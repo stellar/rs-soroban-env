@@ -116,8 +116,8 @@ impl BudgetDimension {
         self.shadow_total_count = 0;
     }
 
-    pub(crate) fn check_budget_limit(&self, is_shadow: bool) -> Result<(), HostError> {
-        let over_limit = if is_shadow {
+    pub(crate) fn check_budget_limit(&self, is_shadow: IsShadowMode) -> Result<(), HostError> {
+        let over_limit = if is_shadow.0 {
             self.shadow_total_count > self.shadow_limit
         } else {
             self.total_count > self.limit
@@ -163,7 +163,7 @@ impl BudgetDimension {
             self.total_count = self.total_count.saturating_add(amount);
         }
 
-        self.check_budget_limit(is_shadow.0)
+        self.check_budget_limit(is_shadow)
     }
 
     // Resets all model parameters to zero (so that we can override and test individual ones later).

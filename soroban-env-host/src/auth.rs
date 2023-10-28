@@ -1304,30 +1304,25 @@ impl AuthorizationManager {
         &self,
         host: &Host,
     ) -> Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)> {
-        let inv: Option<Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)>> =
-            host.as_budget().with_shadow_mode(
-                || {
-                    let inv = self
-                        .account_trackers
-                        .borrow()
-                        .iter()
-                        .filter(|t| t.borrow().verified)
-                        .map(|t| {
-                            (
-                                host.scaddress_from_address(t.borrow().address).unwrap(),
-                                t.borrow()
-                                    .invocation_tracker
-                                    .root_authorized_invocation
-                                    .to_xdr(host, true)
-                                    .unwrap(),
-                            )
-                        })
-                        .metered_collect(host)?;
-                    Ok(Some(inv))
-                },
-                || None,
-            );
-        inv.unwrap()
+        host.as_budget()
+            .with_observable_shadow_mode(|| {
+                self.account_trackers
+                    .borrow()
+                    .iter()
+                    .filter(|t| t.borrow().verified)
+                    .map(|t| {
+                        (
+                            host.scaddress_from_address(t.borrow().address).unwrap(),
+                            t.borrow()
+                                .invocation_tracker
+                                .root_authorized_invocation
+                                .to_xdr(host, true)
+                                .unwrap(),
+                        )
+                    })
+                    .metered_collect(host)
+            })
+            .unwrap()
     }
 }
 
@@ -1695,7 +1690,7 @@ impl AccountAuthorizationTracker {
     // metering: free for recording
     #[cfg(any(test, feature = "recording_auth"))]
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
-        host.as_budget().with_shadow_mode_fallible(|| {
+        host.as_budget().with_observable_shadow_mode(|| {
             Ok(RecordedAuthPayload {
                 address: if !self.is_invoker {
                     Some(host.visit_obj(self.address, |a: &ScAddress| a.metered_clone(host))?)

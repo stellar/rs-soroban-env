@@ -4,6 +4,8 @@ use crate::{
     xdr::{self, Hash, LedgerKey, ScAddress, ScError, ScErrorCode, ScErrorType},
     ConversionError, EnvBase, Error, Host, TryFromVal, U32Val, Val,
 };
+
+#[cfg(any(test, feature = "testutils"))]
 use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
 use std::{
@@ -16,8 +18,9 @@ use super::metered_clone::MeteredClone;
 
 #[derive(Clone)]
 pub(crate) struct DebugInfo {
-    pub(crate) events: Events,
-    pub(crate) backtrace: Backtrace,
+    events: Events,
+    #[cfg(any(test, feature = "testutils"))]
+    backtrace: Backtrace,
 }
 
 #[derive(Clone)]
@@ -34,8 +37,32 @@ impl Into<Error> for HostError {
     }
 }
 
-impl Debug for HostError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl DebugInfo {
+    fn write_events(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: maybe make this something users can adjust?
+        const MAX_EVENTS: usize = 25;
+        let mut wrote_heading = false;
+        for (i, e) in self.events.0.iter().rev().take(MAX_EVENTS).enumerate() {
+            if !wrote_heading {
+                writeln!(f)?;
+                writeln!(f, "Event log (newest first):")?;
+                wrote_heading = true;
+            }
+            writeln!(f, "   {}: {}", i, e)?;
+        }
+        if self.events.0.len() > MAX_EVENTS {
+            writeln!(f, "   {}: ... elided ...", MAX_EVENTS)?;
+        }
+        Ok(())
+    }
+
+    #[cfg(not(any(test, feature = "testutils")))]
+    fn write_backtrace(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    fn write_backtrace(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // We do a little trimming here, skipping the first two frames (which
         // are always into, from, and one or more Host::err_foo calls) and all
         // the frames _after_ the short-backtrace marker that rust compiles-in.
@@ -64,36 +91,28 @@ impl Debug for HostError {
                 || frame_name_matches(frame, "Host>::err")
                 || frame_name_matches(frame, "::augment_err_result")
         }
+        let mut bt = self.backtrace.clone();
+        bt.resolve();
+        let frames: Vec<BacktraceFrame> = bt
+            .frames()
+            .iter()
+            .skip_while(|f| frame_is_initial_error_plumbing(f))
+            .take_while(|f| !frame_is_short_backtrace_start(f))
+            .cloned()
+            .collect();
+        let bt: Backtrace = frames.into();
+        writeln!(f)?;
+        writeln!(f, "Backtrace (newest first):")?;
+        writeln!(f, "{:?}", bt)
+    }
+}
 
+impl Debug for HostError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "HostError: {:?}", self.error)?;
         if let Some(info) = &self.info {
-            let mut bt = info.backtrace.clone();
-            bt.resolve();
-            let frames: Vec<BacktraceFrame> = bt
-                .frames()
-                .iter()
-                .skip_while(|f| frame_is_initial_error_plumbing(f))
-                .take_while(|f| !frame_is_short_backtrace_start(f))
-                .cloned()
-                .collect();
-            let bt: Backtrace = frames.into();
-            // TODO: maybe make this something users can adjust?
-            const MAX_EVENTS: usize = 25;
-            let mut wrote_heading = false;
-            for (i, e) in info.events.0.iter().rev().take(MAX_EVENTS).enumerate() {
-                if !wrote_heading {
-                    writeln!(f)?;
-                    writeln!(f, "Event log (newest first):")?;
-                    wrote_heading = true;
-                }
-                writeln!(f, "   {}: {}", i, e)?;
-            }
-            if info.events.0.len() > MAX_EVENTS {
-                writeln!(f, "   {}: ... elided ...", MAX_EVENTS)?;
-            }
-            writeln!(f)?;
-            writeln!(f, "Backtrace (newest first):")?;
-            writeln!(f, "{:?}", bt)
+            info.write_events(f)?;
+            info.write_backtrace(f)
         } else {
             writeln!(f, "DebugInfo not available")
         }
@@ -214,40 +233,46 @@ impl Host {
     /// enriches the returned [Error] with [DebugInfo] in the form of a
     /// [Backtrace] and snapshot of the [Events] buffer.
     pub fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
-        self.with_debug_mode(
-            || {
-                // We _try_ to take a mutable borrow of the events buffer refcell
-                // while building up the event we're going to emit into the events
-                // log, failing gracefully (just emitting a no-debug-info
-                // `HostError` wrapping the supplied `Error`) if we cannot acquire
-                // the refcell. This is to handle the "double fault" case where we
-                // get an error _while performing_ any of the steps needed to record
-                // an error as an event, below.
-                if let Ok(mut events_refmut) = self.0.events.try_borrow_mut() {
-                    self.record_err_diagnostics(events_refmut.deref_mut(), error, msg, args);
-                }
-                Ok(HostError {
-                    error,
-                    info: self.maybe_get_debug_info(),
-                })
-            },
-            || error.into(),
-        )
+        let mut he = HostError::from(error);
+        self.with_debug_mode(|| {
+            // We _try_ to take a mutable borrow of the events buffer refcell
+            // while building up the event we're going to emit into the events
+            // log, failing gracefully (just emitting a no-debug-info
+            // `HostError` wrapping the supplied `Error`) if we cannot acquire
+            // the refcell. This is to handle the "double fault" case where we
+            // get an error _while performing_ any of the steps needed to record
+            // an error as an event, below.
+            if let Ok(mut events_refmut) = self.0.events.try_borrow_mut() {
+                self.record_err_diagnostics(events_refmut.deref_mut(), error, msg, args);
+            }
+            he = HostError {
+                error,
+                info: self.maybe_get_debug_info(),
+            };
+            Ok(())
+        });
+        he
     }
 
     pub(crate) fn maybe_get_debug_info(&self) -> Option<Box<DebugInfo>> {
-        self.with_debug_mode(
-            || {
+        #[allow(unused_mut)]
+        let mut res = None;
+        // DebugInfo should never even be _possible_ to turn on in a production
+        // environment. It does not contribute to the diagnostics emitted in the
+        // debug stream -- those happen elsewhere -- DebugInfo only exists for
+        // users doing local testing to get nice backtraces on their console.
+        #[cfg(any(test, feature = "testutils"))]
+        {
+            self.with_debug_mode(|| {
                 if let Ok(events_ref) = self.0.events.try_borrow() {
                     let events = events_ref.externalize(self)?;
                     let backtrace = Backtrace::new_unresolved();
-                    Ok(Some(Box::new(DebugInfo { backtrace, events })))
-                } else {
-                    Ok(None)
+                    res = Some(Box::new(DebugInfo { backtrace, events }));
                 }
-            },
-            || None,
-        )
+                Ok(())
+            });
+        }
+        res
     }
 
     // Some common error patterns here.
@@ -303,12 +328,16 @@ impl Host {
         E: Debug,
     {
         res.map_err(|e| {
-            if let Ok(true) = self.is_debug() {
-                let msg = format!("{:?}", e);
-                self.error(e.into(), &msg, &[])
-            } else {
-                self.error(e.into(), "", &[])
-            }
+            use std::borrow::Cow;
+            let mut msg: Cow<'_, str> = Cow::Borrowed(&"");
+            // This observes the debug state, but it only causes a different
+            // (richer) string to be logged as a diagnostic event, which
+            // is itself not observable outside the debug state.
+            self.with_debug_mode(|| {
+                msg = Cow::Owned(format!("{:?}", e));
+                Ok(())
+            });
+            self.error(e.into(), &msg, &[])
         })
     }
 
@@ -431,14 +460,16 @@ pub(crate) trait DebugArg {
     fn debug_arg(host: &Host, arg: &Self) -> Val {
         // We similarly guard against double-faulting here by try-acquiring the event buffer,
         // which will fail if we're re-entering error reporting _while_ forming a debug argument.
+        let mut val: Val =
+            Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError).to_val();
         if let Ok(_guard) = host.0.events.try_borrow_mut() {
-            host.with_debug_mode(
-                || Self::debug_arg_maybe_expensive_or_fallible(host, arg),
-                || {
-                    Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError)
-                        .into()
-                },
-            )
+            host.with_debug_mode(|| {
+                if let Ok(v) = Self::debug_arg_maybe_expensive_or_fallible(host, arg) {
+                    val = v;
+                }
+                Ok(())
+            });
+            val
         } else {
             Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError).into()
         }
@@ -489,11 +520,25 @@ impl DebugArg for usize {
 macro_rules! err {
     ($host:expr, $error:expr, $msg:literal, $($args:expr),*) => {
         {
-            if let Ok(true) = $host.is_debug() {
-                $host.error($error.into(), $msg, &[$(<_ as $crate::host::error::DebugArg>::debug_arg($host, &$args)),*])
-            } else {
-                $host.error($error.into(), $msg, &[])
+            const fn voidarg(_: &'static str) -> $crate::Val {
+                $crate::Val::VOID.to_val()
             }
+            // The stringify and voidarg calls here exist just to cause the
+            // macro to stack-allocate a fixed-size local array with one VOID
+            // initializer per argument. The arguments themselves are not
+            // actually used at this point.
+            let mut buf = [$(voidarg(stringify!($args))),*];
+            let mut i = 0;
+            $host.with_debug_mode(||{
+                $(
+                    // Args actually get used here, where we fill in array cells..
+                    buf[i] = <_ as $crate::host::error::DebugArg>::debug_arg($host, &$args);
+                    // .. and extend the end-index of the args-slice we'll pass.
+                    i += 1;
+                )*
+                Ok(())
+            });
+            $host.error($error.into(), $msg, &buf[0..i])
         }
     };
 }
