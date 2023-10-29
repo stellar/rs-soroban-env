@@ -1,4 +1,4 @@
-//! # Auth conceptual overview:
+//! # Auth conceptual overview
 //!
 //! This module is responsible for two separate tasks (both starting with
 //! "auth"):
@@ -20,177 +20,131 @@
 //! And again, in both directions the "auth services" required or provided may
 //! be _either_ of authorization, authentication, or both.
 //!
-//! ## Authorization
+//! All auth services reason about invocations and authorizations, so we
+//! next turn our attention to these.
 //!
-//! Authorization judgments are explicitly requested by smart contracts, and
-//! relate to an ambient authorization context that is maintained by this
-//! module. Specifically a contract calls the host (using `require_auth` or
-//! `require_auth_for_args`) informing the host that the contract code needs
-//! authorization before it continues. If the requirement matches the context
-//! the call succeeds, otherwise it fails (and the contract typically traps).
+//! ## Invocations
 //!
-//! This interface raises obvious questions:
+//! A Soroban transaction can be seen as a tree of _invocations_: usually
+//! invocations of contract functions, though strictly speaking transctions
+//! first invoke host functions which may then invoke contract functions, or
+//! else do other tasks like uploading contracts.
 //!
-//!   - What type of "requirements" can the contract require?
-//!   - What are the contents of the authentication context?
+//! The "invocation tree" corresponds to the fact that each invocation may cause
+//! sub-invocations, each of which may have sub-sub-invocations, and so on.
+//! Contracts often invoke other contracts.
 //!
-//! To answer either of these questions we first need to take a slight detour
-//! into the notion of an _address_.
+//! Each invocation in the tree is mediated by the Soroban host, and typically
+//! represents a transition between trust domains (as different contracts are
+//! written by different authors), so invocations are the natural boundary at
+//! which to evaluate authorization.
 //!
-//! ## Addresses
+//! In other words: authorization happens _in terms of_ invocations; they are
+//! the conceptual units for which authorization is granted or denied.
 //!
-//! Addresses generalize and abstract over accounts (corresponding to public
-//! keys) and contracts. To understand why this is helpful, consider what it
-//! means to authorize some action.
+//! Note that invocations are _not_ function calls within a contract's own WASM
+//! bytecode. The host can't see a call from one WASM function to another inside
+//! a single WASM blob, and in general it does not concern itself with authorizing
+//! those. Invocations are bigger: what are often called "cross-contract calls",
+//! that transfer control from one WASM VM to another.
 //!
-//! Authorization (in the real world, and blockchains) to perform some sensitive
-//! action (such as, say, transferring money) takes two fairly different forms.
-//! Either:
+//! ## Authorized Invocations
 //!
-//!   1. The action is labeled with _some authority's name_ who has to approve
-//!      of the action, in which case we need convincing evidence that they
-//!      approved. Think of this as the case where your name is on a bank
-//!      account. Obviously if you ask for money out of that account, and you
-//!      provide a signature or PIN as an authentic credential, the withdrawal
-//!      is authorized. You are the designated owner or authority for it.
+//! Each invocation may -- usually early on -- call the host function
+//! `require_auth(Address)`: this is the main entrypoint to the auth module.
 //!
-//!   2. The action is labeled with _some set of rules_ that need to hold for
-//!      the action to be authorized, in which case we evaluate the rules in
-//!      context, whatever they may be. Think of this as the case where, say,
-//!      there are daily transfer limits on an account to minimize risks. Here
-//!      the rules have nothing to do with authority in the sense of a person,
-//!      merely the evaluation of a given situation.
+//! The `require_auth` function takes an `Address` that the contract provides,
+//! that identifies some abstract entity responsible for _authorizing the
+//! current invocation_. The contract calling `require_auth` must therefore
+//! somehow select (directly or indirectly, perhaps from its own internal
+//! configuration or from some argument it was passed associated with the
+//! operation it's performing) _which entity_ it wishes to predicate its
+//! execution on the authorization of. As we'll see, there are multiple ways
+//! this entity may provide authorization. It may also require authorization
+//! from multiple entities!
 //!
-//! Some authorization scenarios will combine cases, and sometimes case 2 will
-//! delegate back to case 1 ("the rules" are "check for a signature from X").
-//! The examples above are illustrative of cases with the strictest difference,
-//! but that difference has crucial practical details:
+//! (There is also a secondary entrypoint called `require_auth_for_args` that
+//! allows customizing the invocation being authorized, in case the current
+//! contract invocation -- function name and argument list -- isn't quite the
+//! one desired, but this distinction is unimportant in this discussion.)
 //!
-//!   - In case 1, the presence of a _valid signature_ (authentic credentials)
-//!     indicates authorization, and those are produced off-chain by private
-//!     keys. The authority is the corresponding public key (an XDR
-//!     `AccountID`).
+//! For a given `Address`, the auth module maintains one or more tree-shaped
+//! data structures called the `AuthorizedInvocation`s of the `Address`, which
+//! are incrementally matched by each invocation's calls to
+//! `require_auth(Address)`.
 //!
-//!   - In case 2, the presence of _a call from a contract_ inside the current
-//!     transaction indicates authorization. We (the blockchain processor) know
-//!     which contracts ran in this transaction -- we ran them! -- and if any of
-//!     those contracts wants to decide, on the basis of its input, that some
-//!     action is authorized, all it has to do is tell us "I authorize this
-//!     action". No signatures are required (and indeed they would not make
-//!     sense, everything on a blockchain is public, there are no secret keys).
+//! Each such tree essentially represents a _pattern_ of invocations the
+//! `Address` authorizes, that the _actual_ execution context of a running tree
+//! of contract invocations needs to match when it calls `require_auth`. Any
+//! pattern node that matches an invocation is then permanently _associated_
+//! with the actual invocation it matched, such that sub-patterns can only match
+//! at actual sub-invocations, allowing the authorizing party to globally
+//! restrict the _contexts_ in which a sub-invocation may match.
 //!
-//! This second case is subtle and worth repeating and emphasizing: in the
-//! simplest instance, contract A can "authorize" contract B by simply calling B
-//! itself, it doesn't much need to use an "auth module". A-calls-B is
-//! implicitly a statement that whatever logic exists in A, it decided it was
-//! correct to call B. This is such a basic fact that if B subsequently _asks_
-//! the auth module "did A authorize me?" in an A-called-B context, the auth
-//! module will just say "yes". We will see later there are other ways A might
-//! authorize B at some further distance than a direct call, but these are
-//! generalizations of the same principle: a contract _is_ at least partly an
-//! authorization policy, and if it says "yes" in a context where it has been
-//! designated an authority for the sake of authorization, then that "yes" is
-//! all the evidence we need.
+//! Furthermore each pattern node is permanently invalidated as it matches so
+//! that it can never match more than once per transaction. If a user wishes to
+//! authorize two instances of the same pattern within a transaction, they must
+//! provide two separate copies.
 //!
-//! To sum up: addresses exist to generalize between these two cases: they allow
-//! a contract to define its authorization requirements in terms of _either_ a
-//! person (account), or a program (contract), or both.
+//! # Addresses
 //!
-//! ## Authorization requirements
+//! As described above, `AuthorizedInvocation`s define the trees of invocations
+//! that are authorized by some `Address`. But what is an Address? Concretely it
+//! is either a Stellar `AccountID` or the `Hash` identity of some contract. But
+//! _conceptually_ the Address used to authorize an invocation may be one of 4
+//! different types.
 //!
-//! Both the `require_auth` and `require_auth_for_args` functions state a
-//! requirement to match against the authorization context (the former function
-//! just provides default arguments to the latter).
+//!   1. The address of a contract that is an _invoker_. We say that if contract
+//!      C invokes contract D, then C authorized D. This is simple and requires
+//!      no credentials as the host literally observes the call from C to D. It
+//!      is a slight conceptual stretch but makes sense: if C didn't want to
+//!      authorize D, it wouldn't have invoked it! Further invoker-contract
+//!      authorizations for _indirect_ calls (C calls D calls E, C wants to
+//!      authorize sub-calls to E) can also be provided on the fly by contracts
+//!      calling `authorize_as_curr_contract`, passing a vector of the
+//!      Val-encoded type `InvokerContractAuthEntry`.
 //!
-//! In both cases the requirement contains: a contract ID, a contract function
-//! name, a vector of arguments, and an _address_ which is, as mentioned above,
-//! the authority whose approval is being required. The authorizing address to
-//! check may be _either_ a contract or an account.
+//!   2. The address of a Stellar classic account, identified by `AccountID`,
+//!      that must supply `SorobanAddressCredentials` for any
+//!      `AuthorizedInvocation` it authorizes, satisfying the account's classic
+//!      multisig authorization to its medium threshold.
 //!
-//! The authorization requirement's contract ID and function name are implicitly
-//! the contract and function making the call to `require_auth`, and cannot be
-//! specified as anything else.
+//!   3. The address of a Stellar classic account that happens to be the
+//!      _transaction source account_. In this case we assume the transaction
+//!      signatures already met the requirements of the account before the
+//!      Soroban host was even instantiated, and so the `AuthorizedInvocation`
+//!      for such an address can be accompanied by the constant credential
+//!      `SOROBAN_CREDENTIALS_SOURCE_ACCOUNT` that's considered authentic by
+//!      assumption.
 //!
-//! We can depict such a requirement as `Req(Address:Contract.Func(Args))` and
-//! read this as saying "Require that Address has authorized calling Func(Args)
-//! on Contract".
+//!   4. The address of a contract that is a _custom account_. In this case the
+//!      `AuthorizedInvocation` is still accompanied by
+//!      `SorobanAddressCredentials` but _interpreting_ those credentials (and
+//!      indeed interpreting the entire authorization request) is delegated to a
+//!      contract. The contract must export a function called `__check_auth` and
+//!      it will be passed the abstract, uninterpreted `Val` from the
+//!      credential's "signature" field, along with a hash of the material it
+//!      expects the signature to authenticate, and a structured summary of the
+//!      auth context. The `__check_auth` function may potentially re-enter the
+//!      auth module by calling `require_auth` on some other `Address`.
 //!
-//! Such a requirement is an atomic "leaf node" matched against a part of the
-//! authorization context. We will now examine that context in more detail.
+//! Each of these 4 forms of address may be passed to `require_auth`, which will
+//! then serve as a key to look up an `AuthorizedInvocation` to match against
+//! the invocation being authorized, and potentially perform further
+//! authentication or custom-auth logic.
 //!
-//! ## Authorization contexts
+//! The first type -- contract invoker address -- is associated with a set of
+//! `AuthorizedInvocation`s that is dynamic, evolves during execution of the
+//! transaction, and requires no credentials. The other 3 types are static, are
+//! provided as input to the transaction, and carry credentials that may require
+//! authentication. Therefore the first type and the latter 3 types are tracked
+//! in different data structures. But this is merely an implementation detail;
+//! addresses in all 4 conceptual roles can be passed to `require_auth` without
+//! any concern for which kind fulfils the requirement at runtime.
 //!
-//! Recall that an Address may be either an account or a contract, and that this
-//! union serves to enable two types of authorization decisions: those supported
-//! by accounts that sign credentials _or_ contracts that provide authorization
-//! judgments.
-//!
-//! The authorization context correspondingly contains two separate sets of
-//! tree-shaped data structures, each associated with one of the two types of
-//! authorization decisions:
-//!
-//!  1. The account-based authorizations. This set of trees is static over the
-//!     course of a transaction. It arrives in XDR form
-//!     (`SorobanAuthorizationEntry`), in the enclosing transaction, and
-//!     contains signatures.
-//!
-//!  2. The contract-based authorizations. This set of trees is dynamic over the
-//!     course of a transaction: nodes can be added to it by contracts that wish
-//!     to contribute authorization information as they are excecuting.
-//!     Contracts do so by calling `authorize_as_curr_contract` and passing a
-//!     vector of the Val-encoded type `InvokerContractAuthEntry`. There are no
-//!     signatures in such entries, as mentioned above, because they are
-//!     unnecessary (we trust which calls were made) and would make no sense
-//!     (there are no secrets to make signatures with).
-//!
-//! Each tree essentially represents a _pattern_ of authorized invocations, that
-//! the _actual_ execution context of a running tree of contract invocations
-//! needs to match when it calls `require_auth`. Any pattern node that matches
-//! an invocation is associated with the actual invocation it matched, such that
-//! sub-patterns can only match at actual sub-invocations, and furthermore each
-//! node is permanently invalidated as it matches so that it can never match
-//! more than once per transaction. If a user wishes to authorize two instances
-//! of the same pattern within a transaction, they must provide two separate
-//! copies.
-//!
-//! ## Authentication
-//!
-//! Conceptually, an authorization may require credentials, and some types of
-//! credentials may be forged. This is why we have signatures! The process of
-//! deciding whether to accept credentials inside an authorization judgment is
-//! called _authentication_ and in this module it takes 4 forms:
-//!
-//!   1. Contract-based authorizations are authentic by definition, because they
-//!      have no credentials. They are evaluated by looking at records of which
-//!      contracts called `authorize_as_curr_contract` during the lifecycle of a
-//!      given host, and we trust ourselves to keep track of that in memory.
-//!
-//!   2. Account-based authorizations with credentials that delegate to the
-//!      "source account" of the enclosing transaction
-//!      (`SOROBAN_CREDENTIALS_SOURCE_ACCOUNT`) are _assumed_ to be authentic,
-//!      because they are assumed to have been checked for authenticity by the
-//!      embedder, such that the host would never have been instantiated if the
-//!      transaction had an invalid signature. Indeed there is no signature to
-//!      check in this case anyways: the enclosing transaction signature is not
-//!      given to the host.
-//!
-//!   3. Account-based authorizations with credentials that delegate to an
-//!      address that is an `AccountID` (`SOROBAN_CREDENTIALS_ADDRESS` with
-//!      `SC_ADDRESS_TYPE_ACCOUNT`) will load the Stellar classic `AccountEntry`
-//!      from the ledger and evaluate the credential's signature as a normal
-//!      Ed25519 signature with the signers-and-weighting scheme built in to
-//!      Stellar classic.
-//!
-//!   3. Account-based authorizations with credentials that delegate to an
-//!      address that is an contract (`SOROBAN_CREDENTIALS_ADDRESS` with
-//!      `SC_ADDRESS_TYPE_CONTRACT`) will instantiate the contract and _call a
-//!      function on it_ to allow the contract to perform authentication, for
-//!      example by implementing signature verification in a public key system
-//!      other than Ed25519. The function implementing such custom
-//!      authentication must be called `__check_auth` and it will be passed an
-//!      abstract, uninterpreted byte string as the "signature" provided in the
-//!      credentials, along with a hash of the material it expects the signature
-//!      to authenticate, and a structured summary of the auth context.
+//! In the cases with nontrivial `SorobanAddressCredentials` (2 and 4), the auth
+//! module takes care of evaluating signature expiration times and recording
+//! nonces to the ledger automatically, to prevent replay.
 //!
 use std::cell::RefCell;
 use std::rc::Rc;
