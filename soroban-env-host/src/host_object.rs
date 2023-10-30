@@ -386,7 +386,13 @@ impl Host {
     }
 
     pub(crate) fn check_val_integrity(&self, val: Val) -> Result<(), HostError> {
-        if val.get_tag() == Tag::Bad {
+        // Technically Tag::Bad is the only one that can occur here -- the other
+        // 3 are mapped to it -- but we check for them just in case.
+        if let Tag::Bad
+        | Tag::SmallCodeUpperBound
+        | Tag::ObjectCodeLowerBound
+        | Tag::ObjectCodeUpperBound = val.get_tag()
+        {
             Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
