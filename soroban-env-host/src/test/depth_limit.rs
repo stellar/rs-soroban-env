@@ -1,4 +1,4 @@
-use soroban_env_common::xdr::{ReadXdr, WriteXdr};
+use soroban_env_common::xdr::{Limits, ReadXdr, WriteXdr};
 
 use crate::{
     budget::AsBudget,
@@ -98,7 +98,10 @@ fn deep_scval_xdr_serialization() -> Result<(), HostError> {
         v = ScVal::from(vv);
     }
     let res = v
-        .to_xdr_with_depth_limit(500)
+        .to_xdr(Limits {
+            depth: 500,
+            ..Limits::default()
+        })
         .map_err(|e| HostError::from(e));
     let code = (ScErrorType::Context, ScErrorCode::ExceededLimit);
     assert!(HostError::result_matches_err(res, code));
@@ -112,8 +115,18 @@ fn deep_scval_xdr_deserialization() -> Result<(), HostError> {
         let vv = ScVec::try_from(vec![v])?;
         v = ScVal::from(vv);
     }
-    let bytes = v.to_xdr_with_depth_limit(10000)?;
-    let res = ScVal::from_xdr_with_depth_limit(bytes, 500).map_err(|e| HostError::from(e));
+    let bytes = v.to_xdr(Limits {
+        depth: 10000,
+        ..Limits::default()
+    })?;
+    let res = ScVal::from_xdr(
+        bytes,
+        Limits {
+            depth: 500,
+            ..Limits::default()
+        },
+    )
+    .map_err(|e| HostError::from(e));
     let code = (ScErrorType::Context, ScErrorCode::ExceededLimit);
     assert!(HostError::result_matches_err(res, code));
     Ok(())

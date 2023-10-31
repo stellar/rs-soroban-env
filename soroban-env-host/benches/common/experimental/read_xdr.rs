@@ -1,6 +1,6 @@
 use soroban_env_host::{
     cost_runner::ReadXdrByteArrayRun,
-    xdr::{ScBytes, ScVal, WriteXdr},
+    xdr::{Limits, ScBytes, ScVal, WriteXdr},
 };
 
 use crate::common::{util::randvec, HostCostMeasurement};
@@ -18,6 +18,6 @@ impl HostCostMeasurement for ReadXdrByteArrayMeasure {
         let len = 1 + input * Self::STEP_SIZE;
         let vec = randvec(rng, len);
         let scval = ScVal::Bytes(ScBytes(vec.try_into().unwrap()));
-        scval.to_xdr().unwrap()
+        scval.to_xdr(Limits::default()).unwrap()
     }
 }

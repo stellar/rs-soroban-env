@@ -6,7 +6,7 @@ use crate::{
     host_vec, Host, HostError,
 };
 use soroban_env_common::{
-    xdr::{Asset, DepthLimitedWrite, WriteXdr, DEFAULT_XDR_RW_DEPTH_LIMIT},
+    xdr::{Asset, Limited, Limits, WriteXdr},
     Env,
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
@@ -20,7 +20,7 @@ pub(crate) struct TestStellarAssetContract<'a> {
 
 impl<'a> TestStellarAssetContract<'a> {
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
-        let mut asset_bytes_vec = DepthLimitedWrite::new(vec![], DEFAULT_XDR_RW_DEPTH_LIMIT);
+        let mut asset_bytes_vec = Limited::new(vec![], Limits::default());
         asset.write_xdr(&mut asset_bytes_vec).unwrap();
         let address_obj = host
             .create_asset_contract(

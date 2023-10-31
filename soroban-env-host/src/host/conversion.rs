@@ -3,7 +3,7 @@ use std::rc::Rc;
 use super::metered_clone::{
     charge_shallow_copy, MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator,
 };
-use crate::budget::AsBudget;
+use crate::budget::{AsBudget, DepthLimiter};
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
 use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
@@ -12,9 +12,8 @@ use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
 use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, ContractDataDurability, DepthLimiter, Int128Parts,
-    Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts,
-    UInt256Parts, VecM,
+    self, int128_helpers, AccountId, ContractDataDurability, Int128Parts, Int256Parts, ScAddress,
+    ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts, UInt256Parts, VecM,
 };
 use soroban_env_common::{
     AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,

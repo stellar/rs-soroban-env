@@ -1,8 +1,7 @@
 use crate::{
     budget::Budget,
     xdr::{
-        ContractCostType, DepthLimitedWrite, ReadXdr, ScBytes, ScErrorCode, ScErrorType, WriteXdr,
-        DEFAULT_XDR_RW_DEPTH_LIMIT,
+        ContractCostType, Limited, Limits, ReadXdr, ScBytes, ScErrorCode, ScErrorType, WriteXdr,
     },
     BytesObject, Host, HostError,
 };
@@ -43,7 +42,7 @@ impl Host {
     pub fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
         let _span = tracy_span!("read xdr");
         self.charge_budget(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
-        self.map_err(T::from_xdr(bytes))
+        self.map_err(T::from_xdr(bytes, Limits::default()))
     }
 
     pub(crate) fn metered_from_xdr_obj<T: ReadXdr>(
@@ -60,8 +59,7 @@ pub fn metered_write_xdr(
     w: &mut Vec<u8>,
 ) -> Result<(), HostError> {
     let _span = tracy_span!("write xdr");
-    let mw = MeteredWrite { budget, w };
-    let mut w = DepthLimitedWrite::new(mw, DEFAULT_XDR_RW_DEPTH_LIMIT);
+    let mut w = Limited::new(MeteredWrite { budget, w }, Limits::default());
     // MeteredWrite above turned any budget failure into an IO error; we turn it
     // back to a budget failure here, since there's really no "IO error" that can
     // occur when writing to a Vec<u8>.
@@ -78,5 +76,5 @@ pub fn metered_from_xdr_with_budget<T: ReadXdr>(
 ) -> Result<T, HostError> {
     let _span = tracy_span!("read xdr with budget");
     budget.charge(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
-    T::from_xdr(bytes).map_err(|e| e.into())
+    T::from_xdr(bytes, Limits::default()).map_err(|e| e.into())
 }
