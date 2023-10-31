@@ -1401,6 +1401,8 @@ dependencies = [
  "pretty_assertions",
  "rand",
  "rand_chacha",
+ "serde",
+ "serde_json",
  "sha2",
  "sha3",
  "soroban-bench-utils",

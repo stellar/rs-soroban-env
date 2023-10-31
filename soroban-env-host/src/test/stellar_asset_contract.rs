@@ -15,6 +15,7 @@ use crate::{
             AccountContractSigner, AccountSigner, ContractTypeVec, TestSigner,
         },
     },
+    function_name,
     host::{frame::TestContractFrame, Frame},
     host_vec,
     test::util::generate_bytes_array,
@@ -40,6 +41,8 @@ use soroban_test_wasms::{
 };
 use stellar_strkey::ed25519;
 
+use super::observe::ObservedHost;
+
 struct StellarAssetContractTest {
     host: Host,
     issuer_key: SigningKey,
@@ -51,8 +54,11 @@ struct StellarAssetContractTest {
 }
 
 impl StellarAssetContractTest {
-    fn setup() -> Self {
-        let host = Host::test_host_with_recording_footprint();
+    fn setup(testname: &'static str) -> Self {
+        let host = ObservedHost {
+            testname,
+            host: Host::test_host_with_recording_footprint(),
+        };
         host.set_ledger_info(LedgerInfo {
             protocol_version: crate::meta::get_ledger_protocol_version(
                 crate::meta::INTERFACE_VERSION,
@@ -328,7 +334,7 @@ fn to_contract_err(e: HostError) -> ContractError {
 
 #[test]
 fn test_stellar_asset_contract_smart_roundtrip() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
 
     let account_id = signing_key_to_account_id(&test.user_key);
     test.create_account(
@@ -368,7 +374,7 @@ fn test_stellar_asset_contract_smart_roundtrip() {
 }
 
 fn test_asset_init(asset_code: &[u8]) {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
 
     let account_id = signing_key_to_account_id(&test.user_key);
     let issuer_id = signing_key_to_account_id(&test.issuer_key);
@@ -466,7 +472,7 @@ fn test_asset12_smart_leading_zero_init() {
 
 #[test]
 fn test_zero_amounts() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -518,7 +524,7 @@ fn test_zero_amounts() {
 
 #[test]
 fn test_direct_transfer() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -578,7 +584,7 @@ fn test_direct_transfer() {
 
 #[test]
 fn test_transfer_with_allowance() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -722,7 +728,7 @@ fn test_transfer_with_allowance() {
 
 #[test]
 fn test_allowance_live_until() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     test.host.enable_debug().unwrap();
 
     let admin = TestSigner::account(&test.issuer_key);
@@ -822,7 +828,7 @@ fn test_allowance_live_until() {
 
 #[test]
 fn test_burn() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
 
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
@@ -940,7 +946,7 @@ fn test_burn() {
 
 #[test]
 fn test_cannot_burn_native() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let contract = TestStellarAssetContract::new_from_asset(&test.host, Asset::Native);
     let user_acc_id = signing_key_to_account_id(&test.user_key);
 
@@ -985,7 +991,7 @@ fn test_cannot_burn_native() {
 
 #[test]
 fn test_stellar_asset_contract_authorization() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -1048,7 +1054,7 @@ fn test_stellar_asset_contract_authorization() {
 
 #[test]
 fn test_clawback_on_account() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -1108,7 +1114,7 @@ fn test_clawback_on_account() {
 
 #[test]
 fn test_clawback_on_contract() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -1175,7 +1181,7 @@ fn test_clawback_on_contract() {
 
 #[test]
 fn test_auth_revocable_on_contract() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -1226,7 +1232,7 @@ fn test_auth_revocable_on_contract() {
 
 #[test]
 fn test_auth_required() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -1282,7 +1288,7 @@ fn test_auth_required() {
 
 #[test]
 fn test_set_admin() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
     let new_admin = TestSigner::account(&test.user_key);
@@ -1373,7 +1379,7 @@ fn test_set_admin() {
 
 #[test]
 fn test_account_balance() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let contract = TestStellarAssetContract::new_from_asset(&test.host, Asset::Native);
     let user_acc_id = signing_key_to_account_id(&test.user_key);
     let user_addr = account_to_address(&test.host, user_acc_id.clone());
@@ -1394,7 +1400,7 @@ fn test_account_balance() {
 
 #[test]
 fn test_trustline_auth() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     // the admin is the issuer_key
     let admin_acc_id = signing_key_to_account_id(&test.issuer_key);
     let user_acc_id = signing_key_to_account_id(&test.user_key);
@@ -1558,7 +1564,7 @@ fn test_trustline_auth() {
 
 #[test]
 fn test_account_invoker_auth_with_issuer_admin() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin_acc = signing_key_to_account_id(&test.issuer_key);
     let user_acc = signing_key_to_account_id(&test.user_key);
 
@@ -1695,7 +1701,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
 
 #[test]
 fn test_contract_invoker_auth() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
 
     let admin_contract_id = generate_bytes_array(&test.host);
     let user_contract_id = generate_bytes_array(&test.host);
@@ -1793,7 +1799,7 @@ fn test_contract_invoker_auth() {
 
 #[test]
 fn test_auth_rejected_for_incorrect_nonce() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
     let user = TestSigner::account(&test.user_key);
@@ -1894,7 +1900,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
 
 #[test]
 fn test_auth_rejected_for_incorrect_payload() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
     let user = TestSigner::account(&test.user_key);
@@ -1983,7 +1989,7 @@ fn test_auth_rejected_for_incorrect_payload() {
 
 #[test]
 fn test_auth_rejected_for_bad_signature_type() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
     let user = TestSigner::account(&test.user_key);
@@ -2019,7 +2025,7 @@ fn test_auth_rejected_for_bad_signature_type() {
 
 #[test]
 fn test_classic_account_multisig_auth() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
 
     let account_id = signing_key_to_account_id(&test.user_key);
     test.create_account(
@@ -2226,7 +2232,7 @@ fn test_classic_account_multisig_auth() {
 
 #[test]
 fn test_negative_amounts_are_not_allowed() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -2411,7 +2417,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries(
 
 #[test]
 fn test_stellar_asset_contract_classic_balance_boundaries_simple() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
 
     let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
@@ -2440,7 +2446,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_simple() {
 
 #[test]
 fn test_stellar_asset_contract_classic_balance_boundaries_with_liabilities() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
@@ -2469,7 +2475,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_with_liabilities() {
 
 #[test]
 fn test_stellar_asset_contract_classic_balance_boundaries_with_sponsorships() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
@@ -2497,7 +2503,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_with_sponsorships() {
 
 #[test]
 fn test_stellar_asset_contract_classic_balance_boundaries_with_sponsorships_and_liabilities() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
@@ -2526,7 +2532,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_with_sponsorships_and_
 
 #[test]
 fn test_stellar_asset_contract_classic_balance_boundaries_with_large_values() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
@@ -2552,6 +2558,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_with_large_values() {
 }
 
 fn test_wrapped_asset_classic_balance_boundaries(
+    testname: &'static str,
     init_balance: i64,
     expected_min_balance: i64,
     expected_max_balance: i64,
@@ -2559,7 +2566,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     liabilities: Option<(i64, i64)>,
     limit: i64,
 ) {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(testname);
     let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
@@ -2723,17 +2730,32 @@ fn test_wrapped_asset_classic_balance_boundaries(
 
 #[test]
 fn test_asset_stellar_asset_contract_classic_balance_boundaries_simple() {
-    test_wrapped_asset_classic_balance_boundaries(100_000_000, 0, i64::MAX, None, i64::MAX);
+    test_wrapped_asset_classic_balance_boundaries(
+        function_name!(),
+        100_000_000,
+        0,
+        i64::MAX,
+        None,
+        i64::MAX,
+    );
 }
 
 #[test]
 fn test_asset_stellar_asset_contract_classic_balance_boundaries_with_trustline_limit() {
-    test_wrapped_asset_classic_balance_boundaries(100_000_000, 0, 200_000_000, None, 200_000_000);
+    test_wrapped_asset_classic_balance_boundaries(
+        function_name!(),
+        100_000_000,
+        0,
+        200_000_000,
+        None,
+        200_000_000,
+    );
 }
 
 #[test]
 fn test_asset_stellar_asset_contract_classic_balance_boundaries_with_liabilities() {
     test_wrapped_asset_classic_balance_boundaries(
+        function_name!(),
         100_000_000,
         300_000,
         i64::MAX - 500_000,
@@ -2745,6 +2767,7 @@ fn test_asset_stellar_asset_contract_classic_balance_boundaries_with_liabilities
 #[test]
 fn test_asset_stellar_asset_contract_classic_balance_boundaries_with_limit_and_liabilities() {
     test_wrapped_asset_classic_balance_boundaries(
+        function_name!(),
         100_000_000,
         300_000,
         150_000_000, /* = 200_000_000 (limit) - 50_000_000 (buying liabilities) */
@@ -2756,6 +2779,7 @@ fn test_asset_stellar_asset_contract_classic_balance_boundaries_with_limit_and_l
 #[test]
 fn test_asset_stellar_asset_contract_classic_balance_boundaries_large_values() {
     test_wrapped_asset_classic_balance_boundaries(
+        function_name!(),
         i64::MAX - i64::MAX / 5,
         i64::MAX / 4,
         i64::MAX - i64::MAX / 5,
@@ -2766,7 +2790,7 @@ fn test_asset_stellar_asset_contract_classic_balance_boundaries_large_values() {
 
 #[test]
 fn test_classic_transfers_not_possible_for_unauthorized_asset() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account(&test.user_key);
     test.create_account(
@@ -2846,7 +2870,7 @@ fn simple_account_sign_fn<'a>(
 
 #[test]
 fn test_custom_account_auth() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let admin_kp = generate_signing_key(&test.host);
     let account_contract_addr_obj = test
         .host
@@ -2954,7 +2978,7 @@ fn test_custom_account_auth() {
 
 #[test]
 fn test_recording_auth_for_stellar_asset_contract() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
 
     let contract = test.default_stellar_asset_contract();
 
@@ -3025,7 +3049,7 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
     // to "fail_after_updates". "fail_after_updates" emits an event, saves data, and does a
     // SAC token transfer before emitting an error.
 
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
 
     let invoke_id_obj = test.host.register_test_contract_wasm(INVOKE_CONTRACT);
     let err_id_obj = test.host.register_test_contract_wasm(ERR);
@@ -3089,7 +3113,7 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
 
 #[test]
 fn test_sac_reentry_is_not_allowed() {
-    let test = StellarAssetContractTest::setup();
+    let test = StellarAssetContractTest::setup(function_name!());
     let issuer = TestSigner::account(&test.issuer_key);
     let issuer_id = signing_key_to_account_id(&test.issuer_key);
     test.create_default_account(&issuer);

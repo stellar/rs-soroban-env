@@ -1,3 +1,4 @@
+pub(crate) mod observe;
 pub(crate) mod util;
 pub(crate) use util::wasm as wasm_util;
 

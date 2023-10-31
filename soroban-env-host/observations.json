@@ -1,0 +1,297 @@
+{
+  "test::stellar_asset_contract::test_account_balance": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_account_invoker_auth_with_issuer_admin": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_allowance_live_until": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_asset_init": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_asset_stellar_asset_contract_classic_balance_boundaries_large_values": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_asset_stellar_asset_contract_classic_balance_boundaries_simple": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_asset_stellar_asset_contract_classic_balance_boundaries_with_liabilities": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_asset_stellar_asset_contract_classic_balance_boundaries_with_limit_and_liabilities": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_asset_stellar_asset_contract_classic_balance_boundaries_with_trustline_limit": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_auth_rejected_for_incorrect_nonce": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_auth_rejected_for_incorrect_payload": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_auth_required": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_auth_revocable_on_contract": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_burn": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_cannot_burn_native": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_classic_account_multisig_auth": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_classic_transfers_not_possible_for_unauthorized_asset": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_clawback_on_account": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_clawback_on_contract": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_contract_invoker_auth": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_custom_account_auth": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_direct_transfer": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_negative_amounts_are_not_allowed": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_recording_auth_for_stellar_asset_contract": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_set_admin": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_stellar_asset_contract_authorization": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_stellar_asset_contract_classic_balance_boundaries_simple": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_stellar_asset_contract_classic_balance_boundaries_with_large_values": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_stellar_asset_contract_classic_balance_boundaries_with_liabilities": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_stellar_asset_contract_classic_balance_boundaries_with_sponsorships": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_stellar_asset_contract_classic_balance_boundaries_with_sponsorships_and_liabilities": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_stellar_asset_contract_smart_roundtrip": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_transfer_with_allowance": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_trustline_auth": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::stellar_asset_contract::test_zero_amounts": {
+    "cpu_insns": 0,
+    "mem_bytes": 0,
+    "base_prng": 17486344864032398679
+  },
+  "test::vec::empty_vec_back": {
+    "cpu_insns": 3144,
+    "mem_bytes": 80,
+    "base_prng": 0
+  },
+  "test::vec::empty_vec_front": {
+    "cpu_insns": 3144,
+    "mem_bytes": 80,
+    "base_prng": 0
+  },
+  "test::vec::vec_append": {
+    "cpu_insns": 12062,
+    "mem_bytes": 464,
+    "base_prng": 0
+  },
+  "test::vec::vec_append_empty": {
+    "cpu_insns": 6468,
+    "mem_bytes": 160,
+    "base_prng": 0
+  },
+  "test::vec::vec_as_seen_by_host": {
+    "cpu_insns": 6255,
+    "mem_bytes": 176,
+    "base_prng": 0
+  },
+  "test::vec::vec_binary_search": {
+    "cpu_insns": 4239,
+    "mem_bytes": 128,
+    "base_prng": 0
+  },
+  "test::vec::vec_build_bad_element_integrity": {
+    "cpu_insns": 19101,
+    "mem_bytes": 568,
+    "base_prng": 0
+  },
+  "test::vec::vec_del_and_cmp": {
+    "cpu_insns": 9154,
+    "mem_bytes": 296,
+    "base_prng": 0
+  },
+  "test::vec::vec_del_out_of_bound": {
+    "cpu_insns": 2896,
+    "mem_bytes": 104,
+    "base_prng": 0
+  },
+  "test::vec::vec_front_and_back": {
+    "cpu_insns": 3506,
+    "mem_bytes": 104,
+    "base_prng": 0
+  },
+  "test::vec::vec_get_out_of_bound": {
+    "cpu_insns": 2896,
+    "mem_bytes": 104,
+    "base_prng": 0
+  },
+  "test::vec::vec_index_of": {
+    "cpu_insns": 4247,
+    "mem_bytes": 128,
+    "base_prng": 0
+  },
+  "test::vec::vec_insert_and_cmp": {
+    "cpu_insns": 21893,
+    "mem_bytes": 712,
+    "base_prng": 0
+  },
+  "test::vec::vec_insert_out_of_bound": {
+    "cpu_insns": 2896,
+    "mem_bytes": 104,
+    "base_prng": 0
+  },
+  "test::vec::vec_new": {
+    "cpu_insns": 1249,
+    "mem_bytes": 64,
+    "base_prng": 0
+  },
+  "test::vec::vec_pop_empty_vec": {
+    "cpu_insns": 2893,
+    "mem_bytes": 80,
+    "base_prng": 0
+  },
+  "test::vec::vec_push_pop_and_len": {
+    "cpu_insns": 14793,
+    "mem_bytes": 432,
+    "base_prng": 0
+  },
+  "test::vec::vec_push_pop_front": {
+    "cpu_insns": 27204,
+    "mem_bytes": 832,
+    "base_prng": 0
+  },
+  "test::vec::vec_put_and_get": {
+    "cpu_insns": 6294,
+    "mem_bytes": 208,
+    "base_prng": 0
+  },
+  "test::vec::vec_slice_and_cmp": {
+    "cpu_insns": 12735,
+    "mem_bytes": 400,
+    "base_prng": 0
+  },
+  "test::vec::vec_slice_end_out_of_bound": {
+    "cpu_insns": 2896,
+    "mem_bytes": 104,
+    "base_prng": 0
+  },
+  "test::vec::vec_slice_start_equal_to_end": {
+    "cpu_insns": 7433,
+    "mem_bytes": 200,
+    "base_prng": 0
+  },
+  "test::vec::vec_slice_start_greater_than_end": {
+    "cpu_insns": 2896,
+    "mem_bytes": 104,
+    "base_prng": 0
+  },
+  "test::vec::vec_slice_start_out_of_bound": {
+    "cpu_insns": 2896,
+    "mem_bytes": 104,
+    "base_prng": 0
+  }
+}
