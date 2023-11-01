@@ -25,10 +25,9 @@
 //!
 //! ## Invocations
 //!
-//! A Soroban transaction can be seen as a tree of _invocations_: usually
-//! invocations of contract functions, though strictly speaking transctions
-//! first invoke host functions which may then invoke contract functions, or
-//! else do other tasks like uploading contracts.
+//! A Soroban transaction can be seen as a tree of _invocations_: these are
+//! usually invocations of contract functions, but may also be other host
+//! functions requiring authorization, such as the 'create contract' function.
 //!
 //! The "invocation tree" corresponds to the fact that each invocation may cause
 //! sub-invocations, each of which may have sub-sub-invocations, and so on.
