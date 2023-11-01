@@ -13,6 +13,8 @@ libfuzzer-sys = "0.4"
 
 [workspace.dependencies.soroban-sdk]
 version = "20.0.0-rc2"
+# # If I swap the two lines below, it gives me an weird error about version mismatch
+# git = "https://github.com/stellar/rs-soroban-sdk"
 path = "../../../rs-soroban-sdk/soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]

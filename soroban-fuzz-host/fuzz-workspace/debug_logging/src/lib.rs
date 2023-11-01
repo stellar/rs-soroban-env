@@ -13,6 +13,7 @@ pub fn wasm_module_with_linear_memory_logging() -> Vec<u8> {
     fe.push(Operand::Local(LocalRef(3)));
     fe.call_func(f0);
     fe.drop();
+    // If I swap out the two lines below, it complains about Symbol not able to convert into Operand
     fe.push(Operand::Const64(0));
     // fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
