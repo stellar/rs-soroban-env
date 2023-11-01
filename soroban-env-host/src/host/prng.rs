@@ -84,7 +84,7 @@ pub type Seed = <rand_chacha::ChaCha20Rng as rand::SeedableRng>::Seed;
 pub const SEED_BYTES: u64 = <Seed as DeclaredSizeForMetering>::DECLARED_SIZE;
 static_assertions::const_assert_eq!(SEED_BYTES, 32);
 
-#[cfg(test)]
+#[cfg(any(feature = "testutils", test))]
 impl std::hash::Hash for Prng {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.get_seed().hash(state);

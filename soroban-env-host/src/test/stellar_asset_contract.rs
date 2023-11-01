@@ -44,6 +44,10 @@ use stellar_strkey::ed25519;
 use super::observe::ObservedHost;
 
 struct StellarAssetContractTest {
+    // The `obs` field here just exists to
+    // live as long as Host, then be dropped.
+    #[allow(dead_code)]
+    obs: ObservedHost,
     host: Host,
     issuer_key: SigningKey,
     user_key: SigningKey,
@@ -55,10 +59,8 @@ struct StellarAssetContractTest {
 
 impl StellarAssetContractTest {
     fn setup(testname: &'static str) -> Self {
-        let host = ObservedHost {
-            testname,
-            host: Host::test_host_with_recording_footprint(),
-        };
+        let host = Host::test_host_with_recording_footprint();
+        let obs = ObservedHost::new(testname, host.clone());
         host.set_ledger_info(LedgerInfo {
             protocol_version: crate::meta::get_ledger_protocol_version(
                 crate::meta::INTERFACE_VERSION,
@@ -73,6 +75,7 @@ impl StellarAssetContractTest {
         })
         .unwrap();
         Self {
+            obs,
             host: host.clone(),
             issuer_key: generate_signing_key(&host),
             user_key: generate_signing_key(&host),

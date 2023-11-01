@@ -25,6 +25,7 @@ pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
 pub(crate) type HostVec = MeteredVector<Val>;
 
 #[derive(Clone)]
+#[cfg_attr(test, derive(Hash))]
 pub enum HostObject {
     Vec(HostVec),
     Map(HostMap),

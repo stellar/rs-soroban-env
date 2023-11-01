@@ -56,7 +56,7 @@ pub struct Vm {
     module: Module,
     store: RefCell<Store<Host>>,
     instance: Instance,
-    memory: Option<Memory>,
+    pub(crate) memory: Option<Memory>,
 }
 
 /// Minimal description of a single function defined in a WASM module.
@@ -267,7 +267,6 @@ impl Vm {
         // right before the VM is being run, i.e., before crossing the host->VM
         // boundary.
         #[cfg(any(test, feature = "testutils"))]
-        host.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::VmInstantiated)?;
         Ok(Rc::new(Self {
             contract_id,
             module,

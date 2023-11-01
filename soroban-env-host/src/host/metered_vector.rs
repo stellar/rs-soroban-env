@@ -15,7 +15,7 @@ const VEC_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCod
 
 #[derive(Clone)]
 pub struct MeteredVector<A> {
-    vec: Vec<A>,
+    pub(crate) vec: Vec<A>,
 }
 
 impl<A> Default for MeteredVector<A> {

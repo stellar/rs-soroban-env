@@ -153,6 +153,12 @@ macro_rules! generate_dispatch_functions {
 
                     let host = caller.data().clone();
 
+                    #[cfg(any(test, feature = "testutils"))]
+                    {
+                        use crate::host::HostLifecycleEvent::VmCall;
+                        host.call_any_lifecycle_hook(VmCall(&core::stringify!($fn_id), &[$(format!("{:?}", $arg)),*]))?;
+                    }
+
                     // This is where the VM -> Host boundary is crossed.
                     // We first return all fuels from the VM back to the host such that
                     // the host maintains control of the budget.
@@ -173,6 +179,13 @@ macro_rules! generate_dispatch_functions {
                     // conversions to and from both Val and i64 / u64 for
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?),*);
+
+                    #[cfg(any(test, feature = "testutils"))]
+                    {
+                        use crate::host::HostLifecycleEvent::VmReturn;
+                        let res_str = res.clone().map(|x| format!("{:?}", x)).map_err(|x| format!("{:?}", x));
+                        host.call_any_lifecycle_hook(VmReturn(&core::stringify!($fn_id), &res_str))?;
+                    }
 
                     // On the off chance we got an error with no context, we can
                     // at least attach some here "at each host function call",

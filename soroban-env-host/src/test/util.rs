@@ -257,12 +257,10 @@ impl Host {
         if std::env::var("EXCLUDE_VM_INSTANTIATION").is_ok() {
             let ht2 = ht.clone();
             let budget2 = budget.clone();
-            self.set_lifecycle_event_hook(Some(Rc::new(move |evt| {
-                match evt {
-                    HostLifecycleEvent::VmInstantiated => {
-                        budget2.reset_unlimited()?;
-                        ht2.borrow_mut().start(None);
-                    }
+            self.set_lifecycle_event_hook(Some(Rc::new(move |_, evt| {
+                if let HostLifecycleEvent::PushContext = evt {
+                    budget2.reset_unlimited()?;
+                    ht2.borrow_mut().start(None);
                 }
                 Ok(())
             })))?;

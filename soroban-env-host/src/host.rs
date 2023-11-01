@@ -77,12 +77,16 @@ pub struct LedgerInfo {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-pub(crate) enum HostLifecycleEvent {
-    VmInstantiated,
+pub(crate) enum HostLifecycleEvent<'a> {
+    PushContext,
+    PopContext(&'a Context, &'a Result<Val, HostError>),
+    VmCall(&'a str, &'a [String]),
+    VmReturn(&'a str, &'a Result<String, String>),
 }
 
 #[cfg(any(test, feature = "testutils"))]
-pub(crate) type HostLifecycleHook = Rc<dyn Fn(HostLifecycleEvent) -> Result<(), HostError>>;
+pub(crate) type HostLifecycleHook =
+    Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
 #[derive(Clone, Default)]
 struct HostImpl {
@@ -90,7 +94,7 @@ struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
-    context: RefCell<Vec<Context>>,
+    context_stack: RefCell<Vec<Context>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
@@ -196,10 +200,10 @@ impl_checked_borrow_helpers!(
 );
 impl_checked_borrow_helpers!(storage, Storage, try_borrow_storage, try_borrow_storage_mut);
 impl_checked_borrow_helpers!(
-    context,
+    context_stack,
     Vec<Context>,
-    try_borrow_context,
-    try_borrow_context_mut
+    try_borrow_context_stack,
+    try_borrow_context_stack_mut
 );
 impl_checked_borrow_helpers!(
     events,
@@ -285,7 +289,7 @@ impl Host {
             ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
-            context: Default::default(),
+            context_stack: Default::default(),
             budget,
             events: Default::default(),
             authorization_manager: RefCell::new(
@@ -2791,7 +2795,7 @@ impl Host {
         event: HostLifecycleEvent,
     ) -> Result<(), HostError> {
         match &*self.try_borrow_lifecycle_event_hook()? {
-            Some(hook) => hook(event),
+            Some(hook) => hook(self, event),
             None => Ok(()),
         }
     }
