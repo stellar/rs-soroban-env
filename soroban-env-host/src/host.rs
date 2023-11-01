@@ -126,7 +126,7 @@ struct HostImpl {
     // Some tests _of the host_ rely on pseudorandom _input_ data. For these cases we attach
     // yet another unmetered PRNG to the host. This should not be exposed through "testutils"
     // to clients testing contracts _against_ the host.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     test_prng: RefCell<Option<ChaCha20Rng>>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
@@ -243,7 +243,7 @@ impl_checked_borrow_helpers!(
     try_borrow_recording_auth_nonce_prng_mut
 );
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
     test_prng,
     Option<ChaCha20Rng>,
@@ -304,7 +304,7 @@ impl Host {
             base_prng: RefCell::new(None),
             #[cfg(any(test, feature = "recording_auth"))]
             recording_auth_nonce_prng: RefCell::new(None),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "testutils"))]
             test_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
@@ -326,12 +326,12 @@ impl Host {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn source_account_id(&self) -> Result<Option<AccountId>, HostError> {
         Ok(self.try_borrow_source_account()?.metered_clone(self)?)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn with_test_prng<T>(
         &self,
         f: impl FnOnce(&mut ChaCha20Rng) -> Result<T, HostError>,

@@ -1,0 +1,10 @@
+[package]
+name = "soroban-fuzz-host"
+version.workspace = true
+description = "Collection of fuzzing targets for soroban host, do not publish"
+edition = "2021"
+publish = false
+rust-version = "1.71"
+
+[features]
+next = []

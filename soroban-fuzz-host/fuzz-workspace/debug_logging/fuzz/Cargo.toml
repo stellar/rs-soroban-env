@@ -1,0 +1,29 @@
+[package]
+name = "fuzz_debug_logging-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+soroban-sdk = { path = "../../../../../rs-soroban-sdk/soroban-sdk", features = ["testutils"] }
+soroban-env-host = { path = "../../../../soroban-env-host", features = ["testutils"] }
+
+[dependencies.fuzz_debug_logging]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
