@@ -6,6 +6,7 @@ use soroban_env_common::{
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
+    err,
     storage::{InstanceStorageMap, StorageMap},
     xdr::{ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
     Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
@@ -348,7 +349,7 @@ impl Host {
         F: FnOnce() -> Result<Val, HostError>,
     {
         let start_depth = self.try_borrow_context()?.len();
-        if start_depth as u32 == DEFAULT_HOST_DEPTH_LIMIT {
+        if start_depth as u32 >= DEFAULT_HOST_DEPTH_LIMIT {
             return Err(Error::from_type_and_code(
                 ScErrorType::Context,
                 ScErrorCode::ExceededLimit,
@@ -375,7 +376,15 @@ impl Host {
         }
         // Every push and pop should be matched; if not there is a bug.
         let end_depth = self.try_borrow_context()?.len();
-        assert_eq!(start_depth, end_depth);
+        if start_depth != end_depth {
+            return Err(err!(
+                self,
+                (ScErrorType::Context, ScErrorCode::InternalError),
+                "frame-depth mismatch",
+                start_depth,
+                end_depth
+            ));
+        }
         res
     }
 
