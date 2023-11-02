@@ -1435,8 +1435,10 @@ dependencies = [
 name = "soroban-synth-wasm"
 version = "20.0.0-rc2"
 dependencies = [
+ "arbitrary",
  "expect-test",
  "soroban-env-common",
+ "soroban-env-macros",
  "wasm-encoder",
  "wasmparser",
  "wasmprinter",

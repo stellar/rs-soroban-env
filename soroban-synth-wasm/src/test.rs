@@ -6,8 +6,8 @@ use wasmprinter::print_bytes;
 #[test]
 fn test_synth_wasm() {
     let mut fe = ModEmitter::new().func(Arity(0), 2);
-    let s = fe.locals[0];
-    let tmp = fe.locals[1];
+    let s = fe.locals[0].0;
+    let tmp = fe.locals[1].0;
 
     fe.push(Symbol::try_from_small_str("somekey").unwrap());
     fe.local_set(s);

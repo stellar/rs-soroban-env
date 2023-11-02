@@ -17,3 +17,12 @@ mod test;
 
 pub use func_emitter::{FuncEmitter, LocalRef, Operand};
 pub use mod_emitter::{Arity, FuncRef, GlobalRef, ModEmitter, TypeRef};
+
+// mod expr is gated on testutils because it uses Arbitrary and
+// enables soroban-env-common/testutils to get its implementations
+// of arbitrary, and we only want to enable that selectively (when
+// the host we're linked to has also enabled common/testutils)
+#[cfg(feature = "testutils")]
+mod expr;
+#[cfg(feature = "testutils")]
+pub use expr::{Emit, Expr};

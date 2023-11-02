@@ -11,7 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1.3.0", features = ["derive"] }
 soroban-env-host = { path = "..", features = ["testutils"]}
-soroban-synth-wasm = { path = "../../soroban-synth-wasm"}
+soroban-synth-wasm = { path = "../../soroban-synth-wasm", features = ["testutils"]}
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -23,5 +23,11 @@ debug = 1
 [[bin]]
 name = "fuzz_target_1"
 path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "expr"
+path = "fuzz_targets/expr.rs"
 test = false
 doc = false

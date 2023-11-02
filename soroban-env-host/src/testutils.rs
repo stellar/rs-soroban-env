@@ -76,7 +76,7 @@ impl SnapshotSource for MockSnapshotSource {
 }
 
 impl Host {
-    pub const TEST_PRNG_SEED: &[u8; 32] = b"12345678901234567890123456789012";
+    pub const TEST_PRNG_SEED: &'static [u8; 32] = b"12345678901234567890123456789012";
 
     pub fn test_host() -> Self {
         let host = Host::default();

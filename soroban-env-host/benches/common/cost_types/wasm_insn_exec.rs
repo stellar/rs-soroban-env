@@ -153,7 +153,7 @@ fn br_table_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
 
 fn local_get(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 1);
-    let s = fe.locals[0];
+    let s = fe.locals[0].0;
     for _i in 0..n {
         fe.local_get(s);
     }
@@ -164,7 +164,7 @@ fn local_get(n: u64, _rng: &mut StdRng) -> WasmModule {
 
 fn local_set(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 1);
-    let s = fe.locals[0];
+    let s = fe.locals[0].0;
     for i in 0..n {
         fe.i64_const(i as i64);
         fe.local_set(s);
@@ -177,7 +177,7 @@ fn local_set(n: u64, _rng: &mut StdRng) -> WasmModule {
 
 fn local_tee(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 1);
-    let s = fe.locals[0];
+    let s = fe.locals[0].0;
     for i in 0..n {
         fe.i64_const(i as i64);
         fe.local_tee(s);
