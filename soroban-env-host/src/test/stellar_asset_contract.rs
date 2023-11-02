@@ -420,7 +420,10 @@ fn test_asset_init(asset_code: &[u8]) {
     assert_eq!(contract.decimals().unwrap(), 7);
     let name = contract.name().unwrap().to_string();
 
-    let mut expected = String::from_utf8(asset_code.to_vec()).unwrap();
+    let mut expected = String::from_utf8(asset_code.to_vec())
+        .unwrap()
+        .trim_matches(char::from(0))
+        .to_string();
     expected.push(':');
     let k = ed25519::PublicKey(test.issuer_key.verifying_key().to_bytes());
     expected.push_str(k.to_string().as_str());
@@ -446,6 +449,16 @@ fn test_asset12_smart_init() {
     test_asset_init(&[
         65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', b'b', b'c',
     ]);
+}
+
+#[test]
+fn test_asset4_smart_leading_zero_init() {
+    test_asset_init(&[b'z', b'a', 0, 0]);
+}
+
+#[test]
+fn test_asset12_smart_leading_zero_init() {
+    test_asset_init(&[65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', 0, 0]);
 }
 
 #[test]
