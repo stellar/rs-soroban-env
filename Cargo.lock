@@ -1432,10 +1432,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-fuzz-host"
-version = "20.0.0-rc2"
-
-[[package]]
 name = "soroban-synth-wasm"
 version = "20.0.0-rc2"
 dependencies = [

@@ -1,9 +1,9 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use debug_logging::wasm_module_with_linear_memory_logging;
 use arbitrary::Arbitrary;
 use soroban_env_host::{Host, Symbol,  budget::AsBudget, Env};
+use soroban_env_host_fuzz::wasm_module_with_linear_memory_logging;
 
 #[derive(Arbitrary, Debug)]
 struct Input {
@@ -32,5 +32,5 @@ fuzz_target!(|input: Input| {
     let cpu = host.as_budget().get_cpu_insns_consumed().unwrap();
     let mem = host.as_budget().get_mem_bytes_consumed().unwrap();
 
-    assert_eq!((cpu,mem), (1075678, 203437) );
+    assert_eq!((cpu,mem), (1073488, 203274) );
 });

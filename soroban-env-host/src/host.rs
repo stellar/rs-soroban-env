@@ -328,7 +328,7 @@ impl Host {
 
     #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn source_account_id(&self) -> Result<Option<AccountId>, HostError> {
-        Ok(self.try_borrow_source_account()?.metered_clone(self)?)
+        self.try_borrow_source_account()?.metered_clone(self)
     }
 
     #[cfg(any(test, feature = "testutils"))]

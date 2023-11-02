@@ -1,21 +1,19 @@
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{collections::BTreeMap, rc::Rc};
 
 use rand::RngCore;
 use soroban_env_common::{
     xdr::{
-        AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
-        PublicKey, ScAddress, ScErrorCode, ScErrorType, ScVal, ScVec, Uint256,
+        AccountEntry, AccountId, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey, ScAddress,
+        ScErrorCode, ScErrorType, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Symbol, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Val, VecObject,
 };
 
 use crate::{
-    budget::{AsBudget, Budget},
-    host::HostLifecycleEvent,
+    budget::Budget,
     storage::{SnapshotSource, Storage},
     xdr, Error, Host, HostError, LedgerInfo,
 };
-
 
 // Test utilities for the host, used in various tests in sub-modules.
 pub trait AsScVal {
@@ -48,12 +46,13 @@ pub fn generate_account_id(host: &Host) -> AccountId {
 
 pub fn generate_bytes_array(host: &Host) -> [u8; 32] {
     let mut bytes: [u8; 32] = Default::default();
-    host.with_test_prng(|chacha| Ok(chacha.fill_bytes(&mut bytes)))
-        .unwrap();
+    host.with_test_prng(|chacha| {
+        chacha.fill_bytes(&mut bytes);
+        Ok(())
+    })
+    .unwrap();
     bytes
 }
-
-
 
 pub struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
 

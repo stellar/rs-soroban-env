@@ -1,4 +1,3 @@
-use soroban_env_host::{Host, Symbol, SymbolSmall, budget::AsBudget, Env};
 use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
 
 pub fn wasm_module_with_linear_memory_logging() -> Vec<u8> {

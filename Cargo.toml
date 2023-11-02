@@ -11,7 +11,6 @@ members = [
     "soroban-test-wasms",
     "soroban-synth-wasm",
     "soroban-bench-utils",
-    "soroban-fuzz-host"
 ]
 
 exclude = ["soroban-test-wasms/wasm-workspace"]
