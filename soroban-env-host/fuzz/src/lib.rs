@@ -42,13 +42,13 @@ pub fn test_scvec<T: AsScVal>(vals: &[T]) -> Vec<ScVal> {
     vals.iter().map(|x| x.as_scval()).collect()
 }
 
-pub const TEST_PRNG_SEED: &[u8; 32] = b"12345678901234567890123456789012";
+pub const TEST_PRNG_SEED: &'static [u8; 32] = b"12345678901234567890123456789012";
 
-pub const TEST_CONTRACT_ID: &[u8; 32] = &[0; 32];
+pub const TEST_CONTRACT_ID: &'static [u8; 32] = &[0; 32];
 
-pub const TEST_SOURCE_ACCOUNT: &[u8; 32] = &[0; 32];
+pub const TEST_SOURCE_ACCOUNT: &'static [u8; 32] = &[0; 32];
 
-pub const TEST_FN_NAME: &str = "test";
+pub const TEST_FN_NAME: &'static str = "test";
 
 pub fn storage_with_test_contract(contract_code: Vec<u8>, budget: &Budget) -> Storage {
     let contract_code_hash: [u8; 32] = <Sha256 as sha2::Digest>::digest(contract_code.as_slice())
