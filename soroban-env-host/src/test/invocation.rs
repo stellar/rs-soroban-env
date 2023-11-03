@@ -7,21 +7,9 @@ use soroban_env_common::{
 };
 
 use crate::{
-    budget::Budget, events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host,
-    HostError, Symbol, Tag,
+    events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
 };
 use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
-
-// #[test]
-// fn invoke_contract_vanilla() -> Result<(), HostError> {
-
-//     let budget = Budget::default();
-
-//     let host = Host::with_storage_and_budget(storage, budget);
-//     // set_base_prng_seed
-//     // set_ledger_info
-
-// }
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
