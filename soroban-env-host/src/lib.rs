@@ -58,11 +58,6 @@ pub mod storage;
 mod test;
 
 #[cfg(any(test, feature = "testutils"))]
-pub mod testutils;
-#[cfg(any(test, feature = "testutils"))]
-pub use testutils::*;
-
-#[cfg(any(test, feature = "testutils"))]
 #[doc(hidden)]
 pub use host::testutils::call_with_suppressed_panic_hook;
 #[cfg(any(test, feature = "testutils"))]

@@ -12,6 +12,7 @@ libfuzzer-sys = "0.4"
 arbitrary = { version = "1.3.0", features = ["derive"] }
 soroban-env-host = { path = "..", features = ["testutils"]}
 soroban-synth-wasm = { path = "../../soroban-synth-wasm", features = ["testutils"]}
+sha2 = "0.10.0"
 
 # Prevent this from interfering with workspaces
 [workspace]

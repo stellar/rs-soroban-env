@@ -126,7 +126,7 @@ struct HostImpl {
     // Some tests _of the host_ rely on pseudorandom _input_ data. For these cases we attach
     // yet another unmetered PRNG to the host. This should not be exposed through "testutils"
     // to clients testing contracts _against_ the host.
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(test)]
     test_prng: RefCell<Option<ChaCha20Rng>>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
@@ -243,7 +243,7 @@ impl_checked_borrow_helpers!(
     try_borrow_recording_auth_nonce_prng_mut
 );
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(test)]
 impl_checked_borrow_helpers!(
     test_prng,
     Option<ChaCha20Rng>,
@@ -304,7 +304,7 @@ impl Host {
             base_prng: RefCell::new(None),
             #[cfg(any(test, feature = "recording_auth"))]
             recording_auth_nonce_prng: RefCell::new(None),
-            #[cfg(any(test, feature = "testutils"))]
+            #[cfg(test)]
             test_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
@@ -326,12 +326,12 @@ impl Host {
         Ok(())
     }
 
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(test)]
     pub(crate) fn source_account_id(&self) -> Result<Option<AccountId>, HostError> {
         self.try_borrow_source_account()?.metered_clone(self)
     }
 
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(test)]
     pub(crate) fn with_test_prng<T>(
         &self,
         f: impl FnOnce(&mut ChaCha20Rng) -> Result<T, HostError>,
@@ -401,7 +401,7 @@ impl Host {
         // regardless of build configuration.
         let recording_auth_nonce_prng = base_prng.unmetered_raw_sub_prng();
         let test_prng = base_prng.unmetered_raw_sub_prng();
-        #[cfg(any(test, feature = "testutils"))]
+        #[cfg(test)]
         {
             *self.try_borrow_test_prng_mut()? = Some(test_prng);
         }

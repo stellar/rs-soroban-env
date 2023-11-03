@@ -805,6 +805,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "libfuzzer-sys",
+ "sha2",
  "soroban-env-host",
  "soroban-synth-wasm",
 ]
