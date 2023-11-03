@@ -19,20 +19,11 @@ impl<'a> Arbitrary<'a> for Error {
             Ok(error)
         }
     }
-
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        ScError::size_hint(depth)
-    }
 }
 
 impl<'a> Arbitrary<'a> for Void {
     fn arbitrary(_u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Val::VOID)
-    }
-
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        let _ = depth;
-        (0, Some(0))
     }
 }
 
@@ -52,28 +43,15 @@ impl<'a> Arbitrary<'a> for Symbol {
             SymbolSmall::try_from(&buf[0..len]).map_err(|_| arbitrary::Error::IncorrectFormat)?;
         Ok(small.into())
     }
-
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        let _ = depth;
-        (
-            size_of::<usize>(),
-            Some(size_of::<usize>() + size_of::<usize>() * MAX_SMALL_CHARS),
-        )
-    }
 }
 
 impl<'a> Arbitrary<'a> for StorageType {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        let st = match u.int_in_range(0..=2)? {
-            0 => StorageType::Instance,
-            1 => StorageType::Persistent,
-            _ => StorageType::Temporary,
-        };
-        Ok(st)
-    }
-
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        let _ = depth;
-        (size_of::<usize>(), Some(size_of::<usize>()))
+        u.choose(&[
+            StorageType::Instance,
+            StorageType::Persistent,
+            StorageType::Temporary,
+        ])
+        .map(|x| *x)
     }
 }

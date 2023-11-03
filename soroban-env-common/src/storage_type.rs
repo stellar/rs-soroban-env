@@ -8,7 +8,7 @@ use num_derive::FromPrimitive;
 /// an argument to storage functions. It doesn't correspond to any [`Val`] types,
 /// and is passed by direct marshalling as a u64.
 #[repr(u64)]
-#[derive(Debug, FromPrimitive, PartialEq, Eq, Clone)]
+#[derive(Debug, FromPrimitive, PartialEq, Eq, Clone, Copy)]
 pub enum StorageType {
     Temporary = 0,
     Persistent = 1,
