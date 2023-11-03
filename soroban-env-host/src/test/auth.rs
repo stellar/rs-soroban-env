@@ -508,7 +508,7 @@ fn test_single_authorized_call() {
         false,
     );
     // Smoke test nonces for one failing scenario - there is really no way
-    // nonces are incremented unless the rollback logic is broken.
+    // nonces are consumed unless the rollback logic is broken.
     test.verify_nonces_consumed(vec![0]);
     // Correct contract called from a wrong contract
     test.tree_test_enforcing(
@@ -517,6 +517,23 @@ fn test_single_authorized_call() {
             &test.contracts[1],
             vec![SignNode::tree_fn(&test.contracts[0], vec![])],
         )]],
+        false,
+    );
+
+    // Account doesn't exist.
+    test.host
+        .with_mut_storage(|storage| {
+            let account_id = signing_key_to_account_id(&test.keys[0]);
+            let key = test.host.to_account_key(account_id)?;
+            // Note, that this represents 'correct footprint, missing value' scenario.
+            // Incorrect footprint scenario is not covered (it's not auth specific).
+            storage.del(&key, test.host.budget_ref())
+        })
+        .unwrap();
+
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn(&test.contracts[0], vec![])]],
         false,
     );
 }
@@ -2939,7 +2956,7 @@ fn test_rollback_with_conditional_custom_account_auth() {
     assert!(do_call(vec![
         create_auth_entry(444),
         create_auth_entry(555),
-        create_auth_entry(666)
+        create_auth_entry(666),
     ])
     .is_ok());
     assert_eq!(test.read_nonce_live_until(&account, 444), Some(1000));
