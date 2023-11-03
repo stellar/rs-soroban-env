@@ -12,12 +12,12 @@ use crate::{Arg, Function};
 // is defined to drive `FuncEmitter`). Unfortunately there are a lot of special
 // cases to make it work well.
 
-const CONST_SUFFIX: &'static str = "_const";
-const NEW_SUFFIX: &'static str = "_new";
-const OR_EXISTING_SUFFIX: &'static str = "_or_existing";
-const NEW_OR_EXISTING_SUFFIX: &'static str = "new_or_existing";
+const CONST_SUFFIX: &str = "_const";
+const NEW_SUFFIX: &str = "_new";
+const OR_EXISTING_SUFFIX: &str = "_or_existing";
+const NEW_OR_EXISTING_SUFFIX: &str = "new_or_existing";
 
-const SUBTYPES: &'static [(&'static str, &'static str)] = &[
+const SUBTYPES: &[(&str, &str)] = &[
     ("Val", "Bool"),
     ("Val", "Void"),
     ("Val", "I32Val"),
@@ -52,8 +52,8 @@ fn expr_enum_name(ty: &String) -> Ident {
     format_ident!("Expr{}", ty)
 }
 
-fn type_const_expr_type(ty: &String) -> Option<String> {
-    match ty.as_str() {
+fn type_const_expr_type(ty: &str) -> Option<String> {
+    match ty {
         "Bool" => Some("bool".to_string()),
         "I32Val" => Some("i32".to_string()),
         "U32Val" => Some("u32".to_string()),
@@ -81,10 +81,12 @@ impl crate::Function {
         }
     }
 
-    fn synthesize_const_expr_function(ty: &String) -> Option<Self> {
+    fn synthesize_const_expr_function(ty: &str) -> Option<Self> {
         if let Some(const_ty) = type_const_expr_type(ty) {
-            let mut f = crate::Function::default();
-            f.name = format!("{}{}", ty, CONST_SUFFIX);
+            let mut f = Function {
+                name: format!("{}{}", ty, CONST_SUFFIX),
+                ..Default::default()
+            };
             f.args.push(crate::Arg {
                 name: "x".to_string(),
                 r#type: const_ty,
@@ -134,8 +136,10 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     for (sup, sub) in SUBTYPES {
         let subty_fn_name = format!("sub_{}", sub);
         all_subty_fns.insert(subty_fn_name.clone());
-        let mut f = Function::default();
-        f.name = subty_fn_name;
+        let mut f = Function {
+            name: subty_fn_name,
+            ..Default::default()
+        };
         f.args.push(Arg {
             name: "sub".to_string(),
             r#type: sub.to_string(),
@@ -150,14 +154,11 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     // foo_new() function to foo_new_or_existing(index:u8)
     for ty in all_tys.iter() {
         let ty_fns = fns_by_type.entry(ty.clone()).or_default();
-        if let Some(f) = Function::synthesize_const_expr_function(ty) {
+        if let Some(f) = Function::synthesize_const_expr_function(ty.as_str()) {
             ty_fns.push(f)
-        } else {
-            if !ty_fns.iter_mut().any(|f| f.specialize_unary_new_function()) {
-                if ty_fns.is_empty() {
-                    panic!("no way to synthesize {}", ty)
-                }
-            }
+        } else if !ty_fns.iter_mut().any(|f| f.specialize_unary_new_function()) && ty_fns.is_empty()
+        {
+            panic!("no way to synthesize {}", ty)
         }
     }
 
@@ -263,10 +264,7 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
             let arg_names: Vec<_> = if f.is_const_expr_fn() || f.is_new_or_existing_expr_fn() {
                 vec![format_ident!("_")]
             } else {
-                f.args
-                    .iter()
-                    .map(|a| format_ident!("{}", a.name).into())
-                    .collect()
+                f.args.iter().map(|a| format_ident!("{}", a.name)).collect()
             };
             let subcalls: Vec<_> = if f.is_const_expr_fn() {
                 vec![quote! { 0 }]

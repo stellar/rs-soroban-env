@@ -109,7 +109,7 @@ fn load_env_file(file_lit: LitStr) -> Result<Root, syn::Error> {
     let file_str = file_lit.value();
     let file_path = path::abs_from_rel_to_manifest(&file_str);
 
-    let file = std::fs::File::open(&file_path).map_err(|e| {
+    let file = std::fs::File::open(file_path).map_err(|e| {
         syn::Error::new(
             file_lit.span(),
             format!("error reading file '{file_str}': {e}"),
