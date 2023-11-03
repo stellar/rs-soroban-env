@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracterror, Val, Error};
+use soroban_sdk::{contract, contractimpl, contracterror, Val, Error, Env, Symbol, Address, symbol_short, token};
 
 #[contract]
 pub struct Contract;
@@ -47,4 +47,28 @@ impl Contract {
         Error::from_contract_error(12345).into()
     }
 
+    // This function is used in a try_call invocation test to make sure
+    // state is rolled back on failure.
+    pub fn fail_after_updates(env: Env, token: Address) -> Result<(), Error> {
+        env.events()
+            .publish((Symbol::new(&env, &"fail_after_updates"),), ());
+
+        env.storage().instance().set(&symbol_short!("key"), &symbol_short!("val"));
+        env.storage().persistent().set(&symbol_short!("key"), &symbol_short!("val"));
+        env.storage().temporary().set(&symbol_short!("key"), &symbol_short!("val"));
+
+        let client = token::Client::new(&env, &token);
+        let contract_address = env.current_contract_address();
+        // Transfer to the token address to make the test easier.
+        client.transfer(&contract_address, &token, &10);
+
+        let e: Error = Error::from_contract_error(12345).into();
+        Err(e)
+    }
+
+    pub fn storage_updated(e: Env) -> bool {
+        e.storage().instance().has(&symbol_short!("key")) ||
+        e.storage().persistent().has(&symbol_short!("key")) ||
+        e.storage().temporary().has(&symbol_short!("key"))
+    }
 }
