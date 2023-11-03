@@ -2,8 +2,6 @@
 
 extern crate alloc;
 
-use core::mem::size_of;
-
 use crate::symbol::MAX_SMALL_CHARS;
 use crate::xdr::{ScError, ScErrorCode};
 use crate::{Error, StorageType, Symbol, SymbolSmall, Val, Void};
