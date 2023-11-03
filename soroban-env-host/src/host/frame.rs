@@ -145,12 +145,6 @@ impl Host {
     /// and storage map to the state in the provided [`RollbackPoint`].
     pub(super) fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
         let _span = tracy_span!("pop frame");
-        // Instance storage is tied to the frame and only exists in-memory. So
-        // instead of snapshotting it and rolling it back, we just flush the
-        // changes only when rollback is not needed.
-        if orp.is_none() {
-            self.persist_instance_storage()?;
-        }
 
         if self.try_borrow_context_mut()?.pop().is_none() {
             return Err(self.err(
@@ -357,7 +351,7 @@ impl Host {
         }
         let rp = self.push_frame(frame)?;
         let res = f();
-        let res = if let Ok(v) = res {
+        let mut res = if let Ok(v) = res {
             if let Ok(err) = Error::try_from(v) {
                 Err(self.error(err, "escalating Ok(Error) frame-exit to Err(Error)", &[]))
             } else {
@@ -366,6 +360,17 @@ impl Host {
         } else {
             res
         };
+
+        // We try flushing instance storage at the end of the frame if nothing
+        // else failed. Unfortunately flushing instance storage is _itself_
+        // fallible in a variety of ways, and if it fails we want to roll back
+        // everything else.
+        if res.is_ok() {
+            if let Err(e) = self.persist_instance_storage() {
+                res = Err(e)
+            }
+        }
+
         if res.is_err() {
             // Pop and rollback on error.
             self.pop_frame(Some(rp))?;
