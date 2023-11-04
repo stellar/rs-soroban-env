@@ -22,8 +22,9 @@ use crate::{
 use ed25519_dalek::SigningKey;
 use soroban_env_common::{
     xdr::{
-        self, AccountFlags, ContractExecutable, InvokeContractArgs, ScAddress, ScContractInstance,
-        ScSymbol, ScVal, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+        self, AccountFlags, ContractEventType, ContractExecutable, InvokeContractArgs, ScAddress,
+        ScContractInstance, ScSymbol, ScVal, SorobanAuthorizedFunction,
+        SorobanAuthorizedInvocation,
     },
     xdr::{
         AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, LedgerEntryData,
@@ -33,6 +34,7 @@ use soroban_env_common::{
     EnvBase, Val,
 };
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
+use soroban_test_wasms::{ERR, INVOKE_CONTRACT};
 use stellar_strkey::ed25519;
 
 use crate::builtin_contracts::base_types::BytesN;
@@ -421,7 +423,10 @@ fn test_asset_init(asset_code: &[u8]) {
     assert_eq!(contract.decimals().unwrap(), 7);
     let name = contract.name().unwrap().to_string();
 
-    let mut expected = String::from_utf8(asset_code.to_vec()).unwrap();
+    let mut expected = String::from_utf8(asset_code.to_vec())
+        .unwrap()
+        .trim_matches(char::from(0))
+        .to_string();
     expected.push(':');
     let k = ed25519::PublicKey(test.issuer_key.verifying_key().to_bytes());
     expected.push_str(k.to_string().as_str());
@@ -447,6 +452,16 @@ fn test_asset12_smart_init() {
     test_asset_init(&[
         65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', b'b', b'c',
     ]);
+}
+
+#[test]
+fn test_asset4_smart_leading_zero_init() {
+    test_asset_init(&[b'z', b'a', 0, 0]);
+}
+
+#[test]
+fn test_asset12_smart_leading_zero_init() {
+    test_asset_init(&[65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', 0, 0]);
 }
 
 #[test]
@@ -3006,4 +3021,72 @@ fn test_recording_auth_for_stellar_asset_contract() {
             }
         )]
     );
+}
+
+#[test]
+fn verify_nested_try_call_rollback() -> Result<(), HostError> {
+    // This test calls "invoke" in the ivocation contract, which then dispatches a call
+    // to "fail_after_updates". "fail_after_updates" emits an event, saves data, and does a
+    // SAC token transfer before emitting an error.
+
+    let test = StellarAssetContractTest::setup();
+
+    let invoke_id_obj = test.host.register_test_contract_wasm(INVOKE_CONTRACT);
+    let err_id_obj = test.host.register_test_contract_wasm(ERR);
+    let err_address = Address::try_from_val(&test.host, &err_id_obj)?;
+
+    let admin = TestSigner::account(&test.issuer_key);
+    let contract = test.default_stellar_asset_contract();
+
+    contract
+        .mint(&admin, err_address.clone(), 100_000_000)
+        .unwrap();
+
+    test.host.call(
+        invoke_id_obj,
+        Symbol::try_from_small_str("invoke")?,
+        host_vec![
+            &test.host,
+            err_id_obj,
+            Symbol::try_from_val(&test.host, &"fail_after_updates").unwrap(),
+            contract.address.as_object()
+        ]
+        .into(),
+    )?;
+
+    assert_eq!(contract.balance(err_address.clone()).unwrap(), 100_000_000);
+    assert_eq!(contract.balance(contract.address.clone()).unwrap(), 0);
+
+    assert_eq!(
+        bool::try_from_val(
+            &test.host,
+            &test.host.call(
+                err_id_obj,
+                Symbol::try_from_val(&test.host, &"storage_updated")?,
+                host_vec![&test.host].into(),
+            )?
+        )?,
+        false
+    );
+
+    let events = test.host.get_events()?.0;
+
+    // Make sure the event emitted in "fail_after_updates" is marked as failed
+    assert!(
+        events
+            .iter()
+            .find(|e| {
+                if e.event.type_ == ContractEventType::Contract && e.event.contract_id.is_some() {
+                    let address = ScAddress::Contract(e.event.contract_id.clone().unwrap());
+                    let id = test.host.add_host_object(address).unwrap();
+                    test.host.obj_cmp(err_id_obj.to_val(), id.to_val()).unwrap() == 0
+                } else {
+                    false
+                }
+            })
+            .unwrap()
+            .failed_call
+    );
+
+    Ok(())
 }

@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, vec, Address, Env, IntoVal, symbol_short};
+use soroban_sdk::{contract, contractimpl, vec, Address, Env, IntoVal, Symbol, symbol_short, Error};
 
 #[contract]
 pub struct Contract;
@@ -19,5 +19,14 @@ impl Contract {
             &symbol_short!("add"),
             vec![&env, x.into_val(&env), y.into_val(&env)],
         )
+    }
+    
+    // This is used through a single test case to test various rollback scenarios 
+    pub fn invoke(env: Env, contract_id: Address, function_name: Symbol, token: Address) {
+        assert!(env.try_invoke_contract::<(), Error>(
+            &contract_id,
+            &function_name,
+            vec![&env, token.into_val(&env)],
+        ).is_err());
     }
 }
