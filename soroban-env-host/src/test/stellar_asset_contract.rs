@@ -36,6 +36,7 @@ use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
 use stellar_strkey::ed25519;
 
 use crate::builtin_contracts::base_types::BytesN;
+use crate::builtin_contracts::testutils::AccountContractSigner;
 
 struct StellarAssetContractTest {
     host: Host,
@@ -539,7 +540,7 @@ fn test_direct_transfer() {
     assert_eq!(
         to_contract_err(
             contract
-                .transfer(&user_2, user.address(&test.host), 10_000_000,)
+                .transfer(&user_2, user.address(&test.host), 10_000_000)
                 .err()
                 .unwrap()
         ),
@@ -803,6 +804,7 @@ fn test_allowance_live_until() {
         10_000
     );
 }
+
 #[test]
 fn test_burn() {
     let test = StellarAssetContractTest::setup();
@@ -865,7 +867,7 @@ fn test_burn() {
     assert_eq!(
         to_contract_err(
             contract
-                .burn_from(&user_2, user.address(&test.host), 4_000_001,)
+                .burn_from(&user_2, user.address(&test.host), 4_000_001)
                 .err()
                 .unwrap()
         ),
@@ -904,7 +906,7 @@ fn test_burn() {
 
     // Can't burn while deauthorized
     assert_eq!(
-        to_contract_err(contract.burn(&user, 100,).err().unwrap()),
+        to_contract_err(contract.burn(&user, 100).err().unwrap()),
         ContractError::BalanceDeauthorizedError
     );
 
@@ -947,7 +949,7 @@ fn test_cannot_burn_native() {
     );
 
     assert_eq!(
-        to_contract_err(contract.burn(&user, 1,).err().unwrap()),
+        to_contract_err(contract.burn(&user, 1).err().unwrap()),
         ContractError::OperationNotSupportedError
     );
 
@@ -958,7 +960,7 @@ fn test_cannot_burn_native() {
     assert_eq!(
         to_contract_err(
             contract
-                .burn_from(&user2, user.address(&test.host), 1,)
+                .burn_from(&user2, user.address(&test.host), 1)
                 .err()
                 .unwrap()
         ),
@@ -1060,7 +1062,7 @@ fn test_clawback_on_account() {
     assert_eq!(
         to_contract_err(
             contract
-                .clawback(&admin, user.address(&test.host), 60_000_001,)
+                .clawback(&admin, user.address(&test.host), 60_000_001)
                 .err()
                 .unwrap()
         ),
@@ -1293,7 +1295,7 @@ fn test_set_admin() {
     // Make sure admin functions are unavailable to the old admin.
     assert_eq!(
         contract
-            .set_admin(&admin, new_admin.address(&test.host),)
+            .set_admin(&admin, new_admin.address(&test.host))
             .err()
             .unwrap()
             .error,
@@ -1317,7 +1319,7 @@ fn test_set_admin() {
     );
     assert_eq!(
         contract
-            .set_authorized(&admin, new_admin.address(&test.host), false,)
+            .set_authorized(&admin, new_admin.address(&test.host), false)
             .err()
             .unwrap()
             .error,
@@ -1965,6 +1967,42 @@ fn test_auth_rejected_for_incorrect_payload() {
 }
 
 #[test]
+fn test_auth_rejected_for_bad_signature_type() {
+    let test = StellarAssetContractTest::setup();
+    let admin = TestSigner::account(&test.issuer_key);
+    let contract = test.default_stellar_asset_contract();
+    let user = TestSigner::account(&test.user_key);
+    test.create_default_account(&user);
+    test.create_default_trustline(&user);
+
+    let args = host_vec![&test.host, user.address(&test.host), 100_i128];
+
+    // Use incorrectly typed value for the signature.
+    let admin_bad_val_signer = TestSigner::AccountContract(AccountContractSigner {
+        address: admin.address(&test.host),
+        sign: Box::new(|_| Val::VOID.into()),
+    });
+    authorize_single_invocation(
+        &test.host,
+        &admin_bad_val_signer,
+        &contract.address,
+        "mint",
+        args.clone(),
+    );
+    assert!(test
+        .host
+        .call(
+            contract.address.clone().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
+            args.clone().into(),
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
+}
+
+#[test]
 fn test_classic_account_multisig_auth() {
     let test = StellarAssetContractTest::setup();
 
@@ -2075,7 +2113,7 @@ fn test_classic_account_multisig_auth() {
         .transfer(
             &TestSigner::account_with_multisig(
                 &account_id,
-                vec![&test.user_key_3, &test.user_key_3]
+                vec![&test.user_key_3, &test.user_key_3],
             ),
             receiver.clone(),
             100,
@@ -2138,7 +2176,7 @@ fn test_classic_account_multisig_auth() {
     }
     assert!(contract
         .transfer(
-            &TestSigner::account_with_multisig(&account_id, too_many_sigs,),
+            &TestSigner::account_with_multisig(&account_id, too_many_sigs),
             receiver.clone(),
             100,
         )
@@ -2191,7 +2229,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             contract
-                .mint(&admin, user.address(&test.host), -1,)
+                .mint(&admin, user.address(&test.host), -1)
                 .err()
                 .unwrap()
         ),
@@ -2201,7 +2239,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             contract
-                .clawback(&admin, user.address(&test.host), -1,)
+                .clawback(&admin, user.address(&test.host), -1)
                 .err()
                 .unwrap()
         ),
@@ -2771,7 +2809,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     assert_eq!(
         to_contract_err(
             contract
-                .transfer(&user, user.address(&test.host), 1_i128,)
+                .transfer(&user, user.address(&test.host), 1_i128)
                 .err()
                 .unwrap()
         ),
@@ -2881,7 +2919,26 @@ fn test_custom_account_auth() {
     assert_eq!(contract.balance(user_address.clone()).unwrap(), 200);
 
     // And they shouldn't work with the old owner signatures.
-    assert!(contract.mint(&admin, user_address, 100).is_err());
+    assert!(contract.mint(&admin, user_address.clone(), 100).is_err());
+
+    // Remove the contract instance completely to represent the scenario
+    // when admin account doesn't exist.
+    test.host
+        .with_mut_storage(|storage| {
+            let contract_id = test
+                .host
+                .contract_id_from_address(account_contract_addr_obj)?;
+            let key = test.host.contract_instance_ledger_key(&contract_id)?;
+            // Note, that this represents 'correct footprint, missing value' scenario.
+            // Incorrect footprint scenario is not covered (it's not auth specific).
+            storage.del(&key, test.host.budget_ref())
+        })
+        .unwrap();
+
+    // Operations may no longer be authorized.
+    assert!(contract
+        .mint(&new_admin, user_address.clone(), 100)
+        .is_err());
 }
 
 #[test]
@@ -2918,20 +2975,20 @@ fn test_recording_auth_for_stellar_asset_contract() {
                     args: vec![
                         ScVal::try_from_val(
                             &test.host,
-                            &Val::try_from_val(&test.host, &user.address(&test.host)).unwrap()
+                            &Val::try_from_val(&test.host, &user.address(&test.host)).unwrap(),
                         )
                         .unwrap(),
                         ScVal::try_from_val(
                             &test.host,
-                            &Val::try_from_val(&test.host, &100_i128).unwrap()
+                            &Val::try_from_val(&test.host, &100_i128).unwrap(),
                         )
-                        .unwrap()
+                        .unwrap(),
                     ]
                     .try_into()
                     .unwrap(),
                 }),
                 sub_invocations: Default::default(),
-            }
+            },
         }]
     );
 
@@ -2943,9 +3000,9 @@ fn test_recording_auth_for_stellar_asset_contract() {
                 function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                     contract_address: contract.address.to_sc_address().unwrap(),
                     function_name: ScSymbol("mint".try_into().unwrap()),
-                    args: test.host.vecobject_to_scval_vec(args.into()).unwrap()
+                    args: test.host.vecobject_to_scval_vec(args.into()).unwrap(),
                 }),
-                sub_invocations: Default::default()
+                sub_invocations: Default::default(),
             }
         )]
     );
