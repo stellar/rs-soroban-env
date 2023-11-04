@@ -56,7 +56,7 @@ linregress = "0.5.1"
 pretty_assertions = "1.4.0"
 
 [features]
-testutils = ["soroban-env-common/testutils", "recording_auth"]
+testutils = ["soroban-env-common/testutils", "soroban-synth-wasm/testutils", "recording_auth"]
 next = ["soroban-env-common/next", "soroban-test-wasms/next", "soroban-synth-wasm/next", "soroban-bench-utils/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_auth = []

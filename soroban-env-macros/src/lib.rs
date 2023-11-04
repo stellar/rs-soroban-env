@@ -1,5 +1,7 @@
 mod call_macro_with_all_host_functions;
 mod path;
+mod synth_wasm_expr_type;
+use serde::{Deserialize, Serialize};
 
 extern crate proc_macro;
 
@@ -75,6 +77,53 @@ impl ToTokens for MetaConstsOutput {
     }
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct Root {
+    pub(crate) modules: Vec<Module>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct Module {
+    pub(crate) name: String,
+    pub(crate) export: String,
+    pub(crate) functions: Vec<Function>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct Function {
+    pub(crate) export: String,
+    pub(crate) name: String,
+    pub(crate) args: Vec<Arg>,
+    pub(crate) r#return: String,
+    pub(crate) docs: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Arg {
+    pub(crate) name: String,
+    pub(crate) r#type: String,
+}
+
+fn load_env_file(file_lit: LitStr) -> Result<Root, syn::Error> {
+    let file_str = file_lit.value();
+    let file_path = path::abs_from_rel_to_manifest(&file_str);
+
+    let file = std::fs::File::open(file_path).map_err(|e| {
+        syn::Error::new(
+            file_lit.span(),
+            format!("error reading file '{file_str}': {e}"),
+        )
+    })?;
+
+    serde_json::from_reader(file).map_err(|e| {
+        syn::Error::new(
+            file_lit.span(),
+            format!("error parsing file '{file_str}': {e}"),
+        )
+    })
+}
+
 #[proc_macro]
 pub fn generate_env_meta_consts(input: TokenStream) -> TokenStream {
     let meta_input = parse_macro_input!(input as MetaInput);
@@ -86,6 +135,15 @@ pub fn generate_env_meta_consts(input: TokenStream) -> TokenStream {
 pub fn generate_call_macro_with_all_host_functions(input: TokenStream) -> TokenStream {
     let file = parse_macro_input!(input as LitStr);
     match call_macro_with_all_host_functions::generate(file) {
+        Ok(t) => t.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+#[proc_macro]
+pub fn generate_synth_wasm_expr_type(input: TokenStream) -> TokenStream {
+    let file = parse_macro_input!(input as LitStr);
+    match synth_wasm_expr_type::generate(file) {
         Ok(t) => t.into(),
         Err(e) => e.to_compile_error().into(),
     }

@@ -1,0 +1,34 @@
+[package]
+name = "soroban-env-host-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.3.0", features = ["derive"] }
+soroban-env-host = { path = "..", features = ["testutils"]}
+soroban-synth-wasm = { path = "../../soroban-synth-wasm", features = ["testutils"]}
+sha2 = "0.10.0"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "log_from_linear_memory"
+path = "fuzz_targets/log_from_linear_memory.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "expr"
+path = "fuzz_targets/expr.rs"
+test = false
+doc = false

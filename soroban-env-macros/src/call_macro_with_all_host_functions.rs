@@ -3,32 +3,13 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{
     collections::{btree_map::Entry, BTreeMap},
-    fs::File,
     iter,
 };
 use syn::{Error, LitStr};
 
-use serde::{Deserialize, Serialize};
-
-use crate::path;
-
 pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     let file_str = file_lit.value();
-    let file_path = path::abs_from_rel_to_manifest(&file_str);
-
-    let file = File::open(&file_path).map_err(|e| {
-        Error::new(
-            file_lit.span(),
-            format!("error reading file '{file_str}': {e}"),
-        )
-    })?;
-
-    let root: Root = serde_json::from_reader(file).map_err(|e| {
-        Error::new(
-            file_lit.span(),
-            format!("error parsing file '{file_str}': {e}"),
-        )
-    })?;
+    let root: crate::Root = crate::load_env_file(file_lit.clone())?;
 
     let mut export_names = BTreeMap::<String, String>::new();
     for m in root.modules.iter() {
@@ -152,32 +133,4 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
         }
         pub use _call_macro_with_all_host_functions as call_macro_with_all_host_functions;
     })
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Root {
-    pub modules: Vec<Module>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Module {
-    pub name: String,
-    pub export: String,
-    pub functions: Vec<Function>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Function {
-    pub export: String,
-    pub name: String,
-    pub args: Vec<Arg>,
-    pub r#return: String,
-    pub docs: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Arg {
-    pub name: String,
-    pub r#type: String,
 }

@@ -99,9 +99,6 @@ allow_apis = [
 ]
 
 [pkg.rand]
-allow_apis = [
-    "thread",
-]
 allow_unsafe = true
 
 [pkg.backtrace]
@@ -383,4 +380,10 @@ from.build.allow_apis = [
 allow_unsafe = true
 
 [pkg.soroban-bench-utils]
+allow_unsafe = true
+
+[pkg.derive_arbitrary]
+allow_proc_macro = true
+
+[pkg.arbitrary]
 allow_unsafe = true

@@ -328,7 +328,7 @@ impl Host {
 
     #[cfg(test)]
     pub(crate) fn source_account_id(&self) -> Result<Option<AccountId>, HostError> {
-        Ok(self.try_borrow_source_account()?.metered_clone(self)?)
+        self.try_borrow_source_account()?.metered_clone(self)
     }
 
     #[cfg(test)]
@@ -778,7 +778,7 @@ impl VmCallerEnv for Host {
                 let msg = String::from_utf8_lossy(&msg);
 
                 let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
-                Vec::<Val>::charge_bulk_init_cpy((len + 1) as u64, self)?;
+                Vec::<Val>::charge_bulk_init_cpy((len.saturating_add(1)) as u64, self)?;
                 let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
                 // charge for conversion from bytes to `Val`s
                 self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;

@@ -1,5 +1,7 @@
 use crate::{Arity, FuncRef, GlobalRef, ModEmitter, TypeRef};
-use soroban_env_common::{xdr::ScError, Error, Symbol, Tag, Val};
+use soroban_env_common::{
+    xdr::ScError, Bool, Error, I32Val, StorageType, Symbol, Tag, U32Val, Val, Void,
+};
 use wasm_encoder::{BlockType, Function, Instruction, MemArg, ValType};
 
 /// An index into the _locals_ for the current function, which may refer
@@ -29,30 +31,69 @@ impl From<LocalRef> for Operand {
     }
 }
 
+impl From<i64> for Operand {
+    fn from(r: i64) -> Self {
+        Operand::Const64(r)
+    }
+}
+
+impl From<u64> for Operand {
+    fn from(r: u64) -> Self {
+        Operand::Const64(r as i64)
+    }
+}
+
+impl From<StorageType> for Operand {
+    fn from(r: StorageType) -> Self {
+        Operand::Const64(r as i64)
+    }
+}
+
 impl From<Val> for Operand {
     fn from(r: Val) -> Self {
         Operand::Const64(r.get_payload() as i64)
     }
 }
 
+impl From<Bool> for Operand {
+    fn from(s: Bool) -> Self {
+        Operand::from(Val::from(s))
+    }
+}
+
+impl From<Void> for Operand {
+    fn from(s: Void) -> Self {
+        Operand::from(Val::from(s))
+    }
+}
+
+impl From<U32Val> for Operand {
+    fn from(s: U32Val) -> Self {
+        Operand::from(Val::from(s))
+    }
+}
+
+impl From<I32Val> for Operand {
+    fn from(s: I32Val) -> Self {
+        Operand::from(Val::from(s))
+    }
+}
+
 impl From<Symbol> for Operand {
     fn from(s: Symbol) -> Self {
-        let r: Val = s.into();
-        r.into()
+        Operand::from(Val::from(s))
     }
 }
 
 impl From<Error> for Operand {
     fn from(s: Error) -> Self {
-        let r: Val = s.into();
-        r.into()
+        Operand::from(Val::from(s))
     }
 }
 
 impl From<ScError> for Operand {
     fn from(s: ScError) -> Self {
-        let r: Val = s.into();
-        r.into()
+        Operand::from(Val::from(s))
     }
 }
 
@@ -77,13 +118,18 @@ pub struct FuncEmitter {
     pub args: Vec<LocalRef>,
 
     /// A vector of [`LocalRef`]s that cover the locals declared inside the
-    /// function, with local indexes starting _after_ the argument indexes.
-    /// If the [`FuncEmitter`] is constructed with `n_locals=k` then the
-    /// `locals` vector will be `k` elements long, and the `n`th element of
-    /// it will be the `n`th local variable, regardless of the argument count
-    /// (it will happen to have index `n+a` where `a` is the arity of the
-    /// function, but the point here is to let client code ignore that fact).
-    pub locals: Vec<LocalRef>,
+    /// function, with local indexes starting _after_ the argument indexes. If
+    /// the [`FuncEmitter`] is constructed with `n_locals=k` then the `locals`
+    /// vector will be `k` elements long, and the `n`th element of it will be
+    /// the `n`th local variable, regardless of the argument count (it will
+    /// happen to have index `n+a` where `a` is the arity of the function, but
+    /// the point here is to let client code ignore that fact).
+    ///
+    /// We also store an optional `&'static str` associated with each local,
+    /// indicating that it's _allocated_ to a specific type of value (with
+    /// meaning of the strings decided by the caller). This is a convention
+    /// maintained by [`FuncEmitter::alloc_local`].
+    pub locals: Vec<(LocalRef, Option<&'static str>)>,
 }
 
 impl FuncEmitter {
@@ -95,13 +141,53 @@ impl FuncEmitter {
     pub fn new(mod_emit: ModEmitter, arity: Arity, n_locals: u32) -> Self {
         let func = Function::new([(n_locals, ValType::I64)]);
         let args = (0..arity.0).map(LocalRef).collect();
-        let locals = (arity.0..arity.0 + n_locals).map(LocalRef).collect();
+        let locals = (arity.0..arity.0 + n_locals)
+            .map(|n| (LocalRef(n), None))
+            .collect();
         Self {
             mod_emit,
             arity,
             func,
             args,
             locals,
+        }
+    }
+
+    pub fn alloc_local(&mut self, ty: &'static str) -> LocalRef {
+        for (lref, ltag) in self.locals.iter_mut() {
+            if ltag.is_none() {
+                *ltag = Some(ty);
+                return *lref;
+            }
+        }
+        panic!(
+            "alloc_local exhausted {} locals without finding room for {:?}",
+            self.locals.len(),
+            ty
+        )
+    }
+
+    pub fn alloc_and_store_local(&mut self, ty: &'static str) -> LocalRef {
+        let lr = self.alloc_local(ty);
+        self.local_set(lr);
+        lr
+    }
+
+    // A utility function for selecting a typed local based on an index into
+    // the subsequence of locals with a given tag. If no appropriate local can
+    // be found, we return None.
+    pub fn maybe_choose_local(&mut self, ty: &'static str, index: u8) -> Option<LocalRef> {
+        let index = (index as usize) % self.locals.len();
+        if let Some((local, _)) = self
+            .locals
+            .iter()
+            .filter(|(_, tyopt)| *tyopt == Some(ty))
+            .cycle()
+            .nth(index)
+        {
+            Some(*local)
+        } else {
+            None
         }
     }
 
