@@ -1,5 +1,6 @@
 use std::{convert::TryInto, rc::Rc};
 
+use crate::builtin_contracts::base_types::BytesN;
 use crate::{
     auth::RecordedAuthPayload,
     budget::AsBudget,
@@ -11,7 +12,7 @@ use crate::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
             generate_signing_key, new_ledger_entry_from_data, signing_key_to_account_id,
-            AccountSigner, HostVec, TestSigner,
+            AccountContractSigner, AccountSigner, HostVec, TestSigner,
         },
     },
     host::{frame::TestContractFrame, Frame},
@@ -34,11 +35,10 @@ use soroban_env_common::{
     EnvBase, Val,
 };
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
-use soroban_test_wasms::{ERR, INVOKE_CONTRACT};
+use soroban_test_wasms::{
+    ERR, INVOKE_CONTRACT, SAC_REENTRY_TEST_CONTRACT, SIMPLE_ACCOUNT_CONTRACT,
+};
 use stellar_strkey::ed25519;
-
-use crate::builtin_contracts::base_types::BytesN;
-use crate::builtin_contracts::testutils::AccountContractSigner;
 
 struct StellarAssetContractTest {
     host: Host,
@@ -2846,10 +2846,6 @@ fn simple_account_sign_fn<'a>(
 
 #[test]
 fn test_custom_account_auth() {
-    use crate::builtin_contracts::testutils::AccountContractSigner;
-    use soroban_env_common::EnvBase;
-    use soroban_test_wasms::SIMPLE_ACCOUNT_CONTRACT;
-
     let test = StellarAssetContractTest::setup();
     let admin_kp = generate_signing_key(&test.host);
     let account_contract_addr_obj = test
@@ -3064,7 +3060,7 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
                 err_id_obj,
                 Symbol::try_from_val(&test.host, &"storage_updated")?,
                 host_vec![&test.host].into(),
-            )?
+            )?,
         )?,
         false
     );
@@ -3089,4 +3085,59 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
     );
 
     Ok(())
+}
+
+#[test]
+fn test_sac_reentry_is_not_allowed() {
+    let test = StellarAssetContractTest::setup();
+    let issuer = TestSigner::account(&test.issuer_key);
+    let issuer_id = signing_key_to_account_id(&test.issuer_key);
+    test.create_default_account(&issuer);
+    let asset_1 = Asset::CreditAlphanum4(AlphaNum4 {
+        asset_code: AssetCode4([1; 4]),
+        issuer: issuer_id.clone(),
+    });
+    let asset_2 = Asset::CreditAlphanum4(AlphaNum4 {
+        asset_code: AssetCode4([2; 4]),
+        issuer: issuer_id,
+    });
+
+    let contract_1 = TestStellarAssetContract::new_from_asset(&test.host, asset_1);
+    let contract_2 = TestStellarAssetContract::new_from_asset(&test.host, asset_2);
+
+    let account_contract_addr_obj = test
+        .host
+        .register_test_contract_wasm(SAC_REENTRY_TEST_CONTRACT);
+    let account_contract_addr: Address =
+        account_contract_addr_obj.try_into_val(&test.host).unwrap();
+
+    contract_1
+        .mint(&issuer, account_contract_addr.clone(), 100000)
+        .unwrap();
+    contract_2
+        .mint(&issuer, account_contract_addr.clone(), 100000)
+        .unwrap();
+
+    let account_signer = TestSigner::AccountContract(AccountContractSigner {
+        address: account_contract_addr.clone(),
+        sign: Box::new(|_| Val::VOID.into()),
+    });
+    test.host
+        .call(
+            account_contract_addr_obj,
+            Symbol::try_from_small_str("set_addr").unwrap(),
+            host_vec![&test.host, contract_1.address].into(),
+        )
+        .unwrap();
+
+    contract_2
+        .transfer(&account_signer, contract_1.address.clone(), 100)
+        .unwrap();
+
+    assert!(contract_1
+        .transfer(&account_signer, contract_2.address.clone(), 100)
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 }
