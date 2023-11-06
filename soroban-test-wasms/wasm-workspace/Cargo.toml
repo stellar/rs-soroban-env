@@ -35,7 +35,8 @@ members = [
     "delegated_account",
     "err",
     "write_upgrade_bytes",
-    "conditional_account"
+    "conditional_account",
+    "sac_reentry_account"
 ]
 [profile.release]
 opt-level = "z"

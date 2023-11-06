@@ -1,5 +1,6 @@
 use std::{convert::TryInto, rc::Rc};
 
+use crate::builtin_contracts::base_types::BytesN;
 use crate::{
     auth::RecordedAuthPayload,
     budget::AsBudget,
@@ -11,7 +12,7 @@ use crate::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
             generate_signing_key, new_ledger_entry_from_data, signing_key_to_account_id,
-            AccountSigner, HostVec, TestSigner,
+            AccountContractSigner, AccountSigner, HostVec, TestSigner,
         },
     },
     host::{frame::TestContractFrame, Frame},
@@ -34,11 +35,8 @@ use soroban_env_common::{
     EnvBase, Val,
 };
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
-use soroban_test_wasms::{ERR, INVOKE_CONTRACT};
+use soroban_test_wasms::{ERR, INVOKE_CONTRACT, SAC_REENTRY_TEST_CONTRACT, SIMPLE_ACCOUNT_CONTRACT};
 use stellar_strkey::ed25519;
-
-use crate::builtin_contracts::base_types::BytesN;
-use crate::builtin_contracts::testutils::AccountContractSigner;
 
 struct StellarAssetContractTest {
     host: Host,
@@ -65,7 +63,7 @@ impl StellarAssetContractTest {
             min_temp_entry_ttl: 16,
             max_entry_ttl: 6_312_000,
         })
-        .unwrap();
+            .unwrap();
         Self {
             host: host.clone(),
             issuer_key: generate_signing_key(&host),
@@ -282,9 +280,9 @@ impl StellarAssetContractTest {
         contract_id_bytes: &BytesN<32>,
         f: F,
     ) -> Result<Val, HostError>
-    where
-        T: Into<Val>,
-        F: FnOnce() -> Result<T, HostError>,
+        where
+            T: Into<Val>,
+            F: FnOnce() -> Result<T, HostError>,
     {
         self.host.with_frame(
             Frame::TestContract(TestContractFrame::new(
@@ -307,9 +305,9 @@ impl StellarAssetContractTest {
     }
 
     fn run_from_account<T, F>(&self, account_id: AccountId, f: F) -> Result<T, HostError>
-    where
-        T: Into<Val>,
-        F: FnOnce() -> Result<T, HostError>,
+        where
+            T: Into<Val>,
+            F: FnOnce() -> Result<T, HostError>,
     {
         let prev_source_account = self.host.source_account_id()?;
         self.host.set_source_account(account_id)?;
@@ -1245,7 +1243,7 @@ fn test_auth_required() {
         &test.host,
         &test.host.bytes_new_from_slice(&user_1).unwrap(),
     )
-    .unwrap();
+        .unwrap();
 
     contract
         .mint(&admin, user_1_addr.clone(), 100_000_000)
@@ -1260,8 +1258,8 @@ fn test_auth_required() {
             test.run_from_contract(&user_1_bytes, || {
                 contract.transfer(&user_1_invoker, user_2_addr.clone(), 1)
             })
-            .err()
-            .unwrap()
+                .err()
+                .unwrap()
         ),
         ContractError::BalanceDeauthorizedError
     );
@@ -1274,7 +1272,7 @@ fn test_auth_required() {
     test.run_from_contract(&user_1_bytes, || {
         contract.transfer(&user_1_invoker, user_2_addr.clone(), 1)
     })
-    .unwrap();
+        .unwrap();
 
     assert_eq!(contract.balance(user_1_addr.clone()).unwrap(), 99_999_999);
     assert_eq!(contract.balance(user_2_addr.clone()).unwrap(), 1);
@@ -1605,7 +1603,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
             1000,
         )
     })
-    .unwrap();
+        .unwrap();
 
     // Make another succesful call.
     test.run_from_account(admin_acc.clone(), || {
@@ -1615,7 +1613,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
             2000,
         )
     })
-    .unwrap();
+        .unwrap();
 
     assert_eq!(contract.balance(user_address.clone()).unwrap(), 1000);
     assert_eq!(
@@ -1632,9 +1630,9 @@ fn test_account_invoker_auth_with_issuer_admin() {
                 1000,
             )
         })
-        .err()
-        .unwrap()
-        .error,
+            .err()
+            .unwrap()
+            .error,
         (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
     // Invoke a transaction with non-matching address - this will fail in host
@@ -1657,7 +1655,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
             500,
         )
     })
-    .unwrap();
+        .unwrap();
 
     test.run_from_account(admin_acc.clone(), || {
         contract.transfer(
@@ -1666,7 +1664,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
             800,
         )
     })
-    .unwrap();
+        .unwrap();
 
     assert_eq!(contract.balance(user_address.clone()).unwrap(), 1300);
     assert_eq!(
@@ -1681,14 +1679,14 @@ fn test_account_invoker_auth_with_issuer_admin() {
         &test.host,
         &test.host.bytes_new_from_slice(&contract_id).unwrap(),
     )
-    .unwrap();
+        .unwrap();
     assert_eq!(
         test.run_from_contract(&contract_id_bytes, || {
             contract.mint(&contract_invoker, user_address.clone(), 1000)
         })
-        .err()
-        .unwrap()
-        .error,
+            .err()
+            .unwrap()
+            .error,
         (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
 }
@@ -1707,18 +1705,18 @@ fn test_contract_invoker_auth() {
         &test.host,
         &test.host.bytes_new_from_slice(&admin_contract_id).unwrap(),
     )
-    .unwrap();
+        .unwrap();
     let user_contract_id_bytes = BytesN::<32>::try_from_val(
         &test.host,
         &test.host.bytes_new_from_slice(&user_contract_id).unwrap(),
     )
-    .unwrap();
+        .unwrap();
     let contract = test.default_stellar_asset_contract_with_admin_id(&admin_contract_address);
 
     test.run_from_contract(&admin_contract_id_bytes, || {
         contract.mint(&admin_contract_invoker, user_contract_address.clone(), 1000)
     })
-    .unwrap();
+        .unwrap();
 
     // Make another succesful call
     test.run_from_contract(&admin_contract_id_bytes, || {
@@ -1728,7 +1726,7 @@ fn test_contract_invoker_auth() {
             2000,
         )
     })
-    .unwrap();
+        .unwrap();
 
     assert_eq!(
         contract.balance(user_contract_address.clone()).unwrap(),
@@ -1744,9 +1742,9 @@ fn test_contract_invoker_auth() {
         test.run_from_contract(&user_contract_id_bytes, || {
             contract.mint(&user_contract_invoker, user_contract_address.clone(), 1000)
         })
-        .err()
-        .unwrap()
-        .error,
+            .err()
+            .unwrap()
+            .error,
         (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
 
@@ -1762,12 +1760,12 @@ fn test_contract_invoker_auth() {
     test.run_from_contract(&user_contract_id_bytes, || {
         contract.transfer(&user_contract_invoker, admin_contract_address.clone(), 500)
     })
-    .unwrap();
+        .unwrap();
 
     test.run_from_contract(&admin_contract_id_bytes, || {
         contract.transfer(&admin_contract_invoker, user_contract_address.clone(), 800)
     })
-    .unwrap();
+        .unwrap();
 
     assert_eq!(
         contract.balance(user_contract_address.clone()).unwrap(),
@@ -1784,9 +1782,9 @@ fn test_contract_invoker_auth() {
         test.run_from_account(signing_key_to_account_id(&test.issuer_key), || {
             contract.mint(&acc_invoker, user_contract_address.clone(), 1000)
         })
-        .err()
-        .unwrap()
-        .error,
+            .err()
+            .unwrap()
+            .error,
         (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
 }
@@ -2846,10 +2844,6 @@ fn simple_account_sign_fn<'a>(
 
 #[test]
 fn test_custom_account_auth() {
-    use crate::builtin_contracts::testutils::AccountContractSigner;
-    use soroban_env_common::EnvBase;
-    use soroban_test_wasms::SIMPLE_ACCOUNT_CONTRACT;
-
     let test = StellarAssetContractTest::setup();
     let admin_kp = generate_signing_key(&test.host);
     let account_contract_addr_obj = test
@@ -2869,7 +2863,7 @@ fn test_custom_account_auth() {
             .bytes_new_from_slice(admin_kp.verifying_key().as_bytes().as_slice())
             .unwrap(),
     )
-    .unwrap();
+        .unwrap();
     // Initialize the admin account
     test.host
         .call(
@@ -2902,7 +2896,7 @@ fn test_custom_account_auth() {
             .bytes_new_from_slice(new_admin_kp.verifying_key().as_bytes().as_slice())
             .unwrap(),
     )
-    .unwrap();
+        .unwrap();
     // The new signer can't authorize admin ops.
     assert!(contract
         .mint(&new_admin, user_address.clone(), 100)
@@ -2992,15 +2986,15 @@ fn test_recording_auth_for_stellar_asset_contract() {
                             &test.host,
                             &Val::try_from_val(&test.host, &user.address(&test.host)).unwrap(),
                         )
-                        .unwrap(),
+                            .unwrap(),
                         ScVal::try_from_val(
                             &test.host,
                             &Val::try_from_val(&test.host, &100_i128).unwrap(),
                         )
-                        .unwrap(),
+                            .unwrap(),
                     ]
-                    .try_into()
-                    .unwrap(),
+                        .try_into()
+                        .unwrap(),
                 }),
                 sub_invocations: Default::default(),
             },
@@ -3051,7 +3045,7 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
             Symbol::try_from_val(&test.host, &"fail_after_updates").unwrap(),
             contract.address.as_object()
         ]
-        .into(),
+            .into(),
     )?;
 
     assert_eq!(contract.balance(err_address.clone()).unwrap(), 100_000_000);
@@ -3064,7 +3058,7 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
                 err_id_obj,
                 Symbol::try_from_val(&test.host, &"storage_updated")?,
                 host_vec![&test.host].into(),
-            )?
+            )?,
         )?,
         false
     );
@@ -3089,4 +3083,59 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
     );
 
     Ok(())
+}
+
+#[test]
+fn test_sac_reentry_is_not_allowed() {
+    let test = StellarAssetContractTest::setup();
+    let issuer = TestSigner::account(&test.issuer_key);
+    let issuer_id = signing_key_to_account_id(&test.issuer_key);
+    test.create_default_account(&issuer);
+    let asset_1 = Asset::CreditAlphanum4(AlphaNum4 {
+        asset_code: AssetCode4([1; 4]),
+        issuer: issuer_id.clone(),
+    });
+    let asset_2 = Asset::CreditAlphanum4(AlphaNum4 {
+        asset_code: AssetCode4([2; 4]),
+        issuer: issuer_id,
+    });
+
+    let contract_1 = TestStellarAssetContract::new_from_asset(&test.host, asset_1);
+    let contract_2 = TestStellarAssetContract::new_from_asset(&test.host, asset_2);
+
+    let account_contract_addr_obj = test
+        .host
+        .register_test_contract_wasm(SAC_REENTRY_TEST_CONTRACT);
+    let account_contract_addr: Address =
+        account_contract_addr_obj.try_into_val(&test.host).unwrap();
+
+    contract_1
+        .mint(&issuer, account_contract_addr.clone(), 100000)
+        .unwrap();
+    contract_2
+        .mint(&issuer, account_contract_addr.clone(), 100000)
+        .unwrap();
+
+    let account_signer = TestSigner::AccountContract(AccountContractSigner {
+        address: account_contract_addr.clone(),
+        sign: Box::new(|_| Val::VOID.into()),
+    });
+    test.host
+        .call(
+            account_contract_addr_obj,
+            Symbol::try_from_small_str("set_addr").unwrap(),
+            host_vec![&test.host, contract_1.address].into(),
+        )
+        .unwrap();
+
+    contract_2
+        .transfer(&account_signer, contract_1.address.clone(), 100)
+        .unwrap();
+
+    assert!(contract_1
+        .transfer(&account_signer, contract_2.address.clone(), 100)
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 }
