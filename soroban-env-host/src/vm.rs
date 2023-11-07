@@ -102,6 +102,12 @@ impl Vm {
         if got_proto < want_proto {
             // Old protocols are finalized, we only support contracts
             // with similarly finalized (zero) prerelease numbers.
+            //
+            // Note that we only enable this check if the "next" feature isn't enabled
+            // because a "next" stellar-core can still run a "curr" test using non-finalized
+            // test wasms. The "next" feature isn't safe for production and is meant to
+            // simulate the protocol version after the one currently supported in
+            // stellar-core, so bypassing this check for "next" is safe.
             #[cfg(not(feature = "next"))]
             if got_pre != 0 {
                 return Err(err!(
