@@ -96,7 +96,10 @@ impl Vm {
             }
         };
 
+        // Not used when "next" is enabled
+        #[cfg(not(feature = "next"))]
         let got_pre = get_pre_release_version(interface_version);
+
         let got_proto = get_ledger_protocol_version(interface_version);
 
         if got_proto < want_proto {
@@ -118,17 +121,23 @@ impl Vm {
                 ));
             }
         } else if got_proto == want_proto {
-            // Current protocol might have a nonzero prerelease number; we will
-            // allow it only if it matches the current prerelease exactly.
-            let want_pre = get_pre_release_version(meta::INTERFACE_VERSION);
-            if want_pre != got_pre {
-                return Err(err!(
-                    host,
-                    (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                    "contract pre-release number for current protocol does not match host",
-                    got_pre,
-                    want_pre
-                ));
+            // Relax this check as well for the "next" feature to allow for flexibility while testing.
+            // stellar-core can pass in an older protocol version, in which case the pre-release version
+            // will not match up with the "next" feature (The "next" pre-release version is always 1).
+            #[cfg(not(feature = "next"))]
+            {
+                // Current protocol might have a nonzero prerelease number; we will
+                // allow it only if it matches the current prerelease exactly.
+                let want_pre = get_pre_release_version(meta::INTERFACE_VERSION);
+                if want_pre != got_pre {
+                    return Err(err!(
+                        host,
+                        (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                        "contract pre-release number for current protocol does not match host",
+                        got_pre,
+                        want_pre
+                    ));
+                }
             }
         } else {
             // Future protocols we don't allow. It might be nice (in the sense
