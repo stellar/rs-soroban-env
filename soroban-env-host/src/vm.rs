@@ -102,6 +102,7 @@ impl Vm {
         if got_proto < want_proto {
             // Old protocols are finalized, we only support contracts
             // with similarly finalized (zero) prerelease numbers.
+            #[cfg(not(feature = "next"))]
             if got_pre != 0 {
                 return Err(err!(
                     host,

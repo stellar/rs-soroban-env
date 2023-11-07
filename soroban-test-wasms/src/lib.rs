@@ -42,10 +42,8 @@
 //!      documentation purpopses without having to worry about breaking tests in
 //!      the host here.
 
-#[cfg(not(feature = "next"))]
 pub use curr::*;
 
-#[cfg(not(feature = "next"))]
 mod curr {
     pub const ADD_I32: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_add_i32.wasm").as_slice();
@@ -85,50 +83,4 @@ mod curr {
         include_bytes!("../wasm-workspace/opt/curr/test_conditional_account.wasm").as_slice();
     pub const SAC_REENTRY_TEST_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/sac_reentry_account.wasm").as_slice();
-}
-
-#[cfg(feature = "next")]
-pub use next::*;
-
-#[cfg(feature = "next")]
-mod next {
-    pub const ADD_I32: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_add_i32.wasm").as_slice();
-    pub const ADD_F32: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_add_f32.wasm").as_slice();
-    pub const ALLOC: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_alloc.wasm").as_slice();
-    pub const CREATE_CONTRACT: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_create_contract.wasm").as_slice();
-    pub const CONTRACT_STORAGE: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_contract_data.wasm").as_slice();
-    pub const LINEAR_MEMORY: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_linear_memory.wasm").as_slice();
-    pub const VEC: &[u8] = include_bytes!("../wasm-workspace/opt/next/example_vec.wasm").as_slice();
-    pub const INVOKE_CONTRACT: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_invoke_contract.wasm").as_slice();
-    pub const HOSTILE: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_hostile.wasm").as_slice();
-    pub const FIB: &[u8] = include_bytes!("../wasm-workspace/opt/next/example_fib.wasm").as_slice();
-    pub const FANNKUCH: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_fannkuch.wasm").as_slice();
-    pub const COMPLEX: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_complex.wasm").as_slice();
-    pub const SIMPLE_ACCOUNT_CONTRACT: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_simple_account.wasm").as_slice();
-    pub const AUTH_TEST_CONTRACT: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/auth_test_contract.wasm").as_slice();
-    pub const UPDATEABLE_CONTRACT: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/example_updateable_contract.wasm").as_slice();
-    pub const DELEGATED_ACCOUNT_TEST_CONTRACT: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/test_delegated_account.wasm").as_slice();
-    pub const ERR: &[u8] = include_bytes!("../wasm-workspace/opt/next/example_err.wasm").as_slice();
-    pub const WRITE_BYTES: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/soroban_write_upgrade_bytes_contract.wasm")
-            .as_slice();
-    pub const CONDITIONAL_ACCOUNT_TEST_CONTRACT: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/test_conditional_account.wasm").as_slice();
-
-    pub const SAC_REENTRY_TEST_CONTRACT: &[u8] =
-        include_bytes!("../wasm-workspace/opt/next/sac_reentry_account.wasm").as_slice();
 }
