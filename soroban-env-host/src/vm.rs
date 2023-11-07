@@ -28,7 +28,7 @@ use super::{xdr::Hash, Host, Symbol, Val};
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
-    meta::{self, get_ledger_protocol_version, get_pre_release_version},
+    meta::{self, get_ledger_protocol_version},
     xdr::{
         DepthLimitedRead, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType,
         DEFAULT_XDR_RW_DEPTH_LIMIT,
@@ -98,7 +98,7 @@ impl Vm {
 
         // Not used when "next" is enabled
         #[cfg(not(feature = "next"))]
-        let got_pre = get_pre_release_version(interface_version);
+        let got_pre = meta::get_pre_release_version(interface_version);
 
         let got_proto = get_ledger_protocol_version(interface_version);
 
@@ -128,7 +128,7 @@ impl Vm {
             {
                 // Current protocol might have a nonzero prerelease number; we will
                 // allow it only if it matches the current prerelease exactly.
-                let want_pre = get_pre_release_version(meta::INTERFACE_VERSION);
+                let want_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
                 if want_pre != got_pre {
                     return Err(err!(
                         host,
