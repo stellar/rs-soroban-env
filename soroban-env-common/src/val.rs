@@ -1,7 +1,7 @@
 // This permits globals prouced by derive(num_enum::TryFromPrimitive) below.
 #![cfg_attr(test, allow(non_upper_case_globals))]
 
-use crate::xdr::{ScError, ScValType};
+use crate::xdr::{ScError, ScVal, ScValType};
 use crate::{
     declare_tag_based_object_wrapper, declare_tag_based_wrapper,
     impl_tryfroms_and_tryfromvals_delegating_to_valconvert, impl_val_wrapper_base, Compare, I32Val,
@@ -604,8 +604,20 @@ impl Val {
         }
     }
 
-    pub const fn can_represent_scval(scv: &crate::xdr::ScVal) -> bool {
-        Self::can_represent_scval_type(scv.discriminant())
+    pub fn can_represent_scval(scv: &crate::xdr::ScVal) -> bool {
+        match scv {
+            // Handle recursive types first
+            ScVal::Vec(None) => return false,
+            ScVal::Map(None) => return false,
+            ScVal::Vec(Some(v)) => return v.0.iter().all(|x| Val::can_represent_scval(x)),
+            ScVal::Map(Some(m)) => {
+                return m
+                    .0
+                    .iter()
+                    .all(|e| Val::can_represent_scval(&e.key) && Val::can_represent_scval(&e.val))
+            }
+            _ => Self::can_represent_scval_type(scv.discriminant()),
+        }
     }
 
     #[inline(always)]
