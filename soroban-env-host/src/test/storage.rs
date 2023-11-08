@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::budget::Budget;
-use crate::builtin_contracts::testutils::HostVec;
+use crate::builtin_contracts::testutils::ContractTypeVec;
 use crate::storage::{AccessType, Footprint};
 use crate::xdr::{
     ContractDataDurability, LedgerKey, LedgerKeyContractData, ScAddress, ScErrorCode, ScErrorType,
