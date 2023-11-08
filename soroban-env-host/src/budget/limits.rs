@@ -35,7 +35,7 @@ pub(crate) const DEFAULT_MEM_BYTES_LIMIT: u64 = 40 * 1024 * 1024; // 40MB
 /// `DepthLimiter` is a trait designed for managing the depth of recursive operations.
 /// It provides a mechanism to limit recursion depth, and defines the behavior upon
 /// entering and leaving a recursion level.
-pub trait DepthLimiter {
+pub(crate) trait DepthLimiter {
     /// Defines the behavior for entering a new recursion level.
     /// An `ExceededLimit` is returned if the new level exceeds the depth limit.
     fn enter(&mut self) -> Result<(), HostError>;
