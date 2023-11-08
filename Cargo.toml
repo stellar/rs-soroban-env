@@ -52,6 +52,6 @@ rev = "e6ba45c60c16de28c7522586b80ed0150157df73"
 lto = true
 
 [profile.test-opt]
-inherits = "dev"
+inherits = "test"
 opt-level = 3
 debug = false
