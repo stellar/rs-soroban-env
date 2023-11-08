@@ -4,7 +4,7 @@ use crate::{
     budget::AsBudget,
     host::metered_clone::MeteredClone,
     xdr::{ScErrorCode, ScErrorType, ScVal, ScVec},
-    Env, Host, HostError,
+    Env, Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };
 
 #[test]
@@ -91,42 +91,51 @@ fn deep_host_obj_cmp() -> Result<(), HostError> {
 }
 
 #[test]
-fn deep_scval_xdr_serialization() -> Result<(), HostError> {
+fn depth_limited_scval_xdr_serialization() -> Result<(), HostError> {
     let mut v = ScVal::from(ScVec::default());
     for _ in 0..200 {
         let vv = ScVec::try_from(vec![v])?;
         v = ScVal::from(vv);
     }
+    // default depth limit will cause serialization to fail
     let res = v
-        .to_xdr(Limits {
-            depth: 500,
-            ..Limits::default()
-        })
+        .to_xdr(DEFAULT_XDR_RW_LIMITS)
         .map_err(|e| HostError::from(e));
     let code = (ScErrorType::Context, ScErrorCode::ExceededLimit);
+    assert!(HostError::result_matches_err(res, code));
+
+    // remove the Limits to make serialization pass
+    let bytes = v.to_xdr(Limits::none())?;
+    // deserialization from the input with limits will fail
+    let res = ScVal::from_xdr(bytes, DEFAULT_XDR_RW_LIMITS).map_err(|e| HostError::from(e));
     assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
 #[test]
-fn deep_scval_xdr_deserialization() -> Result<(), HostError> {
-    let mut v = ScVal::from(ScVec::default());
-    for _ in 0..200 {
-        let vv = ScVec::try_from(vec![v])?;
-        v = ScVal::from(vv);
+fn length_limited_scval_xdr_conversion() -> Result<(), HostError> {
+    let buf = vec![0; 200000];
+    let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());
+    let mut scv_vec = ScVal::Vec(Some(ScVec(vec![scv_bytes.clone(); 1].try_into().unwrap())));
+    // roughly consumes 20MiB (> 16 MiB the limit)
+    for _i in 1..100 {
+        let mut v = vec![scv_vec; 1];
+        v.push(scv_bytes.clone());
+        scv_vec = ScVal::Vec(Some(v.try_into().unwrap()));
     }
-    let bytes = v.to_xdr(Limits {
-        depth: 10000,
-        ..Limits::default()
-    })?;
-    let res = ScVal::from_xdr(
-        bytes,
-        Limits {
-            depth: 500,
-            ..Limits::default()
-        },
-    )
-    .map_err(|e| HostError::from(e));
+    // default length limit will cause serialization to fail
+    let res = scv_vec
+        .to_xdr(DEFAULT_XDR_RW_LIMITS)
+        .map_err(|e| HostError::from(e));
+    let code = (ScErrorType::Context, ScErrorCode::ExceededLimit);
+    assert!(HostError::result_matches_err(res, code));
+
+    // remove the Limits to make serialization pass
+    let bytes = scv_vec
+        .to_xdr(Limits::none())
+        .map_err(|e| HostError::from(e))?;
+    // deserialization from the input with limits will fail
+    let res = ScVal::from_xdr(bytes, DEFAULT_XDR_RW_LIMITS).map_err(|e| HostError::from(e));
     let code = (ScErrorType::Context, ScErrorCode::ExceededLimit);
     assert!(HostError::result_matches_err(res, code));
     Ok(())

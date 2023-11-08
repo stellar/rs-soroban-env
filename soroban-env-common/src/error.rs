@@ -155,7 +155,7 @@ impl From<ConversionError> for Error {
 impl From<crate::xdr::Error> for Error {
     fn from(e: crate::xdr::Error) -> Self {
         match e {
-            crate::xdr::Error::DepthLimitExceeded => {
+            crate::xdr::Error::DepthLimitExceeded | crate::xdr::Error::LengthLimitExceeded => {
                 Error::from_type_and_code(ScErrorType::Context, ScErrorCode::ExceededLimit)
             }
             _ => Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput),

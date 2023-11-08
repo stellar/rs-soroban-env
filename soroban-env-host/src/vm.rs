@@ -19,19 +19,15 @@ use crate::{
     budget::AsBudget,
     err,
     host::{error::TryBorrowOrErr, metered_clone::MeteredContainer},
-    xdr::ContractCostType,
-    HostError,
+    meta::{self, get_ledger_protocol_version},
+    xdr::{ContractCostType, Hash, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
+    ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
+    DEFAULT_XDR_RW_LIMITS,
 };
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
-use super::{xdr::Hash, Host, Symbol, Val};
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
-use soroban_env_common::{
-    meta::{self, get_ledger_protocol_version},
-    xdr::{Limited, Limits, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
-    ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
-};
 
 use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store, Value};
 
@@ -158,7 +154,7 @@ impl Vm {
         // us as well as a protocol that's less than or equal to our protocol.
 
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
-            let mut cursor = Limited::new(Cursor::new(env_meta), Limits::default());
+            let mut cursor = Limited::new(Cursor::new(env_meta), DEFAULT_XDR_RW_LIMITS);
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;

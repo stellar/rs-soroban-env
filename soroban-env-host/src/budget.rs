@@ -1,10 +1,11 @@
-mod depth_limiter;
 mod dimension;
+mod limits;
 mod model;
 mod util;
 mod wasmi_helper;
 
-pub use depth_limiter::DepthLimiter;
+pub(crate) use limits::DepthLimiter;
+pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use model::COST_MODEL_LIN_TERM_SCALE_BITS;
 
 use std::{
@@ -16,17 +17,12 @@ use std::{
 use crate::{
     host::error::TryBorrowOrErr,
     xdr::{ContractCostParams, ContractCostType, ScErrorCode, ScErrorType},
-    Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
+    Error, Host, HostError,
 };
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
 use model::ScaledU64;
 use wasmi_helper::FuelConfig;
-
-// These are some sane values, however the embedder should typically customize
-// these to match the network config.
-const DEFAULT_CPU_INSN_LIMIT: u64 = 100_000_000;
-const DEFAULT_MEM_BYTES_LIMIT: u64 = 40 * 1024 * 1024; // 40MB
 
 #[derive(Clone, Default)]
 struct MeterTracker {
@@ -425,8 +421,8 @@ impl Default for BudgetImpl {
         }
 
         // define the limits
-        b.cpu_insns.reset(DEFAULT_CPU_INSN_LIMIT);
-        b.mem_bytes.reset(DEFAULT_MEM_BYTES_LIMIT);
+        b.cpu_insns.reset(limits::DEFAULT_CPU_INSN_LIMIT);
+        b.mem_bytes.reset(limits::DEFAULT_MEM_BYTES_LIMIT);
         b
     }
 }

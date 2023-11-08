@@ -9,6 +9,9 @@ use crate::{
 pub struct ReadXdrByteArrayRun;
 
 impl CostRunner for ReadXdrByteArrayRun {
+    // experimental cost type that identifies this component. Used purely for result aggregation
+    // purpose. Internally there is no budget component associated with this type, and you'll
+    // have to override the get_tracker method to return the correct inputs.
     const COST_TYPE: CostType = CostType::Experimental(ReadXdrByteArray);
 
     type SampleType = Vec<u8>;
@@ -30,6 +33,7 @@ impl CostRunner for ReadXdrByteArrayRun {
     }
 
     fn get_tracker(host: &crate::Host) -> (u64, Option<u64>) {
+        // internally this is still charged under `ValDeser`
         host.as_budget().get_tracker(ValDeser).unwrap()
     }
 }

@@ -2,6 +2,7 @@
 // $ cargo bench --features testutils --bench worst_case_linear_models -- --nocapture
 // You can optionally pass in args listing the {`ContractCostType`, `WasmInsnType`} combination to run with, e.g.
 // $ cargo bench --features testutils --bench worst_case_linear_models -- MemCpy I64Rotr --nocapture
+// To run the experimental cost types: $ RUN_EXPERIMENT=1 cargo bench ...
 mod common;
 use common::*;
 use soroban_env_host::{
