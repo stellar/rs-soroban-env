@@ -1410,7 +1410,7 @@ dependencies = [
  "soroban-test-wasms",
  "soroban-wasmi",
  "static_assertions",
- "stellar-strkey 0.0.7",
+ "stellar-strkey 0.0.8 (git+https://github.com/stellar/rs-stellar-strkey?rev=79ede59c97ed80090b9af63151c9f9a15260492d)",
  "tabwriter",
  "textplots",
  "thousands",
@@ -1484,18 +1484,19 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-strkey"
-version = "0.0.7"
-source = "git+https://github.com/stellar/rs-stellar-strkey?rev=e6ba45c60c16de28c7522586b80ed0150157df73#e6ba45c60c16de28c7522586b80ed0150157df73"
+version = "0.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12d2bf45e114117ea91d820a846fd1afbe3ba7d717988fee094ce8227a3bf8bd"
 dependencies = [
  "base32",
+ "crate-git-revision",
  "thiserror",
 ]
 
 [[package]]
 name = "stellar-strkey"
 version = "0.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12d2bf45e114117ea91d820a846fd1afbe3ba7d717988fee094ce8227a3bf8bd"
+source = "git+https://github.com/stellar/rs-stellar-strkey?rev=79ede59c97ed80090b9af63151c9f9a15260492d#79ede59c97ed80090b9af63151c9f9a15260492d"
 dependencies = [
  "base32",
  "crate-git-revision",
@@ -1513,7 +1514,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_with",
- "stellar-strkey 0.0.8",
+ "stellar-strkey 0.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
