@@ -37,11 +37,6 @@ version = "0.31.0-soroban1"
 git = "https://github.com/stellar/wasmi"
 rev = "7e63b4c9e08c4163f417d118d81f7ea34789d0be"
 
-[workspace.dependencies.stellar-strkey]
-version = "0.0.8"
-git = "https://github.com/stellar/rs-stellar-strkey"
-rev = "79ede59c97ed80090b9af63151c9f9a15260492d"
-
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # stellar-xdr = { path = "../rs-stellar-xdr/" }
 # [patch."https://github.com/stellar/wasmi"]

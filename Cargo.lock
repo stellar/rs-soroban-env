@@ -1410,7 +1410,7 @@ dependencies = [
  "soroban-test-wasms",
  "soroban-wasmi",
  "static_assertions",
- "stellar-strkey 0.0.8 (git+https://github.com/stellar/rs-stellar-strkey?rev=79ede59c97ed80090b9af63151c9f9a15260492d)",
+ "stellar-strkey",
  "tabwriter",
  "textplots",
  "thousands",
@@ -1494,16 +1494,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "stellar-strkey"
-version = "0.0.8"
-source = "git+https://github.com/stellar/rs-stellar-strkey?rev=79ede59c97ed80090b9af63151c9f9a15260492d#79ede59c97ed80090b9af63151c9f9a15260492d"
-dependencies = [
- "base32",
- "crate-git-revision",
- "thiserror",
-]
-
-[[package]]
 name = "stellar-xdr"
 version = "20.0.0-rc1"
 source = "git+https://github.com/stellar/rs-stellar-xdr?rev=957273d7b8092888849219a3ad2aa054059ca89d#957273d7b8092888849219a3ad2aa054059ca89d"
@@ -1514,7 +1504,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_with",
- "stellar-strkey 0.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "stellar-strkey",
 ]
 
 [[package]]
