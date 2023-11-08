@@ -24,4 +24,5 @@ mod symbol;
 mod tuple;
 mod vec;
 
+mod finish;
 mod metering_benchmark;
