@@ -1,7 +1,10 @@
 all: build test
 
 test:
-	cargo hack --each-feature test
+	cargo hack --each-feature --exclude-features build_opt test
+
+test-opt:
+	cargo hack --each-feature --exclude-features build_opt test --profile test-opt
 
 build:
 	cargo hack --each-feature clippy

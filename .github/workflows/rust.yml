@@ -90,9 +90,9 @@ jobs:
       with:
         name: cargo-hack
         version: 0.5.16
-    - run: cargo hack --each-feature clippy --locked --target ${{ matrix.sys.target }}
+    - run: cargo hack --each-feature --exclude-features build_opt clippy --locked --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
-      run: cargo hack --each-feature test --locked --target ${{ matrix.sys.target }}
+      run: cargo hack --each-feature --exclude-features build_opt test --profile test-opt --locked --target ${{ matrix.sys.target }}
 
   publish-dry-run:
     if: github.event_name == 'push' || startsWith(github.head_ref, 'release/')
