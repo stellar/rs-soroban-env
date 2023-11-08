@@ -61,9 +61,6 @@ testutils = ["soroban-env-common/testutils", "soroban-synth-wasm/testutils", "re
 next = ["soroban-env-common/next", "soroban-synth-wasm/next", "soroban-bench-utils/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_auth = []
-# This feature is set automatically by the build script to indicate that
-# build is optimized. Don't set manually.
-opt_build = []
 
 [[bench]]
 required-features = ["testutils"]
