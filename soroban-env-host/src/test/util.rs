@@ -386,4 +386,25 @@ pub(crate) mod wasm {
         fe.call_func_indirect(ty);
         fe.finish_and_export("test").finish()
     }
+
+    pub(crate) fn wasm_module_with_div_by_zero() -> Vec<u8> {
+        let me = ModEmitter::new();
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Operand::Const64(123));
+        fe.push(Operand::Const64(0));
+        fe.i64_div_s();
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_integer_overflow() -> Vec<u8> {
+        let me = ModEmitter::new();
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Operand::Const64(i64::MIN));
+        fe.push(Operand::Const64(-1));
+        // interestingly the only operation that can trigger `IntegerOverflow`
+        // is an overflowing division. Other arithmatic opeartions add, sub, mul
+        // are wrapping.
+        fe.i64_div_s();
+        fe.finish_and_export("test").finish()
+    }
 }

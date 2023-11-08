@@ -454,3 +454,43 @@ fn test_indirect_call_via_table_access() -> Result<(), HostError> {
     }
     Ok(())
 }
+
+#[test]
+fn test_div_by_zero() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_div_by_zero();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+
+    host.budget_ref().reset_limits(2_000_000, 500_000)?;
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::ArithDomain)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_integer_overflow() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_integer_overflow();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+
+    host.budget_ref().reset_limits(2_000_000, 500_000)?;
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::ArithDomain)
+    ));
+    Ok(())
+}
