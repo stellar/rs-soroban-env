@@ -1,4 +1,5 @@
 pub(crate) mod util;
+pub(crate) use util::wasm as wasm_util;
 
 mod address;
 mod auth;
