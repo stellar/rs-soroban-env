@@ -7,7 +7,8 @@ use soroban_env_common::{
 };
 
 use crate::{
-    events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
+    budget::AsBudget, events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host,
+    HostError, Symbol, Tag,
 };
 use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
 
@@ -195,6 +196,46 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     ]];
     let actual = format!("{}", last_event);
     expected.assert_eq(&actual);
+
+    Ok(())
+}
+
+#[test]
+fn contract_failure_with_debug_on_off_affects_no_metering() -> Result<(), HostError> {
+    let invoke_cross_contract_indirect_with_err =
+        |enable_debug: bool| -> Result<(u64, u64, u64, u64), HostError> {
+            let host = Host::test_host_with_recording_footprint();
+            if enable_debug {
+                host.enable_debug()?
+            };
+            let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
+            let sym = Symbol::try_from_small_str("add_with").unwrap();
+            let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
+            let args = host.vec_push_back(args, host.bytes_new()?.to_val())?;
+
+            // try call -- add will trap, and add_with will trap, but we will get an error
+            let res = host.try_call(id0_obj, sym, args);
+            HostError::result_matches_err(
+                res,
+                Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InvalidAction),
+            );
+            Ok((
+                host.as_budget().get_cpu_insns_consumed()?,
+                host.as_budget().get_mem_bytes_consumed()?,
+                host.as_budget().get_shadow_cpu_insns_consumed()?,
+                host.as_budget().get_shadow_mem_bytes_consumed()?,
+            ))
+        };
+
+    let (on_cpu, on_mem, on_shadow_cpu, on_shadow_mem) =
+        invoke_cross_contract_indirect_with_err(true)?;
+    let (off_cpu, off_mem, off_shadow_cpu, off_shadow_mem) =
+        invoke_cross_contract_indirect_with_err(false)?;
+    assert_eq!((on_cpu, on_mem), (off_cpu, off_mem));
+    assert_ne!(
+        (on_shadow_cpu, on_shadow_mem),
+        (off_shadow_cpu, off_shadow_mem)
+    );
 
     Ok(())
 }
