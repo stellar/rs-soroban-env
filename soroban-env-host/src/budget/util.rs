@@ -142,17 +142,26 @@ impl Budget {
 
 #[cfg(any(test, feature = "recording_auth"))]
 impl Budget {
-    /// Fallible version of `with_shadow_mode`, enabled only in testing and
-    /// non-production scenarios. The non-fallible `with_shadow_mode` is the
-    /// preferred method and should be used if at all possible.
+    /// Variant of `with_shadow_mode`, enabled only in testing and
+    /// non-production scenarios, that produces a `Result<>` rather than eating
+    /// errors and return values the way `with_shadow_mode` does.
+    ///
+    /// This is undesirable specifically because it has a return value which may
+    /// vary between `Ok` and `Err` depending on whether the shadow budget is
+    /// exhausted, and the shadow budget varies based on debug status --
+    /// something that is not identical from one host to the next.
+    ///
     /// However, in testing and non-production workflows, sometimes we need the
     /// convenience of temporarily "turning off" the budget. This can happen for
-    /// several reasons: we want the some test logic to not affect the production
-    /// budget, or we want to maintain an accurate prediction of production budget
-    /// during preflight. In the latter case, we want to exclude preflight-only
-    /// logic from the budget. By routing metering to the shadow budget instead
-    /// of turning the budget off completely, it offers some DOS-mitigation.
-    pub(crate) fn with_shadow_mode_fallible<T, F>(&self, f: F) -> Result<T, HostError>
+    /// several reasons: we want the some test logic to not affect the
+    /// production budget, or we want to maintain an accurate prediction of
+    /// production budget during preflight. In the latter case, we want to
+    /// exclude preflight-only logic from the budget. By routing metering to the
+    /// shadow budget instead of turning the budget off completely, it offers
+    /// some DOS-mitigation.
+    ///
+    /// If in doubt, do not use this function.
+    pub(crate) fn with_observable_shadow_mode<T, F>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce() -> Result<T, HostError>,
     {
@@ -160,8 +169,10 @@ impl Budget {
         let should_execute = self.mut_budget(|mut b| {
             prev = b.is_in_shadow_mode;
             b.is_in_shadow_mode = true;
-            b.cpu_insns.check_budget_limit(true)?;
-            b.mem_bytes.check_budget_limit(true)
+            b.cpu_insns
+                .check_budget_limit(super::dimension::IsShadowMode(true))?;
+            b.mem_bytes
+                .check_budget_limit(super::dimension::IsShadowMode(true))
         });
 
         let rt = match should_execute {

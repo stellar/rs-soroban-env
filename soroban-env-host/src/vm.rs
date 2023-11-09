@@ -358,6 +358,8 @@ impl Vm {
             .return_fuel_to_host(host)?;
 
         if let Err(e) = res {
+            use std::borrow::Cow;
+
             // When a call fails with a wasmi::Error::Trap that carries a HostError
             // we propagate that HostError as is, rather than producing something new.
 
@@ -365,13 +367,12 @@ impl Vm {
                 wasmi::Error::Trap(trap) => {
                     if let Some(code) = trap.trap_code() {
                         let err = code.into();
-                        return Err(if host.is_debug()? {
-                            // With diagnostics on: log as much detail as we can from wasmi.
-                            let msg = format!("VM call trapped: {:?}", &code);
-                            host.error(err, &msg, &[func_sym.to_val(), err.to_val()])
-                        } else {
-                            err.into()
+                        let mut msg = Cow::Borrowed("VM call trapped");
+                        host.with_debug_mode(|| {
+                            msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
+                            Ok(())
                         });
+                        return Err(host.error(err, &msg, &[func_sym.to_val()]));
                     }
                     if let Some(he) = trap.downcast::<HostError>() {
                         host.log_diagnostics(
@@ -388,13 +389,12 @@ impl Vm {
                     ));
                 }
                 e => {
-                    return Err(if host.is_debug()? {
-                        // With diagnostics on: log as much detail as we can from wasmi.
-                        let msg = format!("VM call failed: {:?}", &e);
-                        host.error(e.into(), &msg, &[func_sym.to_val()])
-                    } else {
-                        host.error(e.into(), "VM call failed", &[func_sym.to_val()])
+                    let mut msg = Cow::Borrowed("VM call failed");
+                    host.with_debug_mode(|| {
+                        msg = Cow::Owned(format!("VM call failed: {:?}", &e));
+                        Ok(())
                     });
+                    return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
                 }
             }
         }
