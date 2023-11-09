@@ -1,7 +1,7 @@
 use crate::{
     builtin_contracts::{
         base_types::{Address, Bytes, String},
-        testutils::{authorize_single_invocation, HostVec, TestSigner},
+        testutils::{authorize_single_invocation, ContractTypeVec, TestSigner},
     },
     host_vec,
     xdr::{Asset, Limited, WriteXdr},
@@ -45,7 +45,7 @@ impl<'a> TestStellarAssetContract<'a> {
         &self,
         signer: &TestSigner,
         function_name: &str,
-        args: HostVec,
+        args: ContractTypeVec,
     ) -> Result<(), HostError> {
         authorize_single_invocation(
             self.host,

@@ -36,7 +36,8 @@ members = [
     "err",
     "write_upgrade_bytes",
     "conditional_account",
-    "sac_reentry_account"
+    "sac_reentry_account",
+    "recursive_account"
 ]
 [profile.release]
 opt-level = "z"

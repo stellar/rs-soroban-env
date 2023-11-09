@@ -44,5 +44,9 @@ rev = "7e63b4c9e08c4163f417d118d81f7ea34789d0be"
 # soroban-wasmi_core = { path = "../wasmi/crates/core/" }
 
 [profile.release]
-codegen-units = 1
 lto = true
+
+[profile.test-opt]
+inherits = "test"
+opt-level = 3
+debug = false

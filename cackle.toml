@@ -117,6 +117,9 @@ allow_unsafe = true
 
 [pkg.soroban-env-host]
 allow_unsafe = true
+build.allow_apis = [
+    "env",
+]
 
 [pkg.unicode-ident]
 allow_unsafe = true

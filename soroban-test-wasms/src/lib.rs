@@ -83,4 +83,6 @@ mod curr {
         include_bytes!("../wasm-workspace/opt/curr/test_conditional_account.wasm").as_slice();
     pub const SAC_REENTRY_TEST_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/sac_reentry_account.wasm").as_slice();
+    pub const RECURSIVE_ACCOUNT_CONTRACT: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/recursive_account.wasm").as_slice();
 }
