@@ -1,20 +1,18 @@
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use rand::RngCore;
-use soroban_env_common::{
-    xdr::{
-        AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
-        PublicKey, ScAddress, ScErrorCode, ScErrorType, ScVal, ScVec, Uint256,
-    },
-    AddressObject, BytesObject, Env, EnvBase, Symbol, Val, VecObject,
-};
-use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 
 use crate::{
     budget::{AsBudget, Budget},
     host::HostLifecycleEvent,
     storage::{SnapshotSource, Storage},
-    xdr, Error, Host, HostError, LedgerInfo,
+    xdr,
+    xdr::{
+        AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
+        PublicKey, ScAddress, ScErrorCode, ScErrorType, ScVal, ScVec, Uint256,
+    },
+    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, Symbol, Val,
+    VecObject,
 };
 
 use soroban_bench_utils::HostTracker;
@@ -36,6 +34,18 @@ impl AsScVal for i32 {
     }
 }
 
+impl AsScVal for u64 {
+    fn as_scval(&self) -> ScVal {
+        ScVal::U64(*self)
+    }
+}
+
+impl AsScVal for i64 {
+    fn as_scval(&self) -> ScVal {
+        ScVal::I64(*self)
+    }
+}
+
 impl AsScVal for ScVec {
     fn as_scval(&self) -> ScVal {
         ScVal::Vec(Some(self.clone()))
@@ -53,21 +63,6 @@ pub(crate) fn generate_bytes_array(host: &Host) -> [u8; 32] {
     host.with_test_prng(|chacha| Ok(chacha.fill_bytes(&mut bytes)))
         .unwrap();
     bytes
-}
-
-pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
-    let mut fe = ModEmitter::new().func(Arity(1), 0);
-    let arg = fe.args[0];
-    fe.push(Operand::Const64(1));
-    for i in 0..n {
-        fe.push(arg);
-        fe.push(Operand::Const64(i as i64));
-        fe.i64_mul();
-        fe.i64_add();
-    }
-    fe.drop();
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    fe.finish_and_export("test").finish()
 }
 
 pub(crate) struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
@@ -314,5 +309,102 @@ impl Host {
         println!();
 
         val
+    }
+}
+
+pub(crate) mod wasm {
+    use crate::Symbol;
+    use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
+
+    pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
+        let mut fe = ModEmitter::new().func(Arity(1), 0);
+        let arg = fe.args[0];
+        fe.push(Operand::Const64(1));
+        for i in 0..n {
+            fe.push(arg);
+            fe.push(Operand::Const64(i as i64));
+            fe.i64_mul();
+            fe.i64_add();
+        }
+        fe.drop();
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
+        let mut fe = ModEmitter::new().func(Arity(0), 0);
+        fe.push(Operand::Const32(n_pages as i32));
+        fe.memory_grow();
+        fe.drop();
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_linear_memory_logging() -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        // log_from_linear_memory
+        let f0 = me.import_func("x", "_", Arity(4));
+        // the caller
+        let mut fe = me.func(Arity(4), 0);
+        fe.push(Operand::Local(LocalRef(0)));
+        fe.push(Operand::Local(LocalRef(1)));
+        fe.push(Operand::Local(LocalRef(2)));
+        fe.push(Operand::Local(LocalRef(3)));
+        fe.call_func(f0);
+        fe.drop();
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_unreachable() -> Vec<u8> {
+        let me = ModEmitter::new();
+        let mut fe = me.func(Arity(0), 0);
+        fe.trap();
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_indirect_call() -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+        // a local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (me, f1) = fe.finish();
+        // another local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass2").unwrap());
+        let (mut me, f2) = fe.finish();
+        // store in table
+        me.define_elems(&[f0, f1, f2]);
+        let ty = me.get_fn_type(Arity(0));
+        // the caller
+        fe = me.func(Arity(1), 0);
+        fe.local_get(LocalRef(0));
+        fe.i32_wrap_i64();
+        // fe.i32_const(0);
+        fe.call_func_indirect(ty);
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_div_by_zero() -> Vec<u8> {
+        let me = ModEmitter::new();
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Operand::Const64(123));
+        fe.push(Operand::Const64(0));
+        fe.i64_div_s();
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_integer_overflow() -> Vec<u8> {
+        let me = ModEmitter::new();
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Operand::Const64(i64::MIN));
+        fe.push(Operand::Const64(-1));
+        // interestingly the only operation that can trigger `IntegerOverflow`
+        // is an overflowing division. Other arithmatic opeartions add, sub, mul
+        // are wrapping.
+        fe.i64_div_s();
+        fe.finish_and_export("test").finish()
     }
 }
