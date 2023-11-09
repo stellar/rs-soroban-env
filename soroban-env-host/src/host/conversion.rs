@@ -331,12 +331,16 @@ impl Host {
                 self.error(cerr.into(), "failed to convert host value to ScVal", &[val])
             })
         })?;
+        // This is a check of internal logical consistency: we came _from_ a Val
+        // so the ScVal definitely should have been representable.
         self.check_val_representable_scval(&scval)?;
         Ok(scval)
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
         let _span = tracy_span!("ScVal to Val");
+        // This is an internal consistency check: this is an internal method and
+        // any caller should have previously rejected non-representable ScVals.
         self.check_val_representable_scval(&v)?;
         // This is the depth limit checkpoint for `ScVal`->`Val` conversion.
         // Metering of val conversion happens only if an object is encountered,
@@ -420,6 +424,8 @@ impl Host {
 
     pub(crate) fn to_host_obj(&self, ob: &ScValObjRef<'_>) -> Result<Object, HostError> {
         let val: &ScVal = (*ob).into();
+        // This is an internal consistency check: this is an internal method and any
+        // caller should have previously rejected non-representable ScVals.
         self.check_val_representable_scval(val)?;
         match val {
             // Here we have to make sure host object conversion is charged in each variant

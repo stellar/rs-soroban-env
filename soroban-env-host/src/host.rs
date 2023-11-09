@@ -2088,7 +2088,16 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        self.to_host_val(&scv)
+        if Val::can_represent_scval(&scv) {
+            self.to_host_val(&scv)
+        } else {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "Deserialized ScVal type cannot be represented as Val",
+                &[(scv.discriminant() as i32).into()],
+            ))
+        }
     }
 
     fn string_copy_to_linear_memory(
