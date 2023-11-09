@@ -9,6 +9,7 @@ version.workspace = true
 readme = "../README.md"
 edition = "2021"
 rust-version = "1.73"
+build = "build.rs"
 
 [dependencies]
 soroban-builtin-sdk-macros = { workspace = true }

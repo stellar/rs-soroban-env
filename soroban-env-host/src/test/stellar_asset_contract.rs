@@ -12,7 +12,7 @@ use crate::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
             generate_signing_key, new_ledger_entry_from_data, signing_key_to_account_id,
-            AccountContractSigner, AccountSigner, HostVec, TestSigner,
+            AccountContractSigner, AccountSigner, ContractTypeVec, TestSigner,
         },
     },
     host::{frame::TestContractFrame, Frame},

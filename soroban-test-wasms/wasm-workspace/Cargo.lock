@@ -898,6 +898,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "recursive_account"
+version = "0.0.0"
+dependencies = [
+ "soroban-env-common",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "rfc6979"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

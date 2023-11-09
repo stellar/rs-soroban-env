@@ -3,6 +3,9 @@ all: build test
 test:
 	cargo hack --each-feature test
 
+test-opt:
+	cargo hack --each-feature test --profile test-opt
+
 build:
 	cargo hack --each-feature clippy
 	cargo hack clippy --target wasm32-unknown-unknown
