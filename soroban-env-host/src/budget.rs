@@ -17,7 +17,7 @@ use std::{
 use crate::{
     host::error::TryBorrowOrErr,
     xdr::{ContractCostParams, ContractCostType, ScErrorCode, ScErrorType},
-    Error, Host, HostError,
+    Host, HostError,
 };
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
