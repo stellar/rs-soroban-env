@@ -472,9 +472,20 @@ impl Host {
         self.as_budget().with_shadow_mode(f, e)
     }
 
+    /// Returns whether the Host can be finished by calling
+    /// [`Host::try_finish`].
+    ///
+    /// Returns true if the host reference is unique, refcount = 1.
+    pub fn can_finish(&self) -> bool {
+        Rc::strong_count(&self.0) == 1
+    }
+
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
     /// underlying [`HostImpl`], returning its finalized components containing
     /// processing side effects  to the caller as a tuple wrapped in `Ok(...)`.
+    ///
+    /// Use [`Host::can_finish`] to determine before calling the function if it
+    /// will succeed.
     pub fn try_finish(self) -> Result<(Storage, Events), HostError> {
         let events = self.try_borrow_events()?.externalize(&self)?;
         Rc::try_unwrap(self.0)

@@ -1,4 +1,5 @@
 pub(crate) mod util;
+pub(crate) use util::wasm as wasm_util;
 
 mod address;
 mod auth;
@@ -24,4 +25,5 @@ mod symbol;
 mod tuple;
 mod vec;
 
+mod finish;
 mod metering_benchmark;
