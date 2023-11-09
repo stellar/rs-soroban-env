@@ -1650,16 +1650,22 @@ impl AccountAuthorizationTracker {
             let authenticate_res = self
                 .authenticate(host)
                 .map_err(|err| {
-                    // Convert any contract errors to auth errors so that it's
+                    // Convert any recoverable errors to auth errors so that it's
                     // not possible to confuse them for the errors of the
                     // contract that has called `require_auth`.
-                    // Also log the original error for diagnosticts.
-                    host.err(
-                        ScErrorType::Auth,
-                        ScErrorCode::InvalidAction,
-                        "failed account authentication with error",
-                        &[self.address.into(), err.error.to_val()],
-                    )
+                    // While there is no 'recovery' here, non-recoverable errors
+                    // aren't really useful for decoration.
+                    if err.is_recoverable() {
+                        // Also log the original error for diagnostics.
+                        host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InvalidAction,
+                            "failed account authentication with error",
+                            &[self.address.into(), err.error.to_val()],
+                        )
+                    } else {
+                        err
+                    }
                 })
                 .and_then(|_| self.verify_and_consume_nonce(host));
             if let Some(err) = authenticate_res.err() {

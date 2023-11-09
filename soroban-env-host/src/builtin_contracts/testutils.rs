@@ -15,7 +15,7 @@ use soroban_env_common::{EnvBase, TryFromVal, Val};
 
 use crate::builtin_contracts::base_types::BytesN;
 
-pub(crate) use crate::builtin_contracts::base_types::Vec as HostVec;
+pub(crate) use crate::builtin_contracts::base_types::Vec as ContractTypeVec;
 
 use super::account_contract::AccountEd25519Signature;
 use super::base_types::Address;
@@ -23,10 +23,10 @@ use super::base_types::Address;
 #[macro_export]
 macro_rules! host_vec {
     ($host:expr $(,)?) => {
-        HostVec::new($host).unwrap()
+        ContractTypeVec::new($host).unwrap()
     };
     ($host:expr, $($x:expr),+ $(,)?) => {
-        HostVec::from_slice($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
+        ContractTypeVec::from_slice($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
     };
 }
 
@@ -114,7 +114,7 @@ impl<'a> TestSigner<'a> {
         let signature: Val = match self {
             TestSigner::AccountInvoker(_) | TestSigner::ContractInvoker(_) => Val::VOID.into(),
             TestSigner::Account(account_signer) => {
-                let mut signatures = HostVec::new(&host).unwrap();
+                let mut signatures = ContractTypeVec::new(&host).unwrap();
                 for key in &account_signer.signers {
                     signatures
                         .push(&sign_payload_for_account(host, key, payload))
@@ -143,7 +143,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
     signer: &TestSigner,
     contract_address: &Address,
     function_name: &str,
-    args: HostVec,
+    args: ContractTypeVec,
     nonce: Option<(i64, u32)>,
 ) {
     let sc_address = signer.address(host).to_sc_address().unwrap();
@@ -200,7 +200,7 @@ pub(crate) fn authorize_single_invocation(
     signer: &TestSigner,
     contract_address: &Address,
     function_name: &str,
-    args: HostVec,
+    args: ContractTypeVec,
 ) {
     let nonce = match signer {
         TestSigner::AccountInvoker(_) => None,

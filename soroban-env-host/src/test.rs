@@ -11,6 +11,8 @@ mod crypto;
 mod depth_limit;
 mod event;
 mod hostile;
+#[cfg(opt_build)]
+mod hostile_opt;
 mod invocation;
 mod ledger;
 mod lifecycle;

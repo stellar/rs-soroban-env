@@ -1,5 +1,5 @@
 use crate::auth::RecordedAuthPayload;
-use crate::builtin_contracts::testutils::HostVec;
+use crate::builtin_contracts::testutils::ContractTypeVec;
 use crate::{
     budget::{AsBudget, Budget},
     host_vec,
@@ -331,7 +331,7 @@ fn test_contract_wasm_update() {
                             ScVal::Vec(Some(ScVec(
                                 vec![
                                     ScVal::Symbol(ScSymbol("Wasm".try_into().unwrap())),
-                                    ScVal::Bytes(ScBytes(old_wasm_hash.0.try_into().unwrap()))
+                                    ScVal::Bytes(ScBytes(old_wasm_hash.0.try_into().unwrap())),
                                 ]
                                 .try_into()
                                 .unwrap()
@@ -339,11 +339,11 @@ fn test_contract_wasm_update() {
                             ScVal::Vec(Some(ScVec(
                                 vec![
                                     ScVal::Symbol(ScSymbol("Wasm".try_into().unwrap())),
-                                    ScVal::Bytes(ScBytes(updated_wasm_hash.0.try_into().unwrap()))
+                                    ScVal::Bytes(ScBytes(updated_wasm_hash.0.try_into().unwrap())),
                                 ]
                                 .try_into()
                                 .unwrap()
-                            )))
+                            ))),
                         ]
                         .try_into()
                         .unwrap(),
@@ -370,7 +370,6 @@ fn test_contract_wasm_update() {
 }
 
 #[test]
-
 fn test_create_contract_from_source_account_recording_auth() {
     let host = Host::test_host_with_recording_footprint();
     let source_account = generate_account_id(&host);
@@ -407,8 +406,8 @@ fn test_create_contract_from_source_account_recording_auth() {
             nonce: None,
             invocation: SorobanAuthorizedInvocation {
                 function: SorobanAuthorizedFunction::CreateContractHostFn(create_contract_args),
-                sub_invocations: VecM::default()
-            }
+                sub_invocations: VecM::default(),
+            },
         }]
     );
 }
