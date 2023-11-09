@@ -347,3 +347,69 @@ fn test_storage_mix() {
     test_storage(&host, contract_id, "temporary");
     test_storage(&host, contract_id, "instance");
 }
+
+#[test]
+#[should_panic(
+    expected = "called `Result::unwrap()` on an `Err` value: Error(Budget, ExceededLimit)"
+)]
+fn test_large_persistent_value() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    let key_1 = Symbol::try_from_small_str("key_1").unwrap();
+
+    let bytes = vec![0u8; 100000000];
+    let _ = host.try_call(
+        contract_id,
+        storage_fn_name(&host, "put", "persistent"),
+        host_vec![&host, key_1, bytes].into(),
+    );
+}
+
+#[test]
+#[should_panic(
+    expected = "called `Result::unwrap()` on an `Err` value: Error(Budget, ExceededLimit)"
+)]
+fn test_large_instance_value() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    let key_1 = Symbol::try_from_small_str("key_1").unwrap();
+
+    let bytes = vec![0u8; 100000000];
+    let _ = host.try_call(
+        contract_id,
+        storage_fn_name(&host, "put", "instance"),
+        host_vec![&host, key_1, bytes].into(),
+    );
+}
+
+#[test]
+#[should_panic(
+    expected = "called `Result::unwrap()` on an `Err` value: Error(Budget, ExceededLimit)"
+)]
+fn test_large_persistent_key() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+
+    let key = vec![0u8; 100000000];
+    let _ = host.try_call(
+        contract_id,
+        storage_fn_name(&host, "put", "persistent"),
+        host_vec![&host, key, 1_u64].into(),
+    );
+}
+
+#[test]
+#[should_panic(
+    expected = "called `Result::unwrap()` on an `Err` value: Error(Budget, ExceededLimit)"
+)]
+fn test_large_instance_key() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+
+    let key = vec![0u8; 100000000];
+    let _ = host.try_call(
+        contract_id,
+        storage_fn_name(&host, "put", "instance"),
+        host_vec![&host, key, 1_u64].into(),
+    );
+}

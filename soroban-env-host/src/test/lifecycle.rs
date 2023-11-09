@@ -14,8 +14,8 @@ use crate::{
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{
     ContractIdPreimage, ContractIdPreimageFromAddress, DepthLimitedWrite, HostFunction, ScAddress,
-    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
-    SorobanCredentials, VecM, DEFAULT_XDR_RW_DEPTH_LIMIT,
+    ScErrorCode, ScErrorType, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, SorobanCredentials, VecM, DEFAULT_XDR_RW_DEPTH_LIMIT,
 };
 use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
 use soroban_env_common::{StorageType, VecObject};
@@ -416,12 +416,27 @@ fn test_create_contract_from_source_account_recording_auth() {
 #[test]
 fn test_invalid_contract() {
     let host = Host::test_host_with_recording_footprint();
+    let bytes = [0u8; 32];
 
-    let bytes = [0u8, 32];
+    let err = host
+        .invoke_function(HostFunction::UploadContractWasm(bytes.try_into().unwrap()))
+        .err()
+        .unwrap();
 
-    assert!(host
-        .invoke_function(HostFunction::UploadContractWasm(
-            bytes.to_vec().try_into().unwrap(),
-        ))
-        .is_err());
+    assert!(err.error.is_type(ScErrorType::WasmVm));
+    assert!(err.error.is_code(ScErrorCode::InvalidAction));
+}
+
+#[test]
+fn test_large_contract() {
+    let host = Host::test_host_with_recording_footprint();
+    let bytes = vec![0u8; u32::MAX.try_into().unwrap()];
+
+    let err = host
+        .invoke_function(HostFunction::UploadContractWasm(bytes.try_into().unwrap()))
+        .err()
+        .unwrap();
+
+    assert!(err.error.is_type(ScErrorType::Budget));
+    assert!(err.error.is_code(ScErrorCode::ExceededLimit));
 }
