@@ -32,7 +32,7 @@ fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
             LedgerEntryData::ContractData(e) => match &e.val {
                 ScVal::ContractInstance(i) => match &i.executable {
                     ContractExecutable::Wasm(h) => Ok(h.clone()),
-                    _ => panic!("expectecd Wasm executable"),
+                    _ => panic!("expected Wasm executable"),
                 },
                 _ => panic!("expected ContractInstance"),
             },
@@ -411,4 +411,17 @@ fn test_create_contract_from_source_account_recording_auth() {
             }
         }]
     );
+}
+
+#[test]
+fn test_invalid_contract() {
+    let host = Host::test_host_with_recording_footprint();
+
+    let bytes = [0u8, 32];
+
+    assert!(host
+        .invoke_function(HostFunction::UploadContractWasm(
+            bytes.to_vec().try_into().unwrap(),
+        ))
+        .is_err());
 }

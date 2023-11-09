@@ -28,7 +28,7 @@ use super::{xdr::Hash, Host, Symbol, Val};
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
-    meta::{self, get_ledger_protocol_version, get_pre_release_version},
+    meta::{self, get_ledger_protocol_version},
     xdr::{
         DepthLimitedRead, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType,
         DEFAULT_XDR_RW_DEPTH_LIMIT,
@@ -96,12 +96,22 @@ impl Vm {
             }
         };
 
-        let got_pre = get_pre_release_version(interface_version);
+        // Not used when "next" is enabled
+        #[cfg(not(feature = "next"))]
+        let got_pre = meta::get_pre_release_version(interface_version);
+
         let got_proto = get_ledger_protocol_version(interface_version);
 
         if got_proto < want_proto {
             // Old protocols are finalized, we only support contracts
             // with similarly finalized (zero) prerelease numbers.
+            //
+            // Note that we only enable this check if the "next" feature isn't enabled
+            // because a "next" stellar-core can still run a "curr" test using non-finalized
+            // test wasms. The "next" feature isn't safe for production and is meant to
+            // simulate the protocol version after the one currently supported in
+            // stellar-core, so bypassing this check for "next" is safe.
+            #[cfg(not(feature = "next"))]
             if got_pre != 0 {
                 return Err(err!(
                     host,
@@ -111,17 +121,23 @@ impl Vm {
                 ));
             }
         } else if got_proto == want_proto {
-            // Current protocol might have a nonzero prerelease number; we will
-            // allow it only if it matches the current prerelease exactly.
-            let want_pre = get_pre_release_version(meta::INTERFACE_VERSION);
-            if want_pre != got_pre {
-                return Err(err!(
-                    host,
-                    (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                    "contract pre-release number for current protocol does not match host",
-                    got_pre,
-                    want_pre
-                ));
+            // Relax this check as well for the "next" feature to allow for flexibility while testing.
+            // stellar-core can pass in an older protocol version, in which case the pre-release version
+            // will not match up with the "next" feature (The "next" pre-release version is always 1).
+            #[cfg(not(feature = "next"))]
+            {
+                // Current protocol might have a nonzero prerelease number; we will
+                // allow it only if it matches the current prerelease exactly.
+                let want_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
+                if want_pre != got_pre {
+                    return Err(err!(
+                        host,
+                        (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                        "contract pre-release number for current protocol does not match host",
+                        got_pre,
+                        want_pre
+                    ));
+                }
             }
         } else {
             // Future protocols we don't allow. It might be nice (in the sense
