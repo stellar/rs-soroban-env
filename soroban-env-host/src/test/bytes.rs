@@ -3,7 +3,7 @@ use crate::{
     Env, Host, HostError, Val,
 };
 use soroban_env_common::{
-    xdr::{ScErrorCode, ScErrorType},
+    xdr::{ScBytes, ScErrorCode, ScErrorType, ScVec, WriteXdr},
     Compare, EnvBase, Error,
 };
 
@@ -111,6 +111,25 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
         assert_eq!(host.compare(&rv, &rv_back)?, core::cmp::Ordering::Equal);
         Ok(())
     };
+    let deser_fails_bytes = |bytes: Vec<u8>| -> Result<(), HostError> {
+        let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
+        let res = host.deserialize_from_bytes(bo);
+        assert!(res.is_err());
+        assert!(res.err().unwrap().error.is_code(ScErrorCode::InvalidInput));
+        Ok(())
+    };
+    let deser_fails_scv = |v: ScVal| -> Result<(), HostError> {
+        let bytes: Vec<u8> = v.to_xdr()?;
+        let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
+        let res = host.deserialize_from_bytes(bo);
+        assert!(res.is_err());
+        assert!(res
+            .err()
+            .unwrap()
+            .error
+            .is_code(ScErrorCode::UnexpectedType));
+        Ok(())
+    };
     // u64
     roundtrip(ScVal::U64(5_u64))?;
     // u32
@@ -132,6 +151,14 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     )))?;
     // error
     roundtrip(ScVal::Error(ScError::Context(ScErrorCode::InternalError)))?;
+    // garbage bytes fail
+    deser_fails_bytes(vec![1, 2, 3, 4, 5])?;
+    // non-representable fails
+    deser_fails_scv(ScVal::LedgerKeyContractInstance)?;
+    // non-representable fails
+    deser_fails_scv(ScVal::Vec(Some(ScVec(
+        vec![ScVal::LedgerKeyContractInstance].try_into()?,
+    ))))?;
     Ok(())
 }
 

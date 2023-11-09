@@ -665,49 +665,36 @@ impl Budget {
         self.0.try_borrow_mut_or_err()?.charge(ty, 1, input)
     }
 
-    /// Runs a user provided closure in shadow mode -- all metering is done through
-    /// the shadow budget.
+    /// Runs a user provided closure in shadow mode -- all metering is done
+    /// through the shadow budget.
     ///
-    /// Because the shadow mode is optional (depending on the configuration,
-    /// nodes may or may not trigger this path), any error occured during execution
-    /// is swallowed by running a fallback closure provided by the caller.
-    ///
-    /// # Arguments:
-    /// * `f` - A fallible closure to be run in shadow mode. If error occurs,
-    ///   fallback closure is run immediately afterwards to replace it
-    ///
-    /// * `fallback` - A fallback closure to be run in case of any error occuring
-    ///
-    /// # Returns:
-    ///
-    /// Returns a value of type `T`. Any errors arising during the execution are
-    /// suppressed.
-    pub(crate) fn with_shadow_mode<T, F, E>(&self, f: F, fallback: E) -> T
+    /// Because shadow mode is _designed not to be observed_ (indeed it exists
+    /// primarily to count actions against the shadow budget that are _optional_
+    /// on a given host, such as debug logging, and that therefore must strictly
+    /// must not be observed), any error that occurs during execution is
+    /// swallowed.
+    pub(crate) fn with_shadow_mode<T, F>(&self, f: F)
     where
         F: FnOnce() -> Result<T, HostError>,
-        E: FnOnce() -> T,
     {
         let mut prev = false;
 
-        let mut res = self
+        if self
             .mut_budget(|mut b| {
                 prev = b.is_in_shadow_mode;
                 b.is_in_shadow_mode = true;
-                b.cpu_insns.check_budget_limit(true)?;
-                b.mem_bytes.check_budget_limit(true)
+                b.cpu_insns.check_budget_limit(IsShadowMode(true))?;
+                b.mem_bytes.check_budget_limit(IsShadowMode(true))
             })
-            .and_then(|_| f());
-
-        if let Err(_) = self.mut_budget(|mut b| {
-            b.is_in_shadow_mode = prev;
-            Ok(())
-        }) {
-            res = Err(
-                Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::InternalError).into(),
-            );
+            .is_ok()
+        {
+            let _ = f();
         }
 
-        res.unwrap_or_else(|_| fallback())
+        let _ = self.mut_budget(|mut b| {
+            b.is_in_shadow_mode = prev;
+            Ok(())
+        });
     }
 
     pub(crate) fn is_in_shadow_mode(&self) -> Result<bool, HostError> {

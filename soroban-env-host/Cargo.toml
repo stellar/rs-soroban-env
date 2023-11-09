@@ -8,7 +8,8 @@ license = "Apache-2.0"
 version.workspace = true
 readme = "../README.md"
 edition = "2021"
-rust-version = "1.71"
+rust-version = "1.73"
+build = "build.rs"
 
 [dependencies]
 soroban-builtin-sdk-macros = { workspace = true }
@@ -25,7 +26,7 @@ rand_chacha = "0.3.1"
 num-traits = "0.2.15"
 num-integer = "0.1.45"
 num-derive = "0.4.0"
-backtrace = "0.3"
+backtrace = { version = "0.3", optional = true }
 k256 = {version = "0.13.1", features=["ecdsa", "arithmetic"]}
 # NB: getrandom is a transitive dependency of k256 which we're not using directly
 # but we have to specify it here in order to enable its 'js' feature which
@@ -54,9 +55,10 @@ expect-test = "1.4.0"
 more-asserts = "0.3.1"
 linregress = "0.5.1"
 pretty_assertions = "1.4.0"
+backtrace = "0.3"
 
 [features]
-testutils = ["soroban-env-common/testutils", "soroban-synth-wasm/testutils", "recording_auth"]
+testutils = ["soroban-env-common/testutils", "soroban-synth-wasm/testutils", "recording_auth", "dep:backtrace"]
 next = ["soroban-env-common/next", "soroban-synth-wasm/next", "soroban-bench-utils/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_auth = []

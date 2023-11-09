@@ -647,20 +647,24 @@ impl Host {
                             // payload into the diagnostic event buffer. This
                             // code path will get hit when contracts do
                             // `panic!("some string")` in native testing mode.
-                            if !recovered_error_from_panic_refcell && self.is_debug()? {
-                                if let Some(str) = panic_payload.downcast_ref::<&str>() {
-                                    let msg: String = format!(
-                                        "caught panic '{}' from contract function '{:?}'",
-                                        str, func
-                                    );
-                                    let _ = self.log_diagnostics(&msg, args);
-                                } else if let Some(str) = panic_payload.downcast_ref::<String>() {
-                                    let msg: String = format!(
-                                        "caught panic '{}' from contract function '{:?}'",
-                                        str, func
-                                    );
-                                    let _ = self.log_diagnostics(&msg, args);
-                                }
+                            if !recovered_error_from_panic_refcell {
+                                self.with_debug_mode(|| {
+                                    if let Some(str) = panic_payload.downcast_ref::<&str>() {
+                                        let msg: String = format!(
+                                            "caught panic '{}' from contract function '{:?}'",
+                                            str, func
+                                        );
+                                        let _ = self.log_diagnostics(&msg, args);
+                                    } else if let Some(str) = panic_payload.downcast_ref::<String>()
+                                    {
+                                        let msg: String = format!(
+                                            "caught panic '{}' from contract function '{:?}'",
+                                            str, func
+                                        );
+                                        let _ = self.log_diagnostics(&msg, args);
+                                    };
+                                    Ok(())
+                                })
                             }
                             Err(self.error(error, "caught error from function", &[]))
                         }

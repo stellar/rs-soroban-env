@@ -1,4 +1,5 @@
 pub(crate) mod util;
+pub(crate) use util::wasm as wasm_util;
 
 mod address;
 mod auth;
@@ -10,6 +11,8 @@ mod crypto;
 mod depth_limit;
 mod event;
 mod hostile;
+#[cfg(opt_build)]
+mod hostile_opt;
 mod invocation;
 mod ledger;
 mod lifecycle;

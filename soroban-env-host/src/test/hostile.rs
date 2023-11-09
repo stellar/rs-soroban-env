@@ -3,13 +3,13 @@ use soroban_env_common::{
     xdr::{ContractCostType, ScErrorCode, ScErrorType},
     Env, EnvBase, Symbol, SymbolSmall, Tag, Val, VecObject,
 };
-use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
 use soroban_test_wasms::HOSTILE;
 
 use crate::{
     budget::{AsBudget, Budget},
     host_object::HostVec,
     storage::Storage,
+    test::wasm_util,
     DiagnosticLevel, Host, HostError,
 };
 
@@ -210,20 +210,11 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
     Ok(())
 }
 
-fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
-    fe.push(Operand::Const32(n_pages as i32));
-    fe.memory_grow();
-    fe.drop();
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    fe.finish_and_export("test").finish()
-}
-
 #[test]
 fn excessive_memory_growth() -> Result<(), HostError> {
     // `memory_grow(32)`, wasmi will desire 33 pages of memory, that includes the
     // initial page.
-    let wasm = wasm_module_with_mem_grow(32);
+    let wasm = wasm_util::wasm_module_with_mem_grow(32);
     let host = Host::test_host_with_recording_footprint();
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
     let host = host
@@ -297,25 +288,9 @@ fn broken_object() {
     let _args = host.vec_new_from_slice(&[bad_val]);
 }
 
-fn wasm_module_with_linear_memory_logging() -> Vec<u8> {
-    let mut me = ModEmitter::new();
-    // log_from_linear_memory
-    let f0 = me.import_func("x", "_", Arity(4));
-    // the caller
-    let mut fe = me.func(Arity(4), 0);
-    fe.push(Operand::Local(LocalRef(0)));
-    fe.push(Operand::Local(LocalRef(1)));
-    fe.push(Operand::Local(LocalRef(2)));
-    fe.push(Operand::Local(LocalRef(3)));
-    fe.call_func(f0);
-    fe.drop();
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    fe.finish_and_export("test").finish()
-}
-
 #[test]
 fn excessive_logging() -> Result<(), HostError> {
-    let wasm = wasm_module_with_linear_memory_logging();
+    let wasm = wasm_util::wasm_module_with_linear_memory_logging();
     let host = Host::test_host_with_recording_footprint();
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
@@ -414,5 +389,108 @@ fn excessive_logging() -> Result<(), HostError> {
         expected_budget.assert_eq(&actual);
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_unreachable_contract_should_fail() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_unreachable();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+
+    host.budget_ref().reset_limits(2_000_000, 500_000)?;
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_indirect_call_via_table_access() -> Result<(), HostError> {
+    // this module contains a table with 128 FuncRef elements, 3 of which are
+    // occuplied with 1 host function 2 contract functions
+    let wasm = wasm_util::wasm_module_with_indirect_call();
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+    host.budget_ref().reset_unlimited()?;
+
+    let call_fn = |raw_bits: u64| -> Result<Val, HostError> {
+        // construct HostVec directly to avoid the check_val_integrety
+        let hv = HostVec::from_vec(vec![Val::from_payload(raw_bits)])?;
+        let args = host.add_host_object(hv)?;
+        host.call(contract_id_obj, Symbol::try_from_small_str("test")?, args)
+    };
+
+    // three functions matches the correct type, they should succeed
+    for i in 0..=2 {
+        let res = call_fn(i);
+        assert!(res.is_ok());
+    }
+    // between 3 and 128 -- the elements count, the FuncRef will be missing
+    // but they are valid table bounds.
+    // Need to skip the Tag::Object ranges to avoid the internall error converting
+    // object handle.
+    for i in 3..=Tag::ObjectCodeLowerBound as u64 {
+        let res = call_fn(i);
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::WasmVm, ScErrorCode::MissingValue)
+        ));
+    }
+    // after 127 the index is out of table elements range
+    for i in 128..200 {
+        let res = call_fn(i);
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::WasmVm, ScErrorCode::IndexBounds)
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_div_by_zero() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_div_by_zero();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+
+    host.budget_ref().reset_limits(2_000_000, 500_000)?;
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::ArithDomain)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_integer_overflow() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_integer_overflow();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+
+    host.budget_ref().reset_limits(2_000_000, 500_000)?;
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::ArithDomain)
+    ));
     Ok(())
 }
