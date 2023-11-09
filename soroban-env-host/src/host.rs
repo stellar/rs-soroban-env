@@ -99,6 +99,11 @@ struct HostImpl {
     budget: Budget,
     events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
+    // Note: to reduce the risk of future maintainers accidentally adding a new
+    // way of observing the diagnostic level (which may vary between different
+    // replicas of the host, thus causing divergence) there are no borrow
+    // helpers for it and the only method to use it is inside the
+    // `with_debug_mode` callback that switches to the shadow budget.
     diagnostic_level: RefCell<DiagnosticLevel>,
     base_prng: RefCell<Option<Prng>>,
     // Auth-recording mode generates pseudorandom nonces to populate its output.
@@ -208,12 +213,12 @@ impl_checked_borrow_helpers!(
     try_borrow_authorization_manager,
     try_borrow_authorization_manager_mut
 );
-impl_checked_borrow_helpers!(
-    diagnostic_level,
-    DiagnosticLevel,
-    try_borrow_diagnostic_level,
-    try_borrow_diagnostic_level_mut
-);
+
+// Note: diagnostic_mode borrow helpers are _not_ defined here to reduce the
+// risk of future maintainers accidentally revealing any way of observing the
+// diagnostic level in user code (which may vary between different replicas of
+// the host).
+
 impl_checked_borrow_helpers!(
     base_prng,
     Option<Prng>,
@@ -457,19 +462,46 @@ impl Host {
         self.0.budget.set_shadow_limits(cpu, mem)
     }
 
-    /// Wraps the `budget.with_internal_mode` call with the check `host.is_debug`.
-    /// This wrapper should be used for any work that is part of the production
-    /// workflow but in debug mode, i.e. diagnostic related work (logging, or any
-    /// operations on diagnostic event).
-    pub(crate) fn with_debug_mode<T, F, E>(&self, f: F, e: E) -> T
+    pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) -> Result<(), HostError> {
+        use crate::host::error::TryBorrowOrErr;
+        *self.0.diagnostic_level.try_borrow_mut_or_err()? = diagnostic_level;
+        Ok(())
+    }
+
+    // As above, avoids having to import DiagnosticLevel.
+    pub fn enable_debug(&self) -> Result<(), HostError> {
+        self.set_diagnostic_level(DiagnosticLevel::Debug)
+    }
+
+    /// Wraps a `budget.with_shadow_mode` call with a check against the
+    /// diagnostic level. This wrapper should be used for any work that is part
+    /// of the production workflow but in debug mode, i.e. diagnostic related
+    /// work (logging, or any operations on diagnostic events).
+    ///
+    /// Note: to help minimize the risk of divergence based on accidental
+    /// observation of the diagnostic level in any context _other_ than this
+    /// callback, we make two things at least inconvenient enough to maybe cause
+    /// people to come to this comment and read it:
+    ///
+    ///   1. We avoid having any other direct way of observing the flag.
+    ///   2. We eat all errors and return no values from the closure.
+    ///
+    /// If you need to observe a value from the execution of debug mode, you can
+    /// of course still mutate a mutable reference pointing outside the closure,
+    /// but be _absolutely certain_ any observation you thereby make of the
+    /// debug-level _only_ flows into other functions that are themselves
+    /// debug-mode-guarded and/or only write results into debug state (eg.
+    /// diagnostic events).
+    pub(crate) fn with_debug_mode<F>(&self, f: F)
     where
-        F: FnOnce() -> Result<T, HostError>,
-        E: Fn() -> T,
+        F: FnOnce() -> Result<(), HostError>,
     {
-        if self.is_debug().ok() != Some(true) {
-            return e();
+        use crate::host::error::TryBorrowOrErr;
+        if let Ok(cell) = self.0.diagnostic_level.try_borrow_or_err() {
+            if matches!(*cell, DiagnosticLevel::Debug) {
+                return self.budget_ref().with_shadow_mode(f);
+            }
         }
-        self.as_budget().with_shadow_mode(f, e)
     }
 
     /// Returns whether the Host can be finished by calling
@@ -764,33 +796,30 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
-        self.with_debug_mode(
-            || {
-                let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
-                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-                let mut msg: Vec<u8> = vec![0u8; len as usize];
-                self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
-                // `String::from_utf8_lossy` iternally allocates a `String` which is a `Vec<u8>`
-                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-                let msg = String::from_utf8_lossy(&msg);
+        self.with_debug_mode(|| {
+            let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
+            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
+            let mut msg: Vec<u8> = vec![0u8; len as usize];
+            self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
+            // `String::from_utf8_lossy` iternally allocates a `String` which is a `Vec<u8>`
+            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
+            let msg = String::from_utf8_lossy(&msg);
 
-                let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
-                Vec::<Val>::charge_bulk_init_cpy((len.saturating_add(1)) as u64, self)?;
-                let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
-                // charge for conversion from bytes to `Val`s
-                self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
-                self.metered_vm_read_vals_from_linear_memory::<8, Val>(
-                    vmcaller,
-                    &vm,
-                    pos,
-                    vals.as_mut_slice(),
-                    |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
-                )?;
-                self.log_diagnostics(&msg, &vals);
-                Ok(())
-            },
-            || (),
-        );
+            let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
+            Vec::<Val>::charge_bulk_init_cpy(len.saturating_add(1) as u64, self)?;
+            let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
+            // charge for conversion from bytes to `Val`s
+            self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
+            self.metered_vm_read_vals_from_linear_memory::<8, Val>(
+                vmcaller,
+                &vm,
+                pos,
+                vals.as_mut_slice(),
+                |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
+            )?;
+            self.log_diagnostics(&msg, &vals);
+            Ok(())
+        });
 
         Ok(Val::VOID)
     }
@@ -2074,7 +2103,16 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        self.to_host_val(&scv)
+        if Val::can_represent_scval(&scv) {
+            self.to_host_val(&scv)
+        } else {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "Deserialized ScVal type cannot be represented as Val",
+                &[(scv.discriminant() as i32).into()],
+            ))
+        }
     }
 
     fn string_copy_to_linear_memory(

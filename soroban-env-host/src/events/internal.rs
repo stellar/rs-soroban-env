@@ -159,9 +159,7 @@ impl InternalEventsBuffer {
 
         match &e {
             InternalEvent::Contract(_) => metered_internal_event_push(e)?,
-            InternalEvent::Diagnostic(_) => {
-                host.with_debug_mode(|| metered_internal_event_push(e), || ())
-            }
+            InternalEvent::Diagnostic(_) => host.with_debug_mode(|| metered_internal_event_push(e)),
         }
 
         Ok(())
@@ -211,10 +209,7 @@ impl InternalEventsBuffer {
                     metered_external_event_push(c.to_xdr(host)?, status)?;
                 }
                 InternalEvent::Diagnostic(d) => {
-                    host.with_debug_mode(
-                        || metered_external_event_push(d.to_xdr(host)?, status),
-                        || (),
-                    );
+                    host.with_debug_mode(|| metered_external_event_push(d.to_xdr(host)?, status));
                 }
             }
         }

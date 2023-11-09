@@ -350,13 +350,10 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     }
 
     for (ty, &(iterations, input)) in tracker.iter().enumerate() {
-        host.as_budget().with_shadow_mode(
-            || {
-                host.as_budget()
-                    .bulk_charge(ContractCostType::VARIANTS[ty], iterations, input)
-            },
-            || (),
-        )
+        host.as_budget().with_shadow_mode(|| {
+            host.as_budget()
+                .bulk_charge(ContractCostType::VARIANTS[ty], iterations, input)
+        })
     }
 
     let actual = format!("{:?}", host.as_budget());
