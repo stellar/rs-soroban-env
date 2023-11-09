@@ -1,14 +1,15 @@
 use crate::{
     budget::AsBudget,
     events::{
-        InternalContractEvent, InternalDiagnosticArg, InternalDiagnosticEvent, InternalEvent,
+        Events, InternalContractEvent, InternalDiagnosticArg, InternalDiagnosticEvent,
+        InternalEvent,
     },
     test::util::AsScVal,
     xdr::{
         ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-        ExtensionPoint, Hash, ScAddress, ScMap, ScMapEntry, ScVal,
+        ExtensionPoint, Hash, ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,
     },
-    ContractFunctionSet, Env, Host, HostError, Symbol, SymbolSmall, Val,
+    ContractFunctionSet, Env, Error, Host, HostError, Symbol, SymbolSmall, Val,
 };
 use expect_test::expect;
 use std::rc::Rc;
@@ -160,5 +161,63 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
     let _ = host.try_borrow_events()?.externalize(&host)?;
     assert_eq!(host.as_budget().get_cpu_insns_consumed()?, 0);
     assert_eq!(host.as_budget().get_mem_bytes_consumed()?, 0);
+    Ok(())
+}
+
+#[test]
+fn test_diagnostic_events_do_not_affect_metering() -> Result<(), HostError> {
+    let args: Vec<_> = (0..1000).map(|u| Val::from_u32(u).to_val()).collect();
+    let contract_id = Hash([0; 32]);
+
+    let f = |host: Host| -> Result<Events, HostError> {
+        host.log_diagnostics("logging some diagnostics", args.as_slice());
+        host.error(
+            Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError),
+            "something internal went wrong",
+            args.as_slice(),
+        );
+        host.fn_call_diagnostics(&contract_id, &Symbol::try_from_small_str("fn_call")?, &args);
+        host.fn_return_diagnostics(
+            &contract_id,
+            &Symbol::try_from_small_str("fn_return")?,
+            &Symbol::try_from_small_str("pass")?.into(),
+        );
+        let (_, evts) = host.try_finish()?;
+        Ok(evts)
+    };
+
+    // DEBUG mode OFF
+    let host = Host::test_host();
+    let budget = host.as_budget().clone();
+    let evts = f(host)?;
+    assert_eq!(budget.get_cpu_insns_consumed()?, 0);
+    assert_eq!(budget.get_mem_bytes_consumed()?, 0);
+    assert_eq!(budget.get_shadow_cpu_insns_consumed()?, 0);
+    assert_eq!(budget.get_shadow_mem_bytes_consumed()?, 0);
+    assert_eq!(evts.0.len(), 0);
+
+    // DEBUG mode ON, budget sufficient
+    let host = Host::test_host();
+    host.enable_debug()?;
+    let budget = host.as_budget().clone();
+    let evts = f(host)?;
+    assert_eq!(budget.get_cpu_insns_consumed()?, 0);
+    assert_eq!(budget.get_mem_bytes_consumed()?, 0);
+    assert_ne!(budget.get_shadow_cpu_insns_consumed()?, 0);
+    assert_ne!(budget.get_shadow_mem_bytes_consumed()?, 0);
+    assert_eq!(evts.0.len(), 4);
+
+    // DEBUG mode ON, budget insufficient
+    let host = Host::test_host();
+    host.set_shadow_budget_limits(100000, 100000)?;
+    host.enable_debug()?;
+    let budget = host.as_budget().clone();
+    let evts = f(host)?;
+    assert_eq!(budget.get_cpu_insns_consumed()?, 0);
+    assert_eq!(budget.get_mem_bytes_consumed()?, 0);
+    assert_ne!(budget.get_shadow_cpu_insns_consumed()?, 0);
+    assert_ne!(budget.get_shadow_mem_bytes_consumed()?, 0);
+    assert_eq!(evts.0.len(), 0);
+
     Ok(())
 }
