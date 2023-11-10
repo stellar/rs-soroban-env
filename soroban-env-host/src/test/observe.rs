@@ -23,7 +23,6 @@ use crate::{
     Host, HostError, Symbol, SymbolObject, SymbolSmall,
 };
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map::DefaultHasher, BTreeMap},
     env,
@@ -35,13 +34,13 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-const FILENAME: &'static str = "observations.json";
-
-fn full_path() -> PathBuf {
+fn full_path(testname: &str) -> PathBuf {
     let root: PathBuf = env::var("CARGO_MANIFEST_DIR")
         .expect("CARGO_MANIFEST_DIR environment variable is required to be set")
         .into();
-    root.join(FILENAME)
+    root.join("observations")
+        .join(testname)
+        .with_extension("json")
 }
 
 fn update_observations() -> bool {
@@ -57,16 +56,31 @@ fn diff_line(last: &String, new: &String) -> String {
 }
 
 impl Observations {
-    fn load() -> Self {
-        println!("reading {}", full_path().display());
-        let file = File::open(&full_path()).expect(&format!("unable to open {FILENAME}"));
-        serde_json::from_reader(file).expect(&format!("failed to parse {FILENAME}"))
+    fn load(&self, testname: &str) {
+        let path = full_path(testname);
+        let obs: BTreeMap<String, String> = if path.exists() {
+            println!("reading {}", path.display());
+            let file = File::open(&path).expect(&format!("unable to open {}", path.display()));
+            serde_json::from_reader(file).expect(&format!("failed to parse {}", path.display()))
+        } else {
+            BTreeMap::new()
+        };
+        self.0
+            .lock()
+            .expect("loading or creating initial observations")
+            .insert(testname.to_string(), obs);
     }
 
-    fn save(&self) {
-        println!("writing {}", full_path().display());
-        let file = File::create(&full_path()).expect(&format!("unable to create {FILENAME}"));
-        serde_json::to_writer_pretty(file, self).expect(&format!("error writing {FILENAME}"))
+    fn save(&self, testname: &str) {
+        let path = full_path(testname);
+        println!("writing {}", path.display());
+        let file = File::create(&path).expect(&format!("unable to create {}", path.display()));
+        let guard = self.0.lock().expect("saving observations");
+        if let Some(e) = guard.get(testname) {
+            let res = serde_json::to_writer_pretty(file, e);
+            drop(guard);
+            res.expect(&format!("error writing {}", path.display()))
+        }
     }
 
     // Check records the new observation by appending it to the vector
@@ -78,14 +92,20 @@ impl Observations {
     // assert_eq! on the observations at this point, which will cause an
     // observed test to fail if there were differences from the old recording.
     fn check(old: &Observations, new: &Observations, name: &'static str, obs: Observation) {
-
         let name = if let Some((_, rest)) = name.split_once("::") {
             rest.to_string()
         } else {
             name.to_string()
         };
+        let name = name.split("::").join("__");
 
         let mut disagreement: Option<(usize, String, String)> = None;
+
+        if obs.step == Step::Begin {
+            // Do this before any guards are held, to void
+            // lock poisoning.
+            old.load(&name);
+        }
 
         let mut new_guard = new.0.lock().unwrap();
         let new_map = new_guard.entry(name.clone()).or_default();
@@ -97,20 +117,20 @@ impl Observations {
         // a map to enable each non-begin-or-end stored line to be a diff from
         // the last line's full state, for greater compactness and legibility.
         const PREV_FULL: &str = "___PREV_FULL";
+        let prev = new_map.remove(PREV_FULL).unwrap_or_default();
         let (id, full) = obs.render(new_map.len());
+        new_map.insert(PREV_FULL.to_string(), full.clone());
         if obs.step == Step::Begin || obs.step == Step::End {
             new_map.insert(id.clone(), full);
         } else {
-            let last = new_map.entry(PREV_FULL.to_string()).or_default();
-            let diff = diff_line(last, &full);
-            *last = full;
+            let diff = diff_line(&prev, &full);
             new_map.insert(id.clone(), diff);
         }
 
         if obs.step == Step::End {
             new_map.remove(PREV_FULL);
             let mut old_guard = old.0.lock().unwrap();
-            let old_map = old_guard.entry(id.clone()).or_default();
+            let old_map = old_guard.entry(name.clone()).or_default();
             if old_map.len() != new_map.len() {
                 println!("old and new observations of {name} have different lengths");
                 disagreement = Some((
@@ -135,8 +155,10 @@ impl Observations {
             // Drop the guard before any panic, so we don't poison the lock.
             drop(old_guard);
             drop(new_guard);
-            if let Some((i, old, new)) = disagreement {
-                if !update_observations() {
+            if update_observations() {
+                new.save(&name);
+            } else {
+                if let Some((i, old, new)) = disagreement {
                     assert_eq!(
                         old, new,
                         "\n\nobservation {i} of {name} changed since last recording\n\
@@ -148,35 +170,25 @@ impl Observations {
     }
 }
 
-extern "C" {
-    fn atexit(hook: extern "C" fn()) -> std::os::raw::c_int;
-}
-extern "C" fn save_hook() {
-    if update_observations() {
-        get_new_obs().save();
-    }
-}
-
 static OLD_OBS: OnceLock<Observations> = OnceLock::new();
 static NEW_OBS: OnceLock<Observations> = OnceLock::new();
 
 fn get_old_obs() -> &'static Observations {
-    OLD_OBS.get_or_init(|| Observations::load())
+    OLD_OBS.get_or_init(|| Default::default())
 }
 
 fn get_new_obs() -> &'static Observations {
-    NEW_OBS.get_or_init(|| {
-        if update_observations() {
-            unsafe {
-                atexit(save_hook);
-            }
-        }
-        get_old_obs().clone()
-    })
+    NEW_OBS.get_or_init(|| Default::default())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 struct Observations(Mutex<BTreeMap<String, BTreeMap<String, String>>>);
+
+impl Default for Observations {
+    fn default() -> Self {
+        Self(Mutex::new(Default::default()))
+    }
+}
 
 impl Clone for Observations {
     fn clone(&self) -> Self {

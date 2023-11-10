@@ -376,8 +376,8 @@ fn test_stellar_asset_contract_smart_roundtrip() {
     );
 }
 
-fn test_asset_init(asset_code: &[u8]) {
-    let test = StellarAssetContractTest::setup(function_name!());
+fn test_asset_init(testname: &'static str, asset_code: &[u8]) {
+    let test = StellarAssetContractTest::setup(testname);
 
     let account_id = signing_key_to_account_id(&test.user_key);
     let issuer_id = signing_key_to_account_id(&test.issuer_key);
@@ -453,24 +453,30 @@ fn test_asset_init(asset_code: &[u8]) {
 
 #[test]
 fn test_asset4_smart_init() {
-    test_asset_init(&[b'z', b'a', b'b', 100]);
+    test_asset_init(function_name!(), &[b'z', b'a', b'b', 100]);
 }
 
 #[test]
 fn test_asset12_smart_init() {
-    test_asset_init(&[
-        65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', b'b', b'c',
-    ]);
+    test_asset_init(
+        function_name!(),
+        &[
+            65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', b'b', b'c',
+        ],
+    );
 }
 
 #[test]
 fn test_asset4_smart_leading_zero_init() {
-    test_asset_init(&[b'z', b'a', 0, 0]);
+    test_asset_init(function_name!(), &[b'z', b'a', 0, 0]);
 }
 
 #[test]
 fn test_asset12_smart_leading_zero_init() {
-    test_asset_init(&[65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', 0, 0]);
+    test_asset_init(
+        function_name!(),
+        &[65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', 0, 0],
+    );
 }
 
 #[test]

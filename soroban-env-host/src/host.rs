@@ -612,7 +612,11 @@ impl EnvBase for Host {
     }
 
     #[cfg(any(test, feature = "testutils"))]
-    fn env_ret_hook(&self, fname: &'static str, res: &Result<String,&HostError>) -> Result<(), HostError> {
+    fn env_ret_hook(
+        &self,
+        fname: &'static str,
+        res: &Result<String, &HostError>,
+    ) -> Result<(), HostError> {
         // We have to defer error formatting to here because the Env type does
         // not know enough about the structure of errors (in particular that we
         // do _not_ want to format debuginfo into the lifecycle-hook string).
