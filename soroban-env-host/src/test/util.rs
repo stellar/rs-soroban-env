@@ -427,4 +427,21 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass").unwrap());
         fe.finish_and_export("test").finish()
     }
+
+    pub(crate) fn wasm_module_with_multiple_data_sections(
+        num_pages: u32,
+        num_sgmts: u32,
+        seg_size: u32,
+    ) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(num_pages, 128);
+        let mem_len = num_pages * 0x10_000;
+        let max_segments = (mem_len / seg_size.max(1)).max(1);
+        for _i in 0..num_sgmts % max_segments {
+            me.define_data_segment(0, vec![0; seg_size as usize]);
+        }
+        // a local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
 }

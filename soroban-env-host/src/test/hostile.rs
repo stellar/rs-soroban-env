@@ -356,6 +356,46 @@ fn test_large_static_initial_data_should_fail() -> Result<(), HostError> {
     Ok(())
 }
 
+#[test]
+fn test_large_number_of_data_segments() -> Result<(), HostError> {
+    let instantiate_module =
+        |host: &Host, num_pages: u32, num_sgmts: u32, seg_size: u32| -> Result<_, HostError> {
+            let wasm =
+                wasm_util::wasm_module_with_multiple_data_sections(num_pages, num_sgmts, seg_size);
+            host.register_test_contract_wasm_from_source_account(
+                wasm.as_slice(),
+                AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+                [0; 32],
+            )
+        };
+
+    // many small segments
+    {
+        let host = Host::test_host_with_recording_footprint();
+        let res = instantiate_module(&host, 1, 10000, 1);
+        assert!(res.is_ok());
+    }
+
+    // a few large segments
+    {
+        let host = Host::test_host_with_recording_footprint();
+        let res = instantiate_module(&host, 1, 10, 10000);
+        assert!(res.is_ok());
+    }
+
+    // a ton of segments will run out of budget, mostly due to contract size and VmInstantiation
+    {
+        let host = Host::test_host_with_recording_footprint();
+        let res = instantiate_module(&host, 1, 10_000_000, 1);
+        assert!(HostError::result_matches_err(
+            res,
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
+        ));
+    }
+
+    Ok(())
+}
+
 // Regression test for infinte loop / recursion
 // while externalizing diagnostics for objects
 // with invalid references.
