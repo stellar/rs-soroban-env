@@ -14,7 +14,7 @@ struct WasmModule {
 }
 
 pub fn wasm_module_with_n_internal_funcs(n: usize) -> Vec<u8> {
-    let mut me = ModEmitter::new();
+    let mut me = ModEmitter::default();
     for _ in 0..n {
         let mut fe = me.func(Arity(0), 0);
         fe.push(Symbol::try_from_small_str("pass").unwrap());
@@ -26,7 +26,7 @@ pub fn wasm_module_with_n_internal_funcs(n: usize) -> Vec<u8> {
 }
 
 pub fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
-    let mut fe = ModEmitter::new().func(Arity(1), 0);
+    let mut fe = ModEmitter::default().func(Arity(1), 0);
     let arg = fe.args[0];
     fe.push(Operand::Const64(1));
     for i in 0..n {
@@ -41,7 +41,7 @@ pub fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
 }
 
 fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.push(Operand::Const32(n_pages as i32));
     fe.memory_grow();
     // need to drop the return value on the stack because it's an i32
@@ -53,7 +53,7 @@ fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
 
 // A wasm module with a single const to serve as the baseline
 fn wasm_module_baseline_pass() -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead: 0 }
@@ -61,14 +61,14 @@ fn wasm_module_baseline_pass() -> WasmModule {
 
 // A wasm module with a single trap to serve as the baseline
 fn wasm_module_baseline_trap() -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.trap();
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead: 0 }
 }
 
 fn push_const(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for i in 0..n {
         fe.i32_const(i as i32);
     }
@@ -80,7 +80,7 @@ fn push_const(n: u64, _rng: &mut StdRng) -> WasmModule {
 // The last fe.push(Const) is not counted as overhead since it's already been included
 // in the baseline. This applies to all following instruction generators.
 fn drop(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for i in 0..n {
         fe.push(Operand::Const64(i as i64));
         fe.drop();
@@ -92,7 +92,7 @@ fn drop(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn select(n: u64, rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for i in 0..n {
         fe.i64_const(rng.next_u64() as i64);
         fe.i64_const(rng.next_u64() as i64);
@@ -110,7 +110,7 @@ fn select(n: u64, rng: &mut StdRng) -> WasmModule {
 }
 
 fn block_br_sequential(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for _i in 0..n {
         fe.block();
         fe.br(0);
@@ -122,7 +122,7 @@ fn block_br_sequential(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn block_br_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for _i in 0..n {
         fe.block();
     }
@@ -136,7 +136,7 @@ fn block_br_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn br_table_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for _i in 0..n {
         fe.block();
     }
@@ -152,7 +152,7 @@ fn br_table_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn local_get(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 1);
+    let mut fe = ModEmitter::default().func(Arity(0), 1);
     let s = fe.locals[0].0;
     for _i in 0..n {
         fe.local_get(s);
@@ -163,7 +163,7 @@ fn local_get(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn local_set(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 1);
+    let mut fe = ModEmitter::default().func(Arity(0), 1);
     let s = fe.locals[0].0;
     for i in 0..n {
         fe.i64_const(i as i64);
@@ -176,7 +176,7 @@ fn local_set(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn local_tee(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 1);
+    let mut fe = ModEmitter::default().func(Arity(0), 1);
     let s = fe.locals[0].0;
     for i in 0..n {
         fe.i64_const(i as i64);
@@ -194,7 +194,7 @@ fn local_tee(n: u64, _rng: &mut StdRng) -> WasmModule {
 
 fn call_local(n: u64, _rng: &mut StdRng) -> WasmModule {
     // a local wasm function -- the callee
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     let (m0, f0) = fe.finish();
     // the caller
@@ -208,7 +208,7 @@ fn call_local(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn call_import(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut me = ModEmitter::new();
+    let mut me = ModEmitter::default();
     // import the function -- the callee
     let f0 = me.import_func("t", "_", Arity(0));
     // the caller
@@ -222,7 +222,7 @@ fn call_import(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn call_indirect(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut me = ModEmitter::new();
+    let mut me = ModEmitter::default();
     // an imported function
     let f0 = me.import_func("t", "_", Arity(0));
     // a local wasm function
@@ -253,7 +253,7 @@ fn call_indirect(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn global_get(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for _ in 0..n {
         fe.global_get(GlobalRef(0));
     }
@@ -263,7 +263,7 @@ fn global_get(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn global_set(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for i in 0..n {
         fe.i64_const(i as i64);
         fe.global_set(GlobalRef(0));
@@ -275,7 +275,7 @@ fn global_set(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn memory_grow(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for _ in 0..n {
         fe.i32_const(1);
         fe.memory_grow();
@@ -292,7 +292,7 @@ fn memory_grow(n: u64, _rng: &mut StdRng) -> WasmModule {
 }
 
 fn memory_size(n: u64, _rng: &mut StdRng) -> WasmModule {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     for _i in 0..n {
         fe.memory_size();
     }
@@ -307,7 +307,7 @@ macro_rules! generate_i64_store_insn_code {
     {
         $(
             fn $func_name(n: u64, _rng: &mut StdRng) -> WasmModule {
-                let mut fe = ModEmitter::new().func(Arity(0), 0);
+                let mut fe = ModEmitter::default().func(Arity(0), 0);
                 for _ in 0..n {
                     fe.i32_const(0);
                     fe.i64_const(5);
@@ -329,7 +329,7 @@ macro_rules! generate_i64_load_insn_code {
     {
         $(
             fn $func_name(n: u64, _rng: &mut StdRng) -> WasmModule {
-                let mut fe = ModEmitter::new().func(Arity(0), 0);
+                let mut fe = ModEmitter::default().func(Arity(0), 0);
                 for _ in 0..n {
                     fe.i32_const(0);
                     fe.$func_name(0);
@@ -350,7 +350,7 @@ macro_rules! generate_unary_insn_code {
     {
         $(
         fn $func_name(n: u64, rng: &mut StdRng) -> WasmModule {
-            let mut fe = ModEmitter::new().func(Arity(0), 0);
+            let mut fe = ModEmitter::default().func(Arity(0), 0);
             for _ in 0..n {
                 fe.push(Operand::Const64(rng.next_u64() as i64));
                 fe.$func_name();
@@ -372,7 +372,7 @@ macro_rules! generate_binary_insn_code {
     {
         $(
         fn $func_name(n: u64, rng: &mut StdRng) -> WasmModule {
-            let mut fe = ModEmitter::new().func(Arity(0), 0);
+            let mut fe = ModEmitter::default().func(Arity(0), 0);
             for _ in 0..n {
                 fe.push(Operand::Const64(rng.next_u64() as i64));
                 fe.push(Operand::Const64(rng.next_u64() as i64));

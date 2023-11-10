@@ -203,32 +203,27 @@ impl Host {
         contract_wasm: &[u8],
         account: AccountId,
         salt: [u8; 32],
-    ) -> AddressObject {
+    ) -> Result<AddressObject, HostError> {
         let _span = tracy_span!("register_test_contract_wasm_from_source_account");
         // Use source account-based auth in order to avoid using nonces which
         // won't work well with enforcing ledger footprint.
-        let prev_source_account = self.source_account_id().unwrap();
+        let prev_source_account = self.source_account_id()?;
         // Use recording auth to skip specifying the auth payload.
-        let prev_auth_manager = self.snapshot_auth_manager().unwrap();
-        self.switch_to_recording_auth(true).unwrap();
+        let prev_auth_manager = self.snapshot_auth_manager()?;
+        self.switch_to_recording_auth(true)?;
 
-        let wasm_hash = self
-            .upload_wasm(self.bytes_new_from_slice(contract_wasm).unwrap())
-            .unwrap();
-        self.set_source_account(account.clone()).unwrap();
-        let contract_address = self
-            .create_contract(
-                self.add_host_object(ScAddress::Account(account.clone()))
-                    .unwrap(),
-                wasm_hash,
-                self.bytes_new_from_slice(&salt).unwrap(),
-            )
-            .unwrap();
+        let wasm_hash = self.upload_wasm(self.bytes_new_from_slice(contract_wasm)?)?;
+        self.set_source_account(account.clone())?;
+        let contract_address = self.create_contract(
+            self.add_host_object(ScAddress::Account(account.clone()))?,
+            wasm_hash,
+            self.bytes_new_from_slice(&salt)?,
+        )?;
         if let Some(prev_account) = prev_source_account {
-            self.set_source_account(prev_account).unwrap();
+            self.set_source_account(prev_account)?;
         }
-        self.set_auth_manager(prev_auth_manager).unwrap();
-        contract_address
+        self.set_auth_manager(prev_auth_manager)?;
+        Ok(contract_address)
     }
 
     // Registers a contract with provided Wasm code and returns the registered
@@ -241,6 +236,7 @@ impl Host {
             generate_account_id(self),
             generate_bytes_array(self),
         )
+        .unwrap()
     }
 
     pub(crate) fn measured_call(
@@ -317,7 +313,7 @@ pub(crate) mod wasm {
     use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
-        let mut fe = ModEmitter::new().func(Arity(1), 0);
+        let mut fe = ModEmitter::default().func(Arity(1), 0);
         let arg = fe.args[0];
         fe.push(Operand::Const64(1));
         for i in 0..n {
@@ -332,7 +328,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
-        let mut fe = ModEmitter::new().func(Arity(0), 0);
+        let mut fe = ModEmitter::default().func(Arity(0), 0);
         fe.push(Operand::Const32(n_pages as i32));
         fe.memory_grow();
         fe.drop();
@@ -341,7 +337,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_linear_memory_logging() -> Vec<u8> {
-        let mut me = ModEmitter::new();
+        let mut me = ModEmitter::default();
         // log_from_linear_memory
         let f0 = me.import_func("x", "_", Arity(4));
         // the caller
@@ -357,14 +353,14 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_unreachable() -> Vec<u8> {
-        let me = ModEmitter::new();
+        let me = ModEmitter::default();
         let mut fe = me.func(Arity(0), 0);
         fe.trap();
         fe.finish_and_export("test").finish()
     }
 
     pub(crate) fn wasm_module_with_indirect_call() -> Vec<u8> {
-        let mut me = ModEmitter::new();
+        let mut me = ModEmitter::default();
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
         // a local wasm function
@@ -388,7 +384,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_div_by_zero() -> Vec<u8> {
-        let me = ModEmitter::new();
+        let me = ModEmitter::default();
         let mut fe = me.func(Arity(0), 0);
         fe.push(Operand::Const64(123));
         fe.push(Operand::Const64(0));
@@ -397,7 +393,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_integer_overflow() -> Vec<u8> {
-        let me = ModEmitter::new();
+        let me = ModEmitter::default();
         let mut fe = me.func(Arity(0), 0);
         fe.push(Operand::Const64(i64::MIN));
         fe.push(Operand::Const64(-1));
@@ -405,6 +401,47 @@ pub(crate) mod wasm {
         // is an overflowing division. Other arithmatic opeartions add, sub, mul
         // are wrapping.
         fe.i64_div_s();
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_user_specified_initial_size(
+        mem_pages: u32,
+        elem_count: u32,
+    ) -> Vec<u8> {
+        let me = ModEmitter::from_configs(mem_pages, elem_count);
+        // a local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_large_data_segment(
+        mem_pages: u32,
+        mem_offset: u32,
+        len: u32,
+    ) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(mem_pages, 128);
+        me.define_data_segment(mem_offset, vec![0; len as usize]);
+        // a local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_multiple_data_sections(
+        num_pages: u32,
+        num_sgmts: u32,
+        seg_size: u32,
+    ) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(num_pages, 128);
+        let mem_len = num_pages * 0x10_000;
+        let max_segments = (mem_len / seg_size.max(1)).max(1);
+        for _i in 0..num_sgmts % max_segments {
+            me.define_data_segment(0, vec![0; seg_size as usize]);
+        }
+        // a local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
         fe.finish_and_export("test").finish()
     }
 }

@@ -1,8 +1,8 @@
 use crate::FuncEmitter;
 use std::collections::BTreeMap;
 use wasm_encoder::{
-    CodeSection, ConstExpr, CustomSection, ElementSection, Elements, EntityType, ExportKind,
-    ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
+    CodeSection, ConstExpr, CustomSection, DataSection, ElementSection, Elements, EntityType,
+    ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
     MemorySection, MemoryType, Module, TableSection, TableType, TypeSection, ValType,
 };
 
@@ -51,13 +51,14 @@ pub struct ModEmitter {
     exports: ExportSection,
     elements: ElementSection,
     codes: CodeSection,
+    data: DataSection,
 
     type_refs: BTreeMap<Arity, TypeRef>,
     import_refs: BTreeMap<(String, String, Arity), FuncRef>,
 }
 
 impl ModEmitter {
-    pub fn new() -> Self {
+    pub fn from_configs(mem_pages: u32, elem_count: u32) -> Self {
         let mut module = Module::new();
 
         let metasection = CustomSection {
@@ -72,12 +73,12 @@ impl ModEmitter {
         let mut tables = TableSection::new();
         tables.table(TableType {
             element_type: ValType::FuncRef,
-            minimum: 128,
+            minimum: elem_count,
             maximum: None,
         });
         let mut memories = MemorySection::new();
         memories.memory(MemoryType {
-            minimum: 1,
+            minimum: mem_pages as u64,
             maximum: None,
             memory64: false,
             shared: false,
@@ -94,6 +95,7 @@ impl ModEmitter {
         exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
         let elements = ElementSection::new();
         let codes = CodeSection::new();
+        let data = DataSection::new();
         let typerefs = BTreeMap::new();
         let importrefs = BTreeMap::new();
         Self {
@@ -107,6 +109,7 @@ impl ModEmitter {
             exports,
             elements,
             codes,
+            data,
             type_refs: typerefs,
             import_refs: importrefs,
         }
@@ -202,6 +205,11 @@ impl ModEmitter {
         }
     }
 
+    pub fn define_data_segment(&mut self, mem_offset: u32, data: Vec<u8>) {
+        self.data
+            .active(0, &ConstExpr::i32_const(mem_offset as i32), data);
+    }
+
     /// Finish emitting code, consuming the `self`, serializing a WASM binary
     /// blob, validating and returning it. Panics the resulting blob fails
     /// validation.
@@ -234,10 +242,72 @@ impl ModEmitter {
         if !self.codes.is_empty() {
             self.module.section(&self.codes);
         }
+        if !self.data.is_empty() {
+            self.module.section(&self.data);
+        }
         let bytes = self.module.finish();
         match wasmparser::validate(bytes.as_slice()) {
             Ok(_) => bytes,
             Err(ty) => panic!("invalid WASM module: {:?}", ty.message()),
+        }
+    }
+}
+
+impl Default for ModEmitter {
+    fn default() -> Self {
+        let mut module = Module::new();
+
+        let metasection = CustomSection {
+            name: soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
+            data: &soroban_env_common::meta::XDR,
+        };
+        module.section(&metasection);
+
+        let types = TypeSection::new();
+        let imports = ImportSection::new();
+        let funcs = FunctionSection::new();
+        let mut tables = TableSection::new();
+        tables.table(TableType {
+            element_type: ValType::FuncRef,
+            minimum: 128,
+            maximum: None,
+        });
+        let mut memories = MemorySection::new();
+        memories.memory(MemoryType {
+            minimum: 1,
+            maximum: None,
+            memory64: false,
+            shared: false,
+        });
+        let mut globals = GlobalSection::new();
+        globals.global(
+            GlobalType {
+                val_type: ValType::I64,
+                mutable: true,
+            },
+            &ConstExpr::i64_const(42),
+        );
+        let mut exports = ExportSection::new();
+        exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        let elements = ElementSection::new();
+        let codes = CodeSection::new();
+        let data = DataSection::new();
+        let typerefs = BTreeMap::new();
+        let importrefs = BTreeMap::new();
+        Self {
+            module,
+            types,
+            imports,
+            funcs,
+            tables,
+            memories,
+            globals,
+            exports,
+            elements,
+            codes,
+            data,
+            type_refs: typerefs,
+            import_refs: importrefs,
         }
     }
 }

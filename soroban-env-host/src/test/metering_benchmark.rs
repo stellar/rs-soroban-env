@@ -49,8 +49,11 @@ fn run_add_i32() -> Result<(), HostError> {
     let foot = {
         let _run_span = tracy_span!("add_i32 run 1: recording footprint");
         host.set_ledger_info(LEDGER_INFO.clone())?;
-        let contract_id_obj =
-            host.register_test_contract_wasm_from_source_account(ADD_I32, account_id.clone(), salt);
+        let contract_id_obj = host.register_test_contract_wasm_from_source_account(
+            ADD_I32,
+            account_id.clone(),
+            salt,
+        )?;
         host.call(
             contract_id_obj,
             Symbol::try_from_small_str("add")?,
@@ -70,7 +73,7 @@ fn run_add_i32() -> Result<(), HostError> {
         host.set_ledger_info(LEDGER_INFO)?;
         host.setup_storage_footprint(foot)?;
         let contract_id_obj =
-            host.register_test_contract_wasm_from_source_account(ADD_I32, account_id, salt);
+            host.register_test_contract_wasm_from_source_account(ADD_I32, account_id, salt)?;
         host.measured_call(
             contract_id_obj,
             Symbol::try_from_small_str("add")?,
@@ -98,8 +101,11 @@ fn run_complex() -> Result<(), HostError> {
     let foot = {
         let _run_span = tracy_span!("complex run 1: recording footprint");
         host.set_ledger_info(LEDGER_INFO.clone())?;
-        let contract_id_obj =
-            host.register_test_contract_wasm_from_source_account(COMPLEX, account_id.clone(), salt);
+        let contract_id_obj = host.register_test_contract_wasm_from_source_account(
+            COMPLEX,
+            account_id.clone(),
+            salt,
+        )?;
         host.call(
             contract_id_obj,
             Symbol::try_from_small_str("go")?,
@@ -120,7 +126,7 @@ fn run_complex() -> Result<(), HostError> {
         host.set_ledger_info(LEDGER_INFO)?;
         host.setup_storage_footprint(foot)?;
         let contract_id_obj =
-            host.register_test_contract_wasm_from_source_account(COMPLEX, account_id, salt);
+            host.register_test_contract_wasm_from_source_account(COMPLEX, account_id, salt)?;
         host.measured_call(
             contract_id_obj,
             Symbol::try_from_small_str("go")?,
