@@ -17,7 +17,7 @@ use soroban_env_common::xdr::{
     ScErrorCode, ScErrorType, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, VecM,
 };
-use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
+use soroban_env_common::{xdr::ScBytes, EnvBase, TryIntoVal, Val};
 use soroban_env_common::{StorageType, VecObject};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
@@ -266,6 +266,19 @@ fn test_contract_wasm_update() {
         .unwrap();
 
     let contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
+
+    let non_existent_hash = [0u8; 32];
+    let non_existent_contract_wasm = host.bytes_new_from_slice(&non_existent_hash).unwrap();
+    let non_existent_wasm_res = host.call(
+        contract_addr_obj,
+        Symbol::try_from_small_str("update").unwrap(),
+        host_vec![&host, &non_existent_contract_wasm].into(),
+    );
+    assert!(non_existent_wasm_res.is_err());
+    let non_existent_wasm_err = non_existent_wasm_res.err().unwrap().error;
+    assert!(non_existent_wasm_err.is_type(ScErrorType::Storage));
+    assert!(non_existent_wasm_err.is_code(ScErrorCode::MissingValue));
+
     let updated_wasm = ADD_I32;
 
     let updated_wasm_hash_obj: Val = host
