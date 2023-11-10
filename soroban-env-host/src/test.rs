@@ -1,3 +1,4 @@
+pub(crate) mod observe;
 pub(crate) mod util;
 pub(crate) use util::wasm as wasm_util;
 
@@ -28,4 +29,5 @@ mod tuple;
 mod vec;
 
 mod finish;
+#[cfg(feature = "testutils")]
 mod metering_benchmark;

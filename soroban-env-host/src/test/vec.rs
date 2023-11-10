@@ -4,13 +4,14 @@ use soroban_env_common::{xdr::ScVal, Compare, Symbol, Tag, TryFromVal, U32Val};
 use soroban_test_wasms::LINEAR_MEMORY;
 
 use crate::{
+    observe_host,
     xdr::{ScErrorCode, ScErrorType},
     Env, Host, HostError, Object, Val,
 };
 
 #[test]
 fn vec_as_seen_by_host() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let val0 = host.test_vec_val(&[1u32])?;
     let val1 = host.test_vec_val(&[1u32])?;
     assert_eq!(val0.get_tag(), Tag::VecObject);
@@ -24,13 +25,13 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
     // Check that we got 2 distinct Vec objects
     assert_ne!(val0.get_payload(), val1.get_payload());
     // But also that they compare deep-equal.
-    assert!(host.compare(&val0, &val1).unwrap() == Ordering::Equal);
+    assert!((*host).compare(&val0, &val1).unwrap() == Ordering::Equal);
     Ok(())
 }
 
 #[test]
 fn vec_new() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let v = host.vec_new()?;
     assert_eq!(
         host.vec_len(v)?.to_val().get_payload(),
@@ -41,7 +42,7 @@ fn vec_new() -> Result<(), HostError> {
 
 #[test]
 fn vec_front_and_back() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let front = u32::try_from(host.vec_front(obj)?)?;
     let back = u32::try_from(host.vec_back(obj)?)?;
@@ -52,7 +53,7 @@ fn vec_front_and_back() -> Result<(), HostError> {
 
 #[test]
 fn empty_vec_front() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_front(obj);
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -62,7 +63,7 @@ fn empty_vec_front() -> Result<(), HostError> {
 
 #[test]
 fn empty_vec_back() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_back(obj);
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -72,7 +73,7 @@ fn empty_vec_back() -> Result<(), HostError> {
 
 #[test]
 fn vec_put_and_get() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let i: U32Val = 1_u32.into();
     let obj1 = host.vec_put(obj, i, 9_u32.into())?;
@@ -84,7 +85,7 @@ fn vec_put_and_get() -> Result<(), HostError> {
 
 #[test]
 fn vec_push_pop_and_len() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[])?;
     let l: u32 = host.vec_len(obj)?.into();
     assert_eq!(l, 0);
@@ -103,7 +104,7 @@ fn vec_push_pop_and_len() -> Result<(), HostError> {
 
 #[test]
 fn vec_pop_empty_vec() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_pop_back(obj);
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -113,7 +114,7 @@ fn vec_pop_empty_vec() -> Result<(), HostError> {
 
 #[test]
 fn vec_push_pop_front() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[])?;
     let mut vec = host.vec_push_front(obj, 1u32.into())?;
     vec = host.vec_push_front(vec, 2u32.into())?;
@@ -133,7 +134,7 @@ fn vec_push_pop_front() -> Result<(), HostError> {
 
 #[test]
 fn vec_get_out_of_bound() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_get(obj, 3_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -143,7 +144,7 @@ fn vec_get_out_of_bound() -> Result<(), HostError> {
 
 #[test]
 fn vec_del_and_cmp() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let obj1 = host.vec_del(obj, 1u32.into())?;
     let obj_ref = host.test_vec_obj::<u32>(&[1, 3])?;
@@ -153,7 +154,7 @@ fn vec_del_and_cmp() -> Result<(), HostError> {
 
 #[test]
 fn vec_del_out_of_bound() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_del(obj, 3_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -163,7 +164,7 @@ fn vec_del_out_of_bound() -> Result<(), HostError> {
 
 #[test]
 fn vec_slice_and_cmp() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let obj1 = host.vec_slice(obj, 1u32.into(), 3u32.into())?;
     let obj_ref = host.test_vec_obj::<u32>(&[2, 3])?;
@@ -177,7 +178,7 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
 
 #[test]
 fn vec_slice_start_equal_to_end() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let slice: ScVal = host
         .from_host_obj(host.vec_slice(obj, 1_u32.into(), 1_u32.into())?)?
@@ -189,7 +190,7 @@ fn vec_slice_start_equal_to_end() -> Result<(), HostError> {
 
 #[test]
 fn vec_slice_start_greater_than_end() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj, 2_u32.into(), 1_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::InvalidInput);
@@ -199,7 +200,7 @@ fn vec_slice_start_greater_than_end() -> Result<(), HostError> {
 
 #[test]
 fn vec_slice_start_out_of_bound() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj, 0_u32.into(), 4_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -209,7 +210,7 @@ fn vec_slice_start_out_of_bound() -> Result<(), HostError> {
 
 #[test]
 fn vec_slice_end_out_of_bound() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj, 0_u32.into(), 4_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -219,7 +220,7 @@ fn vec_slice_end_out_of_bound() -> Result<(), HostError> {
 
 #[test]
 fn vec_insert_and_cmp() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[2])?;
     let obj1 = host.vec_insert(obj, 0u32.into(), 1u32.into())?;
     let obj_ref = host.test_vec_obj::<u32>(&[1, 2])?;
@@ -237,7 +238,7 @@ fn vec_insert_and_cmp() -> Result<(), HostError> {
 
 #[test]
 fn vec_insert_out_of_bound() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_insert(obj, 4_u32.into(), 9u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -247,7 +248,7 @@ fn vec_insert_out_of_bound() -> Result<(), HostError> {
 
 #[test]
 fn vec_append() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj0 = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let obj1 = host.test_vec_obj::<u32>(&[4, 5, 6])?;
     let obj2 = host.vec_append(obj0, obj1)?;
@@ -258,7 +259,7 @@ fn vec_append() -> Result<(), HostError> {
 
 #[test]
 fn vec_append_empty() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj0 = host.test_vec_obj::<u32>(&[])?;
     let obj1 = host.vec_append(obj0, obj0)?;
     assert_ne!(obj0.as_val().get_payload(), obj1.as_val().get_payload());
@@ -268,7 +269,7 @@ fn vec_append_empty() -> Result<(), HostError> {
 
 #[test]
 fn vec_index_of() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj0 = host.test_vec_obj::<u32>(&[3, 4, 2, 2, 2, 5])?;
     let mut idx = host.vec_first_index_of(obj0, 2u32.into())?;
     assert_eq!(idx.get_payload(), Val::from(2u32).get_payload());
@@ -283,7 +284,7 @@ fn vec_index_of() -> Result<(), HostError> {
 
 #[test]
 fn vec_binary_search() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj0 = host.test_vec_obj::<u32>(&[1, 2, 4, 5, 7, 9])?;
     let mut res = host.vec_binary_search(obj0, 7u32.into())?;
     let exp: u64 = 4 | (1 << 32);
@@ -301,7 +302,7 @@ fn vec_binary_search() -> Result<(), HostError> {
 #[test]
 fn vec_build_bad_element_integrity() -> Result<(), HostError> {
     use crate::EnvBase;
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let i = U32Val::from(1);
 

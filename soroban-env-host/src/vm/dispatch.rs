@@ -153,6 +153,21 @@ macro_rules! generate_dispatch_functions {
 
                     let host = caller.data().clone();
 
+                    #[cfg(feature = "testutils")]
+                    {
+                        host.env_call_hook(&core::stringify!($fn_id), &[$(
+                            // Incoming args might or might-not be type-correct;
+                            // we attempt to unmarshal here but fail safely and
+                            // log the bad i64 if it doesn't work. The failure
+                            // will be repeated below in the attempted call, and
+                            // will propagate.
+                            match <$type>::try_marshal_from_relative_value(Value::I64($arg), &host) {
+                                Ok(val) => format!("{:?}", val),
+                                Err(_) => format!("bad:{:?}", $arg),
+                            }
+                        ),*])?;
+                    }
+
                     // This is where the VM -> Host boundary is crossed.
                     // We first return all fuels from the VM back to the host such that
                     // the host maintains control of the budget.
@@ -173,6 +188,15 @@ macro_rules! generate_dispatch_functions {
                     // conversions to and from both Val and i64 / u64 for
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?),*);
+
+                    #[cfg(feature = "testutils")]
+                    {
+                        let res_str: Result<String,&HostError> = match &res {
+                            Ok(ok) => Ok(format!("{:?}", ok)),
+                            Err(err) => Err(err)
+                        };
+                        host.env_ret_hook(&core::stringify!($fn_id), &res_str)?;
+                    }
 
                     // On the off chance we got an error with no context, we can
                     // at least attach some here "at each host function call",

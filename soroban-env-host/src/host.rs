@@ -76,13 +76,17 @@ pub struct LedgerInfo {
     pub max_entry_ttl: u32,
 }
 
-#[cfg(any(test, feature = "testutils"))]
-pub(crate) enum HostLifecycleEvent {
-    VmInstantiated,
+#[cfg(feature = "testutils")]
+pub(crate) enum HostLifecycleEvent<'a> {
+    PushCtx(&'a Context),
+    PopCtx(&'a Context, &'a Result<Val, HostError>),
+    EnvCall(&'static str, &'a [String]),
+    EnvRet(&'static str, &'a Result<String, String>),
 }
 
-#[cfg(any(test, feature = "testutils"))]
-pub(crate) type HostLifecycleHook = Rc<dyn Fn(HostLifecycleEvent) -> Result<(), HostError>>;
+#[cfg(feature = "testutils")]
+pub(crate) type HostLifecycleHook =
+    Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
 #[derive(Clone, Default)]
 struct HostImpl {
@@ -90,7 +94,7 @@ struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
-    context: RefCell<Vec<Context>>,
+    context_stack: RefCell<Vec<Context>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
@@ -137,7 +141,7 @@ struct HostImpl {
     // the host's execution. No guarantees are made about the stability of this
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(feature = "testutils")]
     lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -196,10 +200,10 @@ impl_checked_borrow_helpers!(
 );
 impl_checked_borrow_helpers!(storage, Storage, try_borrow_storage, try_borrow_storage_mut);
 impl_checked_borrow_helpers!(
-    context,
+    context_stack,
     Vec<Context>,
-    try_borrow_context,
-    try_borrow_context_mut
+    try_borrow_context_stack,
+    try_borrow_context_stack_mut
 );
 impl_checked_borrow_helpers!(
     events,
@@ -253,7 +257,7 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager_mut
 );
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(feature = "testutils")]
 impl_checked_borrow_helpers!(
     lifecycle_event_hook,
     Option<HostLifecycleHook>,
@@ -285,7 +289,7 @@ impl Host {
             ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
-            context: Default::default(),
+            context_stack: Default::default(),
             budget,
             events: Default::default(),
             authorization_manager: RefCell::new(
@@ -301,7 +305,7 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
-            #[cfg(any(test, feature = "testutils"))]
+            #[cfg(feature = "testutils")]
             lifecycle_event_hook: RefCell::new(None),
         }))
     }
@@ -600,6 +604,24 @@ impl EnvBase for Host {
             }
         }
         x
+    }
+
+    #[cfg(feature = "testutils")]
+    fn env_call_hook(&self, fname: &'static str, args: &[String]) -> Result<(), HostError> {
+        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvCall(fname, args))
+    }
+
+    #[cfg(feature = "testutils")]
+    fn env_ret_hook(
+        &self,
+        fname: &'static str,
+        res: &Result<String, &HostError>,
+    ) -> Result<(), HostError> {
+        // We have to defer error formatting to here because the Env type does
+        // not know enough about the structure of errors (in particular that we
+        // do _not_ want to format debuginfo into the lifecycle-hook string).
+        let res = res.clone().map_err(|he| format!("{:?}", he.error));
+        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvRet(fname, &res))
     }
 
     fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
@@ -2777,7 +2799,7 @@ impl Host {
         f(self.0.budget.clone())
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "testutils")]
     pub(crate) fn set_lifecycle_event_hook(
         &self,
         hook: Option<HostLifecycleHook>,
@@ -2786,12 +2808,13 @@ impl Host {
         Ok(())
     }
 
+    #[cfg(feature = "testutils")]
     pub(crate) fn call_any_lifecycle_hook(
         &self,
         event: HostLifecycleEvent,
     ) -> Result<(), HostError> {
         match &*self.try_borrow_lifecycle_event_hook()? {
-            Some(hook) => hook(event),
+            Some(hook) => hook(self, event),
             None => Ok(()),
         }
     }

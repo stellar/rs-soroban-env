@@ -1,4 +1,4 @@
-all: build test
+all: build test test-opt
 
 test:
 	cargo hack --each-feature test
