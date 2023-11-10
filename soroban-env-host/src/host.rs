@@ -78,10 +78,10 @@ pub struct LedgerInfo {
 
 #[cfg(any(test, feature = "testutils"))]
 pub(crate) enum HostLifecycleEvent<'a> {
-    PushContext,
-    PopContext(&'a Context, &'a Result<Val, HostError>),
-    VmCall(&'a str, &'a [String]),
-    VmReturn(&'a str, &'a Result<String, String>),
+    PushCtx(&'a Context),
+    PopCtx(&'a Context, &'a Result<Val, HostError>),
+    EnvCall(&'static str, &'a [String]),
+    EnvRet(&'static str, &'a Result<String, String>),
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -604,6 +604,20 @@ impl EnvBase for Host {
             }
         }
         x
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    fn env_call_hook(&self, fname: &'static str, args: &[String]) -> Result<(), HostError> {
+        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvCall(fname, args))
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    fn env_ret_hook(&self, fname: &'static str, res: &Result<String,&HostError>) -> Result<(), HostError> {
+        // We have to defer error formatting to here because the Env type does
+        // not know enough about the structure of errors (in particular that we
+        // do _not_ want to format debuginfo into the lifecycle-hook string).
+        let res = res.clone().map_err(|he| format!("{:?}", he.error));
+        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvRet(fname, &res))
     }
 
     fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {

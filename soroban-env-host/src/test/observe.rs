@@ -22,6 +22,7 @@ use crate::{
     xdr::{self, ContractExecutable},
     Host, HostError, Symbol, SymbolObject, SymbolSmall,
 };
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map::DefaultHasher, BTreeMap},
@@ -47,11 +48,15 @@ fn update_observations() -> bool {
     env::var("UPDATE_OBSERVATIONS").is_ok()
 }
 
-impl Observations {
-    fn new() -> Self {
-        Self(Mutex::new(BTreeMap::new()))
-    }
+fn diff_line(last: &String, new: &String) -> String {
+    last.split(',')
+        .zip(new.split(','))
+        .filter(|(a, b)| a != b)
+        .map(|(_, b)| b)
+        .join(",")
+}
 
+impl Observations {
     fn load() -> Self {
         println!("reading {}", full_path().display());
         let file = File::open(&full_path()).expect(&format!("unable to open {FILENAME}"));
@@ -73,22 +78,37 @@ impl Observations {
     // assert_eq! on the observations at this point, which will cause an
     // observed test to fail if there were differences from the old recording.
     fn check(old: &Observations, new: &Observations, name: &'static str, obs: Observation) {
+
         let name = if let Some((_, rest)) = name.split_once("::") {
             rest.to_string()
         } else {
             name.to_string()
         };
 
-        let is_end = obs.step == Step::End;
-
         let mut disagreement: Option<(usize, String, String)> = None;
 
         let mut new_guard = new.0.lock().unwrap();
         let new_map = new_guard.entry(name.clone()).or_default();
-        let (id, obs) = obs.render(new_map.len());
-        new_map.insert(id.clone(), obs);
+        if obs.step == Step::Begin {
+            new_map.clear();
+        }
 
-        if is_end {
+        // We use a pseudo-entry to track the last-written entry while building
+        // a map to enable each non-begin-or-end stored line to be a diff from
+        // the last line's full state, for greater compactness and legibility.
+        const PREV_FULL: &str = "___PREV_FULL";
+        let (id, full) = obs.render(new_map.len());
+        if obs.step == Step::Begin || obs.step == Step::End {
+            new_map.insert(id.clone(), full);
+        } else {
+            let last = new_map.entry(PREV_FULL.to_string()).or_default();
+            let diff = diff_line(last, &full);
+            *last = full;
+            new_map.insert(id.clone(), diff);
+        }
+
+        if obs.step == Step::End {
+            new_map.remove(PREV_FULL);
             let mut old_guard = old.0.lock().unwrap();
             let old_map = old_guard.entry(id.clone()).or_default();
             if old_map.len() != new_map.len() {
@@ -151,7 +171,7 @@ fn get_new_obs() -> &'static Observations {
                 atexit(save_hook);
             }
         }
-        Observations::new()
+        get_old_obs().clone()
     })
 }
 
@@ -166,30 +186,31 @@ impl Clone for Observations {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Step {
-    Enter {
+    Begin,
+    Push {
         contract: String,
         func: String,
         args: Vec<String>,
     },
-    Leave {
+    Pop {
         contract: String,
         func: String,
         result: String,
     },
     Call(String, Vec<String>),
-    Ret(String, String),
+    Ret(String, Result<String, String>),
     End,
 }
 
 impl Display for Step {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Step::Enter {
+            Step::Push {
                 contract,
                 func,
                 args,
             } => {
-                write!(f, "enter {contract}:{func}(")?;
+                write!(f, "push {contract}:{func}(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
@@ -198,12 +219,12 @@ impl Display for Step {
                 }
                 write!(f, ")")
             }
-            Step::Leave {
+            Step::Pop {
                 contract,
                 func,
                 result,
             } => {
-                write!(f, "leave {contract}:{func} -> {result}")
+                write!(f, "pop {contract}:{func} -> {result}")
             }
             Step::Call(hostfn, args) => {
                 write!(f, "call {}(", hostfn)?;
@@ -215,9 +236,13 @@ impl Display for Step {
                 }
                 write!(f, ")")
             }
-            Step::Ret(hostfn, result) => {
-                write!(f, "ret {} -> {}", hostfn, result)
+            Step::Ret(hostfn, Ok(ok)) => {
+                write!(f, "ret {} -> Ok({})", hostfn, ok)
             }
+            Step::Ret(hostfn, Err(err)) => {
+                write!(f, "ret {} -> Err({})", hostfn, err)
+            }
+            Step::Begin => write!(f, "begin"),
             Step::End => write!(f, "end"),
         }
     }
@@ -472,7 +497,7 @@ impl Observation {
     }
 
     fn render_size_and_hash(size: usize, hash: u64) -> String {
-        if size == 0 && hash == 0 {
+        if size == 0 {
             "-".to_string()
         } else {
             format!("{}@{}", size, Self::render_hash(hash))
@@ -501,12 +526,7 @@ impl Observation {
         )
     }
 
-    fn observe(host: &Host, evt: Option<HostLifecycleEvent<'_>>) -> Self {
-        let step = if let Some(e) = evt {
-            Step::from_host_lifecycle_event(host, e)
-        } else {
-            Step::End
-        };
+    fn observe(host: &Host, step: Step) -> Self {
         Observation {
             step,
             cpu_insns: host.as_budget().get_cpu_insns_consumed().unwrap(),
@@ -557,34 +577,30 @@ pub(crate) struct ObservedHost {
 }
 
 impl Step {
-    fn from_host_lifecycle_event(host: &Host, evt: HostLifecycleEvent<'_>) -> Self {
+    fn from_host_lifecycle_event(evt: HostLifecycleEvent<'_>) -> Self {
         match evt {
-            HostLifecycleEvent::PushContext => {
-                let stack = host.try_borrow_context_stack().expect("borrowing context");
-                let context = stack.last().expect("last context");
+            HostLifecycleEvent::PushCtx(context) => {
                 let (contract, func, args) = Self::frame_contract_func_and_args(&context.frame);
-                Step::Enter {
+                Step::Push {
                     contract,
                     func,
                     args,
                 }
             }
-            HostLifecycleEvent::PopContext(context, result) => {
+            HostLifecycleEvent::PopCtx(context, result) => {
                 let (contract, func, _) = Self::frame_contract_func_and_args(&context.frame);
                 // We only want to see the error code here, not debuginfo.
                 let result = format!("{:?}", result.clone().map_err(|he| he.error));
-                Step::Leave {
+                Step::Pop {
                     contract,
                     func,
                     result,
                 }
             }
-            HostLifecycleEvent::VmCall(fname, args) => {
+            HostLifecycleEvent::EnvCall(fname, args) => {
                 Step::Call(fname.to_string(), args.iter().cloned().collect())
             }
-            HostLifecycleEvent::VmReturn(fname, ret) => {
-                Step::Ret(fname.to_string(), format!("{:?}", ret))
-            }
+            HostLifecycleEvent::EnvRet(fname, res) => Step::Ret(fname.to_string(), res.clone()),
         }
     }
     fn short_hash(hash: &xdr::Hash) -> String {
@@ -640,7 +656,8 @@ fn make_obs_hook(
     testname: &'static str,
 ) -> Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>> {
     Rc::new(move |host, evt| {
-        let obs = Observation::observe(host, Some(evt));
+        let step = Step::from_host_lifecycle_event(evt);
+        let obs = Observation::observe(host, step);
         Observations::check(get_old_obs(), get_new_obs(), testname, obs);
         Ok(())
     })
@@ -648,6 +665,8 @@ fn make_obs_hook(
 
 impl ObservedHost {
     pub fn new(testname: &'static str, host: Host) -> Self {
+        let obs = Observation::observe(&host, Step::Begin);
+        Observations::check(get_old_obs(), get_new_obs(), testname, obs);
         let hook = make_obs_hook(testname);
         host.set_lifecycle_event_hook(Some(hook))
             .expect("installing host lifecycle hook");
@@ -668,7 +687,7 @@ impl Drop for ObservedHost {
         self.host
             .set_lifecycle_event_hook(None)
             .expect("resetting host lifecycle hook");
-        let obs = Observation::observe(&self.host, None);
+        let obs = Observation::observe(&self.host, Step::End);
         Observations::check(get_old_obs(), get_new_obs(), self.testname, obs)
     }
 }

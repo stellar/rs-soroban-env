@@ -155,8 +155,7 @@ macro_rules! generate_dispatch_functions {
 
                     #[cfg(any(test, feature = "testutils"))]
                     {
-                        use crate::host::HostLifecycleEvent::VmCall;
-                        host.call_any_lifecycle_hook(VmCall(&core::stringify!($fn_id), &[$(format!("{:?}", $arg)),*]))?;
+                        host.env_call_hook(&core::stringify!($fn_id), &[$(format!("{:?}", $arg)),*])?;
                     }
 
                     // This is where the VM -> Host boundary is crossed.
@@ -182,9 +181,11 @@ macro_rules! generate_dispatch_functions {
 
                     #[cfg(any(test, feature = "testutils"))]
                     {
-                        use crate::host::HostLifecycleEvent::VmReturn;
-                        let res_str = res.clone().map(|x| format!("{:?}", x)).map_err(|x| format!("{:?}", x));
-                        host.call_any_lifecycle_hook(VmReturn(&core::stringify!($fn_id), &res_str))?;
+                        let res_str: Result<String,&HostError> = match &res {
+                            Ok(ok) => Ok(format!("{:?}", ok)),
+                            Err(err) => Err(err)
+                        };
+                        host.env_ret_hook(&core::stringify!($fn_id), &res_str)?;
                     }
 
                     // On the off chance we got an error with no context, we can

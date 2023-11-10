@@ -46,8 +46,26 @@ pub trait EnvBase: Sized + Clone {
     /// terms that the environment controls (eg. enriching or logging it). This
     /// should only ever be called by client-side / SDK local-testing code,
     /// never in the `Host`.
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     fn escalate_error_to_panic(&self, e: Self::Error) -> !;
+
+    /// A general interface for tracing all env-method calls, intended to
+    /// be called from macros that do dispatch on all such methods.
+    #[cfg(any(test, feature = "testutils"))]
+    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A general interface for tracing all env-method returns, intended to
+    /// be called from macros that do dispatch on all such methods.
+    #[cfg(feature = "testutils")]
+    fn env_ret_hook(
+        &self,
+        _fname: &'static str,
+        _res: &Result<String, &Self::Error>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     /// If `x` is `Err(...)`, ensure as much debug information as possible is
     /// attached to that error; in any case return "essentially the same" `x` --
