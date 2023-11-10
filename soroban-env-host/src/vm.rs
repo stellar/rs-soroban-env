@@ -266,7 +266,6 @@ impl Vm {
         // Here we do _not_ supply the store with any fuel. Fuel is supplied
         // right before the VM is being run, i.e., before crossing the host->VM
         // boundary.
-        #[cfg(any(test, feature = "testutils"))]
         Ok(Rc::new(Self {
             contract_id,
             module,
