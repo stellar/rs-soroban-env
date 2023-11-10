@@ -7,8 +7,8 @@
 // Observations include a short summary of everything a contract _might_
 // observe: local and global objects, local and global storage, events, PRNGs,
 // guest linear memory, and budgets. The results are stored in maps and saved to
-// disk in a file called "observations.json" which should exist in the crate
-// root.
+// disk in files called "observations/some_testname.json" based on the testnames
+// passed in.
 //
 // If observations differ from previous runs, it's considered an error. If you
 // want to make an intentional change, run with UPDATE_OBSERVATIONS=1.
@@ -24,6 +24,7 @@ use crate::{
 };
 use itertools::Itertools;
 use std::{
+    cell::RefCell,
     collections::{hash_map::DefaultHasher, BTreeMap},
     env,
     fmt::Display,
@@ -31,15 +32,20 @@ use std::{
     hash::{Hash, Hasher},
     path::PathBuf,
     rc::Rc,
-    sync::{Mutex, OnceLock},
 };
 
 fn full_path(testname: &str) -> PathBuf {
+    let testname = if let Some((_, rest)) = testname.split_once("::") {
+        rest.to_string()
+    } else {
+        testname.to_string()
+    };
+    let filename = testname.split("::").join("__");
     let root: PathBuf = env::var("CARGO_MANIFEST_DIR")
         .expect("CARGO_MANIFEST_DIR environment variable is required to be set")
         .into();
     root.join("observations")
-        .join(testname)
+        .join(filename)
         .with_extension("json")
 }
 
@@ -56,7 +62,7 @@ fn diff_line(last: &String, new: &String) -> String {
 }
 
 impl Observations {
-    fn load(&self, testname: &str) {
+    fn load(testname: &str) -> Self {
         let path = full_path(testname);
         let obs: BTreeMap<String, String> = if path.exists() {
             println!("reading {}", path.display());
@@ -65,22 +71,15 @@ impl Observations {
         } else {
             BTreeMap::new()
         };
-        self.0
-            .lock()
-            .expect("loading or creating initial observations")
-            .insert(testname.to_string(), obs);
+        Self(obs)
     }
 
     fn save(&self, testname: &str) {
         let path = full_path(testname);
         println!("writing {}", path.display());
         let file = File::create(&path).expect(&format!("unable to create {}", path.display()));
-        let guard = self.0.lock().expect("saving observations");
-        if let Some(e) = guard.get(testname) {
-            let res = serde_json::to_writer_pretty(file, e);
-            drop(guard);
-            res.expect(&format!("error writing {}", path.display()))
-        }
+        serde_json::to_writer_pretty(file, &self.0)
+            .expect(&format!("error writing {}", path.display()));
     }
 
     // Check records the new observation by appending it to the vector
@@ -91,57 +90,40 @@ impl Observations {
     // _not_ in update_observations mode (i.e. it's enforcing) it also calls
     // assert_eq! on the observations at this point, which will cause an
     // observed test to fail if there were differences from the old recording.
-    fn check(old: &Observations, new: &Observations, name: &'static str, obs: Observation) {
-        let name = if let Some((_, rest)) = name.split_once("::") {
-            rest.to_string()
-        } else {
-            name.to_string()
-        };
-        let name = name.split("::").join("__");
-
+    fn check(old: &Observations, new: &mut Observations, name: &'static str, ob: Observation) {
         let mut disagreement: Option<(usize, String, String)> = None;
 
-        if obs.step == Step::Begin {
-            // Do this before any guards are held, to void
-            // lock poisoning.
-            old.load(&name);
-        }
-
-        let mut new_guard = new.0.lock().unwrap();
-        let new_map = new_guard.entry(name.clone()).or_default();
-        if obs.step == Step::Begin {
-            new_map.clear();
+        if ob.step == Step::Begin {
+            new.0.clear();
         }
 
         // We use a pseudo-entry to track the last-written entry while building
         // a map to enable each non-begin-or-end stored line to be a diff from
         // the last line's full state, for greater compactness and legibility.
         const PREV_FULL: &str = "___PREV_FULL";
-        let prev = new_map.remove(PREV_FULL).unwrap_or_default();
-        let (id, full) = obs.render(new_map.len());
-        new_map.insert(PREV_FULL.to_string(), full.clone());
-        if obs.step == Step::Begin || obs.step == Step::End {
-            new_map.insert(id.clone(), full);
+        let prev = new.0.remove(PREV_FULL).unwrap_or_default();
+        let (id, full) = ob.render(new.0.len());
+        new.0.insert(PREV_FULL.to_string(), full.clone());
+        if ob.step == Step::Begin || ob.step == Step::End {
+            new.0.insert(id.clone(), full);
         } else {
             let diff = diff_line(&prev, &full);
-            new_map.insert(id.clone(), diff);
+            new.0.insert(id.clone(), diff);
         }
 
-        if obs.step == Step::End {
-            new_map.remove(PREV_FULL);
-            let mut old_guard = old.0.lock().unwrap();
-            let old_map = old_guard.entry(name.clone()).or_default();
-            if old_map.len() != new_map.len() {
+        if ob.step == Step::End {
+            new.0.remove(PREV_FULL);
+            if old.0.len() != new.0.len() {
                 println!("old and new observations of {name} have different lengths");
                 disagreement = Some((
-                    old_map.len(),
-                    old_map.len().to_string(),
-                    new_map.len().to_string(),
+                    old.0.len(),
+                    old.0.len().to_string(),
+                    new.0.len().to_string(),
                 ));
             }
 
             for (i, ((old_key, old_val), (new_key, new_val))) in
-                old_map.iter().zip(new_map.iter()).enumerate()
+                old.0.iter().zip(new.0.iter()).enumerate()
             {
                 if old_key != new_key {
                     println!("observation key {i} of {name} changed since last recording");
@@ -152,9 +134,6 @@ impl Observations {
                     disagreement = Some((i, old_val.clone(), new_val.clone()));
                 }
             }
-            // Drop the guard before any panic, so we don't poison the lock.
-            drop(old_guard);
-            drop(new_guard);
             if update_observations() {
                 new.save(&name);
             } else {
@@ -170,31 +149,8 @@ impl Observations {
     }
 }
 
-static OLD_OBS: OnceLock<Observations> = OnceLock::new();
-static NEW_OBS: OnceLock<Observations> = OnceLock::new();
-
-fn get_old_obs() -> &'static Observations {
-    OLD_OBS.get_or_init(|| Default::default())
-}
-
-fn get_new_obs() -> &'static Observations {
-    NEW_OBS.get_or_init(|| Default::default())
-}
-
-#[derive(Debug)]
-struct Observations(Mutex<BTreeMap<String, BTreeMap<String, String>>>);
-
-impl Default for Observations {
-    fn default() -> Self {
-        Self(Mutex::new(Default::default()))
-    }
-}
-
-impl Clone for Observations {
-    fn clone(&self) -> Self {
-        Self(Mutex::new(self.0.lock().unwrap().clone()))
-    }
-}
+#[derive(Debug, Default, Clone)]
+struct Observations(BTreeMap<String, String>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Step {
@@ -585,6 +541,8 @@ macro_rules! observe_host {
 
 pub(crate) struct ObservedHost {
     testname: &'static str,
+    old_obs: Rc<RefCell<Observations>>,
+    new_obs: Rc<RefCell<Observations>>,
     host: Host,
 }
 
@@ -664,25 +622,45 @@ impl Step {
     }
 }
 
-fn make_obs_hook(
-    testname: &'static str,
-) -> Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>> {
-    Rc::new(move |host, evt| {
-        let step = Step::from_host_lifecycle_event(evt);
-        let obs = Observation::observe(host, step);
-        Observations::check(get_old_obs(), get_new_obs(), testname, obs);
-        Ok(())
-    })
-}
-
 impl ObservedHost {
     pub fn new(testname: &'static str, host: Host) -> Self {
-        let obs = Observation::observe(&host, Step::Begin);
-        Observations::check(get_old_obs(), get_new_obs(), testname, obs);
-        let hook = make_obs_hook(testname);
-        host.set_lifecycle_event_hook(Some(hook))
+        let old_obs = Rc::new(RefCell::new(Observations::load(testname)));
+        let new_obs = Rc::new(RefCell::new(Observations::default()));
+        let oh = Self {
+            old_obs,
+            new_obs,
+            testname,
+            host,
+        };
+        oh.observe_and_check(Step::Begin);
+        oh.host
+            .set_lifecycle_event_hook(Some(oh.make_obs_hook()))
             .expect("installing host lifecycle hook");
-        Self { testname, host }
+        oh
+    }
+
+    fn make_obs_hook(
+        &self,
+    ) -> Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>> {
+        let old_obs = self.old_obs.clone();
+        let new_obs = self.new_obs.clone();
+        let testname = self.testname;
+        Rc::new(move |host, evt| {
+            let step = Step::from_host_lifecycle_event(evt);
+            let ob = Observation::observe(host, step);
+            Observations::check(&old_obs.borrow(), &mut new_obs.borrow_mut(), testname, ob);
+            Ok(())
+        })
+    }
+
+    fn observe_and_check(&self, step: Step) {
+        let ob = Observation::observe(&self.host, step);
+        Observations::check(
+            &self.old_obs.borrow(),
+            &mut self.new_obs.borrow_mut(),
+            self.testname,
+            ob,
+        );
     }
 }
 
@@ -699,7 +677,6 @@ impl Drop for ObservedHost {
         self.host
             .set_lifecycle_event_hook(None)
             .expect("resetting host lifecycle hook");
-        let obs = Observation::observe(&self.host, Step::End);
-        Observations::check(get_old_obs(), get_new_obs(), self.testname, obs)
+        self.observe_and_check(Step::End)
     }
 }
