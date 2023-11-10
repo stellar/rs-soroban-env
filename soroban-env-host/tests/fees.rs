@@ -1,10 +1,13 @@
 use soroban_env_common::xdr::{Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, WriteXdr};
-use soroban_env_host::fees::{
-    compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
-    FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
-    WriteFeeConfiguration, TTL_ENTRY_SIZE,
+use soroban_env_host::{
+    fees::{
+        compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
+        FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
+        WriteFeeConfiguration, TTL_ENTRY_SIZE,
+    },
+    xdr::TtlEntry,
+    DEFAULT_XDR_RW_LIMITS,
 };
-use soroban_env_host::xdr::TtlEntry;
 
 #[test]
 fn ttl_entry_size() {
@@ -18,7 +21,10 @@ fn ttl_entry_size() {
     };
     assert_eq!(
         TTL_ENTRY_SIZE,
-        expiration_entry.to_xdr().unwrap().len() as u32
+        expiration_entry
+            .to_xdr(DEFAULT_XDR_RW_LIMITS)
+            .unwrap()
+            .len() as u32
     );
 }
 

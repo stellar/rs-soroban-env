@@ -9,13 +9,13 @@ use crate::{
         ContractExecutable, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage,
         HashIdPreimageContractId, LedgerEntryData, ScSymbol, ScVal, ScVec, Uint256,
     },
-    Env, Host, LedgerInfo, Symbol,
+    Env, Host, LedgerInfo, Symbol, DEFAULT_XDR_RW_LIMITS,
 };
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{
-    ContractIdPreimage, ContractIdPreimageFromAddress, DepthLimitedWrite, HostFunction, ScAddress,
+    ContractIdPreimage, ContractIdPreimageFromAddress, HostFunction, Limited, ScAddress,
     ScErrorCode, ScErrorType, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-    SorobanAuthorizedInvocation, SorobanCredentials, VecM, DEFAULT_XDR_RW_DEPTH_LIMIT,
+    SorobanAuthorizedInvocation, SorobanCredentials, VecM,
 };
 use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
 use soroban_env_common::{StorageType, VecObject};
@@ -241,7 +241,7 @@ fn create_contract_from_source_account() {
 }
 
 pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Hash {
-    let mut buf = DepthLimitedWrite::new(Vec::new(), DEFAULT_XDR_RW_DEPTH_LIMIT);
+    let mut buf = Limited::new(Vec::new(), DEFAULT_XDR_RW_LIMITS);
     pre_image
         .write_xdr(&mut buf)
         .expect("preimage write failed");

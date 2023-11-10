@@ -1,6 +1,6 @@
 use crate::{
     xdr::{ScError, ScVal},
-    Env, Host, HostError, Val,
+    Env, Host, HostError, Val, DEFAULT_XDR_RW_LIMITS,
 };
 use soroban_env_common::{
     xdr::{ScBytes, ScErrorCode, ScErrorType, ScVec, WriteXdr},
@@ -119,7 +119,7 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
         Ok(())
     };
     let deser_fails_scv = |v: ScVal| -> Result<(), HostError> {
-        let bytes: Vec<u8> = v.to_xdr()?;
+        let bytes: Vec<u8> = v.to_xdr(DEFAULT_XDR_RW_LIMITS)?;
         let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
         let res = host.deserialize_from_bytes(bo);
         assert!(res.is_err());

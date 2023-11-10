@@ -1,3 +1,4 @@
+use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{budget::AsBudget, meta, Host, LedgerInfo, Val, I256};
 
 pub(crate) fn test_host() -> Host {
@@ -34,4 +35,10 @@ pub(crate) fn repeating_byte_i256(byte: u8, input: u64) -> I256 {
     let mut res = vec![0u8; 32 - input as usize];
     res.extend_from_slice(buf.as_slice());
     I256::from_be_bytes(res.try_into().unwrap())
+}
+
+pub(crate) fn randvec(rng: &mut StdRng, len: u64) -> Vec<u8> {
+    let mut res: Vec<u8> = vec![0; len as usize];
+    rng.fill_bytes(res.as_mut_slice());
+    res
 }

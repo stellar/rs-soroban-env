@@ -1484,17 +1484,19 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-strkey"
-version = "0.0.7"
-source = "git+https://github.com/stellar/rs-stellar-strkey?rev=e6ba45c60c16de28c7522586b80ed0150157df73#e6ba45c60c16de28c7522586b80ed0150157df73"
+version = "0.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12d2bf45e114117ea91d820a846fd1afbe3ba7d717988fee094ce8227a3bf8bd"
 dependencies = [
  "base32",
+ "crate-git-revision",
  "thiserror",
 ]
 
 [[package]]
 name = "stellar-xdr"
 version = "20.0.0-rc1"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=9c97e4fa909a0b6455547a4f4a95800696b2a69a#9c97e4fa909a0b6455547a4f4a95800696b2a69a"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=957273d7b8092888849219a3ad2aa054059ca89d#957273d7b8092888849219a3ad2aa054059ca89d"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
@@ -1502,6 +1504,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_with",
+ "stellar-strkey",
 ]
 
 [[package]]

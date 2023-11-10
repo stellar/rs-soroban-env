@@ -14,8 +14,8 @@ build = "build.rs"
 [dependencies]
 soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi"] }
-stellar-strkey = { workspace = true }
 wasmi = { workspace = true }
+stellar-strkey = "0.0.8"
 static_assertions = "1.1.0"
 sha2 = "0.10.0"
 ed25519-dalek = {version = "2.0.0", features = ["rand_core"] }

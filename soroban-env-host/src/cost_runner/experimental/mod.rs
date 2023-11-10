@@ -1,6 +1,8 @@
 mod ed25519_scalar_mut;
+mod read_xdr;
 
 pub use ed25519_scalar_mut::*;
+pub use read_xdr::*;
 
 use crate::xdr::Name;
 use core::fmt;
@@ -8,6 +10,7 @@ use core::fmt;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ExperimentalCostType {
     EdwardsPointCurve25519ScalarMul,
+    ReadXdrByteArray,
 }
 
 impl Name for ExperimentalCostType {
@@ -16,6 +19,7 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::EdwardsPointCurve25519ScalarMul => {
                 "EdwardsPointCurve25519ScalarMul"
             }
+            ExperimentalCostType::ReadXdrByteArray => "ReadXdrByteArray",
         }
     }
 }

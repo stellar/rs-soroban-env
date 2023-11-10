@@ -19,12 +19,12 @@
 use std::{iter::FromIterator, mem, rc::Rc};
 
 use crate::{
-    budget::AsBudget,
+    budget::{AsBudget, DepthLimiter},
     builtin_contracts::base_types::Address,
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType,
-        ContractExecutable, ContractIdPreimage, CreateContractArgs, DepthLimiter, Duration, Hash,
+        ContractExecutable, ContractIdPreimage, CreateContractArgs, Duration, Hash,
         InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
         LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,

@@ -1,4 +1,6 @@
-use soroban_env_host::{cost_runner::ValDeserRun, xdr::ScVal, xdr::WriteXdr};
+use soroban_env_host::{
+    cost_runner::ValDeserRun, xdr::ScVal, xdr::WriteXdr, DEFAULT_XDR_RW_LIMITS,
+};
 
 use super::{ValSerMeasure, MAX_DEPTH};
 use crate::common::HostCostMeasurement;
@@ -14,7 +16,7 @@ impl HostCostMeasurement for ValDeserMeasure {
         input: u64,
     ) -> Vec<u8> {
         let scval = ValSerMeasure::new_random_case(host, rng, input);
-        scval.0.to_xdr().unwrap()
+        scval.0.to_xdr(DEFAULT_XDR_RW_LIMITS).unwrap()
     }
 
     // The worst case is a deeply nested structure, each level containing minimal
@@ -37,6 +39,6 @@ impl HostCostMeasurement for ValDeserMeasure {
             v = ScVal::Vec(Some(inner.try_into().unwrap()));
             rem -= elem_per_level;
         }
-        v.to_xdr().unwrap()
+        v.to_xdr(DEFAULT_XDR_RW_LIMITS).unwrap()
     }
 }

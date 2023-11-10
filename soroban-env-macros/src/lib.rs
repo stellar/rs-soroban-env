@@ -15,7 +15,7 @@ use stellar_xdr::curr as xdr;
 #[cfg(feature = "next")]
 use stellar_xdr::next as xdr;
 
-use crate::xdr::{ScEnvMetaEntry, WriteXdr};
+use crate::xdr::{Limits, ScEnvMetaEntry, WriteXdr};
 
 struct MetaInput {
     pub interface_version: u64,
@@ -62,7 +62,8 @@ impl ToTokens for MetaConstsOutput {
         let meta_xdr = self
             .to_meta_entries()
             .into_iter()
-            .map(|entry| entry.to_xdr())
+            // Limits::none here is okay since `MetaConstsOutput` is controled by us
+            .map(|entry| entry.to_xdr(Limits::none()))
             .collect::<Result<Vec<Vec<u8>>, crate::xdr::Error>>()
             .unwrap()
             .concat();

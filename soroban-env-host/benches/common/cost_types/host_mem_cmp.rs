@@ -1,12 +1,6 @@
-use crate::HostCostMeasurement;
-use rand::{rngs::StdRng, RngCore};
+use crate::{common::util::randvec, HostCostMeasurement};
+use rand::rngs::StdRng;
 use soroban_env_host::{cost_runner::*, Host};
-
-fn randvec(rng: &mut StdRng, len: u64) -> Vec<u8> {
-    let mut res: Vec<u8> = vec![0; len as usize];
-    rng.fill_bytes(res.as_mut_slice());
-    res
-}
 
 pub struct MemCmpMeasure;
 impl HostCostMeasurement for MemCmpMeasure {
