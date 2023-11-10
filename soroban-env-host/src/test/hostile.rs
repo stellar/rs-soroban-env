@@ -260,7 +260,7 @@ fn excessive_memory_growth() -> Result<(), HostError> {
 }
 
 #[test]
-fn contract_asking_for_too_much_memory_or_table_elements() -> Result<(), HostError> {
+fn test_large_static_initial_memory_and_table_should_fail() -> Result<(), HostError> {
     let instantiate_with_size_request =
         |host: &Host, mem_pages: u32, elem_count: u32| -> Result<_, HostError> {
             let wasm =
@@ -308,6 +308,51 @@ fn contract_asking_for_too_much_memory_or_table_elements() -> Result<(), HostErr
             Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
         ));
     }
+    Ok(())
+}
+
+#[test]
+fn test_large_static_initial_data_should_fail() -> Result<(), HostError> {
+    let instantiate_with_size_request =
+        |host: &Host, mem_pages: u32, mem_offset: u32, len: u32| -> Result<_, HostError> {
+            let wasm = wasm_util::wasm_module_with_large_data_segment(mem_pages, mem_offset, len);
+            host.register_test_contract_wasm_from_source_account(
+                wasm.as_slice(),
+                AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+                [0; 32],
+            )
+        };
+
+    // initial data segment less than 1 page (64 KiB) will fit into the linear memory
+    {
+        let host = Host::test_host_with_recording_footprint();
+        host.as_budget().reset_unlimited_cpu()?;
+        let res = instantiate_with_size_request(&host, 1, 0, 5000);
+        assert!(res.is_ok());
+        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
+    }
+
+    // initial data segment over 1 page will cause an out-of-bound access error
+    {
+        let host = Host::test_host_with_recording_footprint();
+        host.as_budget().reset_unlimited_cpu()?;
+        let res = instantiate_with_size_request(&host, 1, 0, 100_000);
+        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
+        assert!(HostError::result_matches_err(
+            res,
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds),
+        ));
+    }
+
+    // initializing 2 pages will the same initial data size will be okay again
+    {
+        let host = Host::test_host_with_recording_footprint();
+        host.as_budget().reset_unlimited_cpu()?;
+        let res = instantiate_with_size_request(&host, 2, 0, 100_000);
+        assert!(res.is_ok());
+        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 2 * 0x10_000);
+    }
+
     Ok(())
 }
 

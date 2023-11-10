@@ -1,8 +1,8 @@
 use crate::FuncEmitter;
 use std::collections::BTreeMap;
 use wasm_encoder::{
-    CodeSection, ConstExpr, CustomSection, ElementSection, Elements, EntityType, ExportKind,
-    ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
+    CodeSection, ConstExpr, CustomSection, DataSection, ElementSection, Elements, EntityType,
+    ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
     MemorySection, MemoryType, Module, TableSection, TableType, TypeSection, ValType,
 };
 
@@ -51,6 +51,7 @@ pub struct ModEmitter {
     exports: ExportSection,
     elements: ElementSection,
     codes: CodeSection,
+    data: DataSection,
 
     type_refs: BTreeMap<Arity, TypeRef>,
     import_refs: BTreeMap<(String, String, Arity), FuncRef>,
@@ -94,6 +95,7 @@ impl ModEmitter {
         exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
         let elements = ElementSection::new();
         let codes = CodeSection::new();
+        let data = DataSection::new();
         let typerefs = BTreeMap::new();
         let importrefs = BTreeMap::new();
         Self {
@@ -107,6 +109,7 @@ impl ModEmitter {
             exports,
             elements,
             codes,
+            data,
             type_refs: typerefs,
             import_refs: importrefs,
         }
@@ -202,6 +205,11 @@ impl ModEmitter {
         }
     }
 
+    pub fn define_data_segment(&mut self, mem_offset: u32, data: Vec<u8>) {
+        self.data
+            .active(0, &ConstExpr::i32_const(mem_offset as i32), data);
+    }
+
     /// Finish emitting code, consuming the `self`, serializing a WASM binary
     /// blob, validating and returning it. Panics the resulting blob fails
     /// validation.
@@ -233,6 +241,9 @@ impl ModEmitter {
         }
         if !self.codes.is_empty() {
             self.module.section(&self.codes);
+        }
+        if !self.data.is_empty() {
+            self.module.section(&self.data);
         }
         let bytes = self.module.finish();
         match wasmparser::validate(bytes.as_slice()) {
@@ -280,6 +291,7 @@ impl Default for ModEmitter {
         exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
         let elements = ElementSection::new();
         let codes = CodeSection::new();
+        let data = DataSection::new();
         let typerefs = BTreeMap::new();
         let importrefs = BTreeMap::new();
         Self {
@@ -293,6 +305,7 @@ impl Default for ModEmitter {
             exports,
             elements,
             codes,
+            data,
             type_refs: typerefs,
             import_refs: importrefs,
         }

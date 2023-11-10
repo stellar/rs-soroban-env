@@ -216,32 +216,42 @@ impl From<wasmi::errors::FuncError> for Error {
 #[cfg(feature = "wasmi")]
 impl From<wasmi::Error> for Error {
     fn from(e: wasmi::Error) -> Self {
-        const BUDGET_EXCEEDED_LIMIT: Error =
+        const EXCEEDED_LIMIT: Error =
             Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit);
+        const INDEX_BOUND: Error =
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds);
 
         match e {
-            wasmi::Error::Memory(e) => {
-                if let wasmi::errors::MemoryError::OutOfBoundsGrowth = e {
-                    return BUDGET_EXCEEDED_LIMIT;
-                }
-            }
-            wasmi::Error::Table(e) => {
-                if let wasmi::errors::TableError::GrowOutOfBounds { .. } = e {
-                    return BUDGET_EXCEEDED_LIMIT;
-                }
-            }
+            wasmi::Error::Memory(e) => match e {
+                wasmi::errors::MemoryError::OutOfBoundsAllocation
+                | wasmi::errors::MemoryError::OutOfBoundsGrowth => return EXCEEDED_LIMIT,
+                wasmi::errors::MemoryError::OutOfBoundsAccess => return INDEX_BOUND,
+                _ => (),
+            },
+            wasmi::Error::Table(e) => match e {
+                wasmi::errors::TableError::GrowOutOfBounds { .. } => return EXCEEDED_LIMIT,
+                wasmi::errors::TableError::AccessOutOfBounds { .. }
+                | wasmi::errors::TableError::CopyOutOfBounds => return INDEX_BOUND,
+                _ => (),
+            },
             wasmi::Error::Instantiation(e) => match e {
-                wasmi::errors::InstantiationError::Table(
-                    wasmi::errors::TableError::GrowOutOfBounds { .. },
-                )
-                | wasmi::errors::InstantiationError::Memory(
-                    wasmi::errors::MemoryError::OutOfBoundsGrowth,
-                ) => return BUDGET_EXCEEDED_LIMIT,
+                wasmi::errors::InstantiationError::Memory(me) => match me {
+                    wasmi::errors::MemoryError::OutOfBoundsAllocation
+                    | wasmi::errors::MemoryError::OutOfBoundsGrowth => return EXCEEDED_LIMIT,
+                    wasmi::errors::MemoryError::OutOfBoundsAccess => return INDEX_BOUND,
+                    _ => (),
+                },
+                wasmi::errors::InstantiationError::Table(te) => match te {
+                    wasmi::errors::TableError::GrowOutOfBounds { .. } => return EXCEEDED_LIMIT,
+                    wasmi::errors::TableError::AccessOutOfBounds { .. }
+                    | wasmi::errors::TableError::CopyOutOfBounds => return INDEX_BOUND,
+                    _ => (),
+                },
                 _ => (),
             },
             wasmi::Error::Store(e) => {
                 if let wasmi::errors::FuelError::OutOfFuel = e {
-                    return BUDGET_EXCEEDED_LIMIT;
+                    return EXCEEDED_LIMIT;
                 }
             }
             wasmi::Error::Trap(trap) => {
@@ -260,7 +270,6 @@ impl From<wasmi::Error> for Error {
                     );
                 }
             }
-
             _ => (),
         }
 

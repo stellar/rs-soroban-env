@@ -414,4 +414,17 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass").unwrap());
         fe.finish_and_export("test").finish()
     }
+
+    pub(crate) fn wasm_module_with_large_data_segment(
+        mem_pages: u32,
+        mem_offset: u32,
+        len: u32,
+    ) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(mem_pages, 128);
+        me.define_data_segment(mem_offset, vec![0; len as usize]);
+        // a local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
 }
