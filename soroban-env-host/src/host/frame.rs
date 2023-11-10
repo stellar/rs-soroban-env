@@ -350,7 +350,7 @@ impl Host {
             storage: None,
         };
         let rp = self.push_context(ctx)?;
-        #[cfg(any(test, feature = "testutils"))]
+        #[cfg(feature = "testutils")]
         {
             // We do this _after_ the context is pushed, in order to let the
             // observation code assume a context exists
@@ -379,7 +379,7 @@ impl Host {
                 res = Err(e)
             }
         }
-        #[cfg(any(test, feature = "testutils"))]
+        #[cfg(feature = "testutils")]
         {
             // We do this _before_ the context is popped, in order to let the
             // observation code assume a context exists

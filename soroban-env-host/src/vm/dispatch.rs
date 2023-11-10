@@ -153,9 +153,19 @@ macro_rules! generate_dispatch_functions {
 
                     let host = caller.data().clone();
 
-                    #[cfg(any(test, feature = "testutils"))]
+                    #[cfg(feature = "testutils")]
                     {
-                        host.env_call_hook(&core::stringify!($fn_id), &[$(format!("{:?}", $arg)),*])?;
+                        host.env_call_hook(&core::stringify!($fn_id), &[$(
+                            // Incoming args might or might-not be type-correct;
+                            // we attempt to unmarshal here but fail safely and
+                            // log the bad i64 if it doesn't work. The failure
+                            // will be repeated below in the attempted call, and
+                            // will propagate.
+                            match <$type>::try_marshal_from_relative_value(Value::I64($arg), &host) {
+                                Ok(val) => format!("{:?}", val),
+                                Err(_) => format!("bad:{:?}", $arg),
+                            }
+                        ),*])?;
                     }
 
                     // This is where the VM -> Host boundary is crossed.
@@ -179,7 +189,7 @@ macro_rules! generate_dispatch_functions {
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?),*);
 
-                    #[cfg(any(test, feature = "testutils"))]
+                    #[cfg(feature = "testutils")]
                     {
                         let res_str: Result<String,&HostError> = match &res {
                             Ok(ok) => Ok(format!("{:?}", ok)),

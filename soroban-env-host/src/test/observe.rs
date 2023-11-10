@@ -13,14 +13,19 @@
 // If observations differ from previous runs, it's considered an error. If you
 // want to make an intentional change, run with UPDATE_OBSERVATIONS=1.
 
+#![cfg_attr(not(feature = "testutils"), allow(dead_code))]
+
+#[cfg(feature = "testutils")]
+use crate::host::{error::HostError, HostLifecycleEvent};
+
 use crate::{
     budget::AsBudget,
     events::{EventError, InternalEvent},
-    host::{Frame, HostLifecycleEvent},
+    host::Frame,
     host_object::{HostMap, HostVec},
     storage::StorageMap,
     xdr::{self, ContractExecutable},
-    Host, HostError, Symbol, SymbolObject, SymbolSmall,
+    Host, Symbol, SymbolObject, SymbolSmall,
 };
 use itertools::Itertools;
 use std::{
@@ -547,6 +552,7 @@ pub(crate) struct ObservedHost {
 }
 
 impl Step {
+    #[cfg(feature = "testutils")]
     fn from_host_lifecycle_event(evt: HostLifecycleEvent<'_>) -> Self {
         match evt {
             HostLifecycleEvent::PushCtx(context) => {
@@ -623,6 +629,19 @@ impl Step {
 }
 
 impl ObservedHost {
+    #[cfg(not(feature = "testutils"))]
+    pub fn new(testname: &'static str, host: Host) -> Self {
+        let old_obs = Rc::new(RefCell::new(Observations::default()));
+        let new_obs = Rc::new(RefCell::new(Observations::default()));
+        Self {
+            old_obs,
+            new_obs,
+            testname,
+            host,
+        }
+    }
+
+    #[cfg(feature = "testutils")]
     pub fn new(testname: &'static str, host: Host) -> Self {
         let old_obs = Rc::new(RefCell::new(Observations::load(testname)));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
@@ -639,6 +658,7 @@ impl ObservedHost {
         oh
     }
 
+    #[cfg(feature = "testutils")]
     fn make_obs_hook(
         &self,
     ) -> Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>> {
@@ -672,6 +692,7 @@ impl std::ops::Deref for ObservedHost {
     }
 }
 
+#[cfg(feature = "testutils")]
 impl Drop for ObservedHost {
     fn drop(&mut self) {
         self.host

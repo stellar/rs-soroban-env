@@ -179,12 +179,12 @@ macro_rules! vmcaller_none_function_helper {
         fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error> {
             #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
             let _span = tracy_span!(core::stringify!($fn_id));
-            #[cfg(all(feature = "std", any(test, feature = "testutils")))]
+            #[cfg(all(feature = "std", feature = "testutils"))]
             {
                 self.env_call_hook(&core::stringify!($fn_id), &[$(format!("{:?}", $arg)),*])?;
             }
             let res: Result<_, _> = self.augment_err_result(<Self as VmCallerEnv>::$fn_id(self, &mut VmCaller::none(), $($arg),*));
-            #[cfg(all(feature = "std", any(test, feature = "testutils")))]
+            #[cfg(all(feature = "std", feature = "testutils"))]
             {
                 let res_str: Result<String,&Self::Error> = match &res {
                     Ok(ok) => Ok(format!("{:?}", ok)),

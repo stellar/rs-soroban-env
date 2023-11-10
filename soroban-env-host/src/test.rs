@@ -29,4 +29,5 @@ mod tuple;
 mod vec;
 
 mod finish;
+#[cfg(feature = "testutils")]
 mod metering_benchmark;

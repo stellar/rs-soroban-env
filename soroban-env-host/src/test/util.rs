@@ -1,21 +1,16 @@
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{collections::BTreeMap, rc::Rc};
 
 use rand::RngCore;
 
 use crate::{
-    budget::{AsBudget, Budget},
-    host::HostLifecycleEvent,
+    budget::Budget,
     storage::{SnapshotSource, Storage},
-    xdr,
     xdr::{
-        AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
-        PublicKey, ScAddress, ScErrorCode, ScErrorType, ScVal, ScVec, Uint256,
+        AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScErrorCode,
+        ScErrorType, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, Symbol, Val,
-    VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, Val, VecObject,
 };
-
-use soroban_bench_utils::HostTracker;
 
 // Test utilities for the host, used in various tests in sub-modules.
 pub(crate) trait AsScVal {
@@ -86,7 +81,6 @@ impl SnapshotSource for MockSnapshotSource {
     }
 }
 
-#[allow(dead_code)]
 impl Host {
     pub(crate) const TEST_PRNG_SEED: &[u8; 32] = b"12345678901234567890123456789012";
 
@@ -140,32 +134,6 @@ impl Host {
         })
         .unwrap();
         self
-    }
-
-    pub(crate) fn test_account_ledger_key_entry_pair(
-        account_id: AccountId,
-    ) -> (Rc<LedgerKey>, Rc<LedgerEntry>) {
-        let lk = Rc::new(LedgerKey::Account(xdr::LedgerKeyAccount {
-            account_id: account_id.clone(),
-        }));
-        let account_entry = AccountEntry {
-            account_id,
-            balance: 100,
-            seq_num: xdr::SequenceNumber(0),
-            num_sub_entries: 0,
-            inflation_dest: None,
-            flags: 0,
-            home_domain: Default::default(),
-            thresholds: xdr::Thresholds([0; 4]),
-            signers: Default::default(),
-            ext: xdr::AccountEntryExt::V0,
-        };
-        let le = Rc::new(LedgerEntry {
-            last_modified_ledger_seq: 0,
-            data: LedgerEntryData::Account(account_entry),
-            ext: xdr::LedgerEntryExt::V0,
-        });
-        (lk, le)
     }
 
     pub(crate) fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {
@@ -243,12 +211,17 @@ impl Host {
         )
     }
 
+    #[cfg(feature = "testutils")]
     pub(crate) fn measured_call(
         &self,
         contract: AddressObject,
-        func: Symbol,
+        func: crate::Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
+        use crate::{budget::AsBudget, host::HostLifecycleEvent};
+        use soroban_bench_utils::HostTracker;
+        use std::cell::RefCell;
+
         let _span = tracy_span!("measured_call");
         let budget = self.as_budget();
         budget.reset_unlimited()?;
