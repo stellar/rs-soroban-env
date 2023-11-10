@@ -133,10 +133,12 @@ impl Observations {
                 if old_key != new_key {
                     println!("observation key {i} of {name} changed since last recording");
                     disagreement = Some((i, old_key.clone(), new_key.clone()));
+                    break;
                 }
                 if old_val != new_val {
                     println!("observation val {i} of {name} changed since last recording");
                     disagreement = Some((i, old_val.clone(), new_val.clone()));
+                    break;
                 }
             }
             if update_observations() {
