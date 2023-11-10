@@ -57,6 +57,7 @@ mod curr {
         include_bytes!("../wasm-workspace/opt/curr/example_contract_data.wasm").as_slice();
     pub const LINEAR_MEMORY: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_linear_memory.wasm").as_slice();
+    pub const LOADGEN: &[u8] = include_bytes!("../wasm-workspace/opt/curr/loadgen.wasm").as_slice();
     pub const VEC: &[u8] = include_bytes!("../wasm-workspace/opt/curr/example_vec.wasm").as_slice();
     pub const INVOKE_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_invoke_contract.wasm").as_slice();

@@ -26,6 +26,7 @@ members = [
     "create_contract",
     "invoke_contract",
     "linear_memory",
+    "loadgen",
     "vec",
     "hostile",
     "complex",
