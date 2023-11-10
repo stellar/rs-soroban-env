@@ -41,7 +41,7 @@ pub trait Emit {
 
     fn as_single_function_wasm_module(&self, name: &str) -> Vec<u8> {
         let n_locals = self.num_locals();
-        let mut fe = ModEmitter::new().func(Arity(0), n_locals);
+        let mut fe = ModEmitter::default().func(Arity(0), n_locals);
         let result = self.emit(&mut fe);
         fe.push(result);
         fe.finish_and_export(name).finish()

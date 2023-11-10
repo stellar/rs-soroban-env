@@ -1,8 +1,4 @@
 use expect_test::expect;
-use soroban_env_common::{
-    xdr::{ContractCostType, ScErrorCode, ScErrorType},
-    Env, EnvBase, Symbol, SymbolSmall, Tag, Val, VecObject,
-};
 use soroban_test_wasms::HOSTILE;
 
 use crate::{
@@ -10,7 +6,9 @@ use crate::{
     host_object::HostVec,
     storage::Storage,
     test::wasm_util,
-    DiagnosticLevel, Host, HostError,
+    xdr::{AccountId, ContractCostType, PublicKey, ScErrorCode, ScErrorType, Uint256},
+    DiagnosticLevel, Env, EnvBase, Error, Host, HostError, Symbol, SymbolSmall, Tag, Val,
+    VecObject,
 };
 
 #[test]
@@ -258,6 +256,58 @@ fn excessive_memory_growth() -> Result<(), HostError> {
         assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 33 * 0x10_000);
     }
 
+    Ok(())
+}
+
+#[test]
+fn contract_asking_for_too_much_memory_or_table_elements() -> Result<(), HostError> {
+    let instantiate_with_size_request =
+        |host: &Host, mem_pages: u32, elem_count: u32| -> Result<_, HostError> {
+            let wasm =
+                wasm_util::wasm_module_with_user_specified_initial_size(mem_pages, elem_count);
+            host.register_test_contract_wasm_from_source_account(
+                wasm.as_slice(),
+                AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+                [0; 32],
+            )
+        };
+
+    // with moderate size initial memory request is ok
+    {
+        let host = Host::test_host_with_recording_footprint();
+        let res = instantiate_with_size_request(&host, 10, 0);
+        assert!(res.is_ok());
+        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000 * 10);
+    }
+
+    // with over-the-limit initial memory size request should fail
+    {
+        let host = Host::test_host_with_recording_footprint();
+        let res = instantiate_with_size_request(&host, 1000, 0);
+        assert!(HostError::result_matches_err(
+            res,
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
+        ));
+        // no wasm memory is allocated at all
+        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0);
+    }
+
+    // with moderate size initial table request is ok
+    {
+        let host = Host::test_host_with_recording_footprint();
+        let res = instantiate_with_size_request(&host, 0, 500);
+        assert!(res.is_ok());
+    }
+
+    // with over-the-limit initial table size request should fail
+    {
+        let host = Host::test_host_with_recording_footprint();
+        let res = instantiate_with_size_request(&host, 0, 2000);
+        assert!(HostError::result_matches_err(
+            res,
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
+        ));
+    }
     Ok(())
 }
 

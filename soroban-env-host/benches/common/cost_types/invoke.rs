@@ -10,7 +10,7 @@ use soroban_env_host::{
 use soroban_synth_wasm::{Arity, ModEmitter};
 
 fn wasm_module_with_empty_invoke() -> Vec<u8> {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
 }

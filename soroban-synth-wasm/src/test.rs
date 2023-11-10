@@ -5,7 +5,7 @@ use wasmprinter::print_bytes;
 
 #[test]
 fn test_synth_wasm() {
-    let mut fe = ModEmitter::new().func(Arity(0), 2);
+    let mut fe = ModEmitter::default().func(Arity(0), 2);
     let s = fe.locals[0].0;
     let tmp = fe.locals[1].0;
 
@@ -67,7 +67,7 @@ fn test_synth_wasm() {
 #[test]
 fn call_local() {
     // a local wasm function -- the callee
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     let (m0, f0) = fe.finish();
     // the caller
@@ -96,7 +96,7 @@ fn call_local() {
 
 #[test]
 fn call_import() {
-    let mut me = ModEmitter::new();
+    let mut me = ModEmitter::default();
     // import the function -- the callee
     let f0 = me.import_func("t", "_", Arity(0));
     // the caller
@@ -123,7 +123,7 @@ fn call_import() {
 
 #[test]
 fn call_indirect() {
-    let mut me = ModEmitter::new();
+    let mut me = ModEmitter::default();
     // an imported function
     let f0 = me.import_func("t", "_", Arity(0));
     // a local wasm function
@@ -172,7 +172,7 @@ fn call_indirect() {
 
 #[test]
 fn get_global() {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.global_get(GlobalRef(0));
 
     let bytes = fe.finish_and_export("test").finish();
@@ -195,7 +195,7 @@ fn get_global() {
 
 #[test]
 fn store_i64() {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.push(Operand::Const32(0));
     fe.push(Operand::Const64(5));
     fe.i64_store(0);
@@ -224,7 +224,7 @@ fn store_i64() {
 
 #[test]
 fn br() {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.block(); // 3
     fe.block(); // 2
     fe.block(); // 1
@@ -270,7 +270,7 @@ fn br() {
 
 #[test]
 fn br_table() {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.block(); // 3
     fe.block(); // 2
     fe.block(); // 1

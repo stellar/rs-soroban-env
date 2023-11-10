@@ -4,7 +4,7 @@ use soroban_synth_wasm::{Arity, ModEmitter};
 // Emit a wasm module that uses post-MVP WASM features. Specifically
 // mutable-globals and sign-ext.
 fn post_mvp_wasm_module() -> Vec<u8> {
-    let mut me = ModEmitter::new();
+    let mut me = ModEmitter::default();
 
     // Emit an exported mutable global
     me.define_global_i64(-100, true, Some("global"));
