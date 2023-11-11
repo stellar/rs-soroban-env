@@ -15,7 +15,6 @@ use crate::{
             AccountContractSigner, AccountSigner, ContractTypeVec, TestSigner,
         },
     },
-    function_name,
     host::{frame::TestContractFrame, Frame},
     host_vec,
     test::util::generate_bytes_array,
