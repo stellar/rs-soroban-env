@@ -412,7 +412,12 @@ pub trait WasmiMarshal: Sized {
 impl WasmiMarshal for Val {
     fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
         if let wasmi::Value::I64(i) = v {
-            Some(Val::from_payload(i as u64))
+            let v = Val::from_payload(i as u64);
+            if v.is_good() {
+                Some(v)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -620,6 +625,46 @@ impl Val {
         }
     }
 
+    /// We define a "good" Val as one that has one of the allowed tag values,
+    /// all the defined body-bits for its case set to valid values, and all the
+    /// undefined body-bits set to zero.
+    pub fn is_good(self) -> bool {
+        match self.get_tag() {
+            // Technically Tag::Bad is the only one that can occur here -- the other
+            // 3 are mapped to it -- but we check for them just in case.
+            Tag::Bad
+            | Tag::SmallCodeUpperBound
+            | Tag::ObjectCodeLowerBound
+            | Tag::ObjectCodeUpperBound => false,
+            Tag::True | Tag::False | Tag::Void => self.has_body(0),
+            Tag::I32Val | Tag::U32Val => self.has_minor(0),
+            Tag::Error => ScError::try_from(unsafe { Error::unchecked_from_val(self) }).is_ok(),
+            Tag::SymbolSmall => SymbolSmall::try_from_body(self.get_body()).is_ok(),
+            Tag::U64Small
+            | Tag::I64Small
+            | Tag::TimepointSmall
+            | Tag::DurationSmall
+            | Tag::U128Small
+            | Tag::I128Small
+            | Tag::U256Small
+            | Tag::I256Small => true,
+            Tag::U64Object
+            | Tag::I64Object
+            | Tag::TimepointObject
+            | Tag::DurationObject
+            | Tag::U128Object
+            | Tag::I128Object
+            | Tag::U256Object
+            | Tag::I256Object
+            | Tag::BytesObject
+            | Tag::StringObject
+            | Tag::SymbolObject
+            | Tag::VecObject
+            | Tag::MapObject
+            | Tag::AddressObject => self.has_minor(0),
+        }
+    }
+
     #[inline(always)]
     pub const fn get_payload(self) -> u64 {
         self.0
@@ -649,6 +694,11 @@ impl Val {
     #[inline(always)]
     pub(crate) const fn get_body(self) -> u64 {
         self.0 >> TAG_BITS
+    }
+
+    #[inline(always)]
+    pub(crate) const fn has_body(self, body: u64) -> bool {
+        self.get_body() == body
     }
 
     #[inline(always)]
