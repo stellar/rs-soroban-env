@@ -84,7 +84,7 @@ impl TestContractFrame {
 /// Context pairs a variable-case [`Frame`] enum with state that's common to all
 /// cases (eg. a [`Prng`]).
 #[derive(Clone)]
-pub(crate) struct Context {
+pub struct Context {
     pub(crate) frame: Frame,
     pub(crate) prng: Option<Prng>,
     pub(crate) storage: Option<InstanceStorageMap>,

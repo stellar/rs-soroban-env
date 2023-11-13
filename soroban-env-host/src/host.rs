@@ -77,7 +77,7 @@ pub struct LedgerInfo {
 }
 
 #[cfg(feature = "testutils")]
-pub(crate) enum HostLifecycleEvent<'a> {
+pub enum HostLifecycleEvent<'a> {
     PushCtx(&'a Context),
     PopCtx(&'a Context, &'a Result<Val, HostError>),
     EnvCall(&'static str, &'a [String]),
@@ -85,7 +85,7 @@ pub(crate) enum HostLifecycleEvent<'a> {
 }
 
 #[cfg(feature = "testutils")]
-pub(crate) type HostLifecycleHook =
+pub type HostLifecycleHook =
     Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
 #[derive(Clone, Default)]
