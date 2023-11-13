@@ -60,12 +60,12 @@ pub trait ContractFunctionSet {
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Debug, Clone)]
-pub(crate) struct TestContractFrame {
-    pub(crate) id: Hash,
-    pub(crate) func: Symbol,
-    pub(crate) args: Vec<Val>,
-    pub(crate) panic: Rc<RefCell<Option<Error>>>,
-    pub(crate) instance: ScContractInstance,
+pub struct TestContractFrame {
+    pub id: Hash,
+    pub func: Symbol,
+    pub args: Vec<Val>,
+    pub panic: Rc<RefCell<Option<Error>>>,
+    pub instance: ScContractInstance,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -102,7 +102,7 @@ pub struct Context {
 /// the host state when it is pushed, and the [`FrameGuard`] will either
 /// commit or roll back that state when it pops the stack.
 #[derive(Clone)]
-pub(crate) enum Frame {
+pub enum Frame {
     ContractVM {
         vm: Rc<Vm>,
         fn_name: Symbol,
