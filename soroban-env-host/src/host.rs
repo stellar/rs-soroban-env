@@ -2800,7 +2800,7 @@ impl Host {
     }
 
     #[cfg(feature = "testutils")]
-    pub(crate) fn set_lifecycle_event_hook(
+    pub fn set_lifecycle_event_hook(
         &self,
         hook: Option<HostLifecycleHook>,
     ) -> Result<(), HostError> {
