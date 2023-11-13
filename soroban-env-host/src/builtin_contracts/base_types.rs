@@ -465,12 +465,6 @@ impl Vec {
     }
 }
 
-macro_rules! vec_new {
-    ($host:expr, $($arg:expr),*) => {
-        Vec::from_slice($host, &[$($arg.try_into_val($host)?),*])
-    }
-}
-
 #[derive(Clone)]
 pub struct Address {
     host: Host,

@@ -1,5 +1,9 @@
 // This module contains ubiquitous macros that get used in many other modules
-// in the host crate.
+// in the host crate. This module is ordered before any other module in the
+// crate to ensure availability of the macros using #[macro_use]. The other
+// option is to add weird `pub(crate) use foo` statements after each definition
+// and import them as items, which is a more modern style, but we avoid it here
+// and use the older style for simplicity.
 
 #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
 macro_rules! tracy_span {
@@ -54,5 +58,25 @@ macro_rules! function_short_name {
 macro_rules! observe_host {
     ($host:expr) => {
         $crate::test::observe::ObservedHost::new(function_name!(), $host)
+    };
+}
+
+macro_rules! host_vec {
+    ($host:expr $(,)?) => {
+        $crate::builtin_contracts::base_types::Vec::new($host)
+    };
+    ($host:expr, $($x:expr),+ $(,)?) => {
+        $crate::builtin_contracts::base_types::Vec::from_slice($host, &[$($x.try_into_val($host)?),+])
+    };
+}
+
+// This is just a variant of `host_vec` that unwraps args and the result
+#[cfg(test)]
+macro_rules! test_vec {
+    ($host:expr $(,)?) => {
+        $crate::builtin_contracts::base_types::Vec::new($host).unwrap()
+    };
+    ($host:expr, $($x:expr),+ $(,)?) => {
+        $crate::builtin_contracts::base_types::Vec::from_slice($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
     };
 }

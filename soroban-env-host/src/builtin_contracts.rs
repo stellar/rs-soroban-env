@@ -1,4 +1,3 @@
-#[macro_use]
 pub(crate) mod base_types;
 pub(crate) mod common_types;
 pub(crate) mod contract_error;

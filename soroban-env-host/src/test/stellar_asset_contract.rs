@@ -12,11 +12,10 @@ use crate::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
             generate_signing_key, new_ledger_entry_from_data, signing_key_to_account_id,
-            AccountContractSigner, AccountSigner, ContractTypeVec, TestSigner,
+            AccountContractSigner, AccountSigner, TestSigner,
         },
     },
     host::{frame::TestContractFrame, Frame},
-    host_vec,
     test::util::generate_bytes_array,
     Host, HostError, LedgerInfo,
 };
@@ -1814,7 +1813,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     test.create_default_account(&user);
     test.create_default_trustline(&user);
 
-    let args = host_vec![&test.host, user.address(&test.host), 100_i128];
+    let args = test_vec![&test.host, user.address(&test.host), 100_i128];
 
     // No longer live nonce
     authorize_single_invocation_with_nonce(
@@ -1915,7 +1914,7 @@ fn test_auth_rejected_for_incorrect_payload() {
     test.create_default_account(&user);
     test.create_default_trustline(&user);
 
-    let args = host_vec![&test.host, user.address(&test.host), 100_i128];
+    let args = test_vec![&test.host, user.address(&test.host), 100_i128];
 
     // Incorrect signer.
     authorize_single_invocation(&test.host, &user, &contract.address, "mint", args.clone());
@@ -1945,7 +1944,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         &admin,
         &contract.address,
         "mint",
-        host_vec![
+        test_vec![
             &test.host,
             admin.address(&test.host),
             user.address(&test.host),
@@ -1967,7 +1966,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         &admin,
         &contract.address,
         "mint",
-        host_vec![
+        test_vec![
             &test.host,
             user.address(&test.host),
             admin.address(&test.host),
@@ -2004,7 +2003,7 @@ fn test_auth_rejected_for_bad_signature_type() {
     test.create_default_account(&user);
     test.create_default_trustline(&user);
 
-    let args = host_vec![&test.host, user.address(&test.host), 100_i128];
+    let args = test_vec![&test.host, user.address(&test.host), 100_i128];
 
     // Use incorrectly typed value for the signature.
     let admin_bad_val_signer = TestSigner::AccountContract(AccountContractSigner {
@@ -2903,7 +2902,7 @@ fn test_custom_account_auth() {
         .call(
             account_contract_addr_obj,
             Symbol::try_from_small_str("init").unwrap(),
-            host_vec![&test.host, admin_public_key].into(),
+            test_vec![&test.host, admin_public_key].into(),
         )
         .unwrap();
 
@@ -2942,7 +2941,7 @@ fn test_custom_account_auth() {
         &admin,
         &account_contract_addr_obj.try_into_val(&test.host).unwrap(),
         "set_owner",
-        host_vec![&test.host, new_admin_public_key],
+        test_vec![&test.host, new_admin_public_key],
     );
 
     // Change the owner of the account.
@@ -2950,7 +2949,7 @@ fn test_custom_account_auth() {
         .call(
             account_contract_addr_obj,
             Symbol::try_from_small_str("set_owner").unwrap(),
-            host_vec![&test.host, new_admin_public_key].into(),
+            test_vec![&test.host, new_admin_public_key].into(),
         )
         .unwrap();
 
@@ -2996,7 +2995,7 @@ fn test_recording_auth_for_stellar_asset_contract() {
     test.create_default_trustline(&user);
     test.host.switch_to_recording_auth(true).unwrap();
 
-    let args = host_vec![&test.host, user.address(&test.host), 100_i128];
+    let args = test_vec![&test.host, user.address(&test.host), 100_i128];
     test.host
         .call(
             contract.address.clone().into(),
@@ -3073,7 +3072,7 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
     test.host.call(
         invoke_id_obj,
         Symbol::try_from_small_str("invoke")?,
-        host_vec![
+        test_vec![
             &test.host,
             err_id_obj,
             Symbol::try_from_val(&test.host, &"fail_after_updates").unwrap(),
@@ -3091,7 +3090,7 @@ fn verify_nested_try_call_rollback() -> Result<(), HostError> {
             &test.host.call(
                 err_id_obj,
                 Symbol::try_from_val(&test.host, &"storage_updated")?,
-                host_vec![&test.host].into(),
+                test_vec![&test.host].into(),
             )?,
         )?,
         false
@@ -3158,7 +3157,7 @@ fn test_sac_reentry_is_not_allowed() {
         .call(
             account_contract_addr_obj,
             Symbol::try_from_small_str("set_addr").unwrap(),
-            host_vec![&test.host, contract_1.address].into(),
+            test_vec![&test.host, contract_1.address].into(),
         )
         .unwrap();
 

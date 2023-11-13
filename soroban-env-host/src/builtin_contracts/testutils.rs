@@ -20,16 +20,6 @@ pub(crate) use crate::builtin_contracts::base_types::Vec as ContractTypeVec;
 use super::account_contract::AccountEd25519Signature;
 use super::base_types::Address;
 
-#[macro_export]
-macro_rules! host_vec {
-    ($host:expr $(,)?) => {
-        ContractTypeVec::new($host).unwrap()
-    };
-    ($host:expr, $($x:expr),+ $(,)?) => {
-        ContractTypeVec::from_slice($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
-    };
-}
-
 pub(crate) fn generate_signing_key(host: &Host) -> SigningKey {
     host.with_test_prng(|chacha| Ok(SigningKey::generate(chacha)))
         .unwrap()

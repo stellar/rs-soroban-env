@@ -3,7 +3,6 @@ use crate::{
         base_types::{Address, Bytes, String},
         testutils::{authorize_single_invocation, ContractTypeVec, TestSigner},
     },
-    host_vec,
     xdr::{Asset, Limited, WriteXdr},
     Env, Host, HostError, Symbol, TryFromVal, TryIntoVal, DEFAULT_XDR_RW_LIMITS,
 };
@@ -36,7 +35,7 @@ impl<'a> TestStellarAssetContract<'a> {
             .call(
                 self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"allowance")?,
-                host_vec![self.host, from, spender].into(),
+                test_vec![self.host, from, spender].into(),
             )?
             .try_into_val(self.host)?)
     }
@@ -74,7 +73,7 @@ impl<'a> TestStellarAssetContract<'a> {
         self.call_with_single_signer(
             from,
             "approve",
-            host_vec![
+            test_vec![
                 self.host,
                 from.address(self.host),
                 spender,
@@ -90,7 +89,7 @@ impl<'a> TestStellarAssetContract<'a> {
             .call(
                 self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"balance")?,
-                host_vec![self.host, addr].into(),
+                test_vec![self.host, addr].into(),
             )?
             .try_into_val(self.host)?)
     }
@@ -101,7 +100,7 @@ impl<'a> TestStellarAssetContract<'a> {
             .call(
                 self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"authorized")?,
-                host_vec![self.host, addr].into(),
+                test_vec![self.host, addr].into(),
             )?
             .try_into_val(self.host)?)
     }
@@ -115,7 +114,7 @@ impl<'a> TestStellarAssetContract<'a> {
         self.call_with_single_signer(
             from,
             "transfer",
-            host_vec![self.host, from.address(self.host), to, amount],
+            test_vec![self.host, from.address(self.host), to, amount],
         )
     }
 
@@ -129,7 +128,7 @@ impl<'a> TestStellarAssetContract<'a> {
         self.call_with_single_signer(
             spender,
             "transfer_from",
-            host_vec![self.host, spender.address(self.host), from, to, amount],
+            test_vec![self.host, spender.address(self.host), from, to, amount],
         )
     }
 
@@ -137,7 +136,7 @@ impl<'a> TestStellarAssetContract<'a> {
         self.call_with_single_signer(
             from,
             "burn",
-            host_vec![self.host, from.address(self.host), amount],
+            test_vec![self.host, from.address(self.host), amount],
         )
     }
 
@@ -150,7 +149,7 @@ impl<'a> TestStellarAssetContract<'a> {
         self.call_with_single_signer(
             spender,
             "burn_from",
-            host_vec![self.host, spender.address(self.host), from, amount],
+            test_vec![self.host, spender.address(self.host), from, amount],
         )
     }
 
@@ -163,7 +162,7 @@ impl<'a> TestStellarAssetContract<'a> {
         self.call_with_single_signer(
             admin,
             "set_authorized",
-            host_vec![self.host, addr, authorize],
+            test_vec![self.host, addr, authorize],
         )
     }
 
@@ -173,7 +172,7 @@ impl<'a> TestStellarAssetContract<'a> {
         to: Address,
         amount: i128,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(admin, "mint", host_vec![self.host, to, amount])
+        self.call_with_single_signer(admin, "mint", test_vec![self.host, to, amount])
     }
 
     pub(crate) fn clawback(
@@ -182,7 +181,7 @@ impl<'a> TestStellarAssetContract<'a> {
         from: Address,
         amount: i128,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(admin, "clawback", host_vec![self.host, from, amount])
+        self.call_with_single_signer(admin, "clawback", test_vec![self.host, from, amount])
     }
 
     pub(crate) fn set_admin(
@@ -190,7 +189,7 @@ impl<'a> TestStellarAssetContract<'a> {
         admin: &TestSigner,
         new_admin: Address,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(admin, "set_admin", host_vec![self.host, new_admin])
+        self.call_with_single_signer(admin, "set_admin", test_vec![self.host, new_admin])
     }
 
     pub(crate) fn admin(&self) -> Result<Address, HostError> {
@@ -198,7 +197,7 @@ impl<'a> TestStellarAssetContract<'a> {
             .call(
                 self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"admin")?,
-                host_vec![self.host].into(),
+                test_vec![self.host].into(),
             )?
             .try_into_val(self.host)
     }
@@ -209,7 +208,7 @@ impl<'a> TestStellarAssetContract<'a> {
             .call(
                 self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"decimals")?,
-                host_vec![self.host].into(),
+                test_vec![self.host].into(),
             )?
             .try_into()?)
     }
@@ -219,7 +218,7 @@ impl<'a> TestStellarAssetContract<'a> {
             .call(
                 self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"name")?,
-                host_vec![self.host].into(),
+                test_vec![self.host].into(),
             )?
             .try_into_val(self.host)
     }
@@ -229,7 +228,7 @@ impl<'a> TestStellarAssetContract<'a> {
             .call(
                 self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"symbol")?,
-                host_vec![self.host].into(),
+                test_vec![self.host].into(),
             )?
             .try_into_val(self.host)
     }
