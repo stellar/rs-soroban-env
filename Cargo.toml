@@ -24,11 +24,12 @@ soroban-env-guest = { version = "20.0.0-rc2", path = "soroban-env-guest" }
 soroban-env-host = { version = "20.0.0-rc2", path = "soroban-env-host" }
 soroban-env-macros = { version = "20.0.0-rc2", path = "soroban-env-macros" }
 soroban-builtin-sdk-macros = { version = "20.0.0-rc2", path = "soroban-builtin-sdk-macros" }
+stellar-strkey = { version = "0.0.8" }
 
 [workspace.dependencies.stellar-xdr]
 version = "20.0.0-rc1"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "40f4fa8fc6fa03a1f6048860925ad3f051f728e9"
+rev = "db3dffa721b6650cab630002faab54105337b17f"
 default-features = false
 
 [workspace.dependencies.wasmi]
@@ -36,11 +37,6 @@ package = "soroban-wasmi"
 version = "0.31.0-soroban1"
 git = "https://github.com/stellar/wasmi"
 rev = "7e63b4c9e08c4163f417d118d81f7ea34789d0be"
-
-[workspace.dependencies.stellar-strkey]
-version = "0.0.7"
-git = "https://github.com/stellar/rs-stellar-strkey"
-rev = "e6ba45c60c16de28c7522586b80ed0150157df73"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # stellar-xdr = { path = "../rs-stellar-xdr/" }
