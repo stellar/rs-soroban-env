@@ -208,6 +208,117 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
     Ok(())
 }
 
+const BAD_VALS: &[u64] = &[
+    // These are Vals with bad tags.
+    0x0000_0000_0000_00_10_u64,
+    0x0000_0000_0000_00_4e_u64,
+    0x0000_0000_0000_00_7f_u64,
+    0x0000_0000_0000_00_ff_u64,
+    // These are False with nonzero major and minor-bits.
+    0x1111_0000_0000_00_00_u64,
+    0x0000_0000_0000_11_00_u64,
+    // These are True with nonzero major and minor-bits.
+    0x1111_0000_0000_00_01_u64,
+    0x0000_0000_0000_11_01_u64,
+    // These are Void with nonzero major and minor-bits.
+    0x1111_0000_0000_00_02_u64,
+    0x0000_0000_0000_11_02_u64,
+    // These are Error with invalid types.
+    0x0000_0000_0000_0a_03_u64,
+    0x0000_0000_0000_ff_03_u64,
+    0x0000_0000_f000_00_03_u64,
+    // These are Error with invalid values.
+    0x0000_000a_0000_01_03_u64,
+    0x0000_00ff_0000_01_03_u64,
+    0xf000_0000_0000_01_03_u64,
+    // This is a U32Val with nonzero minor-bits.
+    0x0000_0000_0000_11_04_u64,
+    // This is a I32Val with nonzero minor-bits.
+    0x0000_0000_0000_11_05_u64,
+    // These are SymbolSmalls with the two most significant bits set.
+    0x8000_0000_0000_00_0e_u64,
+    0x4000_0000_0000_00_0e_u64,
+    0xc000_0000_0000_00_0e_u64,
+    0xc000_0000_0000_ab_0e_u64,
+    0xc000_0000_00ab_cd_0e_u64,
+    0xffff_ffff_ffff_ff_0e_u64,
+    // This is a BytesObject with nonzero minor-bits.
+    // It should be rejected _before_ its invalid
+    // object-index or object-type is discovered.
+    0x0000_0000_0000_11_48_u64,
+];
+
+#[test]
+fn guest_val_integrity_errors() {
+    fn check_badval(host: &Host, contract: crate::AddressObject, badu64: u64) {
+        // To smuggle a badval into the callee at all we need to split it in
+        // two u32 vals. If we try to pass it _as_ a Val, the code that builds
+        // the argument vector will reject it.
+        let lo = crate::U32Val::from(badu64 as u32).to_val();
+        let hi = crate::U32Val::from((badu64 >> 32) as u32).to_val();
+        let badval = Val::from_payload(badu64);
+        let res = if let Ok(u) = crate::U32Val::try_from(badval) {
+            // create a valid local vector with a single boolean element and then
+            // index into it using the bad value
+            let vin = vec![Val::TRUE.to_val(); u32::from(u) as usize + 1];
+            let vec = host.vec_new_from_slice(&vin).unwrap();
+            host.call(
+                contract,
+                Symbol::try_from_small_str("idxbad").unwrap(),
+                host.vec_new_from_slice(&[vec.to_val(), lo, hi]).unwrap(),
+            )
+        } else {
+            // pass the bad value as a polymorphic Val argument to vec_push
+            let vec = host.vec_new_from_slice(&[]).unwrap();
+            host.call(
+                contract,
+                Symbol::try_from_small_str("pushbad").unwrap(),
+                host.vec_new_from_slice(&[vec.to_val(), lo, hi]).unwrap(),
+            )
+        };
+        assert!(res.is_err());
+        let he: HostError = res.err().unwrap();
+        assert!(
+            he.error.is_code(ScErrorCode::UnexpectedType)
+                || he.error.is_code(ScErrorCode::InvalidInput)
+        );
+    }
+
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
+    for i in BAD_VALS {
+        check_badval(&host, contract_id_obj, *i);
+    }
+}
+
+#[test]
+fn local_val_integrity_errors() {
+    fn check_badval(host: &Host, badval: u64) {
+        let badval = Val::from_payload(badval);
+        let res = if let Ok(u) = crate::U32Val::try_from(badval) {
+            // create a valid local vector with a single boolean element and then
+            // index into it using the bad value
+            let vin = vec![Val::TRUE.to_val(); u32::from(u) as usize + 1];
+            let vec = host.vec_new_from_slice(&vin).unwrap();
+            host.vec_get(vec, u)
+        } else {
+            // pass the bad value as a polymorphic Val argument to vec_new_from_slice
+            host.vec_new_from_slice(&[badval]).map(|x| x.to_val())
+        };
+        assert!(res.is_err());
+        let he: HostError = res.err().unwrap();
+        assert!(
+            he.error.is_code(ScErrorCode::UnexpectedType)
+                || he.error.is_code(ScErrorCode::InvalidInput)
+        );
+    }
+
+    let host = Host::default();
+    for i in BAD_VALS {
+        check_badval(&host, *i);
+    }
+}
+
 #[test]
 fn excessive_memory_growth() -> Result<(), HostError> {
     // `memory_grow(32)`, wasmi will desire 33 pages of memory, that includes the
