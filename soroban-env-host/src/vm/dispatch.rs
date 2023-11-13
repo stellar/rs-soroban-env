@@ -2,7 +2,7 @@ use super::FuelRefillable;
 use crate::{xdr::ContractCostType, EnvBase, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
-    I32Val, I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
+    I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
     U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
@@ -79,7 +79,6 @@ impl RelativeObjectConversion for Bool {}
 impl RelativeObjectConversion for Error {}
 impl RelativeObjectConversion for StorageType {}
 impl RelativeObjectConversion for U32Val {}
-impl RelativeObjectConversion for I32Val {}
 
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: dispatch functions
