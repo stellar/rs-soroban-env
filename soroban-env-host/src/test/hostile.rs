@@ -194,7 +194,8 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
     ));
 
     // Here we call a function that passes an argument to a host function
-    // with a bad val tag. This should fail in check_val_integrity.
+    // with a bad val tag. This fails during argument unmarshalling in
+    // dispatch functions.
     let res = host.call(
         contract_id_obj,
         Symbol::try_from_small_str("badtag")?,
@@ -202,7 +203,7 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
     );
     assert!(HostError::result_matches_err(
         res.clone(),
-        (ScErrorType::Value, ScErrorCode::InvalidInput)
+        (ScErrorType::WasmVm, ScErrorCode::UnexpectedType)
     ));
 
     Ok(())
