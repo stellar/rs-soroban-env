@@ -1,8 +1,11 @@
 use super::FuelRefillable;
-use crate::{xdr::ContractCostType, EnvBase, Host, HostError, VmCaller, VmCallerEnv};
+use crate::{
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
+    EnvBase, Host, HostError, VmCaller, VmCallerEnv,
+};
 use crate::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
-    I32Val, I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
+    I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
     U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
@@ -19,7 +22,9 @@ pub(crate) trait RelativeObjectConversion: WasmiMarshal {
         Ok(self)
     }
     fn try_marshal_from_relative_value(v: wasmi::Value, host: &Host) -> Result<Self, Trap> {
-        let val = Self::try_marshal_from_value(v).ok_or(BadSignature)?;
+        let val = Self::try_marshal_from_value(v).ok_or(Trap::from(HostError::from(
+            Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput),
+        )))?;
         Ok(val.relative_to_absolute(host)?)
     }
     fn marshal_relative_from_self(self, host: &Host) -> Result<wasmi::Value, Trap> {
@@ -79,7 +84,6 @@ impl RelativeObjectConversion for Bool {}
 impl RelativeObjectConversion for Error {}
 impl RelativeObjectConversion for StorageType {}
 impl RelativeObjectConversion for U32Val {}
-impl RelativeObjectConversion for I32Val {}
 
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: dispatch functions
@@ -153,6 +157,21 @@ macro_rules! generate_dispatch_functions {
 
                     let host = caller.data().clone();
 
+                    #[cfg(feature = "testutils")]
+                    {
+                        host.env_call_hook(&core::stringify!($fn_id), &[$(
+                            // Incoming args might or might-not be type-correct;
+                            // we attempt to unmarshal here but fail safely and
+                            // log the bad i64 if it doesn't work. The failure
+                            // will be repeated below in the attempted call, and
+                            // will propagate.
+                            match <$type>::try_marshal_from_relative_value(Value::I64($arg), &host) {
+                                Ok(val) => format!("{:?}", val),
+                                Err(_) => format!("bad:{:?}", $arg),
+                            }
+                        ),*])?;
+                    }
+
                     // This is where the VM -> Host boundary is crossed.
                     // We first return all fuels from the VM back to the host such that
                     // the host maintains control of the budget.
@@ -173,6 +192,15 @@ macro_rules! generate_dispatch_functions {
                     // conversions to and from both Val and i64 / u64 for
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?),*);
+
+                    #[cfg(feature = "testutils")]
+                    {
+                        let res_str: Result<String,&HostError> = match &res {
+                            Ok(ok) => Ok(format!("{:?}", ok)),
+                            Err(err) => Err(err)
+                        };
+                        host.env_ret_hook(&core::stringify!($fn_id), &res_str)?;
+                    }
 
                     // On the off chance we got an error with no context, we can
                     // at least attach some here "at each host function call",

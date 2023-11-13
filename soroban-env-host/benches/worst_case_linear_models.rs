@@ -2,6 +2,7 @@
 // $ cargo bench --features testutils --bench worst_case_linear_models -- --nocapture
 // You can optionally pass in args listing the {`ContractCostType`, `WasmInsnType`} combination to run with, e.g.
 // $ cargo bench --features testutils --bench worst_case_linear_models -- MemCpy I64Rotr --nocapture
+// To run the experimental cost types: $ RUN_EXPERIMENT=1 cargo bench ...
 mod common;
 use common::*;
 use soroban_env_host::{
@@ -176,7 +177,11 @@ fn extract_wasmi_fuel_costs(
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 fn main() -> std::io::Result<()> {
-    let params = for_each_host_cost_measurement::<WorstCaseLinearModels>()?;
+    let params = if std::env::var("RUN_EXPERIMENT").is_err() {
+        for_each_host_cost_measurement::<WorstCaseLinearModels>()?
+    } else {
+        for_each_experimental_cost_measurement::<WorstCaseLinearModels>()?
+    };
     let params_wasm = for_each_wasm_insn_measurement::<WorstCaseLinearModels>()?;
 
     let mut tw = TabWriter::new(vec![])

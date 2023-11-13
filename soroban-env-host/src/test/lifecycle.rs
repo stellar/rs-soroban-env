@@ -1,5 +1,5 @@
 use crate::auth::RecordedAuthPayload;
-use crate::builtin_contracts::testutils::HostVec;
+use crate::builtin_contracts::testutils::ContractTypeVec;
 use crate::{
     budget::{AsBudget, Budget},
     host_vec,
@@ -9,15 +9,15 @@ use crate::{
         ContractExecutable, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage,
         HashIdPreimageContractId, LedgerEntryData, ScSymbol, ScVal, ScVec, Uint256,
     },
-    Env, Host, LedgerInfo, Symbol,
+    Env, Host, LedgerInfo, Symbol, DEFAULT_XDR_RW_LIMITS,
 };
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{
-    ContractIdPreimage, ContractIdPreimageFromAddress, DepthLimitedWrite, HostFunction, ScAddress,
-    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
-    SorobanCredentials, VecM, DEFAULT_XDR_RW_DEPTH_LIMIT,
+    ContractIdPreimage, ContractIdPreimageFromAddress, HostFunction, Limited, ScAddress,
+    ScErrorCode, ScErrorType, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, SorobanCredentials, VecM,
 };
-use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
+use soroban_env_common::{xdr::ScBytes, EnvBase, TryIntoVal, Val};
 use soroban_env_common::{StorageType, VecObject};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
@@ -241,7 +241,7 @@ fn create_contract_from_source_account() {
 }
 
 pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Hash {
-    let mut buf = DepthLimitedWrite::new(Vec::new(), DEFAULT_XDR_RW_DEPTH_LIMIT);
+    let mut buf = Limited::new(Vec::new(), DEFAULT_XDR_RW_LIMITS);
     pre_image
         .write_xdr(&mut buf)
         .expect("preimage write failed");
@@ -266,8 +266,22 @@ fn test_contract_wasm_update() {
         .unwrap();
 
     let contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
-    let updated_wasm = ADD_I32;
 
+    // Try updating with non-existing hash first.
+    let non_existent_hash = [0u8; 32];
+    let non_existent_contract_wasm = host.bytes_new_from_slice(&non_existent_hash).unwrap();
+    let non_existent_wasm_res = host.call(
+        contract_addr_obj,
+        Symbol::try_from_small_str("update").unwrap(),
+        host_vec![&host, &non_existent_contract_wasm, &false].into(),
+    );
+    assert!(non_existent_wasm_res.is_err());
+    let non_existent_wasm_err = non_existent_wasm_res.err().unwrap().error;
+    assert!(non_existent_wasm_err.is_type(ScErrorType::Storage));
+    assert!(non_existent_wasm_err.is_code(ScErrorCode::MissingValue));
+    assert!(host.get_events().unwrap().0.is_empty());
+
+    let updated_wasm = ADD_I32;
     let updated_wasm_hash_obj: Val = host
         .invoke_function(HostFunction::UploadContractWasm(
             updated_wasm.to_vec().try_into().unwrap(),
@@ -275,11 +289,36 @@ fn test_contract_wasm_update() {
         .unwrap()
         .try_into_val(&host)
         .unwrap();
+
+    // Now do a successful update, but fail the contract after that.
+    let failed_call_res = host.call(
+        contract_addr_obj,
+        Symbol::try_from_small_str("update").unwrap(),
+        host_vec![&host, &updated_wasm_hash_obj, &true].into(),
+    );
+    assert!(failed_call_res.is_err());
+    let failed_call_err = failed_call_res.err().unwrap().error;
+    assert!(failed_call_err.is_type(ScErrorType::WasmVm));
+    assert!(failed_call_err.is_code(ScErrorCode::InvalidAction));
+    // The update now has happened, but then got rolled back. Make sure
+    // that it got converted to a failed system event.
+    let failed_call_events = host.get_events().unwrap().0;
+    assert_eq!(failed_call_events.len(), 1);
+    match failed_call_events.last() {
+        Some(he) => {
+            assert!(he.failed_call);
+            assert_eq!(he.event.type_, ContractEventType::System);
+        }
+        _ => {
+            panic!("unexpected event");
+        }
+    }
+
     let res: i32 = host
         .call(
             contract_addr_obj,
             Symbol::try_from_small_str("update").unwrap(),
-            host_vec![&host, &updated_wasm_hash_obj].into(),
+            host_vec![&host, &updated_wasm_hash_obj, &false].into(),
         )
         .unwrap()
         .try_into_val(&host)
@@ -317,8 +356,10 @@ fn test_contract_wasm_update() {
             updated_wasm_hash_obj.try_into_val(&host).unwrap(),
         )
         .unwrap();
+    assert_eq!(events.len(), 2);
     match events.last() {
         Some(he) => {
+            assert!(!he.failed_call);
             assert_eq!(
                 he.event,
                 ContractEvent {
@@ -331,7 +372,7 @@ fn test_contract_wasm_update() {
                             ScVal::Vec(Some(ScVec(
                                 vec![
                                     ScVal::Symbol(ScSymbol("Wasm".try_into().unwrap())),
-                                    ScVal::Bytes(ScBytes(old_wasm_hash.0.try_into().unwrap()))
+                                    ScVal::Bytes(ScBytes(old_wasm_hash.0.try_into().unwrap())),
                                 ]
                                 .try_into()
                                 .unwrap()
@@ -339,11 +380,11 @@ fn test_contract_wasm_update() {
                             ScVal::Vec(Some(ScVec(
                                 vec![
                                     ScVal::Symbol(ScSymbol("Wasm".try_into().unwrap())),
-                                    ScVal::Bytes(ScBytes(updated_wasm_hash.0.try_into().unwrap()))
+                                    ScVal::Bytes(ScBytes(updated_wasm_hash.0.try_into().unwrap())),
                                 ]
                                 .try_into()
                                 .unwrap()
-                            )))
+                            ))),
                         ]
                         .try_into()
                         .unwrap(),
@@ -370,7 +411,94 @@ fn test_contract_wasm_update() {
 }
 
 #[test]
+fn test_contract_wasm_update_with_try_call() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
+    let updated_contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
+    let updated_wasm = ADD_I32;
+    let updated_wasm_hash_obj: Val = host
+        .invoke_function(HostFunction::UploadContractWasm(
+            updated_wasm.to_vec().try_into().unwrap(),
+        ))
+        .unwrap()
+        .try_into_val(&host)
+        .unwrap();
 
+    // Run `update` that fails via external contract that does `try_call`.
+    // The overall call succeeds, but the internal contract stays unchanged.
+    let failed_call_res: Option<i32> = host
+        .call(
+            contract_addr_obj,
+            Symbol::try_from_small_str("try_upd").unwrap(),
+            host_vec![
+                &host,
+                &updated_contract_addr_obj,
+                &updated_wasm_hash_obj,
+                &true
+            ]
+            .into(),
+        )
+        .unwrap()
+        .try_into_val(&host)
+        .unwrap();
+    assert_eq!(failed_call_res, None);
+
+    // Make sure failure event is recorded.
+    let failed_call_events = host.get_events().unwrap().0;
+    assert_eq!(failed_call_events.len(), 1);
+    match failed_call_events.last() {
+        Some(he) => {
+            assert!(he.failed_call);
+            assert_eq!(he.event.type_, ContractEventType::System);
+        }
+        _ => {
+            panic!("unexpected event");
+        }
+    }
+
+    let res: Option<i32> = host
+        .call(
+            contract_addr_obj,
+            Symbol::try_from_small_str("try_upd").unwrap(),
+            host_vec![
+                &host,
+                &updated_contract_addr_obj,
+                &updated_wasm_hash_obj,
+                &false
+            ]
+            .into(),
+        )
+        .unwrap()
+        .try_into_val(&host)
+        .unwrap();
+    assert_eq!(res, Some(123));
+    let success_call_events = host.get_events().unwrap().0;
+    assert_eq!(success_call_events.len(), 2);
+    // Make sure event is recorded.
+    match success_call_events.last() {
+        Some(he) => {
+            assert!(!he.failed_call);
+            assert_eq!(he.event.type_, ContractEventType::System);
+        }
+        _ => {
+            panic!("unexpected event");
+        }
+    }
+
+    // Make sure internal contract has been updated.
+    let updated_res: i32 = host
+        .call(
+            updated_contract_addr_obj,
+            Symbol::try_from_small_str("add").unwrap(),
+            host_vec![&host, 10_i32, 20_i32].into(),
+        )
+        .unwrap()
+        .try_into_val(&host)
+        .unwrap();
+    assert_eq!(updated_res, 30);
+}
+
+#[test]
 fn test_create_contract_from_source_account_recording_auth() {
     let host = Host::test_host_with_recording_footprint();
     let source_account = generate_account_id(&host);
@@ -407,8 +535,8 @@ fn test_create_contract_from_source_account_recording_auth() {
             nonce: None,
             invocation: SorobanAuthorizedInvocation {
                 function: SorobanAuthorizedFunction::CreateContractHostFn(create_contract_args),
-                sub_invocations: VecM::default()
-            }
+                sub_invocations: VecM::default(),
+            },
         }]
     );
 }
@@ -416,12 +544,27 @@ fn test_create_contract_from_source_account_recording_auth() {
 #[test]
 fn test_invalid_contract() {
     let host = Host::test_host_with_recording_footprint();
+    let bytes = [0u8; 32];
 
-    let bytes = [0u8, 32];
+    let err = host
+        .invoke_function(HostFunction::UploadContractWasm(bytes.try_into().unwrap()))
+        .err()
+        .unwrap();
 
-    assert!(host
-        .invoke_function(HostFunction::UploadContractWasm(
-            bytes.to_vec().try_into().unwrap(),
-        ))
-        .is_err());
+    assert!(err.error.is_type(ScErrorType::WasmVm));
+    assert!(err.error.is_code(ScErrorCode::InvalidAction));
+}
+
+#[test]
+fn test_large_contract() {
+    let host = Host::test_host_with_recording_footprint();
+    let bytes = vec![0u8; u32::MAX.try_into().unwrap()];
+
+    let err = host
+        .invoke_function(HostFunction::UploadContractWasm(bytes.try_into().unwrap()))
+        .err()
+        .unwrap();
+
+    assert!(err.error.is_type(ScErrorType::Budget));
+    assert!(err.error.is_code(ScErrorCode::ExceededLimit));
 }

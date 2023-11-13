@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call vec_slice(Vec(obj#1), U32(2), U32(1))": "cpu:2788, mem:104, objs:-/1@d548e8c1",
+  "   2 ret vec_slice -> Err(Error(Object, InvalidInput))": "cpu:2896",
+  "   3 end": "cpu:2896, mem:104, prngs:-/-, objs:-/1@d548e8c1, vmem:-, evt:-, store:-/-"
+}

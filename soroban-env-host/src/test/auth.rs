@@ -16,6 +16,7 @@ use crate::budget::AsBudget;
 use crate::builtin_contracts::base_types::Address;
 use crate::builtin_contracts::testutils::{
     create_account, generate_signing_key, sign_payload_for_account, signing_key_to_account_id,
+    ContractTypeVec,
 };
 use crate::{host_vec, Host, LedgerInfo};
 use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryFromVal, TryIntoVal};

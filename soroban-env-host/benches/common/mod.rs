@@ -49,9 +49,12 @@ fn call_bench<B: Benchmark, HCM: HostCostMeasurement>(
 }
 
 pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
-) -> std::io::Result<(FPCostModel, FPCostModel)> {
-    B::bench::<Ed25519ScalarMulMeasure>()?;
-    B::bench::<VerifyEd25519SigMeasure>()
+) -> std::io::Result<BTreeMap<CostType, (FPCostModel, FPCostModel)>> {
+    let mut params: BTreeMap<CostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
+    call_bench::<B, Ed25519ScalarMulMeasure>(&mut params)?;
+    call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
+    call_bench::<B, ReadXdrByteArrayMeasure>(&mut params)?;
+    Ok(params)
 }
 
 pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(

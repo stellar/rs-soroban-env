@@ -3,7 +3,7 @@ use std::rc::Rc;
 use super::metered_clone::{
     charge_shallow_copy, MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator,
 };
-use crate::budget::AsBudget;
+use crate::budget::{AsBudget, DepthLimiter};
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
 use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
@@ -12,9 +12,8 @@ use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
 use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, ContractDataDurability, DepthLimiter, Int128Parts,
-    Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts,
-    UInt256Parts, VecM,
+    self, int128_helpers, AccountId, ContractDataDurability, Int128Parts, Int256Parts, ScAddress,
+    ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts, UInt256Parts, VecM,
 };
 use soroban_env_common::{
     AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,
@@ -331,12 +330,16 @@ impl Host {
                 self.error(cerr.into(), "failed to convert host value to ScVal", &[val])
             })
         })?;
+        // This is a check of internal logical consistency: we came _from_ a Val
+        // so the ScVal definitely should have been representable.
         self.check_val_representable_scval(&scval)?;
         Ok(scval)
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
         let _span = tracy_span!("ScVal to Val");
+        // This is an internal consistency check: this is an internal method and
+        // any caller should have previously rejected non-representable ScVals.
         self.check_val_representable_scval(&v)?;
         // This is the depth limit checkpoint for `ScVal`->`Val` conversion.
         // Metering of val conversion happens only if an object is encountered,
@@ -420,6 +423,8 @@ impl Host {
 
     pub(crate) fn to_host_obj(&self, ob: &ScValObjRef<'_>) -> Result<Object, HostError> {
         let val: &ScVal = (*ob).into();
+        // This is an internal consistency check: this is an internal method and any
+        // caller should have previously rejected non-representable ScVals.
         self.check_val_representable_scval(val)?;
         match val {
             // Here we have to make sure host object conversion is charged in each variant

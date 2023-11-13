@@ -86,7 +86,7 @@ impl TestContractFrame {
 #[derive(Clone)]
 pub(crate) struct Context {
     pub(crate) frame: Frame,
-    prng: Option<Prng>,
+    pub(crate) prng: Option<Prng>,
     pub(crate) storage: Option<InstanceStorageMap>,
 }
 
@@ -117,23 +117,17 @@ pub(crate) enum Frame {
 }
 
 impl Host {
-    /// Helper function for [`Host::with_frame`] below. Pushes a new [`Frame`]
+    /// Helper function for [`Host::with_frame`] below. Pushes a new [`Context`]
     /// on the context stack, returning a [`RollbackPoint`] such that if
     /// operation fails, it can be used to roll the [`Host`] back to the state
-    /// it had before its associated [`Frame`] was pushed.
-    pub(super) fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
-        let _span = tracy_span!("push frame");
+    /// it had before its associated [`Context`] was pushed.
+    pub(super) fn push_context(&self, ctx: Context) -> Result<RollbackPoint, HostError> {
+        let _span = tracy_span!("push context");
         let auth_manager = self.try_borrow_authorization_manager()?;
         let auth_snapshot = auth_manager.snapshot(self)?;
-        auth_manager.push_frame(self, &frame)?;
-
-        let ctx = Context {
-            frame,
-            prng: None,
-            storage: None,
-        };
+        auth_manager.push_frame(self, &ctx.frame)?;
         Vec::<Context>::charge_bulk_init_cpy(1, self.as_budget())?;
-        self.try_borrow_context_mut()?.push(ctx);
+        self.try_borrow_context_stack_mut()?.push(ctx);
         Ok(RollbackPoint {
             storage: self.try_borrow_storage()?.map.metered_clone(self)?,
             events: self.try_borrow_events()?.vec.len(),
@@ -141,26 +135,18 @@ impl Host {
         })
     }
 
-    /// Helper function for [`Host::with_frame`] below. Pops a [`Frame`] off
-    /// the current context and optionally rolls back the [`Host`]'s objects
+    /// Helper function for [`Host::with_frame`] below. Pops a [`Context`] off
+    /// the current context stack and optionally rolls back the [`Host`]'s objects
     /// and storage map to the state in the provided [`RollbackPoint`].
-    pub(super) fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
-        let _span = tracy_span!("pop frame");
+    pub(super) fn pop_context(&self, orp: Option<RollbackPoint>) -> Result<Context, HostError> {
+        let _span = tracy_span!("pop context");
 
-        if self.try_borrow_context_mut()?.pop().is_none() {
-            return Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "unmatched host frame push/pop",
-                &[],
-            ));
-        }
-
+        let ctx = self.try_borrow_context_stack_mut()?.pop();
         self.try_borrow_authorization_manager()?.pop_frame(self)?;
 
         #[cfg(any(test, feature = "recording_auth"))]
-        if self.try_borrow_context()?.is_empty() {
-            // When there are no frames left, emulate authentication for the
+        if self.try_borrow_context_stack()?.is_empty() {
+            // When there are no contexts left, emulate authentication for the
             // recording auth mode. This is a no-op for the enforcing mode.
             self.try_borrow_authorization_manager()?
                 .maybe_emulate_authentication(self)?;
@@ -178,12 +164,20 @@ impl Host {
         // the authorization manager as the host instance shouldn't be
         // shared between the contract invocations.
         #[cfg(any(test, feature = "testutils"))]
-        if self.try_borrow_context()?.is_empty() {
+        if self.try_borrow_context_stack()?.is_empty() {
             *self.try_borrow_previous_authorization_manager_mut()? =
                 Some(self.try_borrow_authorization_manager()?.clone());
             self.try_borrow_authorization_manager_mut()?.reset();
         }
-        Ok(())
+
+        ctx.ok_or_else(|| {
+            self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "unmatched host context push/pop",
+                &[],
+            )
+        })
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
@@ -196,7 +190,7 @@ impl Host {
     where
         F: FnOnce(&Frame) -> Result<U, HostError>,
     {
-        let Ok(context_guard) = self.0.context.try_borrow() else {
+        let Ok(context_guard) = self.0.context_stack.try_borrow() else {
             return Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -228,7 +222,7 @@ impl Host {
     where
         F: FnOnce(&mut Context) -> Result<U, HostError>,
     {
-        let Ok(mut context_guard) = self.0.context.try_borrow_mut() else {
+        let Ok(mut context_guard) = self.0.context_stack.try_borrow_mut() else {
             return Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -255,7 +249,7 @@ impl Host {
     where
         F: FnOnce(Option<&Frame>) -> Result<U, HostError>,
     {
-        let Ok(context_guard) = self.0.context.try_borrow() else {
+        let Ok(context_guard) = self.0.context_stack.try_borrow() else {
             return Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -342,7 +336,7 @@ impl Host {
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
-        let start_depth = self.try_borrow_context()?.len();
+        let start_depth = self.try_borrow_context_stack()?.len();
         if start_depth as u32 >= DEFAULT_HOST_DEPTH_LIMIT {
             return Err(Error::from_type_and_code(
                 ScErrorType::Context,
@@ -350,7 +344,21 @@ impl Host {
             )
             .into());
         }
-        let rp = self.push_frame(frame)?;
+        let ctx = Context {
+            frame,
+            prng: None,
+            storage: None,
+        };
+        let rp = self.push_context(ctx)?;
+        #[cfg(feature = "testutils")]
+        {
+            // We do this _after_ the context is pushed, in order to let the
+            // observation code assume a context exists
+            if let Some(ctx) = self.try_borrow_context_stack()?.last() {
+                self.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::PushCtx(ctx))?;
+            }
+        }
+
         let res = f();
         let mut res = if let Ok(v) = res {
             if let Ok(err) = Error::try_from(v) {
@@ -371,16 +379,23 @@ impl Host {
                 res = Err(e)
             }
         }
-
+        #[cfg(feature = "testutils")]
+        {
+            // We do this _before_ the context is popped, in order to let the
+            // observation code assume a context exists
+            if let Some(ctx) = self.try_borrow_context_stack()?.last() {
+                self.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::PopCtx(&ctx, &res))?;
+            }
+        }
         if res.is_err() {
             // Pop and rollback on error.
-            self.pop_frame(Some(rp))?;
+            self.pop_context(Some(rp))?
         } else {
             // Just pop on success.
-            self.pop_frame(None)?;
-        }
+            self.pop_context(None)?
+        };
         // Every push and pop should be matched; if not there is a bug.
-        let end_depth = self.try_borrow_context()?.len();
+        let end_depth = self.try_borrow_context_stack()?.len();
         if start_depth != end_depth {
             return Err(err!(
                 self,
@@ -526,7 +541,7 @@ impl Host {
         }
         if !matches!(reentry_mode, ContractReentryMode::Allowed) {
             let mut is_last_non_host_frame = true;
-            for ctx in self.try_borrow_context()?.iter().rev() {
+            for ctx in self.try_borrow_context_stack()?.iter().rev() {
                 let exist_id = match &ctx.frame {
                     Frame::ContractVM { vm, .. } => &vm.contract_id,
                     Frame::StellarAssetContract(id, ..) => id,
@@ -647,20 +662,24 @@ impl Host {
                             // payload into the diagnostic event buffer. This
                             // code path will get hit when contracts do
                             // `panic!("some string")` in native testing mode.
-                            if !recovered_error_from_panic_refcell && self.is_debug()? {
-                                if let Some(str) = panic_payload.downcast_ref::<&str>() {
-                                    let msg: String = format!(
-                                        "caught panic '{}' from contract function '{:?}'",
-                                        str, func
-                                    );
-                                    let _ = self.log_diagnostics(&msg, args);
-                                } else if let Some(str) = panic_payload.downcast_ref::<String>() {
-                                    let msg: String = format!(
-                                        "caught panic '{}' from contract function '{:?}'",
-                                        str, func
-                                    );
-                                    let _ = self.log_diagnostics(&msg, args);
-                                }
+                            if !recovered_error_from_panic_refcell {
+                                self.with_debug_mode(|| {
+                                    if let Some(str) = panic_payload.downcast_ref::<&str>() {
+                                        let msg: String = format!(
+                                            "caught panic '{}' from contract function '{:?}'",
+                                            str, func
+                                        );
+                                        let _ = self.log_diagnostics(&msg, args);
+                                    } else if let Some(str) = panic_payload.downcast_ref::<String>()
+                                    {
+                                        let msg: String = format!(
+                                            "caught panic '{}' from contract function '{:?}'",
+                                            str, func
+                                        );
+                                        let _ = self.log_diagnostics(&msg, args);
+                                    };
+                                    Ok(())
+                                })
                             }
                             Err(self.error(error, "caught error from function", &[]))
                         }

@@ -85,8 +85,7 @@ macro_rules! impl_wrapper_wasmi_conversions {
         #[cfg(feature = "wasmi")]
         impl $crate::WasmiMarshal for $wrapper {
             fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-                if let wasmi::Value::I64(i) = v {
-                    let val = $crate::Val::from_payload(i as u64);
+                if let Some(val) = $crate::Val::try_marshal_from_value(v) {
                     if <Self as $crate::val::ValConvert>::is_val_type(val) {
                         return Some(unsafe {
                             <Self as $crate::val::ValConvert>::unchecked_from_val(val)
@@ -97,7 +96,7 @@ macro_rules! impl_wrapper_wasmi_conversions {
             }
 
             fn marshal_from_self(self) -> wasmi::Value {
-                wasmi::Value::I64(self.as_val().get_payload() as i64)
+                $crate::Val::marshal_from_self(self.to_val())
             }
         }
     };

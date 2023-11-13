@@ -49,6 +49,24 @@ pub trait EnvBase: Sized + Clone {
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> !;
 
+    /// A general interface for tracing all env-method calls, intended to
+    /// be called from macros that do dispatch on all such methods.
+    #[cfg(all(feature = "std", feature = "testutils"))]
+    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A general interface for tracing all env-method returns, intended to
+    /// be called from macros that do dispatch on all such methods.
+    #[cfg(all(feature = "std", feature = "testutils"))]
+    fn env_ret_hook(
+        &self,
+        _fname: &'static str,
+        _res: &Result<String, &Self::Error>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     /// If `x` is `Err(...)`, ensure as much debug information as possible is
     /// attached to that error; in any case return "essentially the same" `x` --
     /// either `Ok(...)` or `Err(...)` -- just with extra error context.

@@ -56,20 +56,6 @@ pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_auth"))]
 use rand_chacha::ChaCha20Rng;
 
-/// Defines the maximum depth for recursive calls in the host, i.e. `Val` conversion, comparison,
-/// and deep clone, to prevent stack overflow.
-///
-/// Similar to the `xdr::DEFAULT_XDR_RW_DEPTH_LIMIT`, `DEFAULT_HOST_DEPTH_LIMIT` is also a proxy
-/// to the stack depth limit, and its purpose is to prevent the program from
-/// hitting the maximum stack size allowed by Rust, which would result in an unrecoverable `SIGABRT`.
-///
-/// The difference is the `DEFAULT_HOST_DEPTH_LIMIT`guards the recursion paths via the `Env` and
-/// the `Budget`, i.e., conversion, comparison and deep clone. The limit is checked at specific
-/// points of the recursion path, e.g. when `Val` is encountered, to minimize noise. So the
-/// "actual stack depth"/"host depth" factor will typically be larger, and thus the
-/// `DEFAULT_HOST_DEPTH_LIMIT` here is set to a smaller value.
-pub const DEFAULT_HOST_DEPTH_LIMIT: u32 = 100;
-
 /// Temporary helper for denoting a slice of guest memory, as formed by
 /// various bytes operations.
 pub(crate) struct VmSlice {
@@ -90,13 +76,17 @@ pub struct LedgerInfo {
     pub max_entry_ttl: u32,
 }
 
-#[cfg(any(test, feature = "testutils"))]
-pub(crate) enum HostLifecycleEvent {
-    VmInstantiated,
+#[cfg(feature = "testutils")]
+pub(crate) enum HostLifecycleEvent<'a> {
+    PushCtx(&'a Context),
+    PopCtx(&'a Context, &'a Result<Val, HostError>),
+    EnvCall(&'static str, &'a [String]),
+    EnvRet(&'static str, &'a Result<String, String>),
 }
 
-#[cfg(any(test, feature = "testutils"))]
-pub(crate) type HostLifecycleHook = Rc<dyn Fn(HostLifecycleEvent) -> Result<(), HostError>>;
+#[cfg(feature = "testutils")]
+pub(crate) type HostLifecycleHook =
+    Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
 #[derive(Clone, Default)]
 struct HostImpl {
@@ -104,7 +94,7 @@ struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
-    context: RefCell<Vec<Context>>,
+    context_stack: RefCell<Vec<Context>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
@@ -113,6 +103,11 @@ struct HostImpl {
     budget: Budget,
     events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
+    // Note: to reduce the risk of future maintainers accidentally adding a new
+    // way of observing the diagnostic level (which may vary between different
+    // replicas of the host, thus causing divergence) there are no borrow
+    // helpers for it and the only method to use it is inside the
+    // `with_debug_mode` callback that switches to the shadow budget.
     diagnostic_level: RefCell<DiagnosticLevel>,
     base_prng: RefCell<Option<Prng>>,
     // Auth-recording mode generates pseudorandom nonces to populate its output.
@@ -146,7 +141,7 @@ struct HostImpl {
     // the host's execution. No guarantees are made about the stability of this
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(feature = "testutils")]
     lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -205,10 +200,10 @@ impl_checked_borrow_helpers!(
 );
 impl_checked_borrow_helpers!(storage, Storage, try_borrow_storage, try_borrow_storage_mut);
 impl_checked_borrow_helpers!(
-    context,
+    context_stack,
     Vec<Context>,
-    try_borrow_context,
-    try_borrow_context_mut
+    try_borrow_context_stack,
+    try_borrow_context_stack_mut
 );
 impl_checked_borrow_helpers!(
     events,
@@ -222,12 +217,12 @@ impl_checked_borrow_helpers!(
     try_borrow_authorization_manager,
     try_borrow_authorization_manager_mut
 );
-impl_checked_borrow_helpers!(
-    diagnostic_level,
-    DiagnosticLevel,
-    try_borrow_diagnostic_level,
-    try_borrow_diagnostic_level_mut
-);
+
+// Note: diagnostic_mode borrow helpers are _not_ defined here to reduce the
+// risk of future maintainers accidentally revealing any way of observing the
+// diagnostic level in user code (which may vary between different replicas of
+// the host).
+
 impl_checked_borrow_helpers!(
     base_prng,
     Option<Prng>,
@@ -262,7 +257,7 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager_mut
 );
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(feature = "testutils")]
 impl_checked_borrow_helpers!(
     lifecycle_event_hook,
     Option<HostLifecycleHook>,
@@ -294,7 +289,7 @@ impl Host {
             ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
-            context: Default::default(),
+            context_stack: Default::default(),
             budget,
             events: Default::default(),
             authorization_manager: RefCell::new(
@@ -310,7 +305,7 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
-            #[cfg(any(test, feature = "testutils"))]
+            #[cfg(feature = "testutils")]
             lifecycle_event_hook: RefCell::new(None),
         }))
     }
@@ -471,19 +466,46 @@ impl Host {
         self.0.budget.set_shadow_limits(cpu, mem)
     }
 
-    /// Wraps the `budget.with_internal_mode` call with the check `host.is_debug`.
-    /// This wrapper should be used for any work that is part of the production
-    /// workflow but in debug mode, i.e. diagnostic related work (logging, or any
-    /// operations on diagnostic event).
-    pub(crate) fn with_debug_mode<T, F, E>(&self, f: F, e: E) -> T
+    pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) -> Result<(), HostError> {
+        use crate::host::error::TryBorrowOrErr;
+        *self.0.diagnostic_level.try_borrow_mut_or_err()? = diagnostic_level;
+        Ok(())
+    }
+
+    // As above, avoids having to import DiagnosticLevel.
+    pub fn enable_debug(&self) -> Result<(), HostError> {
+        self.set_diagnostic_level(DiagnosticLevel::Debug)
+    }
+
+    /// Wraps a `budget.with_shadow_mode` call with a check against the
+    /// diagnostic level. This wrapper should be used for any work that is part
+    /// of the production workflow but in debug mode, i.e. diagnostic related
+    /// work (logging, or any operations on diagnostic events).
+    ///
+    /// Note: to help minimize the risk of divergence based on accidental
+    /// observation of the diagnostic level in any context _other_ than this
+    /// callback, we make two things at least inconvenient enough to maybe cause
+    /// people to come to this comment and read it:
+    ///
+    ///   1. We avoid having any other direct way of observing the flag.
+    ///   2. We eat all errors and return no values from the closure.
+    ///
+    /// If you need to observe a value from the execution of debug mode, you can
+    /// of course still mutate a mutable reference pointing outside the closure,
+    /// but be _absolutely certain_ any observation you thereby make of the
+    /// debug-level _only_ flows into other functions that are themselves
+    /// debug-mode-guarded and/or only write results into debug state (eg.
+    /// diagnostic events).
+    pub(crate) fn with_debug_mode<F>(&self, f: F)
     where
-        F: FnOnce() -> Result<T, HostError>,
-        E: Fn() -> T,
+        F: FnOnce() -> Result<(), HostError>,
     {
-        if self.is_debug().ok() != Some(true) {
-            return e();
+        use crate::host::error::TryBorrowOrErr;
+        if let Ok(cell) = self.0.diagnostic_level.try_borrow_or_err() {
+            if matches!(*cell, DiagnosticLevel::Debug) {
+                return self.budget_ref().with_shadow_mode(f);
+            }
         }
-        self.as_budget().with_shadow_mode(f, e)
     }
 
     /// Returns whether the Host can be finished by calling
@@ -582,6 +604,24 @@ impl EnvBase for Host {
             }
         }
         x
+    }
+
+    #[cfg(feature = "testutils")]
+    fn env_call_hook(&self, fname: &'static str, args: &[String]) -> Result<(), HostError> {
+        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvCall(fname, args))
+    }
+
+    #[cfg(feature = "testutils")]
+    fn env_ret_hook(
+        &self,
+        fname: &'static str,
+        res: &Result<String, &HostError>,
+    ) -> Result<(), HostError> {
+        // We have to defer error formatting to here because the Env type does
+        // not know enough about the structure of errors (in particular that we
+        // do _not_ want to format debuginfo into the lifecycle-hook string).
+        let res = res.clone().map_err(|he| format!("{:?}", he.error));
+        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvRet(fname, &res))
     }
 
     fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
@@ -778,33 +818,30 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
-        self.with_debug_mode(
-            || {
-                let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
-                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-                let mut msg: Vec<u8> = vec![0u8; len as usize];
-                self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
-                // `String::from_utf8_lossy` iternally allocates a `String` which is a `Vec<u8>`
-                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-                let msg = String::from_utf8_lossy(&msg);
+        self.with_debug_mode(|| {
+            let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
+            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
+            let mut msg: Vec<u8> = vec![0u8; len as usize];
+            self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
+            // `String::from_utf8_lossy` iternally allocates a `String` which is a `Vec<u8>`
+            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
+            let msg = String::from_utf8_lossy(&msg);
 
-                let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
-                Vec::<Val>::charge_bulk_init_cpy((len.saturating_add(1)) as u64, self)?;
-                let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
-                // charge for conversion from bytes to `Val`s
-                self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
-                self.metered_vm_read_vals_from_linear_memory::<8, Val>(
-                    vmcaller,
-                    &vm,
-                    pos,
-                    vals.as_mut_slice(),
-                    |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
-                )?;
-                self.log_diagnostics(&msg, &vals);
-                Ok(())
-            },
-            || (),
-        );
+            let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
+            Vec::<Val>::charge_bulk_init_cpy(len.saturating_add(1) as u64, self)?;
+            let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
+            // charge for conversion from bytes to `Val`s
+            self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
+            self.metered_vm_read_vals_from_linear_memory::<8, Val>(
+                vmcaller,
+                &vm,
+                pos,
+                vals.as_mut_slice(),
+                |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
+            )?;
+            self.log_diagnostics(&msg, &vals);
+            Ok(())
+        });
 
         Ok(Val::VOID)
     }
@@ -2088,7 +2125,16 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        self.to_host_val(&scv)
+        if Val::can_represent_scval(&scv) {
+            self.to_host_val(&scv)
+        } else {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "Deserialized ScVal type cannot be represented as Val",
+                &[(scv.discriminant() as i32).into()],
+            ))
+        }
     }
 
     fn string_copy_to_linear_memory(
@@ -2753,7 +2799,7 @@ impl Host {
         f(self.0.budget.clone())
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "testutils")]
     pub(crate) fn set_lifecycle_event_hook(
         &self,
         hook: Option<HostLifecycleHook>,
@@ -2762,12 +2808,13 @@ impl Host {
         Ok(())
     }
 
+    #[cfg(feature = "testutils")]
     pub(crate) fn call_any_lifecycle_hook(
         &self,
         event: HostLifecycleEvent,
     ) -> Result<(), HostError> {
         match &*self.try_borrow_lifecycle_event_hook()? {
-            Some(hook) => hook(event),
+            Some(hook) => hook(self, event),
             None => Ok(()),
         }
     }

@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call vec_del(Vec(obj#1), U32(1))": "cpu:2788, mem:104, objs:-/1@d548e8c1",
+  "   2 ret vec_del -> Ok(Vec(obj#3))": "cpu:5683, mem:200, objs:-/2@8ad93bf8",
+  "   3 call obj_cmp(Vec(obj#3), Vec(obj#5))": "cpu:8470, mem:296, objs:-/3@5391ace",
+  "   4 ret obj_cmp -> Ok(0)": "cpu:9154",
+  "   5 end": "cpu:9154, mem:296, prngs:-/-, objs:-/3@5391ace, vmem:-, evt:-, store:-/-"
+}

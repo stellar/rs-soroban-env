@@ -1,8 +1,11 @@
 mod dimension;
+mod limits;
 mod model;
 mod util;
 mod wasmi_helper;
 
+pub(crate) use limits::DepthLimiter;
+pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use model::COST_MODEL_LIN_TERM_SCALE_BITS;
 
 use std::{
@@ -13,18 +16,13 @@ use std::{
 
 use crate::{
     host::error::TryBorrowOrErr,
-    xdr::{ContractCostParams, ContractCostType, DepthLimiter, ScErrorCode, ScErrorType},
-    Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
+    xdr::{ContractCostParams, ContractCostType, ScErrorCode, ScErrorType},
+    Host, HostError,
 };
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
 use model::ScaledU64;
 use wasmi_helper::FuelConfig;
-
-// These are some sane values, however the embedder should typically customize
-// these to match the network config.
-const DEFAULT_CPU_INSN_LIMIT: u64 = 100_000_000;
-const DEFAULT_MEM_BYTES_LIMIT: u64 = 40 * 1024 * 1024; // 40MB
 
 #[derive(Clone, Default)]
 struct MeterTracker {
@@ -423,8 +421,8 @@ impl Default for BudgetImpl {
         }
 
         // define the limits
-        b.cpu_insns.reset(DEFAULT_CPU_INSN_LIMIT);
-        b.mem_bytes.reset(DEFAULT_MEM_BYTES_LIMIT);
+        b.cpu_insns.reset(limits::DEFAULT_CPU_INSN_LIMIT);
+        b.mem_bytes.reset(limits::DEFAULT_MEM_BYTES_LIMIT);
         b
     }
 }
@@ -527,30 +525,6 @@ impl Display for BudgetImpl {
     }
 }
 
-impl DepthLimiter for BudgetImpl {
-    type DepthLimiterError = HostError;
-
-    fn enter(&mut self) -> Result<(), HostError> {
-        if let Some(depth) = self.depth_limit.checked_sub(1) {
-            self.depth_limit = depth;
-        } else {
-            return Err(Error::from_type_and_code(
-                ScErrorType::Context,
-                ScErrorCode::ExceededLimit,
-            )
-            .into());
-        }
-        Ok(())
-    }
-
-    // `leave` should be called in tandem with `enter` such that the depth
-    // doesn't exceed the initial depth limit.
-    fn leave(&mut self) -> Result<(), HostError> {
-        self.depth_limit = self.depth_limit.saturating_add(1);
-        Ok(())
-    }
-}
-
 #[derive(Clone)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
@@ -600,18 +574,6 @@ impl AsBudget for Host {
 impl AsBudget for &Host {
     fn as_budget(&self) -> &Budget {
         self.budget_ref()
-    }
-}
-
-impl DepthLimiter for Budget {
-    type DepthLimiterError = HostError;
-
-    fn enter(&mut self) -> Result<(), HostError> {
-        self.0.try_borrow_mut_or_err()?.enter()
-    }
-
-    fn leave(&mut self) -> Result<(), HostError> {
-        self.0.try_borrow_mut_or_err()?.leave()
     }
 }
 
@@ -665,49 +627,36 @@ impl Budget {
         self.0.try_borrow_mut_or_err()?.charge(ty, 1, input)
     }
 
-    /// Runs a user provided closure in shadow mode -- all metering is done through
-    /// the shadow budget.
+    /// Runs a user provided closure in shadow mode -- all metering is done
+    /// through the shadow budget.
     ///
-    /// Because the shadow mode is optional (depending on the configuration,
-    /// nodes may or may not trigger this path), any error occured during execution
-    /// is swallowed by running a fallback closure provided by the caller.
-    ///
-    /// # Arguments:
-    /// * `f` - A fallible closure to be run in shadow mode. If error occurs,
-    ///   fallback closure is run immediately afterwards to replace it
-    ///
-    /// * `fallback` - A fallback closure to be run in case of any error occuring
-    ///
-    /// # Returns:
-    ///
-    /// Returns a value of type `T`. Any errors arising during the execution are
-    /// suppressed.
-    pub(crate) fn with_shadow_mode<T, F, E>(&self, f: F, fallback: E) -> T
+    /// Because shadow mode is _designed not to be observed_ (indeed it exists
+    /// primarily to count actions against the shadow budget that are _optional_
+    /// on a given host, such as debug logging, and that therefore must strictly
+    /// must not be observed), any error that occurs during execution is
+    /// swallowed.
+    pub(crate) fn with_shadow_mode<T, F>(&self, f: F)
     where
         F: FnOnce() -> Result<T, HostError>,
-        E: FnOnce() -> T,
     {
         let mut prev = false;
 
-        let mut res = self
+        if self
             .mut_budget(|mut b| {
                 prev = b.is_in_shadow_mode;
                 b.is_in_shadow_mode = true;
-                b.cpu_insns.check_budget_limit(true)?;
-                b.mem_bytes.check_budget_limit(true)
+                b.cpu_insns.check_budget_limit(IsShadowMode(true))?;
+                b.mem_bytes.check_budget_limit(IsShadowMode(true))
             })
-            .and_then(|_| f());
-
-        if let Err(_) = self.mut_budget(|mut b| {
-            b.is_in_shadow_mode = prev;
-            Ok(())
-        }) {
-            res = Err(
-                Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::InternalError).into(),
-            );
+            .is_ok()
+        {
+            let _ = f();
         }
 
-        res.unwrap_or_else(|_| fallback())
+        let _ = self.mut_budget(|mut b| {
+            b.is_in_shadow_mode = prev;
+            Ok(())
+        });
     }
 
     pub(crate) fn is_in_shadow_mode(&self) -> Result<bool, HostError> {

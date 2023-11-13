@@ -19,22 +19,15 @@ use crate::{
     budget::AsBudget,
     err,
     host::{error::TryBorrowOrErr, metered_clone::MeteredContainer},
-    xdr::ContractCostType,
-    HostError,
+    meta::{self, get_ledger_protocol_version},
+    xdr::{ContractCostType, Hash, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
+    ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
+    DEFAULT_XDR_RW_LIMITS,
 };
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
-use super::{xdr::Hash, Host, Symbol, Val};
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
-use soroban_env_common::{
-    meta::{self, get_ledger_protocol_version},
-    xdr::{
-        DepthLimitedRead, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType,
-        DEFAULT_XDR_RW_DEPTH_LIMIT,
-    },
-    ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
-};
 
 use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store, Value};
 
@@ -63,7 +56,7 @@ pub struct Vm {
     module: Module,
     store: RefCell<Store<Host>>,
     instance: Instance,
-    memory: Option<Memory>,
+    pub(crate) memory: Option<Memory>,
 }
 
 /// Minimal description of a single function defined in a WASM module.
@@ -161,8 +154,7 @@ impl Vm {
         // us as well as a protocol that's less than or equal to our protocol.
 
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
-            let mut cursor =
-                DepthLimitedRead::new(Cursor::new(env_meta), DEFAULT_XDR_RW_DEPTH_LIMIT);
+            let mut cursor = Limited::new(Cursor::new(env_meta), DEFAULT_XDR_RW_LIMITS);
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;
@@ -274,8 +266,6 @@ impl Vm {
         // Here we do _not_ supply the store with any fuel. Fuel is supplied
         // right before the VM is being run, i.e., before crossing the host->VM
         // boundary.
-        #[cfg(any(test, feature = "testutils"))]
-        host.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::VmInstantiated)?;
         Ok(Rc::new(Self {
             contract_id,
             module,
@@ -358,6 +348,8 @@ impl Vm {
             .return_fuel_to_host(host)?;
 
         if let Err(e) = res {
+            use std::borrow::Cow;
+
             // When a call fails with a wasmi::Error::Trap that carries a HostError
             // we propagate that HostError as is, rather than producing something new.
 
@@ -365,13 +357,12 @@ impl Vm {
                 wasmi::Error::Trap(trap) => {
                     if let Some(code) = trap.trap_code() {
                         let err = code.into();
-                        return Err(if host.is_debug()? {
-                            // With diagnostics on: log as much detail as we can from wasmi.
-                            let msg = format!("VM call trapped: {:?}", &code);
-                            host.error(err, &msg, &[func_sym.to_val(), err.to_val()])
-                        } else {
-                            err.into()
+                        let mut msg = Cow::Borrowed("VM call trapped");
+                        host.with_debug_mode(|| {
+                            msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
+                            Ok(())
                         });
+                        return Err(host.error(err, &msg, &[func_sym.to_val()]));
                     }
                     if let Some(he) = trap.downcast::<HostError>() {
                         host.log_diagnostics(
@@ -388,13 +379,12 @@ impl Vm {
                     ));
                 }
                 e => {
-                    return Err(if host.is_debug()? {
-                        // With diagnostics on: log as much detail as we can from wasmi.
-                        let msg = format!("VM call failed: {:?}", &e);
-                        host.error(e.into(), &msg, &[func_sym.to_val()])
-                    } else {
-                        host.error(e.into(), "VM call failed", &[func_sym.to_val()])
+                    let mut msg = Cow::Borrowed("VM call failed");
+                    host.with_debug_mode(|| {
+                        msg = Cow::Owned(format!("VM call failed: {:?}", &e));
+                        Ok(())
                     });
+                    return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
                 }
             }
         }

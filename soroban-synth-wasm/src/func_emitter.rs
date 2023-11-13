@@ -393,7 +393,7 @@ i64_mem_insn!(
     (i64_store32, I64Store32)
 );
 
-macro_rules! i64_numeric_insn {
+macro_rules! numeric_insn {
     ( $(($func_name: ident, $insn: ident)),* )
     =>
     {
@@ -406,7 +406,8 @@ macro_rules! i64_numeric_insn {
         }
     }
 }
-i64_numeric_insn!(
+numeric_insn!(
+    (i32_wrap_i64, I32WrapI64),
     (i64_eqz, I64Eqz),
     (i64_eq, I64Eq),
     (i64_ne, I64Ne),

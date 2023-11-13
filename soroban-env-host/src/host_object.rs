@@ -25,6 +25,7 @@ pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
 pub(crate) type HostVec = MeteredVector<Val>;
 
 #[derive(Clone)]
+#[cfg_attr(test, derive(Hash))]
 pub enum HostObject {
     Vec(HostVec),
     Map(HostMap),
@@ -265,15 +266,15 @@ impl Host {
                     // done the translation (eg. in native testing mode), so for
                     // symmetry sake we will return the same error here.
                     Some(_) => Err(self.err(
-                        ScErrorType::Object,
-                        ScErrorCode::UnexpectedType,
+                        ScErrorType::Value,
+                        ScErrorCode::InvalidInput,
                         "relative and absolute object types differ",
                         &[],
                     )),
                     // User is referring to something outside the bounds of
                     // their relative table, erroneously.
                     None => Err(self.err(
-                        ScErrorType::Context,
+                        ScErrorType::Value,
                         ScErrorCode::InvalidInput,
                         "unknown relative object reference",
                         &[Val::from_u32(handle).to_val()],
@@ -283,7 +284,7 @@ impl Host {
                 // This also gets "invalid input" because it came from the user
                 // VM: they tried to forge an absolute.
                 Err(self.err(
-                    ScErrorType::Context,
+                    ScErrorType::Value,
                     ScErrorCode::InvalidInput,
                     "relative_to_absolute given an absolute reference",
                     &[Val::from_u32(handle).to_val()],
@@ -386,20 +387,15 @@ impl Host {
     }
 
     pub(crate) fn check_val_integrity(&self, val: Val) -> Result<(), HostError> {
-        // Technically Tag::Bad is the only one that can occur here -- the other
-        // 3 are mapped to it -- but we check for them just in case.
-        if let Tag::Bad
-        | Tag::SmallCodeUpperBound
-        | Tag::ObjectCodeLowerBound
-        | Tag::ObjectCodeUpperBound = val.get_tag()
-        {
-            Err(self.err(
+        if !val.is_good() {
+            return Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
-                "bad value tag",
-                &[val],
-            ))
-        } else if let Ok(obj) = Object::try_from(val) {
+                "bad value",
+                &[],
+            ));
+        }
+        if let Ok(obj) = Object::try_from(val) {
             self.check_obj_integrity(obj)
         } else {
             Ok(())

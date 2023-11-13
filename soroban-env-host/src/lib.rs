@@ -57,6 +57,7 @@ pub mod storage;
 #[cfg(test)]
 mod test;
 
+pub use budget::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 #[cfg(any(test, feature = "testutils"))]
 #[doc(hidden)]
 pub use host::testutils::call_with_suppressed_panic_hook;
@@ -64,7 +65,7 @@ pub use host::testutils::call_with_suppressed_panic_hook;
 pub use host::ContractFunctionSet;
 pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo, Seed,
-    DEFAULT_HOST_DEPTH_LIMIT, SEED_BYTES,
+    SEED_BYTES,
 };
 pub use soroban_env_common::*;
 

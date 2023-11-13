@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_env_common::BytesObject;
+use soroban_env_common::{BytesObject, U32Val, Env as _};
 use soroban_sdk::{contract, contractimpl, Bytes, Env, FromVal, Val, Vec};
 
 #[contract]
@@ -89,5 +89,21 @@ impl Contract {
     pub fn badtag(_env: Env, mut v: Vec<Val>) {
         let bad = Val::from_payload((v.to_val().get_payload() & !0xff) | 32);
         v.push_back(bad)
+    }
+
+    // Push a Val made from the payload onto the provided vector.
+    #[allow(unused_mut)]
+    pub fn pushbad(_env: Env, mut v: Vec<Val>, payload_lo: U32Val, payload_hi: U32Val) {
+        let payload: u64 = (u32::from(payload_lo) as u64) | ((u32::from(payload_hi) as u64) << 32);
+        let bad = Val::from_payload(payload);
+        v.push_back(bad)
+    }
+
+    // Index into the provided vector using the payload as a U32Val.
+    #[allow(unused_mut)]
+    pub fn idxbad(env: Env, mut v: Vec<Val>, payload_lo: U32Val, payload_hi: U32Val) -> Val {
+        let payload: u64 = (u32::from(payload_lo) as u64) | ((u32::from(payload_hi) as u64) << 32);
+        let bad: U32Val = Val::from_payload(payload).try_into().unwrap();
+        env.vec_get(*v.as_object(), bad).unwrap()
     }
 }

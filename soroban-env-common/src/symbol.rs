@@ -65,6 +65,8 @@ pub enum SymbolError {
     /// Returned when attempting to form a [SymbolObject] or [SymbolSmall] from
     /// a string with characters outside the range `[a-zA-Z0-9_]`.
     BadChar(char),
+    /// Malformed small symbol (upper two bits were set).
+    MalformedSmall,
 }
 
 impl core::fmt::Display for SymbolError {
@@ -76,6 +78,7 @@ impl core::fmt::Display for SymbolError {
             SymbolError::BadChar(char) => f.write_fmt(format_args!(
                 "symbol bad char: encountered {char}, supported range [a-zA-Z0-9_]"
             )),
+            SymbolError::MalformedSmall => f.write_str("malformed small symbol"),
         }
     }
 }
@@ -95,8 +98,10 @@ use super::val::BODY_BITS;
 pub(crate) const MAX_SMALL_CHARS: usize = 9;
 const CODE_BITS: usize = 6;
 const CODE_MASK: u64 = (1u64 << CODE_BITS) - 1;
+const SMALL_MASK: u64 = (1u64 << (MAX_SMALL_CHARS * CODE_BITS)) - 1;
 sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_SMALL_CHARS + 2 == BODY_BITS);
+sa::const_assert!(SMALL_MASK == 0x003f_ffff_ffff_ffff);
 
 impl<E: Env> TryFromVal<E, &str> for Symbol {
     type Error = crate::Error;
@@ -146,12 +151,27 @@ impl<E: Env> Compare<Symbol> for E {
     }
 }
 
+impl SymbolSmall {
+    #[doc(hidden)]
+    pub const fn try_from_body(body: u64) -> Result<Self, SymbolError> {
+        // check if bits 54 or 55 are set, if so return error.
+        // the other low 54 bits can have any value, they're all
+        // legal small symbols.
+        if body & SMALL_MASK != body {
+            Err(SymbolError::MalformedSmall)
+        } else {
+            Ok(unsafe { SymbolSmall::from_body(body) })
+        }
+    }
+}
+
 impl Symbol {
     #[doc(hidden)]
     pub const unsafe fn from_small_body(body: u64) -> Self {
-        // Can't panic, though it's possible you gave it a weird
-        // symbol, every possible bit-pattern in the low 56 bits
-        // is a valid small symbol.
+        // This is a helper that should only be used in macros where it's
+        // necessary to generate a Symbol constant with no possibility of error:
+        // it just forces the bits that might be set wrong (54 and 55) to zero.
+        let body = body & SMALL_MASK;
         Symbol(SymbolSmall::from_body(body).0)
     }
 
@@ -258,6 +278,7 @@ impl SymbolSmall {
             Ok(sym) => sym,
             Err(SymbolError::TooLong(_)) => panic!("symbol too long"),
             Err(SymbolError::BadChar(_)) => panic!("symbol bad char"),
+            Err(SymbolError::MalformedSmall) => panic!("malformed small symbol"),
         }
     }
 

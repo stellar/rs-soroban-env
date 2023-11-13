@@ -7,11 +7,10 @@ where
     type Error = T::Error;
 
     fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
-        let val = *val;
         if val.is_void() {
             Ok(None)
         } else {
-            Ok(Some(T::try_from_val(env, &val)?))
+            Ok(Some(T::try_from_val(env, val)?))
         }
     }
 }

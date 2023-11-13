@@ -1,10 +1,13 @@
 use soroban_env_common::xdr::{Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, WriteXdr};
-use soroban_env_host::fees::{
-    compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
-    FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
-    WriteFeeConfiguration, TTL_ENTRY_SIZE,
+use soroban_env_host::{
+    fees::{
+        compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
+        FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
+        WriteFeeConfiguration, TTL_ENTRY_SIZE,
+    },
+    xdr::TtlEntry,
+    DEFAULT_XDR_RW_LIMITS,
 };
-use soroban_env_host::xdr::TtlEntry;
 
 #[test]
 fn ttl_entry_size() {
@@ -18,7 +21,306 @@ fn ttl_entry_size() {
     };
     assert_eq!(
         TTL_ENTRY_SIZE,
-        expiration_entry.to_xdr().unwrap().len() as u32
+        expiration_entry
+            .to_xdr(DEFAULT_XDR_RW_LIMITS)
+            .unwrap()
+            .len() as u32
+    );
+}
+
+fn change_resource<T>(func: T) -> TransactionResources
+where
+    T: FnOnce(&mut TransactionResources) -> (),
+{
+    let mut resources = TransactionResources {
+        instructions: 0,
+        read_entries: 0,
+        write_entries: 0,
+        read_bytes: 0,
+        write_bytes: 0,
+        contract_events_size_bytes: 0,
+        transaction_size_bytes: 0,
+    };
+    func(&mut resources);
+    resources
+}
+
+#[test]
+fn resource_fee_computation_with_single_resource() {
+    // Historical fee is always paid for 300 byte of transaction result.
+    // ceil(6000 * 300 / 1024) == 1758
+    const BASE_HISTORICAL_FEE: i64 = 1758;
+    let fee_config = FeeConfiguration {
+        fee_per_instruction_increment: 1000,
+        fee_per_read_entry: 2000,
+        fee_per_write_entry: 3000,
+        fee_per_read_1kb: 4000,
+        fee_per_write_1kb: 5000,
+        fee_per_historical_1kb: 6000,
+        fee_per_contract_event_1kb: 7000,
+        fee_per_transaction_size_1kb: 8000,
+    };
+
+    // Instructions
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.instructions = 1;
+            }),
+            &fee_config,
+        ),
+        (1 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.instructions = 10000;
+            }),
+            &fee_config,
+        ),
+        (1000 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.instructions = 123_451_234;
+            }),
+            &fee_config,
+        ),
+        (12_345_124 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.instructions = u32::MAX;
+            }),
+            &fee_config,
+        ),
+        (429_496_730 + BASE_HISTORICAL_FEE, 0)
+    );
+
+    // Read entries
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.read_entries = 1;
+            }),
+            &fee_config,
+        ),
+        (2000 * 1 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.read_entries = 5;
+            }),
+            &fee_config,
+        ),
+        (2000 * 5 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.read_entries = u32::MAX;
+            }),
+            &fee_config,
+        ),
+        (8_589_934_590_000 + BASE_HISTORICAL_FEE, 0)
+    );
+
+    // Write entries
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.write_entries = 1;
+            }),
+            &fee_config,
+        ),
+        // Write entries are also counted towards the read entry fee.
+        (2000 + 3000 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.write_entries = 5;
+            }),
+            &fee_config,
+        ),
+        ((2000 + 3000) * 5 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.write_entries = u32::MAX;
+            }),
+            &fee_config,
+        ),
+        (
+            8_589_934_590_000 + 12_884_901_885_000 + BASE_HISTORICAL_FEE,
+            0
+        )
+    );
+
+    // Read bytes
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.read_bytes = 1;
+            }),
+            &fee_config,
+        ),
+        // ceil(1 * 4000 / 1024) = 4
+        (4 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.read_bytes = 5 * 1024;
+            }),
+            &fee_config,
+        ),
+        (5 * 4000 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.read_bytes = 5 * 1024 + 1;
+            }),
+            &fee_config,
+        ),
+        (20_004 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.read_bytes = u32::MAX;
+            }),
+            &fee_config,
+        ),
+        (16_777_215_997 + BASE_HISTORICAL_FEE, 0)
+    );
+
+    // Write bytes
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.write_bytes = 1;
+            }),
+            &fee_config,
+        ),
+        // ceil(1 * 5000 / 1024) = 4
+        (5 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.write_bytes = 5 * 1024;
+            }),
+            &fee_config,
+        ),
+        (5 * 5000 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.write_bytes = 5 * 1024 + 1;
+            }),
+            &fee_config,
+        ),
+        (25_005 + BASE_HISTORICAL_FEE, 0)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.write_bytes = u32::MAX;
+            }),
+            &fee_config,
+        ),
+        (20_971_519_996 + BASE_HISTORICAL_FEE, 0)
+    );
+
+    // Transaction size (affected by historical + tx size fees)
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.transaction_size_bytes = 1;
+            }),
+            &fee_config,
+        ),
+        // Historical fee: ceil(1 * 6000 / 1024) = 6
+        // Tx size fee: ceil(1 * 8000 / 1024) = 8
+        (6 + 8 + BASE_HISTORICAL_FEE, 0)
+    );
+
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.transaction_size_bytes = 5 * 1024;
+            }),
+            &fee_config,
+        ),
+        ((6000 + 8000) * 5 + BASE_HISTORICAL_FEE, 0)
+    );
+
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.transaction_size_bytes = 5 * 1024 + 1;
+            }),
+            &fee_config,
+        ),
+        (30_006 + 40_008 + BASE_HISTORICAL_FEE, 0)
+    );
+
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.transaction_size_bytes = u32::MAX;
+            }),
+            &fee_config,
+        ),
+        // BASE_HISTORICAL_FEE is omitted as it's saturated with overall
+        // `transaction_size_bytes`.
+        (25_165_823_995 + 33_554_431_993, 0)
+    );
+
+    // Events size
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.contract_events_size_bytes = 1;
+            }),
+            &fee_config,
+        ),
+        // ceil(1 * 7000 / 1024) = 7
+        (BASE_HISTORICAL_FEE, 7)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.contract_events_size_bytes = 5 * 1024;
+            }),
+            &fee_config,
+        ),
+        (BASE_HISTORICAL_FEE, 5 * 7000)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.contract_events_size_bytes = 5 * 1024 + 1;
+            }),
+            &fee_config,
+        ),
+        (BASE_HISTORICAL_FEE, 35_007)
+    );
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.contract_events_size_bytes = u32::MAX;
+            }),
+            &fee_config,
+        ),
+        (BASE_HISTORICAL_FEE, 29_360_127_994)
     );
 }
 
@@ -299,7 +601,7 @@ fn test_rent_extend_fees_with_only_extend() {
                     new_size_bytes: 10 * 1024,
                     old_live_until_ledger: 100_000,
                     new_live_until_ledger: 300_000,
-                }
+                },
             ],
             &fee_config,
             50_000,
@@ -405,7 +707,7 @@ fn test_rent_extend_fees_with_only_size_change() {
                     new_size_bytes: 100_000,
                     old_live_until_ledger: 100_000,
                     new_live_until_ledger: 100_000,
-                }
+                },
             ],
             &fee_config,
             25_000,
@@ -479,7 +781,7 @@ fn test_rent_extend_with_size_change_and_extend() {
                     new_size_bytes: 100_000,
                     old_live_until_ledger: 100_000,
                     new_live_until_ledger: 300_000,
-                }
+                },
             ],
             &fee_config,
             25_000,
