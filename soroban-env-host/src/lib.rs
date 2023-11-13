@@ -18,7 +18,7 @@
 //!   - The [storage] module which is responsible for providing an interface
 //!     between contracts and their durable storage.
 //!
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
 macro_rules! tracy_span {
     () => {
