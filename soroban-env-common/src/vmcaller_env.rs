@@ -178,16 +178,9 @@ macro_rules! impl_checkedval_with_val_and_unexpectedtype {
                 if Val::from(*self).is_good() {
                     Ok(())
                 } else {
-                    // If we get an unmarshal failure on the wasmi dispatch path
-                    // (which we're attempting to emulate here) we return a
-                    // BadSignature trap code which turns into ScErrorType::WasmVM
-                    // ScErrorCode::UnexpectedType. We could emulate that _exactly_
-                    // at the risk of confusing people who are not expecting to see
-                    // "WasmVM" discussed when not-calling the VM. Instead we return
-                    // ScErrorType::Value, ScErrorCode::UnexpectedType.
                     Err(e.error_from_error_val(crate::Error::from_type_and_code(
                         crate::xdr::ScErrorType::Value,
-                        crate::xdr::ScErrorCode::UnexpectedType,
+                        crate::xdr::ScErrorCode::InvalidInput,
                     )))
                 }
             }

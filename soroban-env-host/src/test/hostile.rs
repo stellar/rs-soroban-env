@@ -122,6 +122,13 @@ fn hostile_objs_traps() -> Result<(), HostError> {
     Ok(())
 }
 
+fn assert_err_value_invalid_input(res: Result<Val, HostError>) {
+    assert!(HostError::result_matches_err(
+        res,
+        Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput),
+    ));
+}
+
 #[test]
 fn hostile_forged_objects_trap() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
@@ -147,10 +154,7 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
         Symbol::try_from_small_str("forgeref")?,
         forged_val_to_forge_call_args(&host, absolute_vec.to_val())?,
     );
-    assert!(HostError::result_matches_err(
-        res.clone(),
-        (ScErrorType::Context, ScErrorCode::InvalidInput)
-    ));
+    assert_err_value_invalid_input(res);
 
     // Here we just pick a big handle number -- but with a zero bit set, so it's
     // a relative handle -- to poke around "random object space" to see if we
@@ -162,10 +166,7 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
         Symbol::try_from_small_str("forgeref")?,
         forged_val_to_forge_call_args(&host, big_vec_ref.to_val())?,
     );
-    assert!(HostError::result_matches_err(
-        res.clone(),
-        (ScErrorType::Context, ScErrorCode::InvalidInput)
-    ));
+    assert_err_value_invalid_input(res);
 
     // Here we call a function that tries to forge the type of an object
     // reference and call a method on it. This fails in the relative-to-absolute
@@ -175,10 +176,7 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
         Symbol::try_from_small_str("forgety1")?,
         host.vec_new_from_slice(&[absolute_vec.to_val()])?,
     );
-    assert!(HostError::result_matches_err(
-        res.clone(),
-        (ScErrorType::Object, ScErrorCode::UnexpectedType)
-    ));
+    assert_err_value_invalid_input(res);
 
     // Here we call a function that tries to forge the type of an object
     // reference and just pass it as an _argument_ to another function. This
@@ -188,10 +186,7 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
         Symbol::try_from_small_str("forgety2")?,
         host.vec_new_from_slice(&[absolute_vec.to_val()])?,
     );
-    assert!(HostError::result_matches_err(
-        res.clone(),
-        (ScErrorType::Object, ScErrorCode::UnexpectedType)
-    ));
+    assert_err_value_invalid_input(res);
 
     // Here we call a function that passes an argument to a host function
     // with a bad val tag. This fails during argument unmarshalling in
@@ -201,10 +196,7 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
         Symbol::try_from_small_str("badtag")?,
         host.vec_new_from_slice(&[absolute_vec.to_val()])?,
     );
-    assert!(HostError::result_matches_err(
-        res.clone(),
-        (ScErrorType::WasmVm, ScErrorCode::UnexpectedType)
-    ));
+    assert_err_value_invalid_input(res);
 
     Ok(())
 }
@@ -277,12 +269,7 @@ fn guest_val_integrity_errors() {
                 host.vec_new_from_slice(&[vec.to_val(), lo, hi]).unwrap(),
             )
         };
-        assert!(res.is_err());
-        let he: HostError = res.err().unwrap();
-        assert!(
-            he.error.is_code(ScErrorCode::UnexpectedType)
-                || he.error.is_code(ScErrorCode::InvalidInput)
-        );
+        assert_err_value_invalid_input(res);
     }
 
     let host = Host::test_host_with_recording_footprint();
@@ -306,12 +293,7 @@ fn local_val_integrity_errors() {
             // pass the bad value as a polymorphic Val argument to vec_new_from_slice
             host.vec_new_from_slice(&[badval]).map(|x| x.to_val())
         };
-        assert!(res.is_err());
-        let he: HostError = res.err().unwrap();
-        assert!(
-            he.error.is_code(ScErrorCode::UnexpectedType)
-                || he.error.is_code(ScErrorCode::InvalidInput)
-        );
+        assert_err_value_invalid_input(res);
     }
 
     let host = Host::default();

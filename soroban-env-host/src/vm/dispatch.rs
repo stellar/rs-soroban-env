@@ -1,5 +1,8 @@
 use super::FuelRefillable;
-use crate::{xdr::ContractCostType, EnvBase, Host, HostError, VmCaller, VmCallerEnv};
+use crate::{
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
+    EnvBase, Host, HostError, VmCaller, VmCallerEnv,
+};
 use crate::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
     I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
@@ -19,7 +22,9 @@ pub(crate) trait RelativeObjectConversion: WasmiMarshal {
         Ok(self)
     }
     fn try_marshal_from_relative_value(v: wasmi::Value, host: &Host) -> Result<Self, Trap> {
-        let val = Self::try_marshal_from_value(v).ok_or(BadSignature)?;
+        let val = Self::try_marshal_from_value(v).ok_or(Trap::from(HostError::from(
+            Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput),
+        )))?;
         Ok(val.relative_to_absolute(host)?)
     }
     fn marshal_relative_from_self(self, host: &Host) -> Result<wasmi::Value, Trap> {

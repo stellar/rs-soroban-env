@@ -266,15 +266,15 @@ impl Host {
                     // done the translation (eg. in native testing mode), so for
                     // symmetry sake we will return the same error here.
                     Some(_) => Err(self.err(
-                        ScErrorType::Object,
-                        ScErrorCode::UnexpectedType,
+                        ScErrorType::Value,
+                        ScErrorCode::InvalidInput,
                         "relative and absolute object types differ",
                         &[],
                     )),
                     // User is referring to something outside the bounds of
                     // their relative table, erroneously.
                     None => Err(self.err(
-                        ScErrorType::Context,
+                        ScErrorType::Value,
                         ScErrorCode::InvalidInput,
                         "unknown relative object reference",
                         &[Val::from_u32(handle).to_val()],
@@ -284,7 +284,7 @@ impl Host {
                 // This also gets "invalid input" because it came from the user
                 // VM: they tried to forge an absolute.
                 Err(self.err(
-                    ScErrorType::Context,
+                    ScErrorType::Value,
                     ScErrorCode::InvalidInput,
                     "relative_to_absolute given an absolute reference",
                     &[Val::from_u32(handle).to_val()],
