@@ -1,6 +1,5 @@
 use crate::budget::AsBudget;
 use crate::builtin_contracts::base_types::Address;
-use crate::builtin_contracts::testutils::ContractTypeVec;
 use crate::{Host, HostError, DEFAULT_HOST_DEPTH_LIMIT};
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal, Val};
