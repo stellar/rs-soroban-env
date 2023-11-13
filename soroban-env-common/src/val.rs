@@ -412,7 +412,12 @@ pub trait WasmiMarshal: Sized {
 impl WasmiMarshal for Val {
     fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
         if let wasmi::Value::I64(i) = v {
-            Some(Val::from_payload(i as u64))
+            let v = Val::from_payload(i as u64);
+            if v.is_good() {
+                Some(v)
+            } else {
+                None
+            }
         } else {
             None
         }

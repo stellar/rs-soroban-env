@@ -387,20 +387,15 @@ impl Host {
     }
 
     pub(crate) fn check_val_integrity(&self, val: Val) -> Result<(), HostError> {
-        // Technically Tag::Bad is the only one that can occur here -- the other
-        // 3 are mapped to it -- but we check for them just in case.
-        if let Tag::Bad
-        | Tag::SmallCodeUpperBound
-        | Tag::ObjectCodeLowerBound
-        | Tag::ObjectCodeUpperBound = val.get_tag()
-        {
-            Err(self.err(
+        if !val.is_good() {
+            return Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
-                "bad value tag",
-                &[val],
-            ))
-        } else if let Ok(obj) = Object::try_from(val) {
+                "bad value",
+                &[],
+            ));
+        }
+        if let Ok(obj) = Object::try_from(val) {
             self.check_obj_integrity(obj)
         } else {
             Ok(())
