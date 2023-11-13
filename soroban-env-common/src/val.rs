@@ -697,6 +697,11 @@ impl Val {
     }
 
     #[inline(always)]
+    pub(crate) const fn has_body(self, body: u64) -> bool {
+        self.get_body() == body
+    }
+
+    #[inline(always)]
     pub(crate) const fn get_signed_body(self) -> i64 {
         (self.0 as i64) >> TAG_BITS
     }
