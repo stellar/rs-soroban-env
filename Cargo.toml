@@ -24,7 +24,6 @@ soroban-env-guest = { version = "20.0.0-rc2", path = "soroban-env-guest" }
 soroban-env-host = { version = "20.0.0-rc2", path = "soroban-env-host" }
 soroban-env-macros = { version = "20.0.0-rc2", path = "soroban-env-macros" }
 soroban-builtin-sdk-macros = { version = "20.0.0-rc2", path = "soroban-builtin-sdk-macros" }
-stellar-strkey = { version = "0.0.8" }
 
 [workspace.dependencies.stellar-xdr]
 version = "20.0.0-rc1"
