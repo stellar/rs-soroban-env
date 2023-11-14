@@ -361,8 +361,46 @@ impl Host {
 
         let res = f();
         let mut res = if let Ok(v) = res {
+            // If a contract function happens to have signature Result<...,
+            // Code> its Wasm ABI encoding will be ambiguous: if it exits with
+            // Err(Code) it'll wind up exiting the Wasm VM "successfully" with a
+            // Val that's of type Error, we'll get Ok(Error) here. To allow this
+            // to work and avoid losing errors, we define _any_ successful
+            // return of Ok(Error) as "a contract failure"; contracts aren't
+            // allowed to return Ok(Error) and have it considered actually-ok.
+            //
+            // (If we were called from try_call, it will actually turn this
+            // Err(ScErrorType::Contract) back into Ok(ScErrorType::Contract)
+            // since that is a "recoverable" type of error.)
             if let Ok(err) = Error::try_from(v) {
-                Err(self.error(err, "escalating Ok(Error) frame-exit to Err(Error)", &[]))
+                // Unfortunately there are still two sub-cases to consider. One
+                // is when a contract returns Ok(Error) with
+                // ScErrorType::Contract, which is allowed and legitimate and
+                // "how a contract would signal a Result::Err(Code) as described
+                // above". In this (good) case we propagate the Error they
+                // provided, just switching it from Ok(Error) to Err(Error)
+                // indicating that the contract "failed" with this Error.
+                //
+                // The second (bad) case is when the contract returns Ok(Error)
+                // with a non-ScErrorType::Contract. This might be some kind of
+                // mistake on their part but it might also be an attempt at
+                // spoofing error reporting, by claiming some subsystem of the
+                // host failed when it really didn't. In particular if a
+                // contract wants to forcibly fail a caller that did `try_call`,
+                // the contract could spoof-return an unrecoverable Error code
+                // like InternalError or BudgetExceeded. We want to deny all
+                // such cases, so we just define them as illegal returns, and
+                // report them all as a specific error type of and description
+                // our own choosing: not a contract's own logic failing, but a
+                // contract failing to live up to a postcondition we're
+                // enforcing of "never returning this sort of error code".
+                if err.is_type(ScErrorType::Contract) {
+                    Err(self.error(err, "escalating Ok(ScErrorType::Contract) frame-exit to Err", &[]))
+                } else {
+                    Err(self.err(ScErrorType::Context, ScErrorCode::InvalidAction,
+                        "frame-exit with Ok(Error) carrying a non-ScErrorType::Contract Error",
+                        &[err.to_val()]))
+                }
             } else {
                 Ok(v)
             }
