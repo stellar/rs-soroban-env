@@ -5,7 +5,7 @@ use soroban_env_common::{EnvBase, U32Val};
 /// crypto tests
 #[test]
 fn sha256_test() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj0 = host.test_bin_obj(&[1])?;
     let hash_obj = host.compute_hash_sha256(obj0)?;
 
@@ -30,7 +30,7 @@ fn sha256_test() -> Result<(), HostError> {
 fn keccak256_test() -> Result<(), HostError> {
     // From https://paulmillr.com/noble/
 
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj0 = host.test_bin_obj(b"test vector for soroban")?;
     let hash_obj = host.compute_hash_keccak256(obj0)?;
 
@@ -48,7 +48,7 @@ fn keccak256_test() -> Result<(), HostError> {
 
 #[test]
 fn ed25519_verify_test() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
 
     // From https://datatracker.ietf.org/doc/html/rfc8032#section-7.1
 
@@ -85,7 +85,7 @@ fn ed25519_verify_test() -> Result<(), HostError> {
 
 #[test]
 fn recover_ecdsa_secp256k1_key_test() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
 
     // From ethereum: https://github.com/ethereum/go-ethereum/blob/master/crypto/secp256k1/secp256_test.go
 

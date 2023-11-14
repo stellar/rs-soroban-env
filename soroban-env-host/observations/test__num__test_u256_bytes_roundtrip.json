@@ -1,0 +1,14 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call bytes_new_from_slice(32)": "",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:2789, mem:112, objs:-/1@27a50b84",
+  "   3 call u256_val_from_be_bytes(Bytes(obj#1))": "",
+  "   4 call obj_from_u256_pieces(0, 4353239472894, 0, 6576786237846)": "cpu:3151",
+  "   5 ret obj_from_u256_pieces -> Ok(U256(obj#3))": "cpu:4292, mem:176, objs:-/2@77e55946",
+  "   6 ret u256_val_from_be_bytes -> Ok(U256(obj#3))": "",
+  "   7 call u256_val_to_be_bytes(U256(obj#3))": "",
+  "   8 ret u256_val_to_be_bytes -> Ok(Bytes(obj#5))": "cpu:7189, mem:288, objs:-/3@b9742ad9",
+  "   9 call bytes_copy_to_slice(Bytes(obj#5), U32(0), 32)": "",
+  "  10 ret bytes_copy_to_slice -> Ok(())": "cpu:7551",
+  "  11 end": "cpu:7551, mem:288, prngs:-/-, objs:-/3@b9742ad9, vmem:-, evt:-, store:-/-"
+}

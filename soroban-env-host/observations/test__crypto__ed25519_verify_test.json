@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call verify_sig_ed25519(Bytes(obj#1), Bytes(obj#3), Bytes(obj#5))": "cpu:8367, mem:337, objs:-/3@4da7001e",
+  "   2 ret verify_sig_ed25519 -> Ok(Void)": "cpu:411431",
+  "   3 call verify_sig_ed25519(Bytes(obj#1), Bytes(obj#7), Bytes(obj#5))": "cpu:414216, mem:418, objs:-/4@7c4f57c7",
+  "   4 ret verify_sig_ed25519 -> Err(Error(Crypto, InvalidInput))": "cpu:817280",
+  "   5 end": "cpu:817280, mem:418, prngs:-/-, objs:-/4@7c4f57c7, vmem:-, evt:-, store:-/-"
+}

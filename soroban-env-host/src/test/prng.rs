@@ -58,7 +58,7 @@ impl ContractFunctionSet for PRNGUsingTest {
 
 #[test]
 fn prng_test() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
 
     host.enable_debug()?;
     host.set_base_prng_seed([0; 32])?;

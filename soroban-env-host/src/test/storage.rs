@@ -313,21 +313,21 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
 
 #[test]
 fn test_persistent_storage() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
     test_storage(&host, contract_id, "persistent");
 }
 
 #[test]
 fn test_temp_storage() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
     test_storage(&host, contract_id, "temporary");
 }
 
 #[test]
 fn test_instance_storage() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
     test_storage(&host, contract_id, "instance");
 }
@@ -335,7 +335,7 @@ fn test_instance_storage() {
 #[test]
 fn test_storage_mix() {
     // This makes sure the keyspaces are not mixed between storage types.
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.with_budget(|b| {
         b.reset_unlimited().unwrap();
         Ok(())
@@ -352,7 +352,7 @@ fn test_storage_mix() {
     expected = "called `Result::unwrap()` on an `Err` value: Error(Budget, ExceededLimit)"
 )]
 fn test_large_persistent_value() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
     let key_1 = Symbol::try_from_small_str("key_1").unwrap();
 
@@ -360,7 +360,7 @@ fn test_large_persistent_value() {
     let _ = host.try_call(
         contract_id,
         storage_fn_name(&host, "put", "persistent"),
-        test_vec![&host, key_1, bytes].into(),
+        test_vec![&*host, key_1, bytes].into(),
     );
 }
 
@@ -369,7 +369,7 @@ fn test_large_persistent_value() {
     expected = "called `Result::unwrap()` on an `Err` value: Error(Budget, ExceededLimit)"
 )]
 fn test_large_instance_value() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
     let key_1 = Symbol::try_from_small_str("key_1").unwrap();
 
@@ -377,7 +377,7 @@ fn test_large_instance_value() {
     let _ = host.try_call(
         contract_id,
         storage_fn_name(&host, "put", "instance"),
-        test_vec![&host, key_1, bytes].into(),
+        test_vec![&*host, key_1, bytes].into(),
     );
 }
 
@@ -386,14 +386,14 @@ fn test_large_instance_value() {
     expected = "called `Result::unwrap()` on an `Err` value: Error(Budget, ExceededLimit)"
 )]
 fn test_large_persistent_key() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
 
     let key = vec![0u8; 100000000];
     let _ = host.try_call(
         contract_id,
         storage_fn_name(&host, "put", "persistent"),
-        test_vec![&host, key, 1_u64].into(),
+        test_vec![&*host, key, 1_u64].into(),
     );
 }
 
@@ -402,13 +402,13 @@ fn test_large_persistent_key() {
     expected = "called `Result::unwrap()` on an `Err` value: Error(Budget, ExceededLimit)"
 )]
 fn test_large_instance_key() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
 
     let key = vec![0u8; 100000000];
     let _ = host.try_call(
         contract_id,
         storage_fn_name(&host, "put", "instance"),
-        test_vec![&host, key, 1_u64].into(),
+        test_vec![&*host, key, 1_u64].into(),
     );
 }

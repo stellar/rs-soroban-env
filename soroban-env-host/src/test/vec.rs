@@ -340,7 +340,7 @@ fn vec_build_bad_element_integrity() -> Result<(), HostError> {
 
 #[test]
 fn linear_memory_operations() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY);
 
     // Tests vec_unpack_to_linear_memory works when given correct input
@@ -348,7 +348,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
         let args = host.vec_new()?;
         let res = host.call(
             id_obj,
-            Symbol::try_from_val(&host, &"vec_mem_ok").unwrap(),
+            Symbol::try_from_val(&*host, &"vec_mem_ok").unwrap(),
             args,
         );
 
@@ -360,7 +360,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
         let args = host.vec_new()?;
         let res = host.call(
             id_obj,
-            Symbol::try_from_val(&host, &"vec_mem_bad").unwrap(),
+            Symbol::try_from_val(&*host, &"vec_mem_bad").unwrap(),
             args,
         );
         assert!(res.is_err());

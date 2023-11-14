@@ -1,0 +1,5 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call symbol_new_from_slice(1)": "",
+  "   2 end": "cpu:250, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-"
+}

@@ -7,7 +7,10 @@ use crate::{
 use soroban_env_common::{Env, Symbol};
 use soroban_test_wasms::COMPLEX;
 
-use super::util::{generate_account_id, generate_bytes_array};
+use super::{
+    observe::ObservedHost,
+    util::{generate_account_id, generate_bytes_array},
+};
 
 #[test]
 fn run_complex() -> Result<(), HostError> {
@@ -22,7 +25,10 @@ fn run_complex() -> Result<(), HostError> {
         max_entry_ttl: 6312000,
     };
 
-    let host = Host::test_host_with_recording_footprint();
+    let host = ObservedHost::new(
+        "soroban_env_host::test::complex::run_complex_1",
+        Host::test_host_with_recording_footprint(),
+    );
     let account_id = generate_account_id(&host);
     let salt = generate_bytes_array(&host);
 
@@ -39,7 +45,9 @@ fn run_complex() -> Result<(), HostError> {
             Symbol::try_from_small_str("go")?,
             host.add_host_object(HostVec::new())?,
         )?;
-        let (store, _) = host.try_finish().unwrap();
+        let realhost: Host = (*host).clone();
+        drop(host);
+        let (store, _) = realhost.try_finish().unwrap();
         store.footprint
     };
 
@@ -49,7 +57,10 @@ fn run_complex() -> Result<(), HostError> {
             Footprint::default(),
             MeteredOrdMap::default(),
         );
-        let host = Host::with_storage_and_budget(store, Budget::default());
+        let host = ObservedHost::new(
+            "soroban_env_host::test::complex::run_complex_2",
+            Host::with_storage_and_budget(store, Budget::default()),
+        );
         host.set_ledger_info(info)?;
         host.setup_storage_footprint(foot)?;
 

@@ -1,0 +1,16 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call map_key_by_pos(Map(obj#1), U32(0))": "cpu:3047, mem:128, objs:-/1@e6201d48",
+  "   2 ret map_key_by_pos -> Ok(U32(1))": "cpu:3408",
+  "   3 call map_key_by_pos(Map(obj#1), U32(1))": "",
+  "   4 ret map_key_by_pos -> Ok(U32(4))": "cpu:3769",
+  "   5 call map_key_by_pos(Map(obj#1), U32(2))": "",
+  "   6 ret map_key_by_pos -> Err(Error(Object, IndexBounds))": "cpu:4130",
+  "   7 call map_val_by_pos(Map(obj#1), U32(0))": "",
+  "   8 ret map_val_by_pos -> Ok(U32(2))": "cpu:4491",
+  "   9 call map_val_by_pos(Map(obj#1), U32(1))": "",
+  "  10 ret map_val_by_pos -> Ok(U32(8))": "cpu:4852",
+  "  11 call map_val_by_pos(Map(obj#1), U32(2))": "",
+  "  12 ret map_val_by_pos -> Err(Error(Object, IndexBounds))": "cpu:5213",
+  "  13 end": "cpu:5213, mem:128, prngs:-/-, objs:-/1@e6201d48, vmem:-, evt:-, store:-/-"
+}

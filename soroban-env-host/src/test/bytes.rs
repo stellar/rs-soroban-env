@@ -12,7 +12,7 @@ use soroban_test_wasms::LINEAR_MEMORY;
 
 #[test]
 fn bytes_suite_of_tests() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     // new and push
     let mut obj = host.bytes_new()?;
     for i in 0..32 {
@@ -64,7 +64,7 @@ fn bytes_suite_of_tests() -> Result<(), HostError> {
 
 #[test]
 fn bytes_put_out_of_bound() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.bytes_new()?;
     let res = host.bytes_put(obj, 0u32.into(), 1u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -74,7 +74,7 @@ fn bytes_put_out_of_bound() -> Result<(), HostError> {
 
 #[test]
 fn bytes_slice_start_greater_than_end() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 2_u32.into(), 1_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::InvalidInput);
@@ -84,7 +84,7 @@ fn bytes_slice_start_greater_than_end() -> Result<(), HostError> {
 
 #[test]
 fn bytes_slice_start_equal_len() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 4_u32.into(), 4_u32.into())?;
     assert_eq!(host.obj_cmp(res.into(), host.bytes_new()?.into())?, 0);
@@ -93,7 +93,7 @@ fn bytes_slice_start_equal_len() -> Result<(), HostError> {
 
 #[test]
 fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 5_u32.into(), 10_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -103,12 +103,12 @@ fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
 
 #[test]
 fn bytes_xdr_roundtrip() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let roundtrip = |v: ScVal| -> Result<(), HostError> {
         let rv: Val = host.to_host_val(&v)?;
         let bo = host.serialize_to_bytes(rv)?;
         let rv_back = host.deserialize_from_bytes(bo)?;
-        assert_eq!(host.compare(&rv, &rv_back)?, core::cmp::Ordering::Equal);
+        assert_eq!((*host).compare(&rv, &rv_back)?, core::cmp::Ordering::Equal);
         Ok(())
     };
     let deser_fails_bytes = |bytes: Vec<u8>| -> Result<(), HostError> {
@@ -166,7 +166,7 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 fn linear_memory_operations() -> Result<(), HostError> {
     use soroban_env_common::BytesObject;
 
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY);
     // tests bytes_new_from_linear_memory
     {
@@ -180,7 +180,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
             .try_into()?;
         let obj_ref: BytesObject = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
         assert_eq!(
-            host.compare(&obj.to_val(), &obj_ref.to_val())?,
+            (*host).compare(&obj.to_val(), &obj_ref.to_val())?,
             core::cmp::Ordering::Equal
         );
     }
@@ -194,7 +194,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
             .try_into()?;
         let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
         assert_eq!(
-            host.compare(&obj.to_val(), &obj_ref.to_val())?,
+            (*host).compare(&obj.to_val(), &obj_ref.to_val())?,
             core::cmp::Ordering::Equal
         );
     }

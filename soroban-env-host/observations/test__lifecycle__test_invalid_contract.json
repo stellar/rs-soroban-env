@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/d8a09d57, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 push UploadContractWasm:()": "cpu:6646, mem:576",
+  "   2 pop UploadContractWasm: -> Err(Error(WasmVm, InvalidAction))": "cpu:995512, mem:132989",
+  "   3 end": "cpu:995512, mem:132989, prngs:-/d8a09d57, objs:-/-, vmem:-, evt:-, store:-/-"
+}
