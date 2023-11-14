@@ -405,11 +405,7 @@ impl TryFromVal<Host, std::vec::Vec<Val>> for Vec {
     type Error = HostError;
 
     fn try_from_val(env: &Host, vals: &std::vec::Vec<Val>) -> Result<Self, Self::Error> {
-        let mut v = Vec::new(env)?;
-        for rv in vals {
-            v.push_val(*rv)?
-        }
-        Ok(v)
+        Vec::from_slice(env, &vals)
     }
 }
 

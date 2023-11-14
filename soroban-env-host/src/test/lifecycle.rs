@@ -1,8 +1,6 @@
 use crate::auth::RecordedAuthPayload;
-use crate::builtin_contracts::testutils::ContractTypeVec;
 use crate::{
     budget::{AsBudget, Budget},
-    host_vec,
     storage::{AccessType, Footprint, Storage, StorageMap},
     xdr::{
         self, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
@@ -273,7 +271,7 @@ fn test_contract_wasm_update() {
     let non_existent_wasm_res = host.call(
         contract_addr_obj,
         Symbol::try_from_small_str("update").unwrap(),
-        host_vec![&host, &non_existent_contract_wasm, &false].into(),
+        test_vec![&host, &non_existent_contract_wasm, &false].into(),
     );
     assert!(non_existent_wasm_res.is_err());
     let non_existent_wasm_err = non_existent_wasm_res.err().unwrap().error;
@@ -294,7 +292,7 @@ fn test_contract_wasm_update() {
     let failed_call_res = host.call(
         contract_addr_obj,
         Symbol::try_from_small_str("update").unwrap(),
-        host_vec![&host, &updated_wasm_hash_obj, &true].into(),
+        test_vec![&host, &updated_wasm_hash_obj, &true].into(),
     );
     assert!(failed_call_res.is_err());
     let failed_call_err = failed_call_res.err().unwrap().error;
@@ -318,7 +316,7 @@ fn test_contract_wasm_update() {
         .call(
             contract_addr_obj,
             Symbol::try_from_small_str("update").unwrap(),
-            host_vec![&host, &updated_wasm_hash_obj, &false].into(),
+            test_vec![&host, &updated_wasm_hash_obj, &false].into(),
         )
         .unwrap()
         .try_into_val(&host)
@@ -402,7 +400,7 @@ fn test_contract_wasm_update() {
         .call(
             contract_addr_obj,
             Symbol::try_from_small_str("add").unwrap(),
-            host_vec![&host, 10_i32, 20_i32].into(),
+            test_vec![&host, 10_i32, 20_i32].into(),
         )
         .unwrap()
         .try_into_val(&host)
@@ -430,7 +428,7 @@ fn test_contract_wasm_update_with_try_call() {
         .call(
             contract_addr_obj,
             Symbol::try_from_small_str("try_upd").unwrap(),
-            host_vec![
+            test_vec![
                 &host,
                 &updated_contract_addr_obj,
                 &updated_wasm_hash_obj,
@@ -460,7 +458,7 @@ fn test_contract_wasm_update_with_try_call() {
         .call(
             contract_addr_obj,
             Symbol::try_from_small_str("try_upd").unwrap(),
-            host_vec![
+            test_vec![
                 &host,
                 &updated_contract_addr_obj,
                 &updated_wasm_hash_obj,
@@ -490,7 +488,7 @@ fn test_contract_wasm_update_with_try_call() {
         .call(
             updated_contract_addr_obj,
             Symbol::try_from_small_str("add").unwrap(),
-            host_vec![&host, 10_i32, 20_i32].into(),
+            test_vec![&host, 10_i32, 20_i32].into(),
         )
         .unwrap()
         .try_into_val(&host)

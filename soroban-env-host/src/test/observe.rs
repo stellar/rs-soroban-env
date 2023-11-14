@@ -524,28 +524,6 @@ impl Observation {
     }
 }
 
-#[macro_export]
-macro_rules! function_name {
-    () => {{
-        // This is the canonical hack used to get a function's name,
-        // copied from the stdext crate (and stackoverflow).
-        fn f() {}
-        fn type_name_of<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
-        }
-        let name = type_name_of(f);
-        // `3` is the length of the `::f`.
-        &name[..name.len() - 3]
-    }};
-}
-
-#[macro_export]
-macro_rules! observe_host {
-    ($host:expr) => {
-        $crate::test::observe::ObservedHost::new($crate::function_name!(), $host)
-    };
-}
-
 pub(crate) struct ObservedHost {
     testname: &'static str,
     old_obs: Rc<RefCell<Observations>>,
