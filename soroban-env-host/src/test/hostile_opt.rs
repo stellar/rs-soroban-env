@@ -1,7 +1,7 @@
 use crate::budget::AsBudget;
 use crate::builtin_contracts::base_types::Address;
-use crate::{Host, HostError, DEFAULT_HOST_DEPTH_LIMIT};
 use crate::test::observe::ObservedHost;
+use crate::{Host, HostError, DEFAULT_HOST_DEPTH_LIMIT};
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal, Val};
 use soroban_test_wasms::RECURSIVE_ACCOUNT_CONTRACT;
@@ -98,7 +98,11 @@ fn test_deep_stack_call_succeeds_near_limit() {
     // The serialized object has depth of `serialization_depth + 1`,
     // thus the maximum serializable value needs
     // `serialization_depth == DEFAULT_HOST_DEPTH_LIMIT - 1`.
-    let res = run_deep_host_stack_test(DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_HOST_DEPTH_LIMIT - 1, function_name!());
+    let res = run_deep_host_stack_test(
+        DEFAULT_HOST_DEPTH_LIMIT,
+        DEFAULT_HOST_DEPTH_LIMIT - 1,
+        function_name!(),
+    );
     assert!(res.is_ok());
 }
 
