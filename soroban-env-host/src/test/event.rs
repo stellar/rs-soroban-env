@@ -9,7 +9,7 @@ use crate::{
         ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
         ExtensionPoint, Hash, ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,
     },
-    ContractFunctionSet, Env, Error, Host, HostError, Symbol, SymbolSmall, Val,
+    ContractFunctionSet, Env, Error, Host, HostError, Symbol, SymbolSmall, Val, VecObject,
 };
 use expect_test::expect;
 use more_asserts::assert_le;
@@ -234,6 +234,19 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_
     assert_ne!(budget.get_shadow_cpu_insns_consumed()?, 0);
     assert_ne!(budget.get_shadow_mem_bytes_consumed()?, 0);
     assert_eq!(evts.0.len(), 0);
+    Ok(())
+}
+
+#[test]
+fn nonexistent_topic_obj_handle() -> Result<(), HostError> {
+    let host = Host::test_host();
+    let data = Val::from_void().to_val();
+    let topics = unsafe { VecObject::from_handle(123) }; // non-existent handle
+    let res = host.contract_event(topics, data);
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Object, ScErrorCode::MissingValue)
+    ));
     Ok(())
 }
 
