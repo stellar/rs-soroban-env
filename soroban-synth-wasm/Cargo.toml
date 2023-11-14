@@ -22,5 +22,5 @@ next = ["soroban-env-common/next"]
 testutils = ["soroban-env-common/testutils"]
 
 [dev-dependencies]
-expect-test = "1.4.0"
-wasmprinter = "0.2.41"
+expect-test = "1.4.1"
+wasmprinter = "0.2.72"

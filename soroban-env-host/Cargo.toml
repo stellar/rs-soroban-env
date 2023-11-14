@@ -23,9 +23,9 @@ ed25519-dalek = {version = "2.0.0", features = ["rand_core"] }
 rand = "0.8.5"
 # NB: this must match the same rand_chacha version used by ed25519-dalek above
 rand_chacha = "0.3.1"
-num-traits = "0.2.15"
+num-traits = "0.2.17"
 num-integer = "0.1.45"
-num-derive = "0.4.0"
+num-derive = "0.4.1"
 backtrace = { version = "0.3", optional = true }
 k256 = {version = "0.13.1", features=["ecdsa", "arithmetic"]}
 # NB: getrandom is a transitive dependency of k256 which we're not using directly
@@ -42,18 +42,18 @@ tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], d
 
 [dev-dependencies]
 hex = "0.4.3"
-itertools = "0.10.3"
-tabwriter = "1.2.1"
+itertools = "0.11.0"
+tabwriter = "1.3.0"
 thousands = "0.2.0"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
 soroban-bench-utils = { package = "soroban-bench-utils", path = "../soroban-bench-utils" }
 bytes-lit = "0.0.5"
-textplots = "0.8.0"
-wasmprinter = "0.2.41"
-expect-test = "1.4.0"
+textplots = "0.8.4"
+wasmprinter = "0.2.72"
+expect-test = "1.4.1"
 more-asserts = "0.3.1"
-linregress = "0.5.1"
+linregress = "0.5.3"
 pretty_assertions = "1.4.0"
 backtrace = "0.3"
 serde_json = "1.0.0"
