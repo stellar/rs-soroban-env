@@ -16,9 +16,8 @@ use crate::budget::AsBudget;
 use crate::builtin_contracts::base_types::Address;
 use crate::builtin_contracts::testutils::{
     create_account, generate_signing_key, sign_payload_for_account, signing_key_to_account_id,
-    ContractTypeVec,
 };
-use crate::{host_vec, Host, LedgerInfo};
+use crate::{Host, LedgerInfo};
 use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryFromVal, TryIntoVal};
 
 use crate::builtin_contracts::base_types::Vec as HostVec;
@@ -183,7 +182,7 @@ impl AuthTest {
         self.test_enforcing(
             root.contract_address.clone(),
             Symbol::try_from_small_str("tree_fn").unwrap(),
-            host_vec![&self.host, addresses, self.convert_setup_tree(&root)],
+            test_vec![&self.host, addresses, self.convert_setup_tree(&root)],
             sign_payloads,
             success,
         );
@@ -203,7 +202,7 @@ impl AuthTest {
         self.test_enforcing(
             root.contract_address.clone(),
             Symbol::try_from_small_str("stree_fn").unwrap(),
-            host_vec![
+            test_vec![
                 &self.host,
                 self.get_addresses(),
                 self.convert_setup_tree(&root)
@@ -218,7 +217,7 @@ impl AuthTest {
             .call(
                 root.contract_address.clone().into(),
                 Symbol::try_from_small_str("store").unwrap(),
-                host_vec![&self.host, self.get_addresses()].into(),
+                test_vec![&self.host, self.get_addresses()].into(),
             )
             .unwrap();
     }
@@ -256,7 +255,7 @@ impl AuthTest {
                         signature_expiration_ledger: 1000,
                     });
                 let payload = self.host.metered_hash_xdr(&payload_preimage).unwrap();
-                let signature_args = host_vec![
+                let signature_args = test_vec![
                     &self.host,
                     sign_payload_for_account(&self.host, &self.keys[address_id], &payload)
                 ];
@@ -321,7 +320,7 @@ impl AuthTest {
         self.run_recording(
             &root.contract_address,
             Symbol::try_from_small_str("tree_fn").unwrap(),
-            host_vec![&self.host, addresses, tree],
+            test_vec![&self.host, addresses, tree],
             disable_non_root_auth,
         )
     }
@@ -337,7 +336,7 @@ impl AuthTest {
         self.run_recording(
             &root.contract_address,
             Symbol::try_from_small_str("stree_fn").unwrap(),
-            host_vec![&self.host, addresses, tree],
+            test_vec![&self.host, addresses, tree],
             disable_non_root_auth,
         )
     }
@@ -352,7 +351,7 @@ impl AuthTest {
         self.run_recording(
             &root.contract_address,
             Symbol::try_from_small_str("tree_fn").unwrap(),
-            host_vec![&self.host, addresses, tree],
+            test_vec![&self.host, addresses, tree],
             disable_non_root_auth,
         )
     }
@@ -1155,7 +1154,7 @@ fn test_disable_non_root_recording_auth() {
         .call(
             setup.contract_address.clone().into(),
             Symbol::try_from_small_str("tree_fn").unwrap(),
-            host_vec![&test.host, addresses, tree].into(),
+            test_vec![&test.host, addresses, tree].into(),
         )
         .err()
         .unwrap();
@@ -1169,7 +1168,7 @@ fn test_disable_non_root_recording_auth() {
         .call(
             setup.contract_address.into(),
             Symbol::try_from_small_str("tree_fn").unwrap(),
-            host_vec![&test.host, addresses, tree].into(),
+            test_vec![&test.host, addresses, tree].into(),
         )
         .is_ok());
 }
@@ -1488,7 +1487,7 @@ fn test_multi_address_trees() {
 #[test]
 fn test_out_of_order_auth() {
     let mut test = AuthTest::setup(1, 2);
-    let call_args = host_vec![
+    let call_args = test_vec![
         &test.host,
         test.key_to_address(&test.keys[0]),
         &test.contracts[1]
@@ -1497,7 +1496,7 @@ fn test_out_of_order_auth() {
         test.run_recording(
             &test.contracts[0],
             Symbol::try_from_small_str("order_fn").unwrap(),
-            host_vec![
+            test_vec![
                 &test.host,
                 test.key_to_address(&test.keys[0]),
                 test.contracts[1]
@@ -1515,7 +1514,7 @@ fn test_out_of_order_auth() {
                     Symbol::try_from_small_str("do_auth").unwrap(),
                     test.host
                         .vecobject_to_scval_vec(
-                            host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32]
+                            test_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32]
                                 .into(),
                         )
                         .unwrap(),
@@ -1530,7 +1529,7 @@ fn test_out_of_order_auth() {
                     Symbol::try_from_small_str("order_fn").unwrap(),
                     test.host
                         .vecobject_to_scval_vec(
-                            host_vec![
+                            test_vec![
                                 &test.host,
                                 test.key_to_address(&test.keys[0]),
                                 test.contracts[1]
@@ -1556,7 +1555,7 @@ fn test_out_of_order_auth() {
                 Symbol::try_from_small_str("order_fn").unwrap(),
                 test.host
                     .vecobject_to_scval_vec(
-                        host_vec![
+                        test_vec![
                             &test.host,
                             test.key_to_address(&test.keys[0]),
                             test.contracts[1]
@@ -1571,7 +1570,7 @@ fn test_out_of_order_auth() {
                 Symbol::try_from_small_str("do_auth").unwrap(),
                 test.host
                     .vecobject_to_scval_vec(
-                        host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
+                        test_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
                     )
                     .unwrap(),
                 vec![],
@@ -1590,7 +1589,7 @@ fn test_out_of_order_auth() {
             Symbol::try_from_small_str("order_fn").unwrap(),
             test.host
                 .vecobject_to_scval_vec(
-                    host_vec![
+                    test_vec![
                         &test.host,
                         test.key_to_address(&test.keys[0]),
                         test.contracts[1]
@@ -1603,7 +1602,7 @@ fn test_out_of_order_auth() {
                 Symbol::try_from_small_str("do_auth").unwrap(),
                 test.host
                     .vecobject_to_scval_vec(
-                        host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
+                        test_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
                     )
                     .unwrap(),
                 vec![],
@@ -1648,7 +1647,7 @@ fn test_invoker_subcontract_auth() {
     );
 
     let tree = test.convert_setup_tree(&setup);
-    let args = host_vec![&test.host, tree];
+    let args = test_vec![&test.host, tree];
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
     assert_eq!(
         test.run_recording(&test.contracts[5], fn_name, args.clone(), true),
@@ -1681,7 +1680,7 @@ fn test_invoker_subcontract_with_gaps() {
     test.test_enforcing(
         test.contracts[3].clone(),
         fn_name,
-        host_vec![&test.host, test.convert_setup_tree(&top_gap_setup)],
+        test_vec![&test.host, test.convert_setup_tree(&top_gap_setup)],
         vec![],
         true,
     );
@@ -1701,7 +1700,7 @@ fn test_invoker_subcontract_with_gaps() {
     test.test_enforcing(
         test.contracts[3].clone(),
         fn_name,
-        host_vec![&test.host, test.convert_setup_tree(&mid_gap_setup)],
+        test_vec![&test.host, test.convert_setup_tree(&mid_gap_setup)],
         vec![],
         false,
     );
@@ -1736,7 +1735,7 @@ fn test_invoker_subcontract_auth_without_subcontract_calls() {
     );
 
     let tree = test.convert_setup_tree(&setup);
-    let args = host_vec![&test.host, tree];
+    let args = test_vec![&test.host, tree];
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn_no_call").unwrap();
     assert_eq!(
         test.run_recording(&test.contracts[5], fn_name, args.clone(), true),
@@ -1766,7 +1765,7 @@ fn test_require_auth_within_check_auth() {
         .call(
             test.contracts[0].as_object(),
             Symbol::try_from_small_str("init").unwrap(),
-            host_vec![&test.host, test.contracts[1]].as_object(),
+            test_vec![&test.host, test.contracts[1]].as_object(),
         )
         .unwrap();
     // Classic account is used to authorize calls on behalf of account 1.
@@ -1774,7 +1773,7 @@ fn test_require_auth_within_check_auth() {
         .call(
             test.contracts[1].as_object(),
             Symbol::try_from_small_str("init").unwrap(),
-            host_vec![&test.host, test.key_to_address(&test.keys[0])].as_object(),
+            test_vec![&test.host, test.key_to_address(&test.keys[0])].as_object(),
         )
         .unwrap();
     let network_id: crate::xdr::Hash = test
@@ -1884,7 +1883,7 @@ fn test_require_auth_within_check_auth() {
         .unwrap();
 
     // Only one actual signature is needed (for the classic account).
-    let signature_args = host_vec![
+    let signature_args = test_vec![
         &test.host,
         sign_payload_for_account(&test.host, &test.keys[0], &classic_account_payload_hash)
     ];
@@ -1912,7 +1911,7 @@ fn test_require_auth_within_check_auth() {
         .call(
             auth_contract.as_object(),
             Symbol::try_from_small_str("do_auth").unwrap(),
-            host_vec![&test.host, test.contracts[0], 123_u32].as_object(),
+            test_vec![&test.host, test.contracts[0], 123_u32].as_object(),
         )
         .err()
         .unwrap();
@@ -1941,7 +1940,7 @@ fn test_require_auth_within_check_auth() {
         .call(
             auth_contract.as_object(),
             Symbol::try_from_small_str("do_auth").unwrap(),
-            host_vec![&test.host, test.contracts[0], 123_u32].as_object(),
+            test_vec![&test.host, test.contracts[0], 123_u32].as_object(),
         )
         .unwrap();
     assert_eq!(
@@ -1978,7 +1977,7 @@ fn test_require_auth_for_self_within_check_auth() {
         .call(
             test.contracts[0].as_object(),
             Symbol::try_from_small_str("init").unwrap(),
-            host_vec![&test.host, test.contracts[0]].as_object(),
+            test_vec![&test.host, test.contracts[0]].as_object(),
         )
         .unwrap();
 
@@ -2010,7 +2009,7 @@ fn test_require_auth_for_self_within_check_auth() {
         .call(
             auth_contract.as_object(),
             Symbol::try_from_small_str("do_auth").unwrap(),
-            host_vec![&test.host, test.contracts[0], 123_u32].as_object(),
+            test_vec![&test.host, test.contracts[0], 123_u32].as_object(),
         )
         .err()
         .unwrap();
@@ -2273,7 +2272,7 @@ fn test_same_auth_tree_with_duplicate_addresses() {
         ],
     );
 
-    let addresses = host_vec![
+    let addresses = test_vec![
         &test.host,
         test.key_to_address(&test.keys[0]).to_val(),
         test.key_to_address(&test.keys[1]).to_val(),
@@ -2633,7 +2632,7 @@ fn test_different_auth_trees_with_duplicate_addresses() {
         ],
     );
 
-    let addresses = host_vec![
+    let addresses = test_vec![
         &test.host,
         test.key_to_address(&test.keys[0]).to_val(),
         test.key_to_address(&test.keys[1]).to_val(),
@@ -2926,7 +2925,7 @@ fn test_rollback_with_conditional_custom_account_auth() {
         test.host.call(
             test.contracts[0].clone().into(),
             Symbol::try_from_val(&test.host, &"conditional_auth").unwrap(),
-            host_vec![&test.host, &account, &test.contracts[1]].into(),
+            test_vec![&test.host, &account, &test.contracts[1]].into(),
         )
     };
 
@@ -2951,7 +2950,7 @@ fn test_rollback_with_conditional_custom_account_auth() {
         .call(
             account.clone().into(),
             Symbol::try_from_small_str("allow").unwrap(),
-            host_vec![&test.host].into(),
+            test_vec![&test.host].into(),
         )
         .unwrap();
     assert!(do_call(vec![

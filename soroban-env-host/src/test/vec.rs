@@ -4,7 +4,6 @@ use soroban_env_common::{xdr::ScVal, Compare, Symbol, Tag, TryFromVal, U32Val};
 use soroban_test_wasms::LINEAR_MEMORY;
 
 use crate::{
-    observe_host,
     xdr::{ScErrorCode, ScErrorType},
     Env, Host, HostError, Object, Val,
 };

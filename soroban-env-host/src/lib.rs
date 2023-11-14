@@ -19,25 +19,9 @@
 //!     between contracts and their durable storage.
 //!
 #![recursion_limit = "256"]
-#[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
-macro_rules! tracy_span {
-    () => {
-        tracy_client::span!()
-    };
-    ($name:expr) => {
-        tracy_client::span!($name)
-    };
-}
 
-#[cfg(any(target_family = "wasm", not(feature = "tracy")))]
-macro_rules! tracy_span {
-    () => {
-        ()
-    };
-    ($name:expr) => {
-        ()
-    };
-}
+#[macro_use]
+mod macros;
 
 pub mod budget;
 pub mod events;

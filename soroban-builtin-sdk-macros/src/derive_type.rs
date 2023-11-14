@@ -105,7 +105,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 };
                 let into = quote! {
                     #ident::#case_ident => {
-                        vec.push(&#case_sym?)?;
+                        Ok((#case_sym?,).try_into_val(env)?)
                     }
                 };
                 let sym = quote! {
@@ -121,8 +121,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 };
                 let into = quote! {
                     #ident::#case_ident(x) => {
-                        vec.push(&#case_sym?)?;
-                        vec.push(x)?;
+                        Ok((#case_sym?, crate::Val::try_from_val(env, x)?).try_into_val(env)?)
                     }
                 };
                 let sym = quote! {
@@ -200,11 +199,9 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
 
                 fn try_from_val(env: &crate::Host, val: &#ident) -> Result<soroban_env_common::Val, Self::Error> {
                     use soroban_env_common::TryFromVal;
-                    let mut vec = crate::builtin_contracts::base_types::Vec::new(env)?;
                     match val {
                         #(#intos)*
-                    };
-                    vec.try_into_val(env)
+                    }
                 }
             }
         }
