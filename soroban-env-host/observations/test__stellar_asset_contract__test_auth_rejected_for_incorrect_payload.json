@@ -397,8 +397,8 @@
   " 395 call vec_new_from_slice(4)": "",
   " 396 ret vec_new_from_slice -> Ok(Vec(obj#345))": "cpu:1811259, mem:64239, objs:-/173@8e4d28cb",
   " 397 call contract_event(Vec(obj#345), I128(100))": "",
-  " 398 ret contract_event -> Ok(Void)": "cpu:1815952, mem:64416, objs:-/174@25deed5c, evt:1@60cf893d",
+  " 398 ret contract_event -> Ok(Void)": "cpu:1816060, mem:64416, objs:-/174@25deed5c, evt:1@60cf893d",
   " 399 pop SAC:baaaf5fd:mint -> Ok(Void)": "",
   " 400 ret call -> Ok(Void)": " store:-/5@98aa37ed",
-  " 401 end": "cpu:1815952, mem:64416, prngs:-/d8a09d57, objs:-/174@25deed5c, vmem:-, evt:1@60cf893d, store:-/5@98aa37ed"
+  " 401 end": "cpu:1816060, mem:64416, prngs:-/d8a09d57, objs:-/174@25deed5c, vmem:-, evt:1@60cf893d, store:-/5@98aa37ed"
 }
