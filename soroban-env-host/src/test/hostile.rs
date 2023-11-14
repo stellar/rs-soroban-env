@@ -353,140 +353,156 @@ fn excessive_memory_growth() -> Result<(), HostError> {
     Ok(())
 }
 
+fn instantiate_with_mem_and_table_sizes(
+    host: &Host,
+    mem_pages: u32,
+    elem_count: u32,
+) -> Result<crate::AddressObject, HostError> {
+    let wasm = wasm_util::wasm_module_with_user_specified_initial_size(mem_pages, elem_count);
+    host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+        [0; 32],
+    )
+}
+
 #[test]
-fn test_large_static_initial_memory_and_table_should_fail() -> Result<(), HostError> {
-    let instantiate_with_size_request =
-        |host: &Host, mem_pages: u32, elem_count: u32| -> Result<_, HostError> {
-            let wasm =
-                wasm_util::wasm_module_with_user_specified_initial_size(mem_pages, elem_count);
-            host.register_test_contract_wasm_from_source_account(
-                wasm.as_slice(),
-                AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
-                [0; 32],
-            )
-        };
-
-    // with moderate size initial memory request is ok
-    {
-        let host = Host::test_host_with_recording_footprint();
-        let res = instantiate_with_size_request(&host, 10, 0);
-        assert!(res.is_ok());
-        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000 * 10);
-    }
-
-    // with over-the-limit initial memory size request should fail
-    {
-        let host = Host::test_host_with_recording_footprint();
-        let res = instantiate_with_size_request(&host, 1000, 0);
-        assert!(HostError::result_matches_err(
-            res,
-            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
-        ));
-        // no wasm memory is allocated at all
-        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0);
-    }
-
-    // with moderate size initial table request is ok
-    {
-        let host = Host::test_host_with_recording_footprint();
-        let res = instantiate_with_size_request(&host, 0, 500);
-        assert!(res.is_ok());
-    }
-
-    // with over-the-limit initial table size request should fail
-    {
-        let host = Host::test_host_with_recording_footprint();
-        let res = instantiate_with_size_request(&host, 0, 2000);
-        assert!(HostError::result_matches_err(
-            res,
-            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
-        ));
-    }
+fn moderate_sized_initial_memory_request_ok() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let res = instantiate_with_mem_and_table_sizes(&host, 10, 0);
+    assert!(res.is_ok());
+    assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000 * 10);
     Ok(())
 }
 
 #[test]
-fn test_large_static_initial_data_should_fail() -> Result<(), HostError> {
-    let instantiate_with_size_request =
-        |host: &Host, mem_pages: u32, mem_offset: u32, len: u32| -> Result<_, HostError> {
-            let wasm = wasm_util::wasm_module_with_large_data_segment(mem_pages, mem_offset, len);
-            host.register_test_contract_wasm_from_source_account(
-                wasm.as_slice(),
-                AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
-                [0; 32],
-            )
-        };
-
-    // initial data segment less than 1 page (64 KiB) will fit into the linear memory
-    {
-        let host = Host::test_host_with_recording_footprint();
-        host.as_budget().reset_unlimited_cpu()?;
-        let res = instantiate_with_size_request(&host, 1, 0, 5000);
-        assert!(res.is_ok());
-        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
-    }
-
-    // initial data segment over 1 page will cause an out-of-bound access error
-    {
-        let host = Host::test_host_with_recording_footprint();
-        host.as_budget().reset_unlimited_cpu()?;
-        let res = instantiate_with_size_request(&host, 1, 0, 100_000);
-        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
-        assert!(HostError::result_matches_err(
-            res,
-            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds),
-        ));
-    }
-
-    // initializing 2 pages will the same initial data size will be okay again
-    {
-        let host = Host::test_host_with_recording_footprint();
-        host.as_budget().reset_unlimited_cpu()?;
-        let res = instantiate_with_size_request(&host, 2, 0, 100_000);
-        assert!(res.is_ok());
-        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 2 * 0x10_000);
-    }
-
+fn initial_memory_request_over_limit_fails() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let res = instantiate_with_mem_and_table_sizes(&host, 1000, 0);
+    assert!(HostError::result_matches_err(
+        res,
+        Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
+    ));
+    // no wasm memory is allocated at all
+    assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0);
     Ok(())
 }
 
 #[test]
-fn test_large_number_of_data_segments() -> Result<(), HostError> {
-    let instantiate_module =
-        |host: &Host, num_pages: u32, num_sgmts: u32, seg_size: u32| -> Result<_, HostError> {
-            let wasm =
-                wasm_util::wasm_module_with_multiple_data_sections(num_pages, num_sgmts, seg_size);
-            host.register_test_contract_wasm_from_source_account(
-                wasm.as_slice(),
-                AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
-                [0; 32],
-            )
-        };
+fn moderate_sized_initial_table_request_ok() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let res = instantiate_with_mem_and_table_sizes(&host, 0, 500);
+    assert!(res.is_ok());
+    Ok(())
+}
 
-    // many small segments
-    {
-        let host = Host::test_host_with_recording_footprint();
-        let res = instantiate_module(&host, 1, 10000, 1);
-        assert!(res.is_ok());
-    }
+#[test]
+fn initial_table_request_over_limit_fails() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let res = instantiate_with_mem_and_table_sizes(&host, 0, 2000);
+    assert!(HostError::result_matches_err(
+        res,
+        Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
+    ));
+    Ok(())
+}
 
-    // a few large segments
-    {
-        let host = Host::test_host_with_recording_footprint();
-        let res = instantiate_module(&host, 1, 10, 10000);
-        assert!(res.is_ok());
-    }
+fn instantiate_with_data_segment(
+    host: &Host,
+    mem_pages: u32,
+    mem_offset: u32,
+    len: u32,
+) -> Result<crate::AddressObject, HostError> {
+    let wasm = wasm_util::wasm_module_with_large_data_segment(mem_pages, mem_offset, len);
+    host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+        [0; 32],
+    )
+}
 
-    // a ton of segments will run out of budget, mostly due to contract size and VmInstantiation
-    {
-        let host = Host::test_host_with_recording_footprint();
-        let res = instantiate_module(&host, 1, 10_000_000, 1);
-        assert!(HostError::result_matches_err(
-            res,
-            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
-        ));
-    }
+#[test]
+fn data_segment_smaller_than_a_page_fits_in_one_page_memory() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.as_budget().reset_unlimited_cpu()?;
+    let res = instantiate_with_data_segment(&host, 1, 0, 5000);
+    assert!(res.is_ok());
+    assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
+    Ok(())
+}
 
+#[test]
+fn data_segment_larger_than_a_page_does_not_fit_in_one_page_memory() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.as_budget().reset_unlimited_cpu()?;
+    let res = instantiate_with_data_segment(&host, 1, 0, 100_000);
+    assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
+    assert!(HostError::result_matches_err(
+        res,
+        Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds),
+    ));
+    Ok(())
+}
+
+#[test]
+fn data_segment_larger_than_a_page_fits_in_two_page_memory() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.as_budget().reset_unlimited_cpu()?;
+    let res = instantiate_with_data_segment(&host, 2, 0, 100_000);
+    assert!(res.is_ok());
+    assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 2 * 0x10_000);
+    Ok(())
+}
+
+fn instantiate_with_page_and_segment_count(
+    host: &Host,
+    num_pages: u32,
+    num_sgmts: u32,
+    seg_size: u32,
+) -> Result<crate::AddressObject, HostError> {
+    let wasm = wasm_util::wasm_module_with_multiple_data_sections(num_pages, num_sgmts, seg_size);
+    host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+        [0; 32],
+    )
+}
+
+#[test]
+fn many_small_segments_ok() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let res = instantiate_with_page_and_segment_count(&host, 1, 10000, 1);
+    assert!(res.is_ok());
+    Ok(())
+}
+
+#[test]
+fn few_large_segments_ok() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let res = instantiate_with_page_and_segment_count(&host, 1, 10, 10000);
+    assert!(res.is_ok());
+    Ok(())
+}
+
+#[test]
+fn many_large_segments_exceeds_budget() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let res = instantiate_with_page_and_segment_count(&host, 20, 10000, 10000);
+    assert!(HostError::result_matches_err(
+        res,
+        Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
+    ));
+    Ok(())
+}
+
+#[test]
+fn way_too_many_segments_exceeds_budget() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let res = instantiate_with_page_and_segment_count(&host, 1, 10_000_000, 1);
+    assert!(HostError::result_matches_err(
+        res,
+        Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
+    ));
     Ok(())
 }
 

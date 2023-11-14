@@ -32,7 +32,7 @@ impl ContractFunctionSet for ContractWithSingleEvent {
 
 #[test]
 fn contract_event() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let dummy_id = [0; 32];
     let dummy_address = ScAddress::Contract(Hash(dummy_id));
     let id = host.add_host_object(dummy_address)?;
@@ -87,7 +87,7 @@ impl ContractFunctionSet for ContractWithMultipleEvents {
 
 #[test]
 fn test_event_rollback() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let dummy_address = ScAddress::Contract(Hash([0; 32]));
     let id = host.add_host_object(dummy_address)?;
     let test_contract = Rc::new(ContractWithMultipleEvents {});
@@ -108,7 +108,7 @@ fn test_event_rollback() -> Result<(), HostError> {
 
 #[test]
 fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
-    let host = Host::test_host();
+    let host = observe_host!(Host::test_host());
     let dummy_id = [0; 32];
     let ce = InternalContractEvent {
         type_: ContractEventType::Contract,
@@ -117,7 +117,8 @@ fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
         data: Val::from_void().to_val(),
     };
 
-    let host = host
+    let _ = host
+        .clone()
         .test_budget(100000, 100000)
         .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
         .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
@@ -147,7 +148,9 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
         args,
     });
 
-    let host = Host::test_host()
+    let host = observe_host!(Host::test_host());
+    let _ = host
+        .clone()
         .test_budget(100000, 100000)
         .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
         .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
@@ -166,152 +169,165 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
     Ok(())
 }
 
-#[test]
-fn test_diagnostic_events_do_not_affect_metering() -> Result<(), HostError> {
+fn log_some_diagnostics(host: crate::test::observe::ObservedHost) -> Result<Events, HostError> {
     let args: Vec<_> = (0..1000).map(|u| Val::from_u32(u).to_val()).collect();
     let contract_id = Hash([0; 32]);
+    host.log_diagnostics("logging some diagnostics", args.as_slice());
+    host.error(
+        Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError),
+        "something internal went wrong",
+        args.as_slice(),
+    );
+    host.fn_call_diagnostics(&contract_id, &Symbol::try_from_small_str("fn_call")?, &args);
+    host.fn_return_diagnostics(
+        &contract_id,
+        &Symbol::try_from_small_str("fn_return")?,
+        &Symbol::try_from_small_str("pass")?.into(),
+    );
+    let realhost = (*host).clone();
+    drop(host);
+    let (_, evts) = realhost.try_finish()?;
+    Ok(evts)
+}
 
-    let f = |host: Host| -> Result<Events, HostError> {
-        host.log_diagnostics("logging some diagnostics", args.as_slice());
-        host.error(
-            Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError),
-            "something internal went wrong",
-            args.as_slice(),
-        );
-        host.fn_call_diagnostics(&contract_id, &Symbol::try_from_small_str("fn_call")?, &args);
-        host.fn_return_diagnostics(
-            &contract_id,
-            &Symbol::try_from_small_str("fn_return")?,
-            &Symbol::try_from_small_str("pass")?.into(),
-        );
-        let (_, evts) = host.try_finish()?;
-        Ok(evts)
-    };
-
+#[test]
+fn test_diagnostic_events_do_not_affect_metering_with_debug_off() -> Result<(), HostError> {
     // DEBUG mode OFF
-    let host = Host::test_host();
+    let host = observe_host!(Host::test_host());
     let budget = host.as_budget().clone();
-    let evts = f(host)?;
+    let evts = log_some_diagnostics(host)?;
     assert_eq!(budget.get_cpu_insns_consumed()?, 0);
     assert_eq!(budget.get_mem_bytes_consumed()?, 0);
     assert_eq!(budget.get_shadow_cpu_insns_consumed()?, 0);
     assert_eq!(budget.get_shadow_mem_bytes_consumed()?, 0);
     assert_eq!(evts.0.len(), 0);
+    Ok(())
+}
 
+#[test]
+fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_sufficient_budget(
+) -> Result<(), HostError> {
     // DEBUG mode ON, budget sufficient
-    let host = Host::test_host();
+    let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     let budget = host.as_budget().clone();
-    let evts = f(host)?;
+    let evts = log_some_diagnostics(host)?;
     assert_eq!(budget.get_cpu_insns_consumed()?, 0);
     assert_eq!(budget.get_mem_bytes_consumed()?, 0);
     assert_ne!(budget.get_shadow_cpu_insns_consumed()?, 0);
     assert_ne!(budget.get_shadow_mem_bytes_consumed()?, 0);
     assert_eq!(evts.0.len(), 4);
+    Ok(())
+}
 
+#[test]
+fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_budget(
+) -> Result<(), HostError> {
     // DEBUG mode ON, budget insufficient
-    let host = Host::test_host();
+    let host = observe_host!(Host::test_host());
     host.set_shadow_budget_limits(100000, 100000)?;
     host.enable_debug()?;
     let budget = host.as_budget().clone();
-    let evts = f(host)?;
+    let evts = log_some_diagnostics(host)?;
     assert_eq!(budget.get_cpu_insns_consumed()?, 0);
     assert_eq!(budget.get_mem_bytes_consumed()?, 0);
     assert_ne!(budget.get_shadow_cpu_insns_consumed()?, 0);
     assert_ne!(budget.get_shadow_mem_bytes_consumed()?, 0);
     assert_eq!(evts.0.len(), 0);
-
     Ok(())
 }
 
 #[test]
-fn excessive_contract_events() -> Result<(), HostError> {
-    // 1. very large number of event topics
-    {
-        let topics: Vec<_> = (0..0x00FFFFFF).map(|u| Val::from_u32(u).to_val()).collect();
-        let host = Host::test_host();
-        let budget = host.as_budget().clone();
-        budget.reset_unlimited()?;
-        let topics = host.vec_new_from_slice(topics.as_slice())?;
-        // if the topics manages to pass through the host-val machineary and VecObject is
-        // created, recording the contract event a cheap operation.
-        budget.reset_default()?;
-        for i in 0..100 {
-            host.contract_event(topics.clone(), Val::from_u32(i).to_val())?;
+fn too_many_event_topics() -> Result<(), HostError> {
+    let topics: Vec<_> = (0..0x00FFFFFF).map(|u| Val::from_u32(u).to_val()).collect();
+    // We don't observe this test: it makes way too big a trace.
+    let host = Host::test_host();
+    let budget = host.as_budget().clone();
+    budget.reset_unlimited()?;
+    let topics = host.vec_new_from_slice(topics.as_slice())?;
+    // if the topics manages to pass through the host-val machineary and VecObject is
+    // created, recording the contract event a cheap operation.
+    budget.reset_default()?;
+    for i in 0..100 {
+        host.contract_event(topics.clone(), Val::from_u32(i).to_val())?;
+    }
+    assert_le!(budget.get_cpu_insns_consumed()?, 200_000);
+    assert_le!(budget.get_mem_bytes_consumed()?, 10000);
+
+    // once trying to externalize, the limit will be exceeded
+    let res = host.try_finish();
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn too_big_event_topic() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    let budget = host.as_budget().clone();
+    budget.reset_unlimited()?;
+    let bytes = host.bytes_new_from_slice(&[0; 0x0FFFFFFF])?;
+    let topics = host.vec_new_from_slice(&[bytes.to_val()])?;
+    budget.reset_default()?;
+    host.contract_event(topics, Val::from_u32(0).to_val())?;
+    assert_le!(budget.get_cpu_insns_consumed()?, 5000);
+    assert_le!(budget.get_mem_bytes_consumed()?, 500);
+
+    let host = (*host).clone();
+    let res = host.try_finish();
+    // This fails at converting from Bytes to ScBytes due to out-of-budget
+    // however, the `ScVal::try_from_val` converts it into a `ConversionError`
+    // which is misleading. We already have a tracking issue #1076.
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+    ));
+    Ok(())
+}
+#[test]
+fn too_big_event_data() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+    let budget = host.as_budget().clone();
+    budget.reset_unlimited()?;
+    let bytes = host.bytes_new_from_slice(&[0; 0x0FFFFFFF])?;
+    let topics = host.vec_new_from_slice(&[Val::from_u32(0).to_val()])?;
+    budget.reset_default()?;
+    host.contract_event(topics, bytes.to_val())?;
+    assert_le!(budget.get_cpu_insns_consumed()?, 5000);
+    assert_le!(budget.get_mem_bytes_consumed()?, 500);
+
+    let host = (*host).clone();
+    let res = host.try_finish();
+    // This fails at converting from Bytes to ScBytes due to out-of-budget
+    // however, the `ScVal::try_from_val` converts it into a `ConversionError`
+    // which is misleading. We already have a tracking issue #1076.
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+    ));
+    Ok(())
+}
+
+#[test]
+fn too_many_events_in_loop() -> Result<(), HostError> {
+    // We don't observe this test: it makes way too big a trace.
+    let host = Host::test_host();
+    let budget = host.as_budget().clone();
+    budget.reset_unlimited()?;
+    let topics = host.vec_new_from_slice(&[Val::from_u32(0).to_val()])?;
+    budget.reset_default()?;
+    let mut i = 0;
+    loop {
+        if let Err(e) = host.contract_event(topics, Val::from_u32(i).to_val()) {
+            assert_eq!(
+                e.error,
+                Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+            );
+            break;
         }
-        assert_le!(budget.get_cpu_insns_consumed()?, 200_000);
-        assert_le!(budget.get_mem_bytes_consumed()?, 10000);
-        // once trying to externalize, the limit will be exceeded
-        let res = host.try_finish();
-        assert!(HostError::result_matches_err(
-            res,
-            (ScErrorType::Budget, ScErrorCode::ExceededLimit)
-        ));
+        i += 1;
     }
-
-    // 2. single large event topic
-    {
-        let host = Host::test_host();
-        let budget = host.as_budget().clone();
-        budget.reset_unlimited()?;
-        let bytes = host.bytes_new_from_slice(&[0; 0x0FFFFFFF])?;
-        let topics = host.vec_new_from_slice(&[bytes.to_val()])?;
-        budget.reset_default()?;
-        host.contract_event(topics, Val::from_u32(0).to_val())?;
-        assert_le!(budget.get_cpu_insns_consumed()?, 5000);
-        assert_le!(budget.get_mem_bytes_consumed()?, 500);
-
-        let res = host.try_finish();
-        // This fails at converting from Bytes to ScBytes due to out-of-budget
-        // however, the `ScVal::try_from_val` converts it into a `ConversionError`
-        // which is misleading. We already have a tracking issue #1076.
-        assert!(HostError::result_matches_err(
-            res,
-            (ScErrorType::Value, ScErrorCode::UnexpectedType)
-        ));
-    }
-
-    // 3. very large of data elements
-    {
-        let host = Host::test_host();
-        let budget = host.as_budget().clone();
-        budget.reset_unlimited()?;
-        let bytes = host.bytes_new_from_slice(&[0; 0x0FFFFFFF])?;
-        let topics = host.vec_new_from_slice(&[Val::from_u32(0).to_val()])?;
-        budget.reset_default()?;
-        host.contract_event(topics, bytes.to_val())?;
-        assert_le!(budget.get_cpu_insns_consumed()?, 5000);
-        assert_le!(budget.get_mem_bytes_consumed()?, 500);
-
-        let res = host.try_finish();
-        // This fails at converting from Bytes to ScBytes due to out-of-budget
-        // however, the `ScVal::try_from_val` converts it into a `ConversionError`
-        // which is misleading. We already have a tracking issue #1076.
-        assert!(HostError::result_matches_err(
-            res,
-            (ScErrorType::Value, ScErrorCode::UnexpectedType)
-        ));
-    }
-
-    // recording lots of events in a loop
-    {
-        let host = Host::test_host();
-        let budget = host.as_budget().clone();
-        budget.reset_unlimited()?;
-        let topics = host.vec_new_from_slice(&[Val::from_u32(0).to_val()])?;
-        budget.reset_default()?;
-        let mut i = 0;
-        loop {
-            if let Err(e) = host.contract_event(topics, Val::from_u32(i).to_val()) {
-                assert_eq!(
-                    e.error,
-                    Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
-                );
-                break;
-            }
-            i += 1;
-        }
-    }
-
     Ok(())
 }

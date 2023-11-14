@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call compute_hash_keccak256(Bytes(obj#1))": "cpu:2787, mem:103, objs:-/1@b380724e",
+  "   2 ret compute_hash_keccak256 -> Ok(Bytes(obj#3))": "cpu:7565, mem:207, objs:-/2@4b768b08",
+  "   3 end": "cpu:9321, mem:255, prngs:-/-, objs:-/2@4b768b08, vmem:-, evt:-, store:-/-"
+}

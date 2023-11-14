@@ -6,7 +6,7 @@ use crate::{Env, Host, HostError, Val};
 
 #[test]
 fn str_conversions() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let mut obj = host.bytes_new()?;
     for c in 'a'..='z' {
         obj = host.bytes_push(obj, (c as u32).into())?;
@@ -14,10 +14,10 @@ fn str_conversions() -> Result<(), HostError> {
     let ss = "abcdefghijklmnopqrstuvwxyz";
     let so = host.string_new_from_slice(ss)?;
     let val = so.to_val();
-    let s: String = val.try_into_val(&host)?;
+    let s: String = val.try_into_val(&*host)?;
     assert_eq!(s, ss);
 
-    let val: Val = s.try_into_val(&host)?;
+    let val: Val = s.try_into_val(&*host)?;
     let obj: StringObject = val.try_into()?;
     let mut slice: Vec<u8> = vec![0; ss.len()];
     host.string_copy_to_slice(obj, 0_u32.into(), slice.as_mut())?;

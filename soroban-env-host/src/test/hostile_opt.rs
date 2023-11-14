@@ -20,7 +20,7 @@ fn run_deep_host_stack_test(
     contract_call_depth: u32,
     serialization_depth: u32,
 ) -> Result<Val, HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
 
     let mut contracts = vec![];
     // Reset budget to unlimited. While it's likely that the malicious

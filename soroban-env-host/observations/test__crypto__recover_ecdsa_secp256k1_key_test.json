@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call recover_key_ecdsa_secp256k1(Bytes(obj#1), Bytes(obj#3), U32(1))": "cpu:8375, mem:401, objs:-/3@bc2eff38",
+  "   2 ret recover_key_ecdsa_secp256k1 -> Ok(Bytes(obj#7))": "cpu:1676365, mem:666, objs:-/4@ae1b5c38",
+  "   3 call bytes_len(Bytes(obj#7))": "",
+  "   4 ret bytes_len -> Ok(U32(65))": "cpu:1676473",
+  "   5 call bytes_copy_to_slice(Bytes(obj#7), U32(0), 65)": "",
+  "   6 ret bytes_copy_to_slice -> Ok(())": "cpu:1676839",
+  "   7 call obj_cmp(Bytes(obj#5), Bytes(obj#7))": "",
+  "   8 ret obj_cmp -> Ok(0)": "cpu:1677529",
+  "   9 end": "cpu:1677529, mem:666, prngs:-/-, objs:-/4@ae1b5c38, vmem:-, evt:-, store:-/-"
+}

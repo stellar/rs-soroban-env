@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call obj_from_u64(18446744073709551615)": "",
+  "   2 ret obj_from_u64 -> Ok(U64(obj#1))": "cpu:1141, mem:64, objs:-/1@ecad9fd5",
+  "   3 call obj_to_u64(U64(obj#1))": "",
+  "   4 ret obj_to_u64 -> Ok(18446744073709551615)": "cpu:1500",
+  "   5 end": "cpu:1500, mem:64, prngs:-/-, objs:-/1@ecad9fd5, vmem:-, evt:-, store:-/-"
+}

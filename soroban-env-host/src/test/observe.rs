@@ -610,7 +610,7 @@ impl Step {
 
 impl ObservedHost {
     #[cfg(not(feature = "testutils"))]
-    pub fn new(testname: &'static str, host: Host) -> Self {
+    pub(crate) fn new(testname: &'static str, host: Host) -> Self {
         let old_obs = Rc::new(RefCell::new(Observations::default()));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
         Self {
@@ -622,7 +622,7 @@ impl ObservedHost {
     }
 
     #[cfg(feature = "testutils")]
-    pub fn new(testname: &'static str, host: Host) -> Self {
+    pub(crate) fn new(testname: &'static str, host: Host) -> Self {
         let old_obs = Rc::new(RefCell::new(Observations::load(testname)));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
         let oh = Self {
