@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
-use crate::budget::Budget;
-use crate::storage::{AccessType, Footprint};
+use crate::budget::{AsBudget, Budget};
+use crate::storage::{AccessType, Footprint, Storage};
 use crate::xdr::{
     ContractDataDurability, LedgerKey, LedgerKeyContractData, ScAddress, ScErrorCode, ScErrorType,
     ScVal,
 };
 use crate::{Host, HostError, MeteredOrdMap};
 use soroban_env_common::{AddressObject, Env, Symbol, TryFromVal, TryIntoVal};
-use soroban_test_wasms::CONTRACT_STORAGE;
+use soroban_test_wasms::{CONTRACT_STORAGE, INVOKE_CONTRACT};
 
 #[test]
 fn footprint_record_access() -> Result<(), HostError> {
@@ -330,6 +330,62 @@ fn test_instance_storage() {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
     test_storage(&host, contract_id, "instance");
+}
+
+#[test]
+fn test_nested_bump() {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let invoke_contract_id = host.register_test_contract_wasm(INVOKE_CONTRACT);
+    let storage_contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+
+    let contract_id_hash = host.contract_id_from_address(storage_contract_id).unwrap();
+    let storage_key: std::rc::Rc<LedgerKey> = host
+        .contract_instance_ledger_key(&contract_id_hash)
+        .unwrap();
+    host.with_mut_storage(|s: &mut Storage| {
+        let v = s
+            .map
+            .get::<Rc<LedgerKey>>(&storage_key, host.as_budget())
+            .unwrap()
+            .unwrap()
+            .clone()
+            .unwrap()
+            .1
+            .unwrap();
+        assert_eq!(v, 4095);
+        Ok(())
+    })
+    .unwrap();
+
+    host.call(
+        invoke_contract_id,
+        Symbol::try_from_val(&*host, &"invoke_storage").unwrap(),
+        test_vec![
+            &*host,
+            storage_contract_id,
+            &Symbol::try_from_val(&*host, &"extend_instance").unwrap(),
+            5000u32,
+            5000u32
+        ]
+        .into(),
+    )
+    .unwrap();
+
+    host.with_mut_storage(|s: &mut Storage| {
+        let v = s
+            .map
+            .get::<Rc<LedgerKey>>(&storage_key, host.as_budget())
+            .unwrap()
+            .unwrap()
+            .clone()
+            .unwrap()
+            .1
+            .unwrap();
+        // The inner call adds 10 to the extend_to parameter
+        assert_eq!(v, 5010);
+        Ok(())
+    })
+    .unwrap()
 }
 
 #[test]
