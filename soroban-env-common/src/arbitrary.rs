@@ -3,7 +3,7 @@
 extern crate alloc;
 
 use crate::symbol::MAX_SMALL_CHARS;
-use crate::xdr::{ScError, ScErrorCode};
+use crate::xdr::ScError;
 use crate::{Error, StorageType, Symbol, SymbolSmall, Val, Void};
 use arbitrary::{Arbitrary, Unstructured};
 
@@ -11,14 +11,7 @@ impl<'a> Arbitrary<'a> for Error {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         let scerror = ScError::arbitrary(u)?;
         let error = Error::from(scerror);
-        // FIXME: fuzzer discovered that it can just return "InternalError" from
-        // a contract to make the host think it had an InternalError. See
-        // https://github.com/stellar/rs-soroban-env/issues/1175
-        if error.is_code(ScErrorCode::InternalError) {
-            Err(arbitrary::Error::IncorrectFormat)
-        } else {
-            Ok(error)
-        }
+        Ok(error)
     }
 }
 
