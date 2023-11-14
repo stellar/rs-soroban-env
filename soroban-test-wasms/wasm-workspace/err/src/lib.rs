@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracterror, Val, Error, Env, Symbol, Address, symbol_short, token};
-
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 #[contract]
 pub struct Contract;
 
@@ -70,5 +70,9 @@ impl Contract {
         e.storage().instance().has(&symbol_short!("key")) ||
         e.storage().persistent().has(&symbol_short!("key")) ||
         e.storage().temporary().has(&symbol_short!("key"))
+    }
+
+    pub fn spoof(_e: Env) -> Result<(), Error> {
+        Err(Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError))
     }
 }

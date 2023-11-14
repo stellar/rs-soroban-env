@@ -322,3 +322,30 @@ fn wasm_invoke_return_err_variants() -> Result<(), HostError> {
     }
     Ok(())
 }
+
+#[test]
+fn error_spoof_rejected() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    let addr = host.register_test_contract_wasm(ERR);
+    let sym = Symbol::try_from_small_str("spoof")?;
+    let args = host.vec_new_from_slice(&[])?;
+
+    // This will try to return Ok(Error(Context,InternalError)) and we'll
+    // reject it and turn it into Err(Context,InvalidAction)
+    let call_res = host.call(addr, sym, args);
+    assert!(HostError::result_matches_err(
+        call_res,
+        Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InvalidAction),
+    ));
+
+    // This will return Ok(Error(Context, InvalidAction)) because while the
+    // contract tried to break the rules, yielding Err(Error(Context,
+    // InvalidAction)), we used try_call and this is a recoverable type of
+    // error.
+    let try_call_res = host.try_call(addr, sym, args);
+    let Ok(val) = try_call_res else { panic!("got Err, expected Ok: {:?}", try_call_res) };
+    let Ok(err) = Error::try_from(val) else { panic!("got non-Error: {:?}", val) };
+    assert!(err.is_type(ScErrorType::Context) && err.is_code(ScErrorCode::InvalidAction));
+    Ok(())
+}
