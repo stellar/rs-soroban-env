@@ -344,8 +344,12 @@ fn error_spoof_rejected() -> Result<(), HostError> {
     // InvalidAction)), we used try_call and this is a recoverable type of
     // error.
     let try_call_res = host.try_call(addr, sym, args);
-    let Ok(val) = try_call_res else { panic!("got Err, expected Ok: {:?}", try_call_res) };
-    let Ok(err) = Error::try_from(val) else { panic!("got non-Error: {:?}", val) };
+    let Ok(val) = try_call_res else {
+        panic!("got Err, expected Ok: {:?}", try_call_res)
+    };
+    let Ok(err) = Error::try_from(val) else {
+        panic!("got non-Error: {:?}", val)
+    };
     assert!(err.is_type(ScErrorType::Context) && err.is_code(ScErrorCode::InvalidAction));
     Ok(())
 }

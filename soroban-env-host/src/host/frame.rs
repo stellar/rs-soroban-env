@@ -395,11 +395,18 @@ impl Host {
                 // contract failing to live up to a postcondition we're
                 // enforcing of "never returning this sort of error code".
                 if err.is_type(ScErrorType::Contract) {
-                    Err(self.error(err, "escalating Ok(ScErrorType::Contract) frame-exit to Err", &[]))
+                    Err(self.error(
+                        err,
+                        "escalating Ok(ScErrorType::Contract) frame-exit to Err",
+                        &[],
+                    ))
                 } else {
-                    Err(self.err(ScErrorType::Context, ScErrorCode::InvalidAction,
+                    Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InvalidAction,
                         "frame-exit with Ok(Error) carrying a non-ScErrorType::Contract Error",
-                        &[err.to_val()]))
+                        &[err.to_val()],
+                    ))
                 }
             } else {
                 Ok(v)
