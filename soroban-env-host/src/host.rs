@@ -988,6 +988,7 @@ impl VmCallerEnv for Host {
         topics: VecObject,
         data: Val,
     ) -> Result<Void, HostError> {
+        self.check_obj_integrity(topics.into())?;
         self.check_val_integrity(data)?;
         self.record_contract_event(ContractEventType::Contract, topics, data)?;
         Ok(Val::VOID)
