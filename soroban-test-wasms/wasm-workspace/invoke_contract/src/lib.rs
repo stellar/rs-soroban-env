@@ -29,4 +29,14 @@ impl Contract {
             vec![&env, token.into_val(&env)],
         ).is_err());
     }
+
+    pub fn invoke_storage(env: Env, contract_id: Address, extend_name: Symbol, threshold: u32,
+        extend_to: u32) {
+        env.deployer().extend_ttl(contract_id.clone(), threshold, extend_to);
+        env.invoke_contract(
+            &contract_id,
+            &extend_name,
+            vec![&env, threshold.into_val(&env), (extend_to + 10u32).into_val(&env)],
+        )
+    }
 }
