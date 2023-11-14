@@ -334,8 +334,7 @@ fn test_instance_storage() {
 
 #[test]
 fn test_nested_bump() {
-    let host = Host::test_host_with_recording_footprint();
-    host.enable_debug().unwrap();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let invoke_contract_id = host.register_test_contract_wasm(INVOKE_CONTRACT);
     let storage_contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
 
@@ -360,11 +359,11 @@ fn test_nested_bump() {
 
     host.call(
         invoke_contract_id,
-        Symbol::try_from_val(&host, &"invoke_storage").unwrap(),
+        Symbol::try_from_val(&*host, &"invoke_storage").unwrap(),
         test_vec![
-            &host,
+            &*host,
             storage_contract_id,
-            &Symbol::try_from_val(&host, &"extend_instance").unwrap(),
+            &Symbol::try_from_val(&*host, &"extend_instance").unwrap(),
             5000u32,
             5000u32
         ]
