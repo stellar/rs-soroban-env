@@ -30,6 +30,9 @@ clean:
 regenerate-test-wasms:
 	make -C soroban-test-wasms regenerate-test-wasms
 
+reobserve-tests:
+	UPDATE_OBSERVATIONS=1 cargo test -p soroban-env-host --features testutils --profile test-opt
+
 publish:
 	cargo workspaces publish --all --force '*' --from-git --yes
 

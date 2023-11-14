@@ -1,6 +1,7 @@
 use crate::budget::AsBudget;
 use crate::builtin_contracts::base_types::Address;
 use crate::{Host, HostError, DEFAULT_HOST_DEPTH_LIMIT};
+use crate::test::observe::ObservedHost;
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal, Val};
 use soroban_test_wasms::RECURSIVE_ACCOUNT_CONTRACT;
@@ -19,8 +20,9 @@ pub enum RecursiveAccountSignature {
 fn run_deep_host_stack_test(
     contract_call_depth: u32,
     serialization_depth: u32,
+    function_name: &'static str,
 ) -> Result<Val, HostError> {
-    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let host = ObservedHost::new(function_name, Host::test_host_with_recording_footprint());
 
     let mut contracts = vec![];
     // Reset budget to unlimited. While it's likely that the malicious
@@ -39,7 +41,7 @@ fn run_deep_host_stack_test(
     for _ in 0..contract_call_depth {
         contracts.push(
             Address::try_from_val(
-                &host,
+                &*host,
                 &host.register_test_contract_wasm(RECURSIVE_ACCOUNT_CONTRACT),
             )
             .unwrap(),
@@ -53,12 +55,12 @@ fn run_deep_host_stack_test(
         } else {
             RecursiveAccountSignature::SerializeValue
         };
-        let signature_val: Val = signature.try_into_val(&host).unwrap();
+        let signature_val: Val = signature.try_into_val(&*host).unwrap();
         let credentials = SorobanAddressCredentials {
             address: contracts[i].to_sc_address().unwrap(),
             nonce: 0,
             signature_expiration_ledger: 1000,
-            signature: signature_val.try_into_val(&host).unwrap(),
+            signature: signature_val.try_into_val(&*host).unwrap(),
         };
         let function_name = if i == 1 { "call" } else { "__check_auth" };
         let root_invocation = SorobanAuthorizedInvocation {
@@ -77,7 +79,7 @@ fn run_deep_host_stack_test(
     host.call(
         contracts.last().unwrap().as_object(),
         Symbol::try_from_small_str("set_depth").unwrap(),
-        test_vec![&host, serialization_depth].into(),
+        test_vec![&*host, serialization_depth].into(),
     )
     .unwrap();
 
@@ -87,7 +89,7 @@ fn run_deep_host_stack_test(
     host.call(
         contracts[0].as_object(),
         Symbol::try_from_small_str("call").unwrap(),
-        test_vec![&host, contracts[1]].into(),
+        test_vec![&*host, contracts[1]].into(),
     )
 }
 
@@ -96,13 +98,13 @@ fn test_deep_stack_call_succeeds_near_limit() {
     // The serialized object has depth of `serialization_depth + 1`,
     // thus the maximum serializable value needs
     // `serialization_depth == DEFAULT_HOST_DEPTH_LIMIT - 1`.
-    let res = run_deep_host_stack_test(DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_HOST_DEPTH_LIMIT - 1);
+    let res = run_deep_host_stack_test(DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_HOST_DEPTH_LIMIT - 1, function_name!());
     assert!(res.is_ok());
 }
 
 #[test]
 fn test_deep_stack_call_fails_when_contract_call_depth_exceeded() {
-    let res = run_deep_host_stack_test(DEFAULT_HOST_DEPTH_LIMIT + 1, 0);
+    let res = run_deep_host_stack_test(DEFAULT_HOST_DEPTH_LIMIT + 1, 0, function_name!());
     assert!(res.is_err());
     let err = res.err().unwrap().error;
     // We shouldn't run out of budget here, so the error would just
@@ -112,7 +114,7 @@ fn test_deep_stack_call_fails_when_contract_call_depth_exceeded() {
 
 #[test]
 fn test_deep_stack_call_fails_when_serialization_depth_exceeded() {
-    let res = run_deep_host_stack_test(2, DEFAULT_HOST_DEPTH_LIMIT);
+    let res = run_deep_host_stack_test(2, DEFAULT_HOST_DEPTH_LIMIT, function_name!());
     assert!(res.is_err());
     let err = res.err().unwrap().error;
     // We shouldn't run out of budget here, so the error would just

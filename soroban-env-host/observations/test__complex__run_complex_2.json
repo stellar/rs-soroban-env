@@ -17,7 +17,7 @@
   "  15 call get_ledger_network_id()": "cpu:3047419, mem:2567167, vmem:-",
   "  16 ret get_ledger_network_id -> Ok(Bytes(obj#19))": "cpu:3054413, mem:2567279, objs:-/10@76e4a640",
   "  17 call get_ledger_version()": "cpu:3055554, mem:2567303, objs:1@7f18fa80/10@76e4a640",
-  "  18 ret get_ledger_version -> Ok(U32(21))": "cpu:3055817",
+  "  18 ret get_ledger_version -> Ok(U32(20))": "cpu:3055817",
   "  19 call get_ledger_sequence()": "",
   "  20 ret get_ledger_sequence -> Ok(U32(1234))": "cpu:3056080",
   "  21 call get_ledger_timestamp()": "",
@@ -41,8 +41,8 @@
   "  39 ret obj_cmp -> Ok(-1)": "cpu:3095367",
   "  40 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:3096508, mem:2568402, objs:6@e37e9bd8/18@5bab638",
   "  41 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:3097649, mem:2568426, objs:7@929806d2/18@5bab638",
-  "  42 ret put_contract_data -> Ok(Void)": "cpu:3114724, mem:2569656, store:-/3@50e94199",
-  "  43 pop VM:c49efa6c:go -> Ok(Void)": " vmem:1114112@589dff27",
+  "  42 ret put_contract_data -> Ok(Void)": "cpu:3114724, mem:2569656, store:-/3@63480b03",
+  "  43 pop VM:c49efa6c:go -> Ok(Void)": " vmem:1114112@6ea60965",
   "  44 ret call -> Ok(Void)": " objs:-/18@5bab638, vmem:-",
-  "  45 end": "cpu:3114724, mem:2569656, prngs:-/-, objs:-/18@5bab638, vmem:-, evt:1@4403228c, store:-/3@50e94199"
+  "  45 end": "cpu:3114724, mem:2569656, prngs:-/-, objs:-/18@5bab638, vmem:-, evt:1@4403228c, store:-/3@63480b03"
 }

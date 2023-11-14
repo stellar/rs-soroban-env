@@ -609,7 +609,7 @@ impl Step {
 }
 
 impl ObservedHost {
-    #[cfg(not(feature = "testutils"))]
+    #[cfg(any(feature = "next", not(feature = "testutils")))]
     pub(crate) fn new(testname: &'static str, host: Host) -> Self {
         let old_obs = Rc::new(RefCell::new(Observations::default()));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
@@ -621,7 +621,7 @@ impl ObservedHost {
         }
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(all(not(feature = "next"), feature = "testutils"))]
     pub(crate) fn new(testname: &'static str, host: Host) -> Self {
         let old_obs = Rc::new(RefCell::new(Observations::load(testname)));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
@@ -638,7 +638,7 @@ impl ObservedHost {
         oh
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(all(not(feature = "next"), feature = "testutils"))]
     fn make_obs_hook(
         &self,
     ) -> Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>> {
@@ -672,7 +672,7 @@ impl std::ops::Deref for ObservedHost {
     }
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(all(not(feature = "next"), feature = "testutils"))]
 impl Drop for ObservedHost {
     fn drop(&mut self) {
         self.host
