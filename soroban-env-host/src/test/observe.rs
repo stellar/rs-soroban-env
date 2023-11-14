@@ -13,9 +13,9 @@
 // If observations differ from previous runs, it's considered an error. If you
 // want to make an intentional change, run with UPDATE_OBSERVATIONS=1.
 
-#![cfg_attr(not(feature = "testutils"), allow(dead_code))]
+#![cfg_attr(any(feature = "next", not(feature = "testutils")), allow(dead_code))]
 
-#[cfg(feature = "testutils")]
+#[cfg(all(not(feature = "next"), feature = "testutils"))]
 use crate::host::{error::HostError, HostLifecycleEvent};
 
 use crate::{
@@ -532,7 +532,7 @@ pub(crate) struct ObservedHost {
 }
 
 impl Step {
-    #[cfg(feature = "testutils")]
+    #[cfg(all(not(feature = "next"), feature = "testutils"))]
     fn from_host_lifecycle_event(evt: HostLifecycleEvent<'_>) -> Self {
         match evt {
             HostLifecycleEvent::PushCtx(context) => {
