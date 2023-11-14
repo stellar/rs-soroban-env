@@ -1,9 +1,9 @@
 use crate::FuncEmitter;
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 use wasm_encoder::{
     CodeSection, ConstExpr, CustomSection, DataSection, ElementSection, Elements, EntityType,
     ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
-    MemorySection, MemoryType, Module, TableSection, TableType, TypeSection, ValType,
+    MemorySection, MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
 /// Wrapper for a u32 that defines the arity of a function -- that is, the number of
@@ -62,8 +62,8 @@ impl ModEmitter {
         let mut module = Module::new();
 
         let metasection = CustomSection {
-            name: soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
-            data: &soroban_env_common::meta::XDR,
+            name: Cow::Borrowed(soroban_env_common::meta::ENV_META_V0_SECTION_NAME),
+            data: Cow::Borrowed(&soroban_env_common::meta::XDR),
         };
         module.section(&metasection);
 
@@ -72,7 +72,7 @@ impl ModEmitter {
         let funcs = FunctionSection::new();
         let mut tables = TableSection::new();
         tables.table(TableType {
-            element_type: ValType::FuncRef,
+            element_type: RefType::FUNCREF,
             minimum: elem_count,
             maximum: None,
         });
@@ -184,11 +184,9 @@ impl ModEmitter {
     pub fn define_elems(&mut self, funcs: &[FuncRef]) {
         let table_index = 0;
         let offset = ConstExpr::i32_const(0);
-        let element_type = ValType::FuncRef;
         let ids: Vec<u32> = funcs.iter().map(|r| r.0).collect();
         let functions = Elements::Functions(ids.as_slice());
-        self.elements
-            .active(Some(table_index), &offset, element_type, functions);
+        self.elements.active(Some(table_index), &offset, functions);
     }
 
     pub fn define_global_i64(&mut self, val: i64, mutable: bool, export: Option<&str>) {
@@ -258,8 +256,8 @@ impl Default for ModEmitter {
         let mut module = Module::new();
 
         let metasection = CustomSection {
-            name: soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
-            data: &soroban_env_common::meta::XDR,
+            name: Cow::Borrowed(soroban_env_common::meta::ENV_META_V0_SECTION_NAME),
+            data: Cow::Borrowed(&soroban_env_common::meta::XDR),
         };
         module.section(&metasection);
 
@@ -268,7 +266,7 @@ impl Default for ModEmitter {
         let funcs = FunctionSection::new();
         let mut tables = TableSection::new();
         tables.table(TableType {
-            element_type: ValType::FuncRef,
+            element_type: RefType::FUNCREF,
             minimum: 128,
             maximum: None,
         });

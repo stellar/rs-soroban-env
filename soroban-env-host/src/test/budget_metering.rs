@@ -11,9 +11,14 @@ use soroban_test_wasms::VEC;
 
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
-    let host = Host::test_host()
-        .test_budget(100_000, 100_000)
-        .enable_model(ContractCostType::MemCpy, 1, 0, 1, 0);
+    let host = observe_host!(Host::test_host());
+    let _ = host.clone().test_budget(100_000, 100_000).enable_model(
+        ContractCostType::MemCpy,
+        1,
+        0,
+        1,
+        0,
+    );
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -48,7 +53,8 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(VEC);
     // this contract requests initial pages = 16 worth of linear memory, not sure why
-    let host = host
+    let _ = host
+        .clone()
         .test_budget(100_000, 1_048_576)
         .enable_model(ContractCostType::InvokeVmFunction, 10, 0, 1, 0)
         .enable_model(ContractCostType::DispatchHostFunction, 10, 0, 1, 0);
@@ -86,7 +92,8 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     let budget_err = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
 
     // successful call with sufficient budget
-    let host = host
+    let _ = host
+        .clone()
         .test_budget(100_000, 1_048_576)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
@@ -106,7 +113,8 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
 
     // giving it the exact required amount will success
     let (cpu_required, mem_required) = (cpu_consumed, mem_consumed);
-    let host = host
+    let _ = host
+        .clone()
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
@@ -119,7 +127,8 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
 
     // give it one less cpu results in failure with no cpu consumption but full mem consumption
     let (cpu_required, mem_required) = (cpu_consumed - 1, mem_consumed);
-    let host = host
+    let _ = host
+        .clone()
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
@@ -133,7 +142,8 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
 
     // give it less than 1 page of memory in failure with no cpu consumption or mem consumption
     let (cpu_required, mem_required) = (cpu_consumed, 65535);
-    let host = host
+    let _ = host
+        .clone()
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);

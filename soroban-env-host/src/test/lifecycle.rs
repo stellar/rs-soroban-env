@@ -253,14 +253,14 @@ pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Ha
 
 #[test]
 fn test_contract_wasm_update() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
 
     let old_wasm_hash_obj: Val = host
         .invoke_function(HostFunction::UploadContractWasm(
             UPDATEABLE_CONTRACT.to_vec().try_into().unwrap(),
         ))
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
 
     let contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
@@ -271,7 +271,7 @@ fn test_contract_wasm_update() {
     let non_existent_wasm_res = host.call(
         contract_addr_obj,
         Symbol::try_from_small_str("update").unwrap(),
-        test_vec![&host, &non_existent_contract_wasm, &false].into(),
+        test_vec![&*host, &non_existent_contract_wasm, &false].into(),
     );
     assert!(non_existent_wasm_res.is_err());
     let non_existent_wasm_err = non_existent_wasm_res.err().unwrap().error;
@@ -285,14 +285,14 @@ fn test_contract_wasm_update() {
             updated_wasm.to_vec().try_into().unwrap(),
         ))
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
 
     // Now do a successful update, but fail the contract after that.
     let failed_call_res = host.call(
         contract_addr_obj,
         Symbol::try_from_small_str("update").unwrap(),
-        test_vec![&host, &updated_wasm_hash_obj, &true].into(),
+        test_vec![&*host, &updated_wasm_hash_obj, &true].into(),
     );
     assert!(failed_call_res.is_err());
     let failed_call_err = failed_call_res.err().unwrap().error;
@@ -316,10 +316,10 @@ fn test_contract_wasm_update() {
         .call(
             contract_addr_obj,
             Symbol::try_from_small_str("update").unwrap(),
-            test_vec![&host, &updated_wasm_hash_obj, &false].into(),
+            test_vec![&*host, &updated_wasm_hash_obj, &false].into(),
         )
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
     // Make sure execution continued after the update and we've got the function
     // return value.
@@ -335,7 +335,7 @@ fn test_contract_wasm_update() {
                     StorageType::Instance,
                 )
                 .unwrap()
-                .try_into_val(&host)
+                .try_into_val(&*host)
                 .unwrap();
             assert_eq!(stored_value, 111);
             Ok(Val::VOID.into())
@@ -346,12 +346,12 @@ fn test_contract_wasm_update() {
     // Verify the contract update event.
     let events = host.get_events().unwrap().0;
     let old_wasm_hash = host
-        .hash_from_bytesobj_input("old_wasm", old_wasm_hash_obj.try_into_val(&host).unwrap())
+        .hash_from_bytesobj_input("old_wasm", old_wasm_hash_obj.try_into_val(&*host).unwrap())
         .unwrap();
     let updated_wasm_hash = host
         .hash_from_bytesobj_input(
             "new_wasm",
-            updated_wasm_hash_obj.try_into_val(&host).unwrap(),
+            updated_wasm_hash_obj.try_into_val(&*host).unwrap(),
         )
         .unwrap();
     assert_eq!(events.len(), 2);
@@ -400,17 +400,17 @@ fn test_contract_wasm_update() {
         .call(
             contract_addr_obj,
             Symbol::try_from_small_str("add").unwrap(),
-            test_vec![&host, 10_i32, 20_i32].into(),
+            test_vec![&*host, 10_i32, 20_i32].into(),
         )
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
     assert_eq!(updated_res, 30);
 }
 
 #[test]
 fn test_contract_wasm_update_with_try_call() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
     let updated_contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
     let updated_wasm = ADD_I32;
@@ -419,7 +419,7 @@ fn test_contract_wasm_update_with_try_call() {
             updated_wasm.to_vec().try_into().unwrap(),
         ))
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
 
     // Run `update` that fails via external contract that does `try_call`.
@@ -429,7 +429,7 @@ fn test_contract_wasm_update_with_try_call() {
             contract_addr_obj,
             Symbol::try_from_small_str("try_upd").unwrap(),
             test_vec![
-                &host,
+                &*host,
                 &updated_contract_addr_obj,
                 &updated_wasm_hash_obj,
                 &true
@@ -437,7 +437,7 @@ fn test_contract_wasm_update_with_try_call() {
             .into(),
         )
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
     assert_eq!(failed_call_res, None);
 
@@ -459,7 +459,7 @@ fn test_contract_wasm_update_with_try_call() {
             contract_addr_obj,
             Symbol::try_from_small_str("try_upd").unwrap(),
             test_vec![
-                &host,
+                &*host,
                 &updated_contract_addr_obj,
                 &updated_wasm_hash_obj,
                 &false
@@ -467,7 +467,7 @@ fn test_contract_wasm_update_with_try_call() {
             .into(),
         )
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
     assert_eq!(res, Some(123));
     let success_call_events = host.get_events().unwrap().0;
@@ -488,17 +488,17 @@ fn test_contract_wasm_update_with_try_call() {
         .call(
             updated_contract_addr_obj,
             Symbol::try_from_small_str("add").unwrap(),
-            test_vec![&host, 10_i32, 20_i32].into(),
+            test_vec![&*host, 10_i32, 20_i32].into(),
         )
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
     assert_eq!(updated_res, 30);
 }
 
 #[test]
 fn test_create_contract_from_source_account_recording_auth() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let source_account = generate_account_id(&host);
     let salt = generate_bytes_array(&host);
     host.set_source_account(source_account.clone()).unwrap();
@@ -513,7 +513,7 @@ fn test_create_contract_from_source_account_recording_auth() {
             CREATE_CONTRACT.try_into().unwrap(),
         ))
         .unwrap()
-        .try_into_val(&host)
+        .try_into_val(&*host)
         .unwrap();
     let created_wasm_hash = host
         .hash_from_bytesobj_input("wasm_hash", created_wasm_hash.try_into().unwrap())
@@ -541,7 +541,7 @@ fn test_create_contract_from_source_account_recording_auth() {
 
 #[test]
 fn test_invalid_contract() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let bytes = [0u8; 32];
 
     let err = host
@@ -555,7 +555,7 @@ fn test_invalid_contract() {
 
 #[test]
 fn test_large_contract() {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let bytes = vec![0u8; u32::MAX.try_into().unwrap()];
 
     let err = host

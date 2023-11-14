@@ -14,7 +14,7 @@ use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(ADD_I32);
     let a = 4i32;
     let b = 7i32;
@@ -25,7 +25,7 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
         Symbol::try_from_small_str("add")?,
         host.test_vec_obj(&[a, b])?,
     )?;
-    assert_eq!(i32::try_from_val(&host, &res)?, a + b);
+    assert_eq!(i32::try_from_val(&*host, &res)?, a + b);
     // overflow
     let res = host.call(
         contract_id_obj,
@@ -39,7 +39,7 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
 
 #[test]
 fn invoke_alloc() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(ALLOC);
     let res = host.call(
@@ -67,7 +67,7 @@ fn invoke_alloc() -> Result<(), HostError> {
 }
 
 fn invoke_cross_contract(diagnostics: bool) -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     if diagnostics {
         host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
     }
@@ -95,7 +95,7 @@ fn invoke_cross_contract_with_diagnostics() -> Result<(), HostError> {
 
 #[test]
 fn invoke_cross_contract_with_err() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let id_obj = host.register_test_contract_wasm(VEC);
     // prepare arguments
@@ -139,7 +139,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
 
 #[test]
 fn invoke_cross_contract_indirect() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
     let id1_obj = host.register_test_contract_wasm(ADD_I32);
     // prepare arguments
@@ -155,7 +155,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
 
 #[test]
 fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
     let sym = Symbol::try_from_small_str("add_with").unwrap();
@@ -202,35 +202,35 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
 
 #[test]
 fn contract_failure_with_debug_on_off_affects_no_metering() -> Result<(), HostError> {
-    let invoke_cross_contract_indirect_with_err =
-        |enable_debug: bool| -> Result<(u64, u64, u64, u64), HostError> {
-            let host = Host::test_host_with_recording_footprint();
-            if enable_debug {
-                host.enable_debug()?
-            };
-            let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
-            let sym = Symbol::try_from_small_str("add_with").unwrap();
-            let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
-            let args = host.vec_push_back(args, host.bytes_new()?.to_val())?;
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
+    let sym = Symbol::try_from_small_str("add_with").unwrap();
+    let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
+    let args = host.vec_push_back(args, host.bytes_new()?.to_val())?;
 
-            // try call -- add will trap, and add_with will trap, but we will get an error
-            let res = host.try_call(id0_obj, sym, args);
-            HostError::result_matches_err(
-                res,
-                Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InvalidAction),
-            );
-            Ok((
-                host.as_budget().get_cpu_insns_consumed()?,
-                host.as_budget().get_mem_bytes_consumed()?,
-                host.as_budget().get_shadow_cpu_insns_consumed()?,
-                host.as_budget().get_shadow_mem_bytes_consumed()?,
-            ))
-        };
+    let invoke_cross_contract_indirect_with_err = || -> Result<(u64, u64, u64, u64), HostError> {
+        // try call -- add will trap, and add_with will trap, but we will get an error
+        host.as_budget().reset_default()?;
+        let res = host.try_call(id0_obj, sym, args);
+        HostError::result_matches_err(
+            res,
+            Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InvalidAction),
+        );
+        Ok((
+            host.as_budget().get_cpu_insns_consumed()?,
+            host.as_budget().get_mem_bytes_consumed()?,
+            host.as_budget().get_shadow_cpu_insns_consumed()?,
+            host.as_budget().get_shadow_mem_bytes_consumed()?,
+        ))
+    };
 
-    let (on_cpu, on_mem, on_shadow_cpu, on_shadow_mem) =
-        invoke_cross_contract_indirect_with_err(true)?;
     let (off_cpu, off_mem, off_shadow_cpu, off_shadow_mem) =
-        invoke_cross_contract_indirect_with_err(false)?;
+        invoke_cross_contract_indirect_with_err()?;
+
+    host.enable_debug()?;
+
+    let (on_cpu, on_mem, on_shadow_cpu, on_shadow_mem) = invoke_cross_contract_indirect_with_err()?;
+
     assert_eq!((on_cpu, on_mem), (off_cpu, off_mem));
     assert_ne!(
         (on_shadow_cpu, on_shadow_mem),
@@ -242,7 +242,7 @@ fn contract_failure_with_debug_on_off_affects_no_metering() -> Result<(), HostEr
 
 #[test]
 fn invoke_contract_with_reentry() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
     // prepare arguments
     let sym = Symbol::try_from_small_str("add_with").unwrap();
@@ -275,7 +275,7 @@ impl ContractFunctionSet for ReturnContractError {
 
 #[test]
 fn native_invoke_return_err_variants() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let addr = host.add_host_object(xdr::ScAddress::Contract(xdr::Hash([0; 32])))?;
     host.register_test_contract(addr, Rc::new(ReturnContractError))?;
 
@@ -298,12 +298,12 @@ fn native_invoke_return_err_variants() -> Result<(), HostError> {
 fn wasm_invoke_return_err_variants() -> Result<(), HostError> {
     // Here we test several variants of returning-a-Val-that-is-an-Error
     // causes Err(Error) from call and Ok(Error) from try_call.
+    let expected_err = Error::from_contract_error(12345);
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    let addr = host.register_test_contract_wasm(ERR);
     for fname in ["err_eek", "err_err", "ok_err", "ok_val_err", "err", "val"].iter() {
-        let expected_err = Error::from_contract_error(12345);
-        let host = Host::test_host_with_recording_footprint();
-        host.enable_debug()?;
-        let addr = host.register_test_contract_wasm(ERR);
-        let sym = Symbol::try_from_val(&host, fname)?;
+        let sym = Symbol::try_from_val(&*host, fname)?;
         let args = host.vec_new_from_slice(&[])?;
         let call_res = host.call(addr, sym, args);
         let try_call_res = host.try_call(addr, sym, args);

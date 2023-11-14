@@ -1,0 +1,4 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/d8a09d57, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 end": "cpu:100, mem:10, prngs:-/d8a09d57, objs:-/2@ab0d4d16, vmem:-, evt:1@83f8765e, store:-/-"
+}

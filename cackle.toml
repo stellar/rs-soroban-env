@@ -390,3 +390,6 @@ allow_proc_macro = true
 
 [pkg.arbitrary]
 allow_unsafe = true
+
+[pkg.itertools]
+allow_unsafe = true

@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call vec_new_from_slice(2)": "",
+  "   2 ret vec_new_from_slice -> Ok(Vec(obj#1))": "cpu:2787, mem:96, objs:-/1@9d1ee4bc",
+  "   3 call vec_unpack_to_slice(Vec(obj#1), 2)": "",
+  "   4 ret vec_unpack_to_slice -> Ok(Void)": "cpu:3147",
+  "   5 end": "cpu:3147, mem:96, prngs:-/-, objs:-/1@9d1ee4bc, vmem:-, evt:-, store:-/-"
+}
