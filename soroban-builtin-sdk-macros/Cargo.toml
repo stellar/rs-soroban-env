@@ -16,7 +16,7 @@ proc-macro = true
 syn = {version="2.0",features=["full"]}
 quote = "1.0"
 proc-macro2 = "1.0"
-itertools = "0.10.3"
+itertools = "0.11.0"
 
 [package.metadata.docs.rs]
 all-features = true
