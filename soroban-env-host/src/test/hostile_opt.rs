@@ -1,7 +1,6 @@
 use crate::budget::AsBudget;
 use crate::builtin_contracts::base_types::Address;
-use crate::builtin_contracts::testutils::ContractTypeVec;
-use crate::{host_vec, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT};
+use crate::{Host, HostError, DEFAULT_HOST_DEPTH_LIMIT};
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal, Val};
 use soroban_test_wasms::RECURSIVE_ACCOUNT_CONTRACT;
@@ -78,7 +77,7 @@ fn run_deep_host_stack_test(
     host.call(
         contracts.last().unwrap().as_object(),
         Symbol::try_from_small_str("set_depth").unwrap(),
-        host_vec![&host, serialization_depth].into(),
+        test_vec![&host, serialization_depth].into(),
     )
     .unwrap();
 
@@ -88,7 +87,7 @@ fn run_deep_host_stack_test(
     host.call(
         contracts[0].as_object(),
         Symbol::try_from_small_str("call").unwrap(),
-        host_vec![&host, contracts[1]].into(),
+        test_vec![&host, contracts[1]].into(),
     )
 }
 

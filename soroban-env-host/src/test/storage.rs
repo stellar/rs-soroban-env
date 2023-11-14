@@ -1,13 +1,12 @@
 use std::rc::Rc;
 
 use crate::budget::{AsBudget, Budget};
-use crate::builtin_contracts::testutils::ContractTypeVec;
 use crate::storage::{AccessType, Footprint, Storage};
 use crate::xdr::{
     ContractDataDurability, LedgerKey, LedgerKeyContractData, ScAddress, ScErrorCode, ScErrorType,
     ScVal,
 };
-use crate::{host_vec, Host, HostError, MeteredOrdMap};
+use crate::{Host, HostError, MeteredOrdMap};
 use soroban_env_common::{AddressObject, Env, Symbol, TryFromVal, TryIntoVal};
 use soroban_test_wasms::{CONTRACT_STORAGE, INVOKE_CONTRACT};
 
@@ -123,7 +122,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
                 .call(
                     contract_id,
                     storage_fn_name(&host, "has", storage),
-                    host_vec![host, key_1].into(),
+                    test_vec![host, key_1].into(),
                 )
                 .unwrap()
         )
@@ -134,7 +133,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     host.call(
         contract_id,
         storage_fn_name(host, "put", storage),
-        host_vec![host, key_1, 1234_u64].into(),
+        test_vec![host, key_1, 1234_u64].into(),
     )
     .unwrap();
 
@@ -145,7 +144,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
                 .call(
                     contract_id,
                     storage_fn_name(host, "has", storage),
-                    host_vec![host, key_1].into(),
+                    test_vec![host, key_1].into(),
                 )
                 .unwrap()
         )
@@ -160,9 +159,9 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
 
     // Smoke test extend
     let extend_args = if storage == "instance" {
-        host_vec![host, threshold, max_extend]
+        test_vec![host, threshold, max_extend]
     } else {
-        host_vec![host, key_1, threshold, max_extend]
+        test_vec![host, key_1, threshold, max_extend]
     };
 
     host.call(
@@ -173,9 +172,9 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     .unwrap();
 
     let extend_args_past_max = if storage == "instance" {
-        host_vec![host, threshold, max_extend + 1]
+        test_vec![host, threshold, max_extend + 1]
     } else {
-        host_vec![host, key_1, threshold, max_extend + 1]
+        test_vec![host, key_1, threshold, max_extend + 1]
     };
 
     assert!(host
@@ -190,7 +189,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     host.call(
         contract_id,
         storage_fn_name(host, "put", storage),
-        host_vec![host, key_2, u64::MAX].into(),
+        test_vec![host, key_2, u64::MAX].into(),
     )
     .unwrap();
     assert_eq!(
@@ -200,7 +199,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
                 .call(
                     contract_id,
                     storage_fn_name(host, "has", storage),
-                    host_vec![
+                    test_vec![
                         host,
                         // Use a new object to sanity-check that comparison
                         // happens based on value.
@@ -223,7 +222,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
                 .call(
                     contract_id,
                     storage_fn_name(host, "get", storage),
-                    host_vec![host, key_1].into(),
+                    test_vec![host, key_1].into(),
                 )
                 .unwrap()
         )
@@ -237,7 +236,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
                 .call(
                     contract_id,
                     storage_fn_name(host, "get", storage),
-                    host_vec![host, key_2].into(),
+                    test_vec![host, key_2].into(),
                 )
                 .unwrap()
         )
@@ -249,7 +248,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     host.call(
         contract_id,
         storage_fn_name(host, "put", storage),
-        host_vec![host, key_2, 4321_u64].into(),
+        test_vec![host, key_2, 4321_u64].into(),
     )
     .unwrap();
     assert_eq!(
@@ -259,7 +258,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
                 .call(
                     contract_id,
                     storage_fn_name(host, "get", storage),
-                    host_vec![host, key_2].into(),
+                    test_vec![host, key_2].into(),
                 )
                 .unwrap()
         )
@@ -271,14 +270,14 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     host.call(
         contract_id,
         storage_fn_name(host, "del", storage),
-        host_vec![host, key_1].into(),
+        test_vec![host, key_1].into(),
     )
     .unwrap();
     // Delete again - that's a no-op, but it shouldn't fail either.
     host.call(
         contract_id,
         storage_fn_name(host, "del", storage),
-        host_vec![host, key_1].into(),
+        test_vec![host, key_1].into(),
     )
     .unwrap();
     // Only the second key is now present
@@ -289,7 +288,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
                 .call(
                     contract_id,
                     storage_fn_name(host, "has", storage),
-                    host_vec![host, key_1].into(),
+                    test_vec![host, key_1].into(),
                 )
                 .unwrap()
         )
@@ -303,7 +302,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
                 .call(
                     contract_id,
                     storage_fn_name(host, "has", storage),
-                    host_vec![host, key_2].into(),
+                    test_vec![host, key_2].into(),
                 )
                 .unwrap()
         )
@@ -362,7 +361,7 @@ fn test_nested_bump() {
     host.call(
         invoke_contract_id,
         Symbol::try_from_val(&host, &"invoke_storage").unwrap(),
-        host_vec![
+        test_vec![
             &host,
             storage_contract_id,
             &Symbol::try_from_val(&host, &"extend_instance").unwrap(),
@@ -418,7 +417,7 @@ fn test_large_persistent_value() {
     let _ = host.try_call(
         contract_id,
         storage_fn_name(&host, "put", "persistent"),
-        host_vec![&host, key_1, bytes].into(),
+        test_vec![&host, key_1, bytes].into(),
     );
 }
 
@@ -435,7 +434,7 @@ fn test_large_instance_value() {
     let _ = host.try_call(
         contract_id,
         storage_fn_name(&host, "put", "instance"),
-        host_vec![&host, key_1, bytes].into(),
+        test_vec![&host, key_1, bytes].into(),
     );
 }
 
@@ -451,7 +450,7 @@ fn test_large_persistent_key() {
     let _ = host.try_call(
         contract_id,
         storage_fn_name(&host, "put", "persistent"),
-        host_vec![&host, key, 1_u64].into(),
+        test_vec![&host, key, 1_u64].into(),
     );
 }
 
@@ -467,6 +466,6 @@ fn test_large_instance_key() {
     let _ = host.try_call(
         contract_id,
         storage_fn_name(&host, "put", "instance"),
-        host_vec![&host, key, 1_u64].into(),
+        test_vec![&host, key, 1_u64].into(),
     );
 }
