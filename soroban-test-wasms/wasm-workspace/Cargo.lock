@@ -619,6 +619,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hostile_large_val"
+version = "0.0.0"
+dependencies = [
+ "soroban-env-common",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"

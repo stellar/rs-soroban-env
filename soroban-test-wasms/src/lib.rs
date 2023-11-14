@@ -86,4 +86,7 @@ mod curr {
         include_bytes!("../wasm-workspace/opt/curr/sac_reentry_account.wasm").as_slice();
     pub const RECURSIVE_ACCOUNT_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/recursive_account.wasm").as_slice();
+
+    pub const HOSTILE_LARGE_VALUE: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/hostile_large_val.wasm").as_slice();
 }
