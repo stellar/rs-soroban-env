@@ -327,7 +327,7 @@ impl Host {
         let _span = tracy_span!("Val to ScVal");
         let scval = self.budget_cloned().with_limited_depth(|_| {
             ScVal::try_from_val(self, &val).map_err(|cerr: crate::ConversionError| {
-                self.error(cerr.into(), "failed to convert host value to ScVal", &[val])
+                self.error(cerr.into(), "failed to convert host value to ScVal", &[])
             })
         })?;
         // This is a check of internal logical consistency: we came _from_ a Val
