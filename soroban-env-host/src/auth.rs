@@ -2084,15 +2084,10 @@ impl Host {
         Ok(self
             .try_borrow_previous_authorization_manager_mut()?
             .as_mut()
-            .ok_or_else(|| {
-                self.err(
-                    ScErrorType::Auth,
-                    ScErrorCode::InvalidAction,
-                    "previous invocation is missing - no auth data to get",
-                    &[],
-                )
-            })?
-            .get_authenticated_authorizations(self))
+            .map(|am| am.get_authenticated_authorizations(self))
+            // If no AuthorizationManager is setup, no authorizations could have
+            // taken place so return an empty vec.
+            .unwrap_or_default())
     }
 }
 
