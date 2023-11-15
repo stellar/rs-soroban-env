@@ -1,3 +1,5 @@
+use core::cmp::Ordering;
+
 use crate::builtin_contracts::base_types::{Address, Bytes, BytesN, String};
 use crate::builtin_contracts::contract_error::ContractError;
 use crate::builtin_contracts::stellar_asset_contract::allowance::{
@@ -15,8 +17,8 @@ use crate::host::{metered_clone::MeteredClone, Host};
 use crate::{err, HostError};
 
 use soroban_builtin_sdk_macros::contractimpl;
-use soroban_env_common::xdr::{AccountId, Asset, ScAddress};
-use soroban_env_common::{ConversionError, Env, EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::xdr::Asset;
+use soroban_env_common::{Compare, ConversionError, Env, EnvBase, TryFromVal, TryIntoVal};
 
 use super::admin::{read_administrator, write_administrator};
 use super::asset_info::read_asset_info;
@@ -52,9 +54,10 @@ fn check_non_native(e: &Host) -> Result<(), HostError> {
 }
 
 fn check_not_issuer(e: &Host, addr: &Address) -> Result<(), HostError> {
-    let issuer_check = |issuer: BytesN<32>, account_id: AccountId| -> Result<(), HostError> {
+    let issuer_check = |issuer: BytesN<32>, address: &Address| -> Result<(), HostError> {
         let issuer_account_id = e.account_id_from_bytesobj(issuer.into())?;
-        if issuer_account_id == account_id {
+        let issuer_address = Address::from_account(e, &issuer_account_id)?;
+        if e.compare(&issuer_address, &address)? == Ordering::Equal {
             Err(e.error(
                 ContractError::OperationNotSupportedError.into(),
                 "operation invalid on issuer",
@@ -65,13 +68,10 @@ fn check_not_issuer(e: &Host, addr: &Address) -> Result<(), HostError> {
         }
     };
 
-    match addr.to_sc_address()? {
-        ScAddress::Account(acc_id) => match read_asset_info(e)? {
-            AssetInfo::Native => Ok(()),
-            AssetInfo::AlphaNum4(asset) => issuer_check(asset.issuer, acc_id),
-            AssetInfo::AlphaNum12(asset) => issuer_check(asset.issuer, acc_id),
-        },
-        ScAddress::Contract(_) => Ok(()),
+    match read_asset_info(e)? {
+        AssetInfo::Native => Ok(()),
+        AssetInfo::AlphaNum4(asset) => issuer_check(asset.issuer, addr),
+        AssetInfo::AlphaNum12(asset) => issuer_check(asset.issuer, addr),
     }
 }
 
