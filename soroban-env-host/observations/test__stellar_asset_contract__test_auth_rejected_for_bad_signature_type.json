@@ -123,16 +123,16 @@
   " 121 ret obj_cmp -> Ok(0)": "cpu:379652",
   " 122 ret get_contract_data -> Ok(Address(obj#65))": "cpu:379905, store:3@99409cfa/4@3224be66",
   " 123 call require_auth(Address(obj#65))": "",
-  " 124 call obj_cmp(Address(obj#47), Address(obj#65))": "cpu:381802, mem:16918",
-  " 125 ret obj_cmp -> Ok(0)": "cpu:382488",
+  " 124 call obj_cmp(Address(obj#47), Address(obj#65))": "cpu:381910, mem:16918",
+  " 125 ret obj_cmp -> Ok(0)": "cpu:382596",
   " 126 call obj_cmp(Address(obj#47), Address(obj#65))": "",
-  " 127 ret obj_cmp -> Ok(0)": "cpu:383174",
+  " 127 ret obj_cmp -> Ok(0)": "cpu:383282",
   " 128 call obj_cmp(Address(obj#49), Address(obj#53))": "",
-  " 129 ret obj_cmp -> Ok(0)": "cpu:383860",
+  " 129 ret obj_cmp -> Ok(0)": "cpu:383968",
   " 130 call obj_cmp(Address(obj#51), Address(obj#39))": "",
-  " 131 ret obj_cmp -> Ok(0)": "cpu:384546",
-  " 132 ret require_auth -> Err(Error(Auth, InvalidAction))": "cpu:415583, mem:17978",
+  " 131 ret obj_cmp -> Ok(0)": "cpu:384654",
+  " 132 ret require_auth -> Err(Error(Auth, InvalidAction))": "cpu:415691, mem:17978",
   " 133 pop SAC:baaaf5fd:mint -> Err(Error(Auth, InvalidAction))": "",
   " 134 ret call -> Err(Error(Auth, InvalidAction))": " store:-/4@3224be66",
-  " 135 end": "cpu:415583, mem:17978, prngs:-/d8a09d57, objs:-/41@1e93abc1, vmem:-, evt:-, store:-/4@3224be66"
+  " 135 end": "cpu:415691, mem:17978, prngs:-/d8a09d57, objs:-/41@1e93abc1, vmem:-, evt:-, store:-/4@3224be66"
 }

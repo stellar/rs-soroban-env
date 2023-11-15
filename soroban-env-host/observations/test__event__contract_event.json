@@ -13,8 +13,8 @@
   "  11 call vec_push_back(Vec(obj#15), U32(1))": "",
   "  12 ret vec_push_back -> Ok(Vec(obj#17))": "cpu:76706, mem:3382, objs:-/9@39d74e1d",
   "  13 call contract_event(Vec(obj#17), Map(obj#11))": "",
-  "  14 ret contract_event -> Ok(Void)": "cpu:81507, mem:3559, objs:-/10@45e9a6d8, evt:1@5435ad6c",
+  "  14 ret contract_event -> Ok(Void)": "cpu:81615, mem:3559, objs:-/10@45e9a6d8, evt:1@5435ad6c",
   "  15 pop TEST:   0:add -> Ok(Void)": "",
   "  16 ret call -> Ok(Void)": "",
-  "  17 end": "cpu:87328, mem:4031, prngs:-/d8a09d57, objs:-/10@45e9a6d8, vmem:-, evt:1@5435ad6c, store:-/2@8f53be5d"
+  "  17 end": "cpu:87436, mem:4031, prngs:-/d8a09d57, objs:-/10@45e9a6d8, vmem:-, evt:1@5435ad6c, store:-/2@8f53be5d"
 }

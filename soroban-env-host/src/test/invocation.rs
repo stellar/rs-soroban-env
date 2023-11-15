@@ -7,8 +7,8 @@ use soroban_env_common::{
 };
 
 use crate::{
-    budget::AsBudget, events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host,
-    HostError, Symbol, Tag,
+    budget::AsBudget, events::HostEvent, test::observe::ObservedHost, xdr::ScErrorType,
+    ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
 };
 use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
 
@@ -66,8 +66,8 @@ fn invoke_alloc() -> Result<(), HostError> {
     Ok(())
 }
 
-fn invoke_cross_contract(diagnostics: bool) -> Result<(), HostError> {
-    let host = observe_host!(Host::test_host_with_recording_footprint());
+fn invoke_cross_contract(diagnostics: bool, testname: &'static str) -> Result<(), HostError> {
+    let host = ObservedHost::new(testname, Host::test_host_with_recording_footprint());
     if diagnostics {
         host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
     }
@@ -85,12 +85,12 @@ fn invoke_cross_contract(diagnostics: bool) -> Result<(), HostError> {
 
 #[test]
 fn invoke_cross_contract_without_diagnostics() -> Result<(), HostError> {
-    invoke_cross_contract(false)
+    invoke_cross_contract(false, function_name!())
 }
 
 #[test]
 fn invoke_cross_contract_with_diagnostics() -> Result<(), HostError> {
-    invoke_cross_contract(true)
+    invoke_cross_contract(true, function_name!())
 }
 
 #[test]
