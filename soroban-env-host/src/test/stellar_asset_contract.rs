@@ -1624,13 +1624,13 @@ fn test_account_invoker_auth_with_issuer_admin() {
     test.run_from_account(admin_acc.clone(), || {
         contract.mint(
             &TestSigner::AccountInvoker(admin_acc.clone()),
-            admin_address.clone(),
+            user_address.clone(),
             2000,
         )
     })
     .unwrap();
 
-    assert_eq!(contract.balance(user_address.clone()).unwrap(), 1000);
+    assert_eq!(contract.balance(user_address.clone()).unwrap(), 3000);
     assert_eq!(
         contract.balance(admin_address.clone()).unwrap(),
         i128::from(i64::MAX)
@@ -1681,7 +1681,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
     })
     .unwrap();
 
-    assert_eq!(contract.balance(user_address.clone()).unwrap(), 1300);
+    assert_eq!(contract.balance(user_address.clone()).unwrap(), 3300);
     assert_eq!(
         contract.balance(admin_address.clone()).unwrap(),
         i128::from(i64::MAX)
