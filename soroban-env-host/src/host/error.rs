@@ -51,7 +51,12 @@ impl DebugInfo {
             writeln!(f, "   {}: {}", i, e)?;
         }
         if self.events.0.len() > MAX_EVENTS {
-            writeln!(f, "   {}: ... elided ...", MAX_EVENTS)?;
+            writeln!(
+                f,
+                "   {}: ... {} events elided ...",
+                MAX_EVENTS,
+                self.events.0.len() - MAX_EVENTS
+            )?;
         }
         Ok(())
     }
