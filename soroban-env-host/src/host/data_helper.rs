@@ -480,6 +480,8 @@ impl Host {
                     ));
                 }
             }
+            let live_until_ledger =
+                live_until_ledger.max(Some(self.get_min_live_until_ledger(durability)?));
             self.try_borrow_storage_mut()?
                 .put(
                     &key,

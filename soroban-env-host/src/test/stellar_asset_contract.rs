@@ -834,6 +834,59 @@ fn test_allowance_live_until() {
 }
 
 #[test]
+fn test_allowance_live_until_2() {
+    let test = StellarAssetContractTest::setup(function_name!());
+    let admin = TestSigner::account(&test.issuer_key);
+    let contract = test.default_stellar_asset_contract();
+
+    let user = TestSigner::account(&test.user_key);
+    let user_2 = TestSigner::account(&test.user_key_2);
+    test.create_default_account(&user);
+    test.create_default_account(&user_2);
+    test.create_default_trustline(&user);
+    test.create_default_trustline(&user_2);
+
+    contract
+        .mint(&admin, user.address(&test.host), 10_000_000)
+        .unwrap();
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        10_000_000,
+    );
+
+    let _ = contract.approve(&user, user_2.address(&test.host), 1000000, 123);
+    assert_eq!(
+        contract
+            .allowance(user.address(&test.host), user_2.address(&test.host))
+            .unwrap(),
+        1000000,
+    );
+
+    // advance the ledger past the live_until of the allowance. Allowance is no longer usable
+    test.host
+        .with_mut_ledger_info(|li| li.sequence_number = 5000)
+        .unwrap();
+    assert_eq!(
+        contract
+            .allowance(user.address(&test.host), user_2.address(&test.host))
+            .unwrap(),
+        0
+    );
+
+    // set new allowance with live_until > ledger sequence_number
+    contract
+        .approve(&user, user_2.address(&test.host), 2000000, 10000)
+        .unwrap();
+
+    assert_eq!(
+        contract
+            .allowance(user.address(&test.host), user_2.address(&test.host))
+            .unwrap(),
+        2000000,
+    );
+}
+
+#[test]
 fn test_burn() {
     let test = StellarAssetContractTest::setup(function_name!());
 
