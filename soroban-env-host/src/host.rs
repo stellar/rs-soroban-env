@@ -2147,7 +2147,8 @@ impl VmCallerEnv for Host {
                 // Non-recoverable errors should still cause guest to panic and
                 // abort execution.
                 if e.is_recoverable() {
-                    // Pass contract errors through.
+                    // Pass contract error _codes_ through, while switching
+                    // from Err(ce) to Ok(ce), i.e. recovering.
                     if e.error.is_type(ScErrorType::Contract) {
                         Ok(e.error.to_val())
                     } else {
