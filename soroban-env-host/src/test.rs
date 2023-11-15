@@ -10,7 +10,9 @@ mod bytes;
 mod complex;
 mod crypto;
 mod depth_limit;
+mod dispatch;
 mod event;
+mod finish;
 mod hostile;
 #[cfg(opt_build)]
 mod hostile_opt;
@@ -18,6 +20,8 @@ mod invocation;
 mod ledger;
 mod lifecycle;
 mod map;
+#[cfg(feature = "testutils")]
+mod metering_benchmark;
 mod num;
 mod post_mvp;
 mod prng;
@@ -27,7 +31,3 @@ mod str;
 mod symbol;
 mod tuple;
 mod vec;
-
-mod finish;
-#[cfg(feature = "testutils")]
-mod metering_benchmark;
