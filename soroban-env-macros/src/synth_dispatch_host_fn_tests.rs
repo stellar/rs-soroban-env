@@ -80,6 +80,71 @@ fn dfs(edges: &BTreeMap<String, BTreeSet<String>>, ty: &String, set: &mut BTreeS
     }
 }
 
+// This requires the input to be a valid signature
+const SPECIAL_CASES: [&str; 1] = ["recover_key_ecdsa_secp256k1"];
+
+fn generate_invalid_obj_call_for_special_cases() -> TokenStream {
+    let fn_name = "recover_key_ecdsa_secp256k1";
+    let wasm_module = format_ident!("wasm_module_calling_{}", fn_name);
+    let impls = (0..2).map(|i| {
+        let args = if i == 0 {
+            quote! {
+                // copied from test
+                let sig: Vec<u8> = hex::FromHex::from_hex(b"90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc93").unwrap();
+                let sig = host.add_host_object(ScBytes(sig.try_into().unwrap())).unwrap();
+                let args = HostVec::from_vec(
+                    vec![
+                        BytesObject::test_val(), // valid object type with invalid handle 123
+                        sig.to_val(), // valid object type + a valid object handle + valid signature
+                        U32Val::test_val_with_initial_value(0_i64)
+                    ]
+                )?;
+            }
+        } else {
+            quote! {
+                let args = HostVec::from_vec(
+                    vec![
+                        BytesObject::test_object(&host).to_val(), // valid object type and handle
+                        BytesObject::test_val(), // valid object type with invalid handle 123
+                        U32Val::test_val_with_initial_value(1)
+                    ]
+                )?;
+            }
+        };
+        (i, args)
+    }).map(|(i, args)| {
+        let fn_ident = format_ident!("invalid_object_handle_{}_arg_{}", fn_name, i as u32);
+        quote! {
+            #[test]
+            fn #fn_ident() -> Result<(), HostError> {
+                let wasm = #wasm_module();
+                let host = observe_host!(Host::test_host_with_recording_footprint());
+                host.as_budget().reset_unlimited()?;
+                let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+
+                #args
+                let args = host.add_host_object(args)?;
+
+                let res = host.call(
+                    contract_id_obj,
+                    Symbol::try_from_small_str("test")?,
+                    args,
+                );
+                assert!(HostError::result_matches_err(
+                    res,
+                    (ScErrorType::Object, ScErrorCode::MissingValue)
+                ));
+
+                Ok(())
+            }
+        }
+    });
+
+    quote! {
+        #(#impls)*
+    }
+}
+
 pub fn generate_wasm_module_calling_host_functions(file_lit: LitStr) -> Result<TokenStream, Error> {
     let root: crate::Root = crate::load_env_file(file_lit)?;
     let impls = root
@@ -229,7 +294,7 @@ pub fn generate_hostfn_call_with_wrong_types(file_lit: LitStr) -> Result<TokenSt
                 #[test]
                 fn #test_wrong_arg_type() -> Result<(), HostError> {
                     let wasm = #wasm_module();
-                    let host = Host::test_host_with_recording_footprint();
+                    let host = observe_host!(Host::test_host_with_recording_footprint());
                     host.as_budget().reset_unlimited()?;
                     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
                     #(#calls)*
@@ -253,10 +318,7 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
         all_test_candidate_types.insert(ty.to_string());
         all_test_candidate_types.insert(subty.to_string());
     }
-
-    let mut black_list_fns = BTreeSet::new();
-    // This requires the input to be a valid signature
-    black_list_fns.insert(String::from("recover_key_ecdsa_secp256k1"));
+    let special_case_fns: BTreeSet<String> = SPECIAL_CASES.iter().map(|s| s.to_string()).collect();
 
     let test_impls = root
         .modules
@@ -270,7 +332,7 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
                 .map(move |(i, a)| ((f.name.clone(), f.args.clone()), (i, a)))
         })
         .filter(|((f_name, _), (_, arg))| {
-            !black_list_fns.contains(f_name) && arg.r#type.ends_with("Object")
+            !special_case_fns.contains(f_name) && arg.r#type.ends_with("Object")
         })
         .map(|(f_info, (pos, _))| {
             let wasm_module = format_ident!("wasm_module_calling_{}", f_info.0);
@@ -278,8 +340,8 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
 
             let args = f_info.1.iter().enumerate().map(|(i, a)| {
                 let ty_ident = format_ident!("{}", a.r#type);
+                // if an arg is Object type, but it is not our test target, we generate an valid handle for it
                 if a.r#type.ends_with("Object") && i != pos {
-                    // if an arg is Object type, but it is not our test target, we generate an valid handle for it
                     // we must handle some special cases, e.g. a valid signature must be 64 bytes
                     if f_info.0 == "verify_sig_ed25519" && i == 2 {
                         quote! {
@@ -301,7 +363,7 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
                 #[test]
                 fn #fn_ident() -> Result<(), HostError> {
                     let wasm = #wasm_module();
-                    let host = Host::test_host_with_recording_footprint();
+                    let host = observe_host!(Host::test_host_with_recording_footprint());
                     host.as_budget().reset_unlimited()?;
                     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
@@ -322,7 +384,11 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
             }
         });
 
+    // manually handle the special case functions
+    let bl_impls = generate_invalid_obj_call_for_special_cases();
+
     Ok(quote! {
         #(#test_impls)*
+        #bl_impls
     })
 }
