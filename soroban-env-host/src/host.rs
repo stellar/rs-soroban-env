@@ -2643,6 +2643,7 @@ impl VmCallerEnv for Host {
         address: AddressObject,
         args: VecObject,
     ) -> Result<Void, Self::Error> {
+        self.check_obj_integrity(address.into())?;
         let args = self.visit_obj(args, |a: &HostVec| a.to_vec(self.budget_ref()))?;
         Ok(self
             .try_borrow_authorization_manager()?
@@ -2655,6 +2656,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
     ) -> Result<Void, Self::Error> {
+        self.check_obj_integrity(address.into())?;
         let args = self.with_current_frame(|f| {
             let args = match f {
                 Frame::ContractVM { args, .. } => args,
