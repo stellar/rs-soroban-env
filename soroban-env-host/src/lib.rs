@@ -47,11 +47,9 @@ pub use budget::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use host::testutils::call_with_suppressed_panic_hook;
 #[cfg(any(test, feature = "testutils"))]
 pub use host::ContractFunctionSet;
-#[cfg(any(test, feature = "testutils"))]
-pub use host::TestContractFrame;
 pub use host::{
-    metered_map::MeteredOrdMap, metered_vector::MeteredVector, Context, Frame, Host, HostError,
-    HostLifecycleEvent, LedgerInfo, Seed, SEED_BYTES,
+    metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo, Seed,
+    SEED_BYTES,
 };
 pub use soroban_env_common::*;
 
