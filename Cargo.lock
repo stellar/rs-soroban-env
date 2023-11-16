@@ -1403,6 +1403,7 @@ dependencies = [
  "soroban-bench-utils",
  "soroban-builtin-sdk-macros",
  "soroban-env-common",
+ "soroban-env-macros",
  "soroban-synth-wasm",
  "soroban-test-wasms",
  "soroban-wasmi",

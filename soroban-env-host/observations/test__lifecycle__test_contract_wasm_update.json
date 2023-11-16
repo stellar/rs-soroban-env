@@ -95,8 +95,8 @@
   "  93 call vec_new_from_linear_memory(U32(1048560), U32(2))": "cpu:10594681, mem:8515825, objs:1@e5149ad9/38@3a29373d",
   "  94 ret vec_new_from_linear_memory -> Ok(Vec(obj#77))": "cpu:10598565, mem:8515921, objs:1@e5149ad9/39@bd931ef0",
   "  95 call contract_event(Vec(obj#75), Vec(obj#77))": "cpu:10599706, mem:8515945, objs:2@aab8483b/39@bd931ef0",
-  "  96 ret contract_event -> Ok(Void)": "cpu:10604770, mem:8516122, objs:2@aab8483b/40@e30ccc23, evt:3@1efb9a8c",
+  "  96 ret contract_event -> Ok(Void)": "cpu:10604878, mem:8516122, objs:2@aab8483b/40@e30ccc23, evt:3@1efb9a8c",
   "  97 pop VM:357a3da3:add -> Ok(I32(30))": " vmem:1048576@8fee54a9",
   "  98 ret call -> Ok(I32(30))": " objs:-/40@e30ccc23, vmem:-",
-  "  99 end": "cpu:10604770, mem:8516122, prngs:-/d8a09d57, objs:-/40@e30ccc23, vmem:-, evt:3@1efb9a8c, store:-/3@2cbe3c4a"
+  "  99 end": "cpu:10604878, mem:8516122, prngs:-/d8a09d57, objs:-/40@e30ccc23, vmem:-, evt:3@1efb9a8c, store:-/3@2cbe3c4a"
 }

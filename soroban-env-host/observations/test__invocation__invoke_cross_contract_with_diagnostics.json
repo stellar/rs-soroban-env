@@ -19,8 +19,8 @@
   "  17 call vec_new_from_linear_memory(U32(1048560), U32(2))": "cpu:2729089, mem:2412020, objs:1@60ba53ce/10@e229aad5",
   "  18 ret vec_new_from_linear_memory -> Ok(Vec(obj#21))": "cpu:2732973, mem:2412116, objs:1@60ba53ce/11@1ba739ad",
   "  19 call contract_event(Vec(obj#19), Vec(obj#21))": "cpu:2734114, mem:2412140, objs:2@abccc140/11@1ba739ad",
-  "  20 ret contract_event -> Ok(Void)": "cpu:2739178, mem:2412317, objs:2@abccc140/12@8cfd32f4, evt:1@309c73cc",
+  "  20 ret contract_event -> Ok(Void)": "cpu:2739286, mem:2412317, objs:2@abccc140/12@8cfd32f4, evt:1@309c73cc",
   "  21 pop VM:357a3da3:add -> Ok(I32(3))": " vmem:1048576@3e7c0f10",
   "  22 ret call -> Ok(I32(3))": " objs:-/12@8cfd32f4, vmem:-",
-  "  23 end": "cpu:2739178, mem:2412317, prngs:-/d8a09d57, objs:-/12@8cfd32f4, vmem:-, evt:1@309c73cc, store:-/2@e7aeb228"
+  "  23 end": "cpu:2739286, mem:2412317, prngs:-/d8a09d57, objs:-/12@8cfd32f4, vmem:-, evt:1@309c73cc, store:-/2@e7aeb228"
 }

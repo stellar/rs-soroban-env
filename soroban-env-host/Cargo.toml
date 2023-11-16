@@ -45,6 +45,7 @@ hex = "0.4.3"
 itertools = "0.11.0"
 tabwriter = "1.3.0"
 thousands = "0.2.0"
+soroban-env-macros = { workspace = true }
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
 soroban-bench-utils = { package = "soroban-bench-utils", path = "../soroban-bench-utils" }

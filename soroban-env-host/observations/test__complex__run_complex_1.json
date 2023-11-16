@@ -35,14 +35,14 @@
   "  33 call vec_new_from_linear_memory(U32(1048544), U32(1))": "cpu:3075053, mem:2567275, objs:5@93e8cf26/14@76d456e2",
   "  34 ret vec_new_from_linear_memory -> Ok(Vec(obj#29))": "cpu:3078724, mem:2567363, objs:5@93e8cf26/15@934a61d9",
   "  35 call contract_event(Vec(obj#29), Bytes(obj#21))": "cpu:3079865, mem:2567387, objs:6@e37e9bd8/15@934a61d9",
-  "  36 ret contract_event -> Ok(Void)": "cpu:3084929, mem:2567564, objs:6@e37e9bd8/16@64866f90, evt:1@4403228c",
+  "  36 ret contract_event -> Ok(Void)": "cpu:3085037, mem:2567564, objs:6@e37e9bd8/16@64866f90, evt:1@4403228c",
   "  37 call map_new_from_linear_memory(U32(1048600), U32(1048544), U32(4))": "",
-  "  38 call obj_cmp(Symbol(obj#33), Symbol(seq))": "cpu:3095099, mem:2567862, objs:6@e37e9bd8/17@9d10386b",
-  "  39 ret obj_cmp -> Ok(-1)": "cpu:3095565",
-  "  40 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:3096706, mem:2567926, objs:6@e37e9bd8/18@648b89ed",
-  "  41 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:3097847, mem:2567950, objs:7@929806d2/18@648b89ed",
-  "  42 ret put_contract_data -> Ok(Void)": "cpu:3124048, mem:2569582, store:-/3@2bee78c2",
+  "  38 call obj_cmp(Symbol(obj#33), Symbol(seq))": "cpu:3095207, mem:2567862, objs:6@e37e9bd8/17@9d10386b",
+  "  39 ret obj_cmp -> Ok(-1)": "cpu:3095673",
+  "  40 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:3096814, mem:2567926, objs:6@e37e9bd8/18@648b89ed",
+  "  41 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:3097955, mem:2567950, objs:7@929806d2/18@648b89ed",
+  "  42 ret put_contract_data -> Ok(Void)": "cpu:3124156, mem:2569582, store:-/3@2bee78c2",
   "  43 pop VM:6272789f:go -> Ok(Void)": " vmem:1114112@6ea60965",
   "  44 ret call -> Ok(Void)": " objs:-/18@648b89ed, vmem:-",
-  "  45 end": "cpu:3124048, mem:2569582, prngs:-/d8a09d57, objs:-/18@648b89ed, vmem:-, evt:1@4403228c, store:-/3@2bee78c2"
+  "  45 end": "cpu:3124156, mem:2569582, prngs:-/d8a09d57, objs:-/18@648b89ed, vmem:-, evt:1@4403228c, store:-/3@2bee78c2"
 }

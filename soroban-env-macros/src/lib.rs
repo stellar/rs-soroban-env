@@ -1,5 +1,6 @@
 mod call_macro_with_all_host_functions;
 mod path;
+mod synth_dispatch_host_fn_tests;
 mod synth_wasm_expr_type;
 use serde::{Deserialize, Serialize};
 
@@ -148,4 +149,31 @@ pub fn generate_synth_wasm_expr_type(input: TokenStream) -> TokenStream {
         Ok(t) => t.into(),
         Err(e) => e.to_compile_error().into(),
     }
+}
+
+#[proc_macro]
+pub fn generate_synth_dispatch_host_fn_tests(input: TokenStream) -> TokenStream {
+    let file = parse_macro_input!(input as LitStr);
+    let mut impls: TokenStream = TokenStream::new();
+    let wasms: TokenStream =
+        match synth_dispatch_host_fn_tests::generate_wasm_module_calling_host_functions(
+            file.clone(),
+        ) {
+            Ok(t) => t.into(),
+            Err(e) => e.to_compile_error().into(),
+        };
+    let dispatch_wrong_types: TokenStream =
+        match synth_dispatch_host_fn_tests::generate_hostfn_call_with_wrong_types(file.clone()) {
+            Ok(t) => t.into(),
+            Err(e) => e.to_compile_error().into(),
+        };
+    let dispatch_invalid_obj_handles: TokenStream =
+        match synth_dispatch_host_fn_tests::generate_hostfn_call_with_invalid_obj_handles(file) {
+            Ok(t) => t.into(),
+            Err(e) => e.to_compile_error().into(),
+        };
+    impls.extend(wasms);
+    impls.extend(dispatch_wrong_types);
+    impls.extend(dispatch_invalid_obj_handles);
+    impls
 }
