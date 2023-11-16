@@ -1,3 +1,5 @@
+use core::cmp::Ordering;
+
 use crate::builtin_contracts::base_types::{Address, Bytes, BytesN, String};
 use crate::builtin_contracts::contract_error::ContractError;
 use crate::builtin_contracts::stellar_asset_contract::allowance::{
@@ -16,7 +18,7 @@ use crate::{err, HostError};
 
 use soroban_builtin_sdk_macros::contractimpl;
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{ConversionError, Env, EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{Compare, ConversionError, Env, EnvBase, TryFromVal, TryIntoVal};
 
 use super::admin::{read_administrator, write_administrator};
 use super::asset_info::read_asset_info;
@@ -48,6 +50,28 @@ fn check_non_native(e: &Host) -> Result<(), HostError> {
             &[],
         )),
         AssetInfo::AlphaNum4(_) | AssetInfo::AlphaNum12(_) => Ok(()),
+    }
+}
+
+fn check_not_issuer(e: &Host, addr: &Address) -> Result<(), HostError> {
+    let issuer_check = |issuer: BytesN<32>, address: &Address| -> Result<(), HostError> {
+        let issuer_account_id = e.account_id_from_bytesobj(issuer.into())?;
+        let issuer_address = Address::from_account(e, &issuer_account_id)?;
+        if e.compare(&issuer_address, &address)? == Ordering::Equal {
+            Err(e.error(
+                ContractError::OperationNotSupportedError.into(),
+                "operation invalid on issuer",
+                &[],
+            ))
+        } else {
+            Ok(())
+        }
+    };
+
+    match read_asset_info(e)? {
+        AssetInfo::Native => Ok(()),
+        AssetInfo::AlphaNum4(asset) => issuer_check(asset.issuer, addr),
+        AssetInfo::AlphaNum12(asset) => issuer_check(asset.issuer, addr),
     }
 }
 
@@ -228,6 +252,8 @@ impl StellarAssetContract {
         let _span = tracy_span!("stellar asset contract burn");
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
+        check_not_issuer(e, &from)?;
+
         from.require_auth()?;
 
         e.extend_current_contract_instance_and_code(
@@ -250,6 +276,8 @@ impl StellarAssetContract {
         let _span = tracy_span!("stellar asset contract burn_from");
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
+        check_not_issuer(e, &from)?;
+
         spender.require_auth()?;
 
         e.extend_current_contract_instance_and_code(
@@ -268,6 +296,8 @@ impl StellarAssetContract {
         let _span = tracy_span!("stellar asset contract clawback");
         check_nonnegative_amount(e, amount)?;
         check_clawbackable(e, from.metered_clone(e)?)?;
+        check_not_issuer(e, &from)?;
+
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
@@ -301,6 +331,8 @@ impl StellarAssetContract {
     pub fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
         let _span = tracy_span!("stellar asset contract mint");
         check_nonnegative_amount(e, amount)?;
+        check_not_issuer(e, &to)?;
+
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
