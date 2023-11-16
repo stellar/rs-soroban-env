@@ -622,8 +622,8 @@ impl EnvBase for Host {
             | (HostObject::Symbol(_), Tag::SymbolObject)
             | (HostObject::Address(_), Tag::AddressObject) => Ok(()),
             _ => Err(self.err(
-                xdr::ScErrorType::Object,
-                xdr::ScErrorCode::UnexpectedType,
+                xdr::ScErrorType::Value,
+                xdr::ScErrorCode::InvalidInput,
                 "mis-tagged object reference",
                 &[],
             )),

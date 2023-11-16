@@ -378,8 +378,8 @@ impl Host {
             let obj_payload = obj.as_val().get_payload();
             let payload_val = Val::try_from_val(self, &obj_payload)?;
             Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::MissingValue,
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
                 "unknown object reference",
                 &[payload_val],
             ))
