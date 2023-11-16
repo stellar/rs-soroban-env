@@ -9,10 +9,11 @@
 
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+use soroban_env_common::xdr::{ContractDataDurability, ScErrorCode, ScErrorType};
 use soroban_env_common::{Env, Val};
 
 use crate::budget::Budget;
+use crate::host::ledger_info_helper::get_key_durability;
 use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
@@ -404,16 +405,29 @@ impl Storage {
             ));
         }
 
-        let new_live_until =
+        let mut new_live_until =
             host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
 
         if new_live_until > host.max_live_until_ledger()? {
-            return Err(host.err(
-                ScErrorType::Storage,
-                ScErrorCode::InvalidAction,
-                "trying to extend past max live_until ledger",
-                &[new_live_until.into()],
-            ));
+            if let Some(durability) = get_key_durability(&key) {
+                if matches!(durability, ContractDataDurability::Persistent) {
+                    new_live_until = host.max_live_until_ledger()?;
+                } else {
+                    return Err(host.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::InvalidAction,
+                        "trying to extend past max live_until ledger",
+                        &[new_live_until.into()],
+                    ));
+                }
+            } else {
+                return Err(host.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
+                    "durability is missing",
+                    &[],
+                ));
+            }
         }
 
         if new_live_until > old_live_until && old_live_until.saturating_sub(ledger_seq) <= threshold

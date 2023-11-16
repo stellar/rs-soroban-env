@@ -177,13 +177,22 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         test_vec![host, key_1, threshold, max_extend + 1]
     };
 
-    assert!(host
-        .call(
+    if storage == "temporary" {
+        assert!(host
+            .call(
+                contract_id,
+                storage_fn_name(host, "extend", storage),
+                extend_args_past_max.into(),
+            )
+            .is_err());
+    } else {
+        host.call(
             contract_id,
             storage_fn_name(host, "extend", storage),
             extend_args_past_max.into(),
         )
-        .is_err());
+        .unwrap();
+    }
 
     // Put another key and verify it's there
     host.call(
