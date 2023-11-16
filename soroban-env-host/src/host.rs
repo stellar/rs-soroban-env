@@ -88,6 +88,16 @@ pub(crate) enum HostLifecycleEvent<'a> {
 pub(crate) type HostLifecycleHook =
     Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
+#[cfg(any(test, feature = "testutils"))]
+#[derive(Clone, Copy)]
+pub enum ContractInvocationEvent {
+    Start,
+    Finish,
+}
+
+#[cfg(any(test, feature = "testutils"))]
+pub type ContractInvocationHook = Rc<dyn Fn(ContractInvocationEvent) -> ()>;
+
 #[derive(Clone, Default)]
 struct HostImpl {
     source_account: RefCell<Option<AccountId>>,
@@ -143,7 +153,14 @@ struct HostImpl {
     #[doc(hidden)]
     #[cfg(feature = "testutils")]
     lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
+    // Store a simple contract invocation hook for public usage.
+    // The hook triggers when the top-level contract invocation
+    // starts and when it ends.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "testutils"))]
+    top_contract_invocation_hook: RefCell<Option<ContractInvocationHook>>,
 }
+
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Clone)]
 pub struct Host(Rc<HostImpl>);
@@ -265,6 +282,14 @@ impl_checked_borrow_helpers!(
     try_borrow_lifecycle_event_hook_mut
 );
 
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
+    top_contract_invocation_hook,
+    Option<ContractInvocationHook>,
+    try_borrow_top_contract_invocation_hook,
+    try_borrow_top_contract_invocation_hook_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -307,6 +332,8 @@ impl Host {
             previous_authorization_manager: RefCell::new(None),
             #[cfg(feature = "testutils")]
             lifecycle_event_hook: RefCell::new(None),
+            #[cfg(any(test, feature = "testutils"))]
+            top_contract_invocation_hook: RefCell::new(None),
         }))
     }
 
@@ -950,7 +977,7 @@ impl VmCallerEnv for Host {
                         ScErrorCode::UnexpectedType,
                         "two non-object args to obj_cmp",
                         &[a, b],
-                    ))
+                    ));
                 }
             }
         } {
@@ -2666,7 +2693,7 @@ impl VmCallerEnv for Host {
                         ScErrorCode::InternalError,
                         "require_auth is not suppported for host fns",
                         &[],
-                    ))
+                    ));
                 }
                 Frame::StellarAssetContract(_, _, args, _) => args,
                 #[cfg(any(test, feature = "testutils"))]
@@ -2863,6 +2890,22 @@ impl Host {
     // It needs to be a `pub` method because benches are considered a separate crate.
     pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
         self.to_host_val(v).map(Into::into)
+    }
+
+    /// Sets a hook to track top-level contract invocations.
+    /// The hook triggers right before the top-level contract invocation
+    /// starts and right after it ends.
+    /// 'Top-level contract invocation' happens when the host creates
+    /// the first context frame that belongs to a contract, which includes
+    /// both direct host function calls (`call`/`try_call`), and test
+    /// utilities such as `with_test_contract_frame` or
+    /// `call_account_contract_check_auth`.
+    pub fn set_top_contract_invocation_hook(
+        &self,
+        hook: Option<ContractInvocationHook>,
+    ) -> Result<(), HostError> {
+        *self.try_borrow_top_contract_invocation_hook_mut()? = hook;
+        Ok(())
     }
 
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
