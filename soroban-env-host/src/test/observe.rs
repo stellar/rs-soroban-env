@@ -46,9 +46,13 @@ fn full_path(testname: &str) -> PathBuf {
         testname.to_string()
     };
     let filename = testname.split("::").join("__");
-    let root: PathBuf = env::var("CARGO_MANIFEST_DIR")
-        .expect("CARGO_MANIFEST_DIR environment variable is required to be set")
-        .into();
+
+    let root: PathBuf = match env::var("CARGO_MANIFEST_DIR") {
+        Ok(dir) => dir.into(),
+        Err(_) => env::current_dir()
+            .expect("unable to get current dir")
+            .join("soroban-env-host"),
+    };
     root.join("observations")
         .join(filename)
         .with_extension("json")

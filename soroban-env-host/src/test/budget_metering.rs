@@ -239,7 +239,7 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
     host.map_put(m, k1.into(), v1)?;
 
     host.with_budget(|budget| {
-        // 12 visit-objs =
+        // 17 visit-objs =
         //    1 to ensure value integrity of key for first map-put
         //  + 1 to get map to do first map-put
         //  + 1 to ensure value integrity of key for second map-put
@@ -247,8 +247,9 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
         //  + 2 to check integrity of k0 and k1 for obj_cmp during lookup
         //  + 2 for actually doing comparison in obj_cmp
         //  + 4 more to do same 2+2 visits when validating order of new map
-        // = 12
-        assert_eq!(budget.get_tracker(ContractCostType::VisitObject)?.0, 12);
+        //  + 5 lookups on objects returned from 5 host fn calls to check their integrity
+        // = 17
+        assert_eq!(budget.get_tracker(ContractCostType::VisitObject)?.0, 17);
         // upper bound of number of map-accesses, counting both binary-search, point-access and validate-scan.
         Ok(())
     })?;

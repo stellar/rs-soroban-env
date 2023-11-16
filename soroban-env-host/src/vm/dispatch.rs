@@ -1,7 +1,7 @@
 use super::FuelRefillable;
 use crate::{
     xdr::{ContractCostType, ScErrorCode, ScErrorType},
-    EnvBase, Host, HostError, VmCaller, VmCallerEnv,
+    CheckedEnvArg, EnvBase, Host, HostError, VmCaller, VmCallerEnv,
 };
 use crate::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
@@ -191,7 +191,7 @@ macro_rules! generate_dispatch_functions {
                     // happens to be a natural switching point for that: we have
                     // conversions to and from both Val and i64 / u64 for
                     // wasmi::Value.
-                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?),*);
+                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::check_env_arg(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?, &host)?),*);
 
                     #[cfg(feature = "testutils")]
                     {
@@ -210,6 +210,7 @@ macro_rules! generate_dispatch_functions {
 
                     let res = match res {
                         Ok(ok) => {
+                            let ok = ok.check_env_arg(&host)?;
                             let val: Value = ok.marshal_relative_from_self(&host)?;
                             if let Value::I64(v) = val {
                                 Ok((v,))

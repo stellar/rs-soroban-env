@@ -1,8 +1,8 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
   "   1 call bytes_new()": "",
-  "   2 ret bytes_new -> Ok(Bytes(obj#1))": "cpu:1141, mem:64, objs:-/1@5b7170d7",
+  "   2 ret bytes_new -> Ok(Bytes(obj#1))": "cpu:1249, mem:64, objs:-/1@5b7170d7",
   "   3 call bytes_put(Bytes(obj#1), U32(0), U32(1))": "",
-  "   4 ret bytes_put -> Err(Error(Object, IndexBounds))": "cpu:2893, mem:80",
-  "   5 end": "cpu:2893, mem:80, prngs:-/-, objs:-/1@5b7170d7, vmem:-, evt:-, store:-/-"
+  "   4 ret bytes_put -> Err(Error(Object, IndexBounds))": "cpu:3109, mem:80",
+  "   5 end": "cpu:3109, mem:80, prngs:-/-, objs:-/1@5b7170d7, vmem:-, evt:-, store:-/-"
 }

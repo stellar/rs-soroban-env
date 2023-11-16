@@ -1,14 +1,14 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/d8a09d57, objs:-/-, vmem:-, evt:-, store:-/-",
   "   1 call vec_new()": "cpu:38478, mem:1718, objs:-/2@7826ffba, store:-/2@8f53be5d",
-  "   2 ret vec_new -> Ok(Vec(obj#5))": "cpu:39619, mem:1782, objs:-/3@16d3c9b2",
+  "   2 ret vec_new -> Ok(Vec(obj#5))": "cpu:39727, mem:1782, objs:-/3@16d3c9b2",
   "   3 call call(Address(obj#1), Symbol(go), Vec(obj#5))": "",
-  "   4 push TEST:   0:go()": "cpu:63332, mem:2918, objs:-/4@b0f4e375",
+  "   4 push TEST:   0:go()": "cpu:63656, mem:2918, objs:-/4@b0f4e375",
   "   5 pop TEST:   0:go -> Err(Error(Contract, #12345))": "",
   "   6 ret call -> Err(Error(Contract, #12345))": "",
   "   7 call try_call(Address(obj#1), Symbol(go), Vec(obj#5))": "",
-  "   8 push TEST:   0:go()": "cpu:87045, mem:4054, objs:-/5@f35de5c",
+  "   8 push TEST:   0:go()": "cpu:87585, mem:4054, objs:-/5@f35de5c",
   "   9 pop TEST:   0:go -> Err(Error(Contract, #12345))": "",
   "  10 ret try_call -> Ok(Error(Contract, #12345))": "",
-  "  11 end": "cpu:87045, mem:4054, prngs:-/d8a09d57, objs:-/5@f35de5c, vmem:-, evt:-, store:-/2@8f53be5d"
+  "  11 end": "cpu:87585, mem:4054, prngs:-/d8a09d57, objs:-/5@f35de5c, vmem:-, evt:-, store:-/2@8f53be5d"
 }

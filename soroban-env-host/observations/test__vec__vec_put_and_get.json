@@ -1,8 +1,8 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
   "   1 call vec_put(Vec(obj#1), U32(1), U32(9))": "cpu:2788, mem:104, objs:-/1@d548e8c1",
-  "   2 ret vec_put -> Ok(Vec(obj#3))": "cpu:5935, mem:208, objs:-/2@8d9e686c",
+  "   2 ret vec_put -> Ok(Vec(obj#3))": "cpu:6151, mem:208, objs:-/2@8d9e686c",
   "   3 call vec_get(Vec(obj#3), U32(1))": "",
-  "   4 ret vec_get -> Ok(U32(9))": "cpu:6294",
-  "   5 end": "cpu:6294, mem:208, prngs:-/-, objs:-/2@8d9e686c, vmem:-, evt:-, store:-/-"
+  "   4 ret vec_get -> Ok(U32(9))": "cpu:6618",
+  "   5 end": "cpu:6618, mem:208, prngs:-/-, objs:-/2@8d9e686c, vmem:-, evt:-, store:-/-"
 }

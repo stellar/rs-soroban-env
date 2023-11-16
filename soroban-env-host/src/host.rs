@@ -604,6 +604,32 @@ impl EnvBase for Host {
         self.error(e, "promoting Error to HostError", &[])
     }
 
+    fn check_obj_integrity(&self, obj: Object) -> Result<(), HostError> {
+        use crate::{xdr, Tag};
+        self.visit_obj_untyped(obj, |hobj| match (hobj, obj.to_val().get_tag()) {
+            (HostObject::Vec(_), Tag::VecObject)
+            | (HostObject::Map(_), Tag::MapObject)
+            | (HostObject::U64(_), Tag::U64Object)
+            | (HostObject::I64(_), Tag::I64Object)
+            | (HostObject::TimePoint(_), Tag::TimepointObject)
+            | (HostObject::Duration(_), Tag::DurationObject)
+            | (HostObject::U128(_), Tag::U128Object)
+            | (HostObject::I128(_), Tag::I128Object)
+            | (HostObject::U256(_), Tag::U256Object)
+            | (HostObject::I256(_), Tag::I256Object)
+            | (HostObject::Bytes(_), Tag::BytesObject)
+            | (HostObject::String(_), Tag::StringObject)
+            | (HostObject::Symbol(_), Tag::SymbolObject)
+            | (HostObject::Address(_), Tag::AddressObject) => Ok(()),
+            _ => Err(self.err(
+                xdr::ScErrorType::Value,
+                xdr::ScErrorCode::InvalidInput,
+                "mis-tagged object reference",
+                &[],
+            )),
+        })
+    }
+
     // This function is somewhat subtle.
     //
     // It exists to allow the client of the (VmCaller)Env interface(s) to
@@ -948,8 +974,6 @@ impl VmCallerEnv for Host {
 
     // Metered: covered by `visit`.
     fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
-        self.check_val_integrity(a)?;
-        self.check_val_integrity(b)?;
         let res = match {
             match (Object::try_from(a), Object::try_from(b)) {
                 // We were given two objects: compare them.
@@ -1015,8 +1039,6 @@ impl VmCallerEnv for Host {
         topics: VecObject,
         data: Val,
     ) -> Result<Void, HostError> {
-        self.check_obj_integrity(topics.into())?;
-        self.check_val_integrity(data)?;
         self.record_contract_event(ContractEventType::Contract, topics, data)?;
         Ok(Val::VOID)
     }
@@ -1355,8 +1377,6 @@ impl VmCallerEnv for Host {
         k: Val,
         v: Val,
     ) -> Result<MapObject, HostError> {
-        self.check_val_integrity(k)?;
-        self.check_val_integrity(v)?;
         let mnew = self.visit_obj(m, |hm: &HostMap| hm.insert(k, v, self))?;
         self.add_host_object(mnew)
     }
@@ -1367,7 +1387,6 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
-        self.check_val_integrity(k)?;
         self.visit_obj(m, |hm: &HostMap| {
             hm.get(&k, self)?.copied().ok_or_else(|| {
                 self.err(
@@ -1386,7 +1405,6 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<MapObject, HostError> {
-        self.check_val_integrity(k)?;
         match self.visit_obj(m, |hm: &HostMap| hm.remove(&k, self))? {
             Some((mnew, _)) => Ok(self.add_host_object(mnew)?),
             None => Err(self.err(
@@ -1409,7 +1427,6 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Bool, HostError> {
-        self.check_val_integrity(k)?;
         self.visit_obj(m, |hm: &HostMap| Ok(hm.contains_key(&k, self)?.into()))
     }
 
@@ -1597,7 +1614,6 @@ impl VmCallerEnv for Host {
         x: Val,
     ) -> Result<VecObject, HostError> {
         let i: u32 = i.into();
-        self.check_val_integrity(x)?;
         let vnew = self.visit_obj(v, |hv: &HostVec| {
             self.validate_index_lt_bound(i, hv.len())?;
             hv.set(i as usize, x, self.as_budget())
@@ -1643,7 +1659,6 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<VecObject, HostError> {
-        self.check_val_integrity(x)?;
         let vnew = self.visit_obj(v, |hv: &HostVec| hv.push_front(x, self.as_budget()))?;
         self.add_host_object(vnew)
     }
@@ -1663,7 +1678,6 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<VecObject, HostError> {
-        self.check_val_integrity(x)?;
         let vnew = self.visit_obj(v, |hv: &HostVec| hv.push_back(x, self.as_budget()))?;
         self.add_host_object(vnew)
     }
@@ -1697,7 +1711,6 @@ impl VmCallerEnv for Host {
         x: Val,
     ) -> Result<VecObject, HostError> {
         let i: u32 = i.into();
-        self.check_val_integrity(x)?;
         let vnew = self.visit_obj(v, |hv: &HostVec| {
             self.validate_index_le_bound(i, hv.len())?;
             hv.insert(i as usize, x, self.as_budget())
@@ -1745,7 +1758,6 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<Val, Self::Error> {
-        self.check_val_integrity(x)?;
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
                 match hv.first_index_of(|other| self.compare(&x, other), self.as_budget())? {
@@ -1762,7 +1774,6 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<Val, Self::Error> {
-        self.check_val_integrity(x)?;
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
                 match hv.last_index_of(|other| self.compare(&x, other), self.as_budget())? {
@@ -1779,7 +1790,6 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<u64, Self::Error> {
-        self.check_val_integrity(x)?;
         self.visit_obj(v, |hv: &HostVec| {
             let res = hv.binary_search_by(|probe| self.compare(probe, &x), self.as_budget())?;
             self.u64_from_binary_search_result(res)
@@ -1855,8 +1865,6 @@ impl VmCallerEnv for Host {
         v: Val,
         t: StorageType,
     ) -> Result<Void, HostError> {
-        self.check_val_integrity(k)?;
-        self.check_val_integrity(v)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 self.put_contract_data_into_ledger(k, v, t)?
@@ -1877,7 +1885,6 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Bool, HostError> {
-        self.check_val_integrity(k)?;
         let res = match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
@@ -1900,7 +1907,6 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Val, HostError> {
-        self.check_val_integrity(k)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
@@ -1941,7 +1947,6 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Void, HostError> {
-        self.check_val_integrity(k)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.contract_data_key_from_val(k, t.try_into()?)?;
@@ -1971,7 +1976,6 @@ impl VmCallerEnv for Host {
         threshold: U32Val,
         extend_to: U32Val,
     ) -> Result<Void, HostError> {
-        self.check_val_integrity(k)?;
         if matches!(t, StorageType::Instance) {
             return Err(self.err(
                 ScErrorType::Storage,
@@ -2211,7 +2215,6 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         v: Val,
     ) -> Result<BytesObject, HostError> {
-        self.check_val_integrity(v)?;
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
         metered_write_xdr(self.budget_ref(), &scv, &mut buf)?;
@@ -2670,7 +2673,6 @@ impl VmCallerEnv for Host {
         address: AddressObject,
         args: VecObject,
     ) -> Result<Void, Self::Error> {
-        self.check_obj_integrity(address.into())?;
         let args = self.visit_obj(args, |a: &HostVec| a.to_vec(self.budget_ref()))?;
         Ok(self
             .try_borrow_authorization_manager()?
@@ -2683,7 +2685,6 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
     ) -> Result<Void, Self::Error> {
-        self.check_obj_integrity(address.into())?;
         let args = self.with_current_frame(|f| {
             let args = match f {
                 Frame::ContractVM { args, .. } => args,

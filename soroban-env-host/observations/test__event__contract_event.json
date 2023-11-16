@@ -1,20 +1,20 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/d8a09d57, objs:-/-, vmem:-, evt:-, store:-/-",
   "   1 call call(Address(obj#1), Symbol(add), Vec(obj#3))": "cpu:41265, mem:1814, objs:-/3@1aa2506e, store:-/2@8f53be5d",
-  "   2 push TEST:   0:add(I32(1), I32(2))": "cpu:64980, mem:2966, objs:-/4@1ddf9399",
+  "   2 push TEST:   0:add(I32(1), I32(2))": "cpu:65196, mem:2966, objs:-/4@1ddf9399",
   "   3 call map_new()": "",
-  "   4 ret map_new -> Ok(Map(obj#9))": "cpu:66121, mem:3030, objs:-/5@b76a42ae",
+  "   4 ret map_new -> Ok(Map(obj#9))": "cpu:66445, mem:3030, objs:-/5@b76a42ae",
   "   5 call map_put(Map(obj#9), U32(1), U32(2))": "",
-  "   6 ret map_put -> Ok(Map(obj#11))": "cpu:69776, mem:3134, objs:-/6@bf5a91f1",
+  "   6 ret map_put -> Ok(Map(obj#11))": "cpu:70316, mem:3134, objs:-/6@bf5a91f1",
   "   7 call vec_new()": "",
-  "   8 ret vec_new -> Ok(Vec(obj#13))": "cpu:70917, mem:3198, objs:-/7@baf1f04f",
+  "   8 ret vec_new -> Ok(Vec(obj#13))": "cpu:71565, mem:3198, objs:-/7@baf1f04f",
   "   9 call vec_push_back(Vec(obj#13), U32(0))": "",
-  "  10 ret vec_push_back -> Ok(Vec(obj#15))": "cpu:73811, mem:3286, objs:-/8@d16a88ba",
+  "  10 ret vec_push_back -> Ok(Vec(obj#15))": "cpu:74675, mem:3286, objs:-/8@d16a88ba",
   "  11 call vec_push_back(Vec(obj#15), U32(1))": "",
-  "  12 ret vec_push_back -> Ok(Vec(obj#17))": "cpu:76706, mem:3382, objs:-/9@39d74e1d",
+  "  12 ret vec_push_back -> Ok(Vec(obj#17))": "cpu:77786, mem:3382, objs:-/9@39d74e1d",
   "  13 call contract_event(Vec(obj#17), Map(obj#11))": "",
-  "  14 ret contract_event -> Ok(Void)": "cpu:81615, mem:3559, objs:-/10@45e9a6d8, evt:1@5435ad6c",
+  "  14 ret contract_event -> Ok(Void)": "cpu:82695, mem:3559, objs:-/10@45e9a6d8, evt:1@5435ad6c",
   "  15 pop TEST:   0:add -> Ok(Void)": "",
   "  16 ret call -> Ok(Void)": "",
-  "  17 end": "cpu:87436, mem:4031, prngs:-/d8a09d57, objs:-/10@45e9a6d8, vmem:-, evt:1@5435ad6c, store:-/2@8f53be5d"
+  "  17 end": "cpu:88516, mem:4031, prngs:-/d8a09d57, objs:-/10@45e9a6d8, vmem:-, evt:1@5435ad6c, store:-/2@8f53be5d"
 }

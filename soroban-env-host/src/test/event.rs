@@ -245,7 +245,7 @@ fn nonexistent_topic_obj_handle() -> Result<(), HostError> {
     let res = host.contract_event(topics, data);
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Object, ScErrorCode::MissingValue)
+        (ScErrorType::Value, ScErrorCode::InvalidInput)
     ));
     Ok(())
 }

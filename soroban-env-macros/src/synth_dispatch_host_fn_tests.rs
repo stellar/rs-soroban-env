@@ -132,7 +132,7 @@ fn generate_invalid_obj_call_for_special_cases() -> TokenStream {
                 );
                 assert!(HostError::result_matches_err(
                     res,
-                    (ScErrorType::Object, ScErrorCode::MissingValue)
+                    (ScErrorType::Value, ScErrorCode::InvalidInput)
                 ));
 
                 Ok(())
@@ -376,7 +376,7 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
                     );
                     assert!(HostError::result_matches_err(
                         res,
-                        (ScErrorType::Object, ScErrorCode::MissingValue)
+                        (ScErrorType::Value, ScErrorCode::InvalidInput)
                     ));
 
                     Ok(())
