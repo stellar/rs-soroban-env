@@ -56,7 +56,9 @@ pub trait EnvBase: Sized + Clone {
 
     /// Check that an Object handle is good according to the current Env. For
     /// general Val-validity checking one should use Val::good().
-    fn check_obj_integrity(&self, obj: Object) -> Result<(), Self::Error>;
+    fn check_obj_integrity(&self, _obj: Object) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     /// Convert a [`crate::Error`] into [`EnvBase::Error`]. This is similar to adding
     /// `+ From<crate::Error>` to the associated type bound for `EnvBase::Error`
