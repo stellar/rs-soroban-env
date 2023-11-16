@@ -361,8 +361,10 @@ impl Host {
         let obj: Object = obj.into();
         let handle: u32 = obj.get_handle();
         if is_relative_object_handle(handle) {
+            // This should never happen: we should have translated a relative
+            // object handle to an absolute before we got here.
             Err(self.err(
-                ScErrorType::Context,
+                ScErrorType::Object,
                 ScErrorCode::InternalError,
                 "looking up relative object",
                 &[Val::from_u32(handle).to_val()],
@@ -397,9 +399,11 @@ impl Host {
         F: FnOnce(&HOT) -> Result<U, HostError>,
     {
         self.visit_obj_untyped(obj, |hobj| match HOT::try_extract(hobj) {
+            // This should never happen: we should have rejected a mis-tagged
+            // object handle before it got here.
             None => Err(self.err(
                 xdr::ScErrorType::Object,
-                xdr::ScErrorCode::UnexpectedType,
+                xdr::ScErrorCode::InternalError,
                 "object reference type does not match tag",
                 &[],
             )),
