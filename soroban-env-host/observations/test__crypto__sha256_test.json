@@ -1,6 +1,6 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
   "   1 call compute_hash_sha256(Bytes(obj#1))": "cpu:2785, mem:81, objs:-/1@8035f0",
-  "   2 ret compute_hash_sha256 -> Ok(Bytes(obj#3))": "cpu:6990, mem:185, objs:-/2@465e1832",
-  "   3 end": "cpu:8746, mem:233, prngs:-/-, objs:-/2@465e1832, vmem:-, evt:-, store:-/-"
+  "   2 ret compute_hash_sha256 -> Ok(Bytes(obj#3))": "cpu:7206, mem:185, objs:-/2@465e1832",
+  "   3 end": "cpu:8962, mem:233, prngs:-/-, objs:-/2@465e1832, vmem:-, evt:-, store:-/-"
 }

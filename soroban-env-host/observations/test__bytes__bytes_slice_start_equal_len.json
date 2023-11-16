@@ -3,10 +3,10 @@
   "   1 call bytes_new_from_slice(4)": "",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:2785, mem:84, objs:-/1@5311c87f",
   "   3 call bytes_slice(Bytes(obj#1), U32(4), U32(4))": "",
-  "   4 ret bytes_slice -> Ok(Bytes(obj#3))": "cpu:5678, mem:164, objs:-/2@69ed7e0c",
+  "   4 ret bytes_slice -> Ok(Bytes(obj#3))": "cpu:5894, mem:164, objs:-/2@69ed7e0c",
   "   5 call bytes_new()": "",
-  "   6 ret bytes_new -> Ok(Bytes(obj#5))": "cpu:6819, mem:228, objs:-/3@33e79d49",
+  "   6 ret bytes_new -> Ok(Bytes(obj#5))": "cpu:7143, mem:228, objs:-/3@33e79d49",
   "   7 call obj_cmp(Bytes(obj#3), Bytes(obj#5))": "",
-  "   8 ret obj_cmp -> Ok(0)": "cpu:7501",
-  "   9 end": "cpu:7501, mem:228, prngs:-/-, objs:-/3@33e79d49, vmem:-, evt:-, store:-/-"
+  "   8 ret obj_cmp -> Ok(0)": "cpu:7825",
+  "   9 end": "cpu:7825, mem:228, prngs:-/-, objs:-/3@33e79d49, vmem:-, evt:-, store:-/-"
 }
