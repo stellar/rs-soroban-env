@@ -862,6 +862,23 @@ fn test_burn() {
         0
     );
 
+    // Mint to issuer not allowed
+    assert_eq!(
+        to_contract_err(
+            contract
+                .mint(&admin, admin.address(&test.host), 1)
+                .err()
+                .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+
+    // Burn from issuer not allowed
+    assert_eq!(
+        to_contract_err(contract.burn(&admin, 1).err().unwrap()),
+        ContractError::OperationNotSupportedError
+    );
+
     // Allow 10_000_000 units of contract to be transferred from user by user 3.
     contract
         .approve(&user, user_2.address(&test.host), 10_000_000, 200)
@@ -1624,13 +1641,13 @@ fn test_account_invoker_auth_with_issuer_admin() {
     test.run_from_account(admin_acc.clone(), || {
         contract.mint(
             &TestSigner::AccountInvoker(admin_acc.clone()),
-            admin_address.clone(),
+            user_address.clone(),
             2000,
         )
     })
     .unwrap();
 
-    assert_eq!(contract.balance(user_address.clone()).unwrap(), 1000);
+    assert_eq!(contract.balance(user_address.clone()).unwrap(), 3000);
     assert_eq!(
         contract.balance(admin_address.clone()).unwrap(),
         i128::from(i64::MAX)
@@ -1681,7 +1698,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
     })
     .unwrap();
 
-    assert_eq!(contract.balance(user_address.clone()).unwrap(), 1300);
+    assert_eq!(contract.balance(user_address.clone()).unwrap(), 3300);
     assert_eq!(
         contract.balance(admin_address.clone()).unwrap(),
         i128::from(i64::MAX)
