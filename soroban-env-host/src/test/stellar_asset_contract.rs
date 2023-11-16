@@ -862,6 +862,23 @@ fn test_burn() {
         0
     );
 
+    // Mint to issuer not allowed
+    assert_eq!(
+        to_contract_err(
+            contract
+                .mint(&admin, admin.address(&test.host), 1)
+                .err()
+                .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+
+    // Burn from issuer not allowed
+    assert_eq!(
+        to_contract_err(contract.burn(&admin, 1).err().unwrap()),
+        ContractError::OperationNotSupportedError
+    );
+
     // Allow 10_000_000 units of contract to be transferred from user by user 3.
     contract
         .approve(&user, user_2.address(&test.host), 10_000_000, 200)
