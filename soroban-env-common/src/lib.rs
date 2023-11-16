@@ -109,7 +109,7 @@ pub use val::{Bool, Void};
 
 pub use compare::Compare;
 pub use convert::{Convert, TryFromVal, TryIntoVal};
-pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
+pub use env::{call_macro_with_all_host_functions, CheckedEnvArg, Env, EnvBase};
 pub use vmcaller_env::{VmCaller, VmCallerEnv};
 
 pub use bytes::BytesObject;

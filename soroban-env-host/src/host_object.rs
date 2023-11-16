@@ -2,8 +2,8 @@
 
 use soroban_env_common::{
     xdr::{ContractCostType, ScErrorCode, ScErrorType},
-    Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, Tag,
-    TimepointSmall, TryFromVal, U128Small, U256Small, U64Small,
+    Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, TimepointSmall,
+    TryFromVal, U128Small, U256Small, U64Small,
 };
 
 use crate::{
@@ -380,51 +380,10 @@ impl Host {
             Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::MissingValue,
-                "unknown object reference, is it coming from a different environment?",
+                "unknown object reference",
                 &[payload_val],
             ))
         }
-    }
-
-    pub(crate) fn check_val_integrity(&self, val: Val) -> Result<(), HostError> {
-        if !val.is_good() {
-            return Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::InvalidInput,
-                "bad value",
-                &[],
-            ));
-        }
-        if let Ok(obj) = Object::try_from(val) {
-            self.check_obj_integrity(obj)
-        } else {
-            Ok(())
-        }
-    }
-
-    pub(crate) fn check_obj_integrity(&self, obj: Object) -> Result<(), HostError> {
-        self.visit_obj_untyped(obj, |hobj| match (hobj, obj.to_val().get_tag()) {
-            (HostObject::Vec(_), Tag::VecObject)
-            | (HostObject::Map(_), Tag::MapObject)
-            | (HostObject::U64(_), Tag::U64Object)
-            | (HostObject::I64(_), Tag::I64Object)
-            | (HostObject::TimePoint(_), Tag::TimepointObject)
-            | (HostObject::Duration(_), Tag::DurationObject)
-            | (HostObject::U128(_), Tag::U128Object)
-            | (HostObject::I128(_), Tag::I128Object)
-            | (HostObject::U256(_), Tag::U256Object)
-            | (HostObject::I256(_), Tag::I256Object)
-            | (HostObject::Bytes(_), Tag::BytesObject)
-            | (HostObject::String(_), Tag::StringObject)
-            | (HostObject::Symbol(_), Tag::SymbolObject)
-            | (HostObject::Address(_), Tag::AddressObject) => Ok(()),
-            _ => Err(self.err(
-                xdr::ScErrorType::Object,
-                xdr::ScErrorCode::UnexpectedType,
-                "mis-tagged object reference",
-                &[],
-            )),
-        })
     }
 
     // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function

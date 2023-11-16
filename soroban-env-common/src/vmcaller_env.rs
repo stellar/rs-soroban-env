@@ -7,7 +7,7 @@ use super::{
     U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use crate::call_macro_with_all_host_functions;
-use crate::{EnvBase, Symbol};
+use crate::{CheckedEnvArg, EnvBase, Symbol};
 #[cfg(not(feature = "wasmi"))]
 use core::marker::PhantomData;
 
@@ -156,68 +156,6 @@ macro_rules! generate_vmcaller_checked_env_trait {
 // Here we invoke the x-macro passing generate_env_trait as its callback macro.
 call_macro_with_all_host_functions! { generate_vmcaller_checked_env_trait }
 
-// In the impl below of Env for VmCallerEnv we want to perform the same
-// integrity checking on Vals that we would normally do when passing them
-// from guest to host (at least when configured with ). To do this we need a helper trait that is defined
-// on Vals and all wrapper types as well as i64 and u64 (which we do no checking on)
-
-trait CheckedArg {
-    fn check_arg<E: crate::Env>(&self, _e: &E) -> Result<(), E::Error> {
-        Ok(())
-    }
-}
-
-impl CheckedArg for i64 {}
-impl CheckedArg for u64 {}
-impl CheckedArg for StorageType {}
-
-macro_rules! impl_checkedval_with_val_and_unexpectedtype {
-    ($type:ty) => {
-        impl CheckedArg for $type {
-            fn check_arg<E: crate::Env>(&self, e: &E) -> Result<(), E::Error> {
-                if Val::from(*self).is_good() {
-                    Ok(())
-                } else {
-                    Err(e.error_from_error_val(crate::Error::from_type_and_code(
-                        crate::xdr::ScErrorType::Value,
-                        crate::xdr::ScErrorCode::InvalidInput,
-                    )))
-                }
-            }
-        }
-    };
-}
-impl_checkedval_with_val_and_unexpectedtype!(Val);
-impl_checkedval_with_val_and_unexpectedtype!(Symbol);
-
-impl_checkedval_with_val_and_unexpectedtype!(AddressObject);
-impl_checkedval_with_val_and_unexpectedtype!(BytesObject);
-impl_checkedval_with_val_and_unexpectedtype!(DurationObject);
-
-impl_checkedval_with_val_and_unexpectedtype!(TimepointObject);
-impl_checkedval_with_val_and_unexpectedtype!(SymbolObject);
-impl_checkedval_with_val_and_unexpectedtype!(StringObject);
-
-impl_checkedval_with_val_and_unexpectedtype!(VecObject);
-impl_checkedval_with_val_and_unexpectedtype!(MapObject);
-
-impl_checkedval_with_val_and_unexpectedtype!(I64Object);
-impl_checkedval_with_val_and_unexpectedtype!(I128Object);
-impl_checkedval_with_val_and_unexpectedtype!(I256Object);
-
-impl_checkedval_with_val_and_unexpectedtype!(U64Object);
-impl_checkedval_with_val_and_unexpectedtype!(U128Object);
-impl_checkedval_with_val_and_unexpectedtype!(U256Object);
-
-impl_checkedval_with_val_and_unexpectedtype!(U64Val);
-impl_checkedval_with_val_and_unexpectedtype!(U256Val);
-impl_checkedval_with_val_and_unexpectedtype!(I256Val);
-
-impl_checkedval_with_val_and_unexpectedtype!(Void);
-impl_checkedval_with_val_and_unexpectedtype!(Bool);
-impl_checkedval_with_val_and_unexpectedtype!(Error);
-impl_checkedval_with_val_and_unexpectedtype!(U32Val);
-
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: impl<E> Env for VmCallerEnv<E>
 ///////////////////////////////////////////////////////////////////////////////
@@ -245,10 +183,11 @@ macro_rules! vmcaller_none_function_helper {
             {
                 self.env_call_hook(&core::stringify!($fn_id), &[$(format!("{:?}", $arg)),*])?;
             }
-            $(
-                $arg.check_arg(self)?;
-            )*
-            let res: Result<_, _> = self.augment_err_result(<Self as VmCallerEnv>::$fn_id(self, &mut VmCaller::none(), $($arg),*));
+            let res: Result<_, _> = self.augment_err_result(<Self as VmCallerEnv>::$fn_id(self, &mut VmCaller::none(), $($arg.check_env_arg(self)?),*));
+            let res = match res {
+                Ok(ok) => Ok(ok.check_env_arg(self)?),
+                Err(err) => Err(err)
+            };
             #[cfg(all(feature = "std", feature = "testutils"))]
             {
                 let res_str: Result<String,&Self::Error> = match &res {
@@ -266,7 +205,7 @@ macro_rules! vmcaller_none_function_helper {
 // x-macro (call_macro_with_all_host_functions) and produces a suite of method
 // declarations, which it places in the body of the blanket impl of Env for
 // T:Env
-macro_rules! impl_checked_env_for_vmcaller_checked_env {
+macro_rules! impl_env_for_vmcaller_env {
     {
         $(
             // This outer pattern matches a single 'mod' block of the token-tree
@@ -317,4 +256,4 @@ macro_rules! impl_checked_env_for_vmcaller_checked_env {
 
 // Here we invoke the x-macro passing
 // generate_checked_env_for_vmcaller_checked_env as its callback macro.
-call_macro_with_all_host_functions! { impl_checked_env_for_vmcaller_checked_env }
+call_macro_with_all_host_functions! { impl_env_for_vmcaller_env }

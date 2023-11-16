@@ -1,11 +1,14 @@
 use soroban_env_macros::generate_call_macro_with_all_host_functions;
 
+use crate::Object;
+
 use super::Symbol;
 use super::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
     I64Object, MapObject, StorageType, StringObject, SymbolObject, TimepointObject, U128Object,
     U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
+use crate::xdr::{ScErrorCode, ScErrorType};
 
 /// Base trait extended by the [Env](crate::Env) trait, providing various special-case
 /// functions that do _not_ simply call across cross the guest/host interface.
@@ -32,6 +35,28 @@ pub trait EnvBase: Sized + Clone {
     /// the contained `Error` code to the user as a `Error` or `Result<>` of
     /// some other type, depending on the API.
     type Error: core::fmt::Debug + Into<crate::Error>;
+
+    /// Check that a [`Val`] is good according to the current Env. This is a
+    /// superset of calling `Val::good` as it also checks that if the `Val` is
+    /// an [`Object`], that the `Object` is good according to
+    /// [`Self::check_obj_integrity`].
+    fn check_val_integrity(&self, val: Val) -> Result<(), Self::Error> {
+        if !val.is_good() {
+            return Err(self.error_from_error_val(Error::from_type_and_code(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+            )));
+        }
+        if let Ok(obj) = Object::try_from(val) {
+            self.check_obj_integrity(obj)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Check that an Object handle is good according to the current Env. For
+    /// general Val-validity checking one should use Val::good().
+    fn check_obj_integrity(&self, obj: Object) -> Result<(), Self::Error>;
 
     /// Convert a [`crate::Error`] into [`EnvBase::Error`]. This is similar to adding
     /// `+ From<crate::Error>` to the associated type bound for `EnvBase::Error`
@@ -172,6 +197,64 @@ pub trait EnvBase: Sized + Clone {
     /// guest, redirects through log_from_linear_memory.
     fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, Self::Error>;
 }
+
+/// This trait is used by macro-generated dispatch and forwarding functions to
+/// check arguments being passed to the Env. The default implementations call
+/// through to the Env integrity-checking functions.
+
+pub trait CheckedEnvArg: Sized {
+    fn check_env_arg<E: crate::Env>(self, _e: &E) -> Result<Self, E::Error> {
+        Ok(self)
+    }
+}
+
+// If a new host function is added that uses argument types not yet listed
+// below, they will have to be added, otherwise this crate will not compile.
+
+impl CheckedEnvArg for i64 {}
+impl CheckedEnvArg for u64 {}
+impl CheckedEnvArg for StorageType {}
+
+macro_rules! impl_checkedenvarg_for_val_or_wrapper {
+    ($type:ty) => {
+        impl CheckedEnvArg for $type {
+            fn check_env_arg<E: crate::Env>(self, e: &E) -> Result<Self, E::Error> {
+                e.check_val_integrity(Val::from(self.clone()))?;
+                Ok(self)
+            }
+        }
+    };
+}
+impl_checkedenvarg_for_val_or_wrapper!(Val);
+impl_checkedenvarg_for_val_or_wrapper!(Symbol);
+
+impl_checkedenvarg_for_val_or_wrapper!(AddressObject);
+impl_checkedenvarg_for_val_or_wrapper!(BytesObject);
+impl_checkedenvarg_for_val_or_wrapper!(DurationObject);
+
+impl_checkedenvarg_for_val_or_wrapper!(TimepointObject);
+impl_checkedenvarg_for_val_or_wrapper!(SymbolObject);
+impl_checkedenvarg_for_val_or_wrapper!(StringObject);
+
+impl_checkedenvarg_for_val_or_wrapper!(VecObject);
+impl_checkedenvarg_for_val_or_wrapper!(MapObject);
+
+impl_checkedenvarg_for_val_or_wrapper!(I64Object);
+impl_checkedenvarg_for_val_or_wrapper!(I128Object);
+impl_checkedenvarg_for_val_or_wrapper!(I256Object);
+
+impl_checkedenvarg_for_val_or_wrapper!(U64Object);
+impl_checkedenvarg_for_val_or_wrapper!(U128Object);
+impl_checkedenvarg_for_val_or_wrapper!(U256Object);
+
+impl_checkedenvarg_for_val_or_wrapper!(U64Val);
+impl_checkedenvarg_for_val_or_wrapper!(U256Val);
+impl_checkedenvarg_for_val_or_wrapper!(I256Val);
+
+impl_checkedenvarg_for_val_or_wrapper!(Void);
+impl_checkedenvarg_for_val_or_wrapper!(Bool);
+impl_checkedenvarg_for_val_or_wrapper!(Error);
+impl_checkedenvarg_for_val_or_wrapper!(U32Val);
 
 ///////////////////////////////////////////////////////////////////////////////
 // X-macro definition
