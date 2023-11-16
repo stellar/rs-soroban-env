@@ -24,8 +24,29 @@ use super::{
 pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
 pub(crate) type HostVec = MeteredVector<Val>;
 
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for HostVec {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.vec.len().hash(state);
+        for x in self.vec.iter() {
+            x.get_payload().hash(state);
+        }
+    }
+}
+
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for HostMap {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.len().hash(state);
+        for (k, v) in self.map.iter() {
+            k.get_payload().hash(state);
+            v.get_payload().hash(state);
+        }
+    }
+}
+
 #[derive(Clone)]
-#[cfg_attr(test, derive(Hash))]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub enum HostObject {
     Vec(HostVec),
     Map(HostMap),

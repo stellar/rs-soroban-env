@@ -65,6 +65,8 @@ mod compare;
 mod convert;
 mod env;
 mod error;
+#[cfg(feature = "testutils")]
+mod hash;
 mod object;
 mod option;
 mod result;
