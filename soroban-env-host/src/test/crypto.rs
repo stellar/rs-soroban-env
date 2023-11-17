@@ -1,107 +1,257 @@
-use crate::{xdr::ScVal, Env, Host, HostError};
-use hex::FromHex;
+use crate::xdr::{ScErrorCode, ScErrorType};
+use crate::{Env, Host, HostError};
+use hex::ToHex;
 use soroban_env_common::{EnvBase, U32Val};
+
+fn is_budget_exceeded(err: HostError) -> bool {
+    err.error.is_type(ScErrorType::Budget) && err.error.is_code(ScErrorCode::ExceededLimit)
+}
+
+fn is_crypto_error(err: HostError) -> bool {
+    err.error.is_type(ScErrorType::Crypto)
+}
+
+fn is_object_error(err: HostError) -> bool {
+    err.error.is_type(ScErrorType::Object)
+}
 
 /// crypto tests
 #[test]
-fn sha256_test() -> Result<(), HostError> {
+fn sha256_test() {
     let host = observe_host!(Host::default());
-    let obj0 = host.test_bin_obj(&[1])?;
-    let hash_obj = host.compute_hash_sha256(obj0)?;
-
-    let v = host.from_host_val(hash_obj.to_val())?;
-    let ScVal::Bytes(bytes) = v else {
-        panic!("Wrong type")
+    let compute_hash = |input_bytes: &[u8]| -> Result<Vec<u8>, HostError> {
+        let bytes_obj = host.bytes_new_from_slice(input_bytes).unwrap();
+        let hash_obj = host.compute_hash_sha256(bytes_obj)?;
+        Ok(host
+            .hash_from_bytesobj_input("hash", hash_obj)
+            .unwrap()
+            .0
+            .to_vec())
     };
+    assert_eq!(
+        compute_hash(&[]).unwrap().encode_hex::<String>(),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string()
+    );
+    assert_eq!(
+        compute_hash(&[1]).unwrap().encode_hex::<String>(),
+        "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a".to_string()
+    );
+    assert_eq!(
+        compute_hash(b"test vector for soroban")
+            .unwrap()
+            .encode_hex::<String>(),
+        "91a8e0fbbf626bf0c24d3cb7adbbef332e42339f56dd943cf272be28978dc294".to_string()
+    );
+    let long_vec = vec![1u8; 1_000_000];
+    assert_eq!(
+        compute_hash(long_vec.as_slice())
+            .unwrap()
+            .encode_hex::<String>(),
+        "1fb6a051d8996888485d47fea0007a88e1e78ea273fa5fb60e1ab00608dbb764".to_string()
+    );
 
-    /*
-    We took the sha256 of [1], which is 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
-    The exp array contains the decimal representation of each hex value
-    */
-    let exp: Vec<u8> = vec![
-        75, 245, 18, 47, 52, 69, 84, 197, 59, 222, 46, 187, 140, 210, 183, 227, 209, 96, 10, 214,
-        49, 195, 133, 165, 215, 204, 226, 60, 119, 133, 69, 154,
-    ];
-    assert_eq!(bytes.as_vec().clone(), exp);
-    Ok(())
+    host.budget_ref().reset_default().unwrap();
+    let too_long_vec = vec![1u8; 10_000_000];
+    assert!(is_budget_exceeded(
+        compute_hash(too_long_vec.as_slice()).err().unwrap()
+    ));
 }
 
 #[test]
-fn keccak256_test() -> Result<(), HostError> {
-    // From https://paulmillr.com/noble/
-
+fn keccak256_test() {
     let host = observe_host!(Host::default());
-    let obj0 = host.test_bin_obj(b"test vector for soroban")?;
-    let hash_obj = host.compute_hash_keccak256(obj0)?;
-
-    let v = host.from_host_val(hash_obj.to_val())?;
-    let ScVal::Bytes(bytes) = v else {
-        panic!("Wrong type")
+    let compute_hash = |input_bytes: &[u8]| -> Result<Vec<u8>, HostError> {
+        let bytes_obj = host.bytes_new_from_slice(input_bytes).unwrap();
+        let hash_obj = host.compute_hash_keccak256(bytes_obj)?;
+        Ok(host
+            .hash_from_bytesobj_input("hash", hash_obj)
+            .unwrap()
+            .0
+            .to_vec())
     };
+    assert_eq!(
+        compute_hash(&[]).unwrap().encode_hex::<String>(),
+        "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".to_string()
+    );
+    assert_eq!(
+        compute_hash(&[1]).unwrap().encode_hex::<String>(),
+        "5fe7f977e71dba2ea1a68e21057beebb9be2ac30c6410aa38d4f3fbe41dcffd2".to_string()
+    );
+    assert_eq!(
+        compute_hash(b"test vector for soroban")
+            .unwrap()
+            .encode_hex::<String>(),
+        "352fe2eaddf44eb02eb3eab1f8d6ff4ba426df4f1734b1e3f210d621ee8853d9".to_string()
+    );
 
-    let exp: Vec<u8> =
-        FromHex::from_hex(b"352fe2eaddf44eb02eb3eab1f8d6ff4ba426df4f1734b1e3f210d621ee8853d9")
-            .unwrap();
-    assert_eq!(bytes.as_vec().clone(), exp);
-    Ok(())
+    let long_vec = vec![1u8; 1_000_000];
+    assert_eq!(
+        compute_hash(long_vec.as_slice())
+            .unwrap()
+            .encode_hex::<String>(),
+        "eb8c4805c2569851fe8a82ed3bf5a95f61090aad0489058aaa99d9b98019aad3".to_string()
+    );
+    host.budget_ref().reset_default().unwrap();
+    let too_long_vec = vec![1u8; 10_000_000];
+    assert!(is_budget_exceeded(
+        compute_hash(too_long_vec.as_slice()).err().unwrap()
+    ));
 }
 
 #[test]
-fn ed25519_verify_test() -> Result<(), HostError> {
+fn ed25519_verify_test() {
     let host = observe_host!(Host::default());
 
-    // From https://datatracker.ietf.org/doc/html/rfc8032#section-7.1
+    let verify_sig =
+        |public_key: Vec<u8>, message: Vec<u8>, signature: Vec<u8>| -> Result<(), HostError> {
+            let public_key_obj = host.bytes_new_from_slice(public_key.as_slice()).unwrap();
+            let message_obj = host.bytes_new_from_slice(message.as_slice()).unwrap();
+            let signature_obj = host.bytes_new_from_slice(signature.as_slice()).unwrap();
+            host.verify_sig_ed25519(public_key_obj, message_obj, signature_obj)
+                .map(|_| ())
+        };
 
-    // First verify successfully
-    let public_key: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
-    let message: &[u8] = b"72";
-    let signature: &[u8] = b"92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00";
+    // Successful scenarios from (https://datatracker.ietf.org/doc/html/rfc8032#section-7.1
+    assert!(verify_sig(
+        hex::decode(
+            "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+        )
+        .unwrap(),
+        hex::decode("").unwrap(),
+        hex::decode(
+            "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+        )
+        .unwrap(),
+    )
+    .is_ok());
 
-    let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
-    let msg_bytes: Vec<u8> = FromHex::from_hex(message).unwrap();
-    let sig_bytes: Vec<u8> = FromHex::from_hex(signature).unwrap();
+    assert!(verify_sig(hex::decode("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c")
+            .unwrap(),
+        hex::decode("72")
+            .unwrap(),
+        hex::decode("92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00")
+            .unwrap(),
+    ).is_ok());
 
-    let obj_pub = host.test_bin_obj(&pub_bytes)?;
-    let obj_msg = host.test_bin_obj(&msg_bytes)?;
-    let obj_sig = host.test_bin_obj(&sig_bytes)?;
+    // Valid signature for a long message
+    assert!(verify_sig(hex::decode("25ddcf6f16fe15f846553ceee99faad07b4c12e063cd817b7df66310d7338fda")
+                                              .unwrap(),
+                                          vec![b'a'; 100_000],
+                                          hex::decode("1c2e91002652bf75c61d35055b674b7aab7a868a9feffd70b5f07abd8d95b09fb3d2e55b4a4b48f80bb92d1ed6b9d1cfe1388be443a2b37f95ee744756e1f702")
+                                              .unwrap(),
+    ).is_ok());
 
-    let res = host.verify_sig_ed25519(obj_pub, obj_msg, obj_sig);
+    // Failing scenarios
+    // Incorrect payload for signature.
+    assert!(is_crypto_error(verify_sig(hex::decode("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c")
+                           .unwrap(),
+                       hex::decode("73")
+                           .unwrap(),
+                       hex::decode("92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00")
+                           .unwrap(),
+    ).err().unwrap()));
 
-    res.expect("verification failed");
+    // Malformed public key (missing one byte)
+    assert!(is_crypto_error(verify_sig(hex::decode("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af466")
+                           .unwrap(),
+                       hex::decode("72")
+                           .unwrap(),
+                       hex::decode("92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00")
+                           .unwrap(),
+    ).err().unwrap()));
 
-    // Now verify with wrong message
-    let message2: &[u8] = b"73";
-    let msg_bytes2: Vec<u8> = FromHex::from_hex(message2).unwrap();
-    let obj_msg2 = host.test_bin_obj(&msg_bytes2)?;
+    // Malformed signature (one extra byte)
+    // This is a bit inconsistent with key error and returns an object error
+    // (and not a crypto error).
+    assert!(is_object_error(verify_sig(hex::decode("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c")
+                                          .unwrap(),
+                                      hex::decode("72")
+                                          .unwrap(),
+                                      hex::decode("92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c0000")
+                                          .unwrap(),
+    ).err().unwrap()));
 
-    let res_failed = host.verify_sig_ed25519(obj_pub, obj_msg2, obj_sig);
-
-    match res_failed {
-        Ok(_) => panic!("verification test failed"),
-        _ => (),
-    };
-    Ok(())
+    // Too long message with correct signature, run out of budget
+    assert!(is_budget_exceeded(verify_sig(hex::decode("25ddcf6f16fe15f846553ceee99faad07b4c12e063cd817b7df66310d7338fda")
+                           .unwrap(),
+                       vec![b'a'; 10_000_000],
+                       hex::decode("87f78aa58df29e330f2dea33a0c668a9953a918552ba1c6d44e8bdeb41acbdf4e8c1202fd32652ebf0fecc82e2569c500faeb7b1c33ece63eb6d7381b0910a0b")
+                           .unwrap(),
+    ).err().unwrap()));
 }
 
 #[test]
-fn recover_ecdsa_secp256k1_key_test() -> Result<(), HostError> {
+fn recover_ecdsa_secp256k1_key_test() {
     let host = observe_host!(Host::default());
 
+    let recover_sig =
+        |msg_digest: Vec<u8>, signature: Vec<u8>, recovery_id: u32| -> Result<String, HostError> {
+            let msg_digest_obj = host.bytes_new_from_slice(msg_digest.as_slice()).unwrap();
+            let signature_obj = host.bytes_new_from_slice(signature.as_slice()).unwrap();
+            let recovery_id = U32Val::from(recovery_id);
+            // Make sure we always verify with the fresh budget to make large payload tests
+            // independent of each other.
+            host.budget_ref().reset_default().unwrap();
+            host.recover_key_ecdsa_secp256k1(msg_digest_obj, signature_obj, recovery_id)
+                .map(|pk_obj| {
+                    let bytes = host
+                        .fixed_length_bytes_from_bytesobj_input::<Vec<u8>, 65>("pk", pk_obj)
+                        .unwrap();
+                    bytes.encode_hex()
+                })
+        };
+
+    // Successful scenario
     // From ethereum: https://github.com/ethereum/go-ethereum/blob/master/crypto/secp256k1/secp256_test.go
+    assert_eq!(recover_sig(
+        hex::decode(
+            "ce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008"
+        )
+            .unwrap(),
+        hex::decode("90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc93").unwrap(),
+        1,
+    )
+        .unwrap(), "04e32df42865e97135acfb65f3bae71bdc86f4d49150ad6a440b6f15878109880a0a2b2667f7e725ceea70c673093bf67663e0312623c8e091b13cf2c0f11ef652");
 
-    let msg_digest: Vec<u8> =
-        FromHex::from_hex(b"ce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008")
-            .unwrap();
-    let sig: Vec<u8> = FromHex::from_hex(b"90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc93").unwrap();
-    let pk: Vec<u8> = FromHex::from_hex(b"04e32df42865e97135acfb65f3bae71bdc86f4d49150ad6a440b6f15878109880a0a2b2667f7e725ceea70c673093bf67663e0312623c8e091b13cf2c0f11ef652").unwrap();
-    let msg_digest_obj = host.test_bin_obj(msg_digest.as_slice())?;
-    let sig_obj = host.test_bin_obj(sig.as_slice())?;
-    let pk_obj = host.test_bin_obj(pk.as_slice())?;
-    let pk_obj_2 = host.recover_key_ecdsa_secp256k1(msg_digest_obj, sig_obj, U32Val::from(1))?;
-    let mut buf = [0u8; 65];
-    assert_eq!(u32::from(host.bytes_len(pk_obj_2)?), 65);
-    host.bytes_copy_to_slice(pk_obj_2, U32Val::from(0), &mut buf)?;
-    assert_eq!(pk.as_slice(), buf.as_slice());
-    assert_eq!(host.obj_cmp(pk_obj.to_val(), pk_obj_2.to_val())?, 0);
-    Ok(())
+    // Failing scenarios
+    // Bad recovery id.
+    assert!(is_crypto_error(recover_sig(
+        hex::decode(
+            "ce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008"
+        )
+            .unwrap(),
+        hex::decode("90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc93").unwrap(),
+        5,
+    )
+                   .err().unwrap()));
+    // Another bad recovery id.
+    assert!(is_crypto_error(recover_sig(
+        hex::decode(
+            "ce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008"
+        )
+            .unwrap(),
+        hex::decode("90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc93").unwrap(),
+        u32::MAX,
+    )
+        .err().unwrap()));
+    // Malformed digest (missing one byte)
+    assert!(is_object_error(recover_sig(
+        hex::decode(
+            "ce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce9710"
+        )
+            .unwrap(),
+        hex::decode("90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc93").unwrap(),
+        1,
+    )
+        .err().unwrap()));
+    // Malformed signature (one extra byte)
+    assert!(is_crypto_error(recover_sig(
+        hex::decode(
+            "ce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008"
+        )
+            .unwrap(),
+        hex::decode("90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc9300").unwrap(),
+        5,
+    )
+        .err().unwrap()));
 }
