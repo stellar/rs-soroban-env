@@ -93,10 +93,9 @@ pub fn get_ledger_changes<T: SnapshotSource>(
     init_storage_snapshot: &T,
     init_ttl_entries: TtlEntryMap,
 ) -> Result<Vec<LedgerEntryChange>, HostError> {
-    let mut changes = vec![];
     // Skip allocation metering for this for the sake of simplicity - the
     // bounding factor here is XDR decoding which is metered.
-    changes.reserve(storage.map.len());
+    let mut changes = Vec::with_capacity(storage.map.len());
 
     let footprint_map = &storage.footprint.0;
     // We return any invariant errors here as internal errors, as they would
