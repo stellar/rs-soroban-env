@@ -7,6 +7,7 @@ use soroban_env_common::{
     },
     MapObject, U32Val,
 };
+use soroban_test_wasms::LINEAR_MEMORY;
 
 use crate::{
     xdr::{ScMap, ScMapEntry, ScVal, ScVec, VecM},
@@ -336,5 +337,64 @@ fn map_build_bad_element_integrity() -> Result<(), HostError> {
     assert!(host.map_put(obj, bad_handle, ok_val).is_err());
     assert!(host.map_new_from_slices(&["hi"], &[bad_handle]).is_err());
 
+    Ok(())
+}
+
+#[test]
+fn initialization_invalid() -> Result<(), HostError> {
+    use crate::EnvBase;
+    let host = observe_host!(Host::default());
+
+    // Out of order keys
+    assert!(host
+        .map_new_from_slices(&["b", "a"], &[1u32.into(), 2u32.into()])
+        .is_err());
+
+    // Duplicate
+    assert!(host
+        .map_new_from_slices(&["a", "a"], &[1u32.into(), 2u32.into()])
+        .is_err());
+
+    let buf = vec![0; 6000000];
+    let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());
+    let bytes_val = host.to_host_val(&scv_bytes)?;
+
+    // roughly consumes 6*5=30MiB (> 16 MiB is the limit)
+    let vals = vec![bytes_val; 5];
+    let keys = ["a", "b", "c", "d", "e"];
+
+    let res = host.map_new_from_slices(&keys, &vals.as_slice())?;
+    assert!(host.from_host_val(res.to_val()).is_err());
+
+    Ok(())
+}
+
+#[test]
+fn linear_memory_operations() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY);
+
+    {
+        let args = host.vec_new()?;
+        let res = host.call(
+            id_obj,
+            Symbol::try_from_val(&*host, &"map_mem_ok").unwrap(),
+            args,
+        );
+
+        assert!(res.is_ok());
+    }
+
+    {
+        let args = host.vec_new()?;
+        let res = host.call(
+            id_obj,
+            Symbol::try_from_val(&*host, &"map_mem_bad").unwrap(),
+            args,
+        );
+        assert!(res.is_err());
+        assert!(res.unwrap_err().error.is_code(ScErrorCode::InvalidInput));
+    }
     Ok(())
 }

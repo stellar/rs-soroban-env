@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, Bytes, Env};
-use soroban_env_common::{VecObject, Val, EnvBase, Error};
+use soroban_env_common::{VecObject, MapObject, Val, EnvBase, Error};
 
 #[contract]
 pub struct Contract;
@@ -49,6 +49,28 @@ impl Contract {
         let vec: VecObject = e.vec_new_from_slice(&in_buf)?;
         assert!(e.vec_unpack_to_slice(vec, &mut short_buf).is_err());
         assert!(e.vec_unpack_to_slice(vec, &mut long_buf).is_err());
+        Ok(())
+    }
+
+    // Bounce a map of vals off the host, successfully
+    pub fn map_mem_ok(e: Env) -> Result<(), Error> {
+        let map: MapObject = e.map_new_from_slices(&["a", "b"], &[1u32.into(), 2u32.into()])?;
+
+        let key_buf = ["a", "b"];
+        let mut val_buf: [Val; 2] = [Val::from(0); 2];
+
+        e.map_unpack_to_slice(map, &key_buf, &mut val_buf)?;
+        Ok(())
+    }
+
+    // Same but with out of order keys
+    pub fn map_mem_bad(e: Env) -> Result<(), Error> {
+        // out of order
+        assert!(e.map_new_from_slices(&["b", "a"], &[1u32.into(), 2u32.into()]).is_err());
+
+        // duplicate
+        assert!(e.map_new_from_slices(&["a", "a"], &[1u32.into(), 2u32.into()]).is_err());
+
         Ok(())
     }
 }
