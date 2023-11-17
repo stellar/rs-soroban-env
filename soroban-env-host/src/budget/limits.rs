@@ -10,11 +10,11 @@ use crate::{
 /// exccessive stack allocation, which could cause an unrecoverable `SIGABRT`,
 /// and exccessive heap memory allocation.
 pub const DEFAULT_XDR_RW_LIMITS: Limits = Limits {
-    /// recursion limit for reading and writing XDR structures.
+    // recursion limit for reading and writing XDR structures.
     depth: 500,
-    /// maximum byte length for a data structure during serialization and
-    /// deserialization to and from the XDR format. The limit of 16MiB
-    /// corresponds to the overlay maximum message size.
+    // maximum byte length for a data structure during serialization and
+    // deserialization to and from the XDR format. The limit of 16MiB
+    // corresponds to the overlay maximum message size.
     len: 0x1000000,
 };
 
