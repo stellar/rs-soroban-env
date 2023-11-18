@@ -466,6 +466,15 @@ impl Host {
         }
         #[cfg(any(test, feature = "testutils"))]
         if end_depth == 0 {
+            // Empty call stack in tests means that some contract function call
+            // has been finished and hence the authorization manager can be reset.
+            // In non-test scenarios, there should be no need to ever reset
+            // the authorization manager as the host instance shouldn't be
+            // shared between the contract invocations.
+            *self.try_borrow_previous_authorization_manager_mut()? =
+                Some(self.try_borrow_authorization_manager()?.clone());
+            self.try_borrow_authorization_manager_mut()?.reset();
+
             // Call the contract invocation hook for contract invocations only.
             if is_top_contract_invocation {
                 if let Some(top_contract_invocation_hook) =
@@ -477,14 +486,6 @@ impl Host {
                     );
                 }
             }
-            // Empty call stack in tests means that some contract function call
-            // has been finished and hence the authorization manager can be reset.
-            // In non-test scenarios, there should be no need to ever reset
-            // the authorization manager as the host instance shouldn't be
-            // shared between the contract invocations.
-            *self.try_borrow_previous_authorization_manager_mut()? =
-                Some(self.try_borrow_authorization_manager()?.clone());
-            self.try_borrow_authorization_manager_mut()?.reset();
         }
         res
     }
