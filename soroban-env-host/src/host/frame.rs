@@ -480,7 +480,10 @@ impl Host {
                 if let Some(top_contract_invocation_hook) =
                     self.try_borrow_top_contract_invocation_hook()?.as_ref()
                 {
-                    top_contract_invocation_hook(self, crate::host::ContractInvocationEvent::Finish);
+                    top_contract_invocation_hook(
+                        self,
+                        crate::host::ContractInvocationEvent::Finish,
+                    );
                 }
             }
         }
