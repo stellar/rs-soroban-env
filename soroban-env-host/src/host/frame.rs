@@ -363,6 +363,7 @@ impl Host {
                                 self.try_borrow_top_contract_invocation_hook()?.as_ref()
                             {
                                 contract_invocation_hook(
+                                    self,
                                     crate::host::ContractInvocationEvent::Start,
                                 );
                             }
@@ -470,7 +471,10 @@ impl Host {
                 if let Some(top_contract_invocation_hook) =
                     self.try_borrow_top_contract_invocation_hook()?.as_ref()
                 {
-                    top_contract_invocation_hook(crate::host::ContractInvocationEvent::Finish);
+                    top_contract_invocation_hook(
+                        self,
+                        crate::host::ContractInvocationEvent::Finish,
+                    );
                 }
             }
             // Empty call stack in tests means that some contract function call

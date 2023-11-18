@@ -96,7 +96,7 @@ pub enum ContractInvocationEvent {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-pub type ContractInvocationHook = Rc<dyn Fn(ContractInvocationEvent) -> ()>;
+pub type ContractInvocationHook = Rc<dyn for<'a> Fn(&'a Host, ContractInvocationEvent) -> ()>;
 
 #[derive(Clone, Default)]
 struct HostImpl {
