@@ -1,5 +1,6 @@
 use super::{
-    crypto::chacha20_fill_bytes, declared_size::DeclaredSizeForMetering,
+    crypto::{chacha20_fill_bytes, unbias_prng_seed},
+    declared_size::DeclaredSizeForMetering,
     metered_clone::MeteredContainer,
 };
 use crate::{
@@ -98,8 +99,9 @@ impl Prng {
         budget.charge(ContractCostType::ChaCha20DrawBytes, Some(count))
     }
 
-    pub(crate) fn new_from_seed(seed: Seed) -> Self {
-        Self(ChaCha20Rng::from_seed(seed))
+    pub(crate) fn new_from_seed(seed: Seed, budget: &Budget) -> Result<Self, HostError> {
+        let seed = unbias_prng_seed(&seed, budget)?;
+        Ok(Self(ChaCha20Rng::from_seed(seed)))
     }
 
     pub(crate) fn u64_in_inclusive_range(

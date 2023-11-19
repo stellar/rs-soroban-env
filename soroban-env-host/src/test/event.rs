@@ -195,6 +195,7 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_off() -> Result<(), 
     // DEBUG mode OFF
     let host = observe_host!(Host::test_host());
     let budget = host.as_budget().clone();
+    budget.reset_default()?;
     let evts = log_some_diagnostics(host)?;
     assert_eq!(budget.get_cpu_insns_consumed()?, 0);
     assert_eq!(budget.get_mem_bytes_consumed()?, 0);
@@ -211,6 +212,7 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_sufficient_bu
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     let budget = host.as_budget().clone();
+    budget.reset_default()?;
     let evts = log_some_diagnostics(host)?;
     assert_eq!(budget.get_cpu_insns_consumed()?, 0);
     assert_eq!(budget.get_mem_bytes_consumed()?, 0);
@@ -225,9 +227,10 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_
 ) -> Result<(), HostError> {
     // DEBUG mode ON, budget insufficient
     let host = observe_host!(Host::test_host());
-    host.set_shadow_budget_limits(100000, 100000)?;
     host.enable_debug()?;
     let budget = host.as_budget().clone();
+    budget.reset_default()?;
+    host.set_shadow_budget_limits(100000, 100000)?;
     let evts = log_some_diagnostics(host)?;
     assert_eq!(budget.get_cpu_insns_consumed()?, 0);
     assert_eq!(budget.get_mem_bytes_consumed()?, 0);
