@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:9996, mem:0, prngs:-/9b4a753, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 call call(Address(obj#1), Symbol(bytes_new), Vec(obj#5))": "cpu:62904, mem:1814, prngs:-/ed310798, objs:-/3@df638363, store:-/2@8f53be5d",
+  "   2 push TEST:   0:bytes_new(U64(0))": "cpu:88482, mem:2966, objs:-/4@c23de825",
+  "   3 call prng_bytes_new(U32(32))": "",
+  "   4 ret prng_bytes_new -> Ok(Bytes(obj#9))": "cpu:102677, mem:3078, prngs:e24a134d/bea2af26, objs:-/5@30b9447d",
+  "   5 pop TEST:   0:bytes_new -> Ok(Bytes(obj#9))": "",
+  "   6 ret call -> Ok(Bytes(obj#9))": "cpu:102785, prngs:-/bea2af26",
+  "   7 call bytes_copy_to_slice(Bytes(obj#9), U32(0), 32)": "",
+  "   8 ret bytes_copy_to_slice -> Ok(())": "cpu:103147",
+  "   9 end": "cpu:103147, mem:3078, prngs:-/bea2af26, objs:-/5@30b9447d, vmem:-, evt:-, store:-/2@8f53be5d"
+}

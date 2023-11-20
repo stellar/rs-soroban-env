@@ -1,12 +1,12 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/d8a09d57, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 push UploadContractWasm:()": "cpu:5002, mem:560",
-  "   2 pop UploadContractWasm: -> Ok(Bytes(obj#1))": "cpu:1316167, mem:1202575, objs:-/1@1dbb8a1a, store:-/1@296b3f6f",
-  "   3 push CreateContract:()": "cpu:1326084, mem:1203363, objs:-/2@76b1e340",
-  "   4 call obj_cmp(Address(obj#7), Address(obj#5))": "cpu:1331054, mem:1203605, objs:-/4@f26cb951",
-  "   5 ret obj_cmp -> Ok(0)": "cpu:1331740",
-  "   6 call get_ledger_network_id()": "cpu:1331998",
-  "   7 ret get_ledger_network_id -> Ok(Bytes(obj#9))": "cpu:1334895, mem:1203717, objs:-/5@c085c90",
-  "   8 pop CreateContract: -> Ok(Address(obj#11))": "cpu:1372652, mem:1205263, objs:-/6@58237e8a, store:-/2@3e5e14f4",
-  "   9 end": "cpu:1373014, mem:1205263, prngs:-/d8a09d57, objs:-/6@58237e8a, vmem:-, evt:-, store:-/2@3e5e14f4"
+  "   0 begin": "cpu:9996, mem:0, prngs:-/9b4a753, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 push UploadContractWasm:()": "cpu:14998, mem:560",
+  "   2 pop UploadContractWasm: -> Ok(Bytes(obj#1))": "cpu:1327811, mem:1202583, objs:-/1@1dbb8a1a, store:-/1@296b3f6f",
+  "   3 push CreateContract:()": "cpu:1337728, mem:1203371, objs:-/2@76b1e340",
+  "   4 call obj_cmp(Address(obj#7), Address(obj#5))": "cpu:1342698, mem:1203613, objs:-/4@a24bbed9",
+  "   5 ret obj_cmp -> Ok(0)": "cpu:1343384",
+  "   6 call get_ledger_network_id()": "cpu:1343642",
+  "   7 ret get_ledger_network_id -> Ok(Bytes(obj#9))": "cpu:1346539, mem:1203725, objs:-/5@efc2d107",
+  "   8 pop CreateContract: -> Ok(Address(obj#11))": "cpu:1384296, mem:1205231, objs:-/6@6a906fa5, store:-/2@8b3a8a28",
+  "   9 end": "cpu:1384658, mem:1205231, prngs:-/9b4a753, objs:-/6@6a906fa5, vmem:-, evt:-, store:-/2@8b3a8a28"
 }

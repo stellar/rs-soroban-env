@@ -371,7 +371,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     expect![[r#"
         =====================================================================================================================================================================
         Cpu limit: 100000000; used: 10068892
-        Mem limit: 41943040; used: 275860
+        Mem limit: 41943040; used: 275780
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           1476           0              6                   0                   0                   0                   
@@ -382,13 +382,13 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         VisitObject              97             None           10476          0              108                 0                   0                   0                   
         ValSer                   1              Some(49)       1006           165            1000                16                  18                  384                 
         ValDeser                 1              Some(103)      1012           119            1000                16                  16                  128                 
-        ComputeSha256Hash        1              Some(193)      9179           40             2924                4149                40                  0                   
+        ComputeSha256Hash        1              Some(193)      9179           0              2924                4149                0                   0                   
         ComputeEd25519PubKey     226            None           5781984        0              25584               0                   0                   0                   
         VerifyEd25519Sig         1              Some(227)      381748         0              376877              2747                0                   0                   
         VmInstantiation          1              Some(147)      1047534        136937         967154              69991               131103              5080                
         VmCachedInstantiation    1              Some(147)      1047534        136937         967154              69991               131103              5080                
         InvokeVmFunction         47             None           52875          658            1125                0                   14                  0                   
-        ComputeKeccak256Hash     1              Some(1)        2917           40             2890                3561                40                  0                   
+        ComputeKeccak256Hash     1              Some(1)        2917           0              2890                3561                0                   0                   
         ComputeEcdsaSecp256k1Sig 1              None           224            0              224                 0                   0                   0                   
         RecoverEcdsaSecp256k1Key 1              None           1666155        201            1666155             0                   201                 0                   
         Int256AddSub             1              None           1716           119            1716                0                   119                 0                   
@@ -401,7 +401,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 23
         Shadow cpu limit: 100000000; used: 10068892
-        Shadow mem limit: 41943040; used: 275860
+        Shadow mem limit: 41943040; used: 275780
         =====================================================================================================================================================================
 
     "#]]

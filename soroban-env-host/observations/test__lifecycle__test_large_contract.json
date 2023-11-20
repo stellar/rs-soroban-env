@@ -1,6 +1,6 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/d8a09d57, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 push UploadContractWasm:()": "cpu:6646, mem:576",
-  "   2 pop UploadContractWasm: -> Err(Error(Budget, ExceededLimit))": "cpu:139217347905",
-  "   3 end": "cpu:139217347905, mem:576, prngs:-/d8a09d57, objs:-/-, vmem:-, evt:-, store:-/-"
+  "   0 begin": "cpu:9996, mem:0, prngs:-/9b4a753, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   1 push UploadContractWasm:()": "cpu:16642, mem:576",
+  "   2 pop UploadContractWasm: -> Err(Error(Budget, ExceededLimit))": "cpu:139217359549, mem:624",
+  "   3 end": "cpu:139217359549, mem:624, prngs:-/9b4a753, objs:-/-, vmem:-, evt:-, store:-/-"
 }

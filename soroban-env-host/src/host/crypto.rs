@@ -1,13 +1,18 @@
+use crate::host::prng::SEED_BYTES;
 use crate::{
     budget::AsBudget,
     err,
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Host, HostError, U32Val, Val,
+    BytesObject, Error, Host, HostError, U32Val, Val,
 };
+use hex_literal::hex;
+use hmac::{Hmac, Mac};
 use rand::RngCore;
 use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use sha3::Keccak256;
+
+use super::metered_clone::MeteredContainer;
 
 impl Host {
     // Ed25519 functions
@@ -183,16 +188,22 @@ impl Host {
     }
 
     // Keccak256/SHA3 functions
-
-    pub(crate) fn keccak256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
+    pub(crate) fn keccak256_hash_from_bytes_raw(
+        &self,
+        bytes: &[u8],
+    ) -> Result<[u8; 32], HostError> {
         let _span = tracy_span!("keccak256");
         self.charge_budget(
             ContractCostType::ComputeKeccak256Hash,
             Some(bytes.len() as u64),
         )?;
-        Ok(<Keccak256 as sha3::Digest>::digest(bytes)
-            .as_slice()
-            .to_vec())
+        Ok(<Keccak256 as sha3::Digest>::digest(bytes).into())
+    }
+
+    pub(crate) fn keccak256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
+        Vec::<u8>::charge_bulk_init_cpy(32, self.as_budget())?;
+        self.keccak256_hash_from_bytes_raw(bytes)
+            .map(|x| x.to_vec())
     }
 
     pub(crate) fn keccak256_hash_from_bytesobj_input(
@@ -214,16 +225,24 @@ impl Host {
     }
 }
 
-pub(crate) fn sha256_hash_from_bytes(
+pub(crate) fn sha256_hash_from_bytes_raw(
     bytes: &[u8],
     budget: impl AsBudget,
-) -> Result<Vec<u8>, HostError> {
+) -> Result<[u8; 32], HostError> {
     let _span = tracy_span!("sha256");
     budget.as_budget().charge(
         ContractCostType::ComputeSha256Hash,
         Some(bytes.len() as u64),
     )?;
-    Ok(<Sha256 as sha2::Digest>::digest(bytes).as_slice().to_vec())
+    Ok(<Sha256 as sha2::Digest>::digest(bytes).into())
+}
+
+pub(crate) fn sha256_hash_from_bytes(
+    bytes: &[u8],
+    budget: impl AsBudget,
+) -> Result<Vec<u8>, HostError> {
+    Vec::<u8>::charge_bulk_init_cpy(32, budget.clone())?;
+    sha256_hash_from_bytes_raw(bytes, budget).map(|x| x.to_vec())
 }
 
 pub(crate) fn chacha20_fill_bytes(
@@ -237,4 +256,49 @@ pub(crate) fn chacha20_fill_bytes(
         .charge(ContractCostType::ChaCha20DrawBytes, Some(dest.len() as u64))?;
     rng.fill_bytes(dest);
     Ok(())
+}
+
+// It is possible that a user-provided PRNG seed (either in a test or, more
+// worryingly, in a production environment) is biased: it might be all zero, or
+// all copies of a single byte, or otherwise statistically unlike a uniformly
+// random bitstream with roughly 50-50 zero and one bits.
+//
+// Unfortunately the security properties of the stream cipher ChaCha used in the
+// PRNG (being "indistinguishable from uniform random") are based on the
+// assumption of an _unbiased_ seed.
+//
+// So we run any seed through HMAC-SHA256 here, with a constant uniform random
+// salt, as an unbiasing step (this is the "randomness-extractor" phase of HKDF,
+// which is the only part relevant to our needs, we don't need multiple keys).
+
+pub(crate) fn unbias_prng_seed(
+    seed: &[u8; SEED_BYTES as usize],
+    budget: impl AsBudget,
+) -> Result<[u8; SEED_BYTES as usize], HostError> {
+    tracy_span!("unbias_prng_seed");
+
+    // Salt is fixed and must not be changed; it is effectively "part of the
+    // protocol" and must be the same for all implementations.
+    //
+    // Note: salt is a "public random value", intended to be statistically
+    // similar to a 32-byte draw on /dev/random but done in a transparent and
+    // reproducible way. In this case we use the Stellar Public Network ID,
+    // `sha256("Public Global Stellar Network ; September 2015")`.
+    //
+    // This number as a bitstring has 137 zeroes and 119 ones, which is within
+    // the range we get when taking 32-byte samples from /dev/random (feel free
+    // to check this yourself).
+
+    const SALT: [u8; 32] = hex!("7ac33997544e3175d266bd022439b22cdb16508c01163f26e5cb2a3e1045a979");
+
+    // Running HMAC will run SHA256 2 times on 64 bytes each time (32-byte salt
+    // concatenated with 32-byte input).
+    budget
+        .as_budget()
+        .bulk_charge(ContractCostType::ComputeSha256Hash, 2, Some(64))?;
+
+    let mut hmac = Hmac::<Sha256>::new_from_slice(&SALT)
+        .map_err(|_| Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError))?;
+    hmac.update(seed);
+    Ok(hmac.finalize().into_bytes().into())
 }
