@@ -179,14 +179,13 @@ impl InternalEventsBuffer {
     /// Converts the internal events into their external representation. This should only be called
     /// either when the host is finished (via `try_finish`), or when an error occurs.
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
-        let mut vec: Vec<HostEvent> = vec![];
         // This line is intentionally unmetered. We want to separate out charging
         // the main budget for `Contract` events (with "observable" costs) from
         // charging the debug budget for `Diagnostic` events (with "non-observable"
         // costs). Both event types are stored in the same input vector so we must
         // not do a bulk charge based on its length, but rather walk through it
         // charging to one budget or the other on an event-by-event basis.
-        vec.reserve(self.vec.len());
+        let mut vec = Vec::with_capacity(self.vec.len());
 
         let mut metered_external_event_push =
             |event: xdr::ContractEvent, status: &EventError| -> Result<(), HostError> {

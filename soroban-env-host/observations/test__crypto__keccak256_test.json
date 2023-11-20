@@ -1,6 +1,24 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 call compute_hash_keccak256(Bytes(obj#1))": "cpu:2787, mem:103, objs:-/1@b380724e",
-  "   2 ret compute_hash_keccak256 -> Ok(Bytes(obj#3))": "cpu:7781, mem:207, objs:-/2@4b768b08",
-  "   3 end": "cpu:9537, mem:255, prngs:-/-, objs:-/2@4b768b08, vmem:-, evt:-, store:-/-"
+  "   1 call bytes_new_from_slice(0)": "",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:2785, mem:80, objs:-/1@5b7170d7",
+  "   3 call compute_hash_keccak256(Bytes(obj#1))": "",
+  "   4 ret compute_hash_keccak256 -> Ok(Bytes(obj#3))": "cpu:7140, mem:184, objs:-/2@e7643bdc",
+  "   5 call bytes_new_from_slice(1)": "cpu:7502",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:10287, mem:265, objs:-/3@e35df180",
+  "   7 call compute_hash_keccak256(Bytes(obj#5))": "",
+  "   8 ret compute_hash_keccak256 -> Ok(Bytes(obj#7))": "cpu:14669, mem:369, objs:-/4@bb3ba690",
+  "   9 call bytes_new_from_slice(23)": "cpu:15031",
+  "  10 ret bytes_new_from_slice -> Ok(Bytes(obj#9))": "cpu:17818, mem:472, objs:-/5@b3bc6324",
+  "  11 call compute_hash_keccak256(Bytes(obj#9))": "",
+  "  12 ret compute_hash_keccak256 -> Ok(Bytes(obj#11))": "cpu:22812, mem:576, objs:-/6@5d4989e7",
+  "  13 call bytes_new_from_slice(1000000)": "cpu:23174",
+  "  14 ret bytes_new_from_slice -> Ok(Bytes(obj#13))": "cpu:158771, mem:1000656, objs:-/7@164ad5bf",
+  "  15 call compute_hash_keccak256(Bytes(obj#13))": "",
+  "  16 ret compute_hash_keccak256 -> Ok(Bytes(obj#15))": "cpu:27983438, mem:1000760, objs:-/8@27868eab",
+  "  17 call bytes_new_from_slice(10000000)": "cpu:0, mem:0",
+  "  18 ret bytes_new_from_slice -> Ok(Bytes(obj#17))": "cpu:1330910, mem:10000080, objs:-/9@a8079493",
+  "  19 call compute_hash_keccak256(Bytes(obj#17))": "",
+  "  20 ret compute_hash_keccak256 -> Err(Error(Budget, ExceededLimit))": "cpu:279537141",
+  "  21 end": "cpu:279537141, mem:10000080, prngs:-/-, objs:-/9@a8079493, vmem:-, evt:-, store:-/-"
 }

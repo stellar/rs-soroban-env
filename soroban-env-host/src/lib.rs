@@ -45,12 +45,12 @@ pub use budget::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 #[cfg(any(test, feature = "testutils"))]
 #[doc(hidden)]
 pub use host::testutils::call_with_suppressed_panic_hook;
-#[cfg(any(test, feature = "testutils"))]
-pub use host::ContractFunctionSet;
 pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo, Seed,
     SEED_BYTES,
 };
+#[cfg(any(test, feature = "testutils"))]
+pub use host::{ContractFunctionSet, ContractInvocationEvent};
 pub use soroban_env_common::*;
 
 pub mod e2e_invoke;
