@@ -355,11 +355,11 @@ fn initialization_invalid() -> Result<(), HostError> {
         .map_new_from_slices(&["a", "a"], &[1u32.into(), 2u32.into()])
         .is_err());
 
-    let buf = vec![0; 6000000];
+    let buf = vec![0; 7000000];
     let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());
     let bytes_val = host.to_host_val(&scv_bytes)?;
 
-    // roughly consumes 6*5=30MiB (> 16 MiB is the limit)
+    // roughly consumes 7*5=42MiB (> 40 MiB is the budget limit)
     let vals = vec![bytes_val; 5];
     let keys = ["a", "b", "c", "d", "e"];
 
