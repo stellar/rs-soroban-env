@@ -10,6 +10,13 @@ use std::{cmp::Ordering, rc::Rc};
 
 impl Host {
     // Notes on metering: free
+    // TODO: this function is confusing, it isn't decoding anything, it is
+    // merely cloning out the VM and copy in whatever pos and len values have
+    // been passed in, evne if those pos or len does not correspond to the vm
+    // linear memory range. Does not perform any range checks It is being used
+    // wrong in several places. e.g. in map_new_from_linear_memory, the len is
+    // actually the number of slices, not the number of bytes.
+    // Tracking issue https://github.com/stellar/rs-soroban-env/issues/1225
     pub(crate) fn decode_vmslice(&self, pos: U32Val, len: U32Val) -> Result<VmSlice, HostError> {
         let pos: u32 = pos.into();
         let len: u32 = len.into();
