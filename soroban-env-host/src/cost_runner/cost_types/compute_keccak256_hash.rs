@@ -12,11 +12,11 @@ impl CostRunner for ComputeKeccak256HashRun {
 
     type SampleType = Vec<u8>;
 
-    type RecycledType = (Option<Vec<u8>>, Vec<u8>);
+    type RecycledType = (Option<[u8; 32]>, Vec<u8>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         let hash = black_box(
-            host.keccak256_hash_from_bytes(sample.as_slice())
+            host.keccak256_hash_from_bytes_raw(sample.as_slice())
                 .expect("keccak256"),
         );
         (Some(hash), sample)

@@ -12,6 +12,8 @@ use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use sha3::Keccak256;
 
+use super::metered_clone::MeteredContainer;
+
 impl Host {
     // Ed25519 functions
     pub(crate) fn ed25519_signature_from_bytesobj_input(
@@ -186,16 +188,22 @@ impl Host {
     }
 
     // Keccak256/SHA3 functions
-
-    pub(crate) fn keccak256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
+    pub(crate) fn keccak256_hash_from_bytes_raw(
+        &self,
+        bytes: &[u8],
+    ) -> Result<[u8; 32], HostError> {
         let _span = tracy_span!("keccak256");
         self.charge_budget(
             ContractCostType::ComputeKeccak256Hash,
             Some(bytes.len() as u64),
         )?;
-        Ok(<Keccak256 as sha3::Digest>::digest(bytes)
-            .as_slice()
-            .to_vec())
+        Ok(<Keccak256 as sha3::Digest>::digest(bytes).into())
+    }
+
+    pub(crate) fn keccak256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
+        Vec::<u8>::charge_bulk_init_cpy(32, self.as_budget())?;
+        self.keccak256_hash_from_bytes_raw(bytes)
+            .map(|x| x.to_vec())
     }
 
     pub(crate) fn keccak256_hash_from_bytesobj_input(
@@ -217,16 +225,24 @@ impl Host {
     }
 }
 
-pub(crate) fn sha256_hash_from_bytes(
+pub(crate) fn sha256_hash_from_bytes_raw(
     bytes: &[u8],
     budget: impl AsBudget,
-) -> Result<Vec<u8>, HostError> {
+) -> Result<[u8; 32], HostError> {
     let _span = tracy_span!("sha256");
     budget.as_budget().charge(
         ContractCostType::ComputeSha256Hash,
         Some(bytes.len() as u64),
     )?;
-    Ok(<Sha256 as sha2::Digest>::digest(bytes).as_slice().to_vec())
+    Ok(<Sha256 as sha2::Digest>::digest(bytes).into())
+}
+
+pub(crate) fn sha256_hash_from_bytes(
+    bytes: &[u8],
+    budget: impl AsBudget,
+) -> Result<Vec<u8>, HostError> {
+    Vec::<u8>::charge_bulk_init_cpy(32, budget.clone())?;
+    sha256_hash_from_bytes_raw(bytes, budget).map(|x| x.to_vec())
 }
 
 pub(crate) fn chacha20_fill_bytes(
