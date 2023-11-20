@@ -114,10 +114,10 @@ fn depth_limited_scval_xdr_serialization() -> Result<(), HostError> {
 
 #[test]
 fn length_limited_scval_xdr_conversion() -> Result<(), HostError> {
-    let buf = vec![0; 200000];
+    let buf = vec![0; 400000];
     let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());
     let mut scv_vec = ScVal::Vec(Some(ScVec(vec![scv_bytes.clone(); 1].try_into().unwrap())));
-    // roughly consumes 20MiB (> 16 MiB the limit)
+    // roughly consumes 40MiB (> 32 MiB the limit)
     for _i in 1..100 {
         let mut v = vec![scv_vec; 1];
         v.push(scv_bytes.clone());

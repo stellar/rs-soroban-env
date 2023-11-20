@@ -154,7 +154,9 @@ impl Vm {
         // us as well as a protocol that's less than or equal to our protocol.
 
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
-            let mut cursor = Limited::new(Cursor::new(env_meta), DEFAULT_XDR_RW_LIMITS);
+            let mut limits = DEFAULT_XDR_RW_LIMITS;
+            limits.len = env_meta.len();
+            let mut cursor = Limited::new(Cursor::new(env_meta), limits);
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;
