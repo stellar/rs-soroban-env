@@ -356,7 +356,7 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(128);
                 }
                 ContractCostType::ComputeSha256Hash => {
-                    mem.const_term = 40;
+                    mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeEd25519PubKey => {
@@ -380,7 +380,7 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeKeccak256Hash => {
-                    mem.const_term = 40;
+                    mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {

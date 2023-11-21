@@ -1,25 +1,39 @@
 use crate::budget::AsBudget;
-use crate::builtin_contracts::base_types::Address;
+use crate::builtin_contracts::base_types::{Address, Bytes};
 use crate::test::observe::ObservedHost;
-use crate::{Host, HostError, DEFAULT_HOST_DEPTH_LIMIT};
+use crate::{Host, HostError, DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal, Val};
 use soroban_test_wasms::RECURSIVE_ACCOUNT_CONTRACT;
 
 use crate::xdr::{
-    InvokeContractArgs, ScErrorType, SorobanAddressCredentials, SorobanAuthorizationEntry,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials,
+    InvokeContractArgs, ScErrorType, ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, WriteXdr,
 };
 
 #[contracttype]
 pub enum RecursiveAccountSignature {
     RedirectAddress(Address),
     SerializeValue,
+    DeserializeValue(Bytes),
+}
+
+fn create_recursive_serialized_scval(depth: u32) -> Vec<u8> {
+    let mut val = ScVal::Vec(Some(vec![ScVal::Void].try_into().unwrap()));
+    for _ in 0..depth {
+        val = ScVal::Vec(Some(vec![val.clone()].try_into().unwrap()));
+    }
+    let mut limits = DEFAULT_XDR_RW_LIMITS;
+    // Set depth much higher than default to be able to test deeper inputs
+    // than host can decode.
+    limits.depth *= 10;
+    val.to_xdr(limits).unwrap()
 }
 
 fn run_deep_host_stack_test(
     contract_call_depth: u32,
     serialization_depth: u32,
+    deserialization_depth: u32,
     function_name: &'static str,
 ) -> Result<Val, HostError> {
     let host = ObservedHost::new(function_name, Host::test_host_with_recording_footprint());
@@ -53,7 +67,18 @@ fn run_deep_host_stack_test(
         let signature = if i < (contract_call_depth - 1) as usize {
             RecursiveAccountSignature::RedirectAddress(contracts[i + 1].clone())
         } else {
-            RecursiveAccountSignature::SerializeValue
+            if deserialization_depth > 0 {
+                assert_eq!(serialization_depth, 0);
+                RecursiveAccountSignature::DeserializeValue(
+                    Bytes::from_slice(
+                        &host,
+                        create_recursive_serialized_scval(deserialization_depth).as_slice(),
+                    )
+                    .unwrap(),
+                )
+            } else {
+                RecursiveAccountSignature::SerializeValue
+            }
         };
         let signature_val: Val = signature.try_into_val(&*host).unwrap();
         let credentials = SorobanAddressCredentials {
@@ -76,12 +101,14 @@ fn run_deep_host_stack_test(
             root_invocation,
         });
     }
-    host.call(
-        contracts.last().unwrap().as_object(),
-        Symbol::try_from_small_str("set_depth").unwrap(),
-        test_vec![&*host, serialization_depth].into(),
-    )
-    .unwrap();
+    if serialization_depth > 0 {
+        host.call(
+            contracts.last().unwrap().as_object(),
+            Symbol::try_from_small_str("set_depth").unwrap(),
+            test_vec![&*host, serialization_depth].into(),
+        )
+        .unwrap();
+    }
 
     host.set_authorization_entries(auth_entries).unwrap();
     // Note, that we only are interested in the end result of the test;
@@ -101,6 +128,7 @@ fn test_deep_stack_call_succeeds_near_limit() {
     let res = run_deep_host_stack_test(
         DEFAULT_HOST_DEPTH_LIMIT,
         DEFAULT_HOST_DEPTH_LIMIT - 1,
+        0,
         function_name!(),
     );
     assert!(res.is_ok());
@@ -108,7 +136,7 @@ fn test_deep_stack_call_succeeds_near_limit() {
 
 #[test]
 fn test_deep_stack_call_fails_when_contract_call_depth_exceeded() {
-    let res = run_deep_host_stack_test(DEFAULT_HOST_DEPTH_LIMIT + 1, 0, function_name!());
+    let res = run_deep_host_stack_test(DEFAULT_HOST_DEPTH_LIMIT + 1, 0, 0, function_name!());
     assert!(res.is_err());
     let err = res.err().unwrap().error;
     // We shouldn't run out of budget here, so the error would just
@@ -118,7 +146,63 @@ fn test_deep_stack_call_fails_when_contract_call_depth_exceeded() {
 
 #[test]
 fn test_deep_stack_call_fails_when_serialization_depth_exceeded() {
-    let res = run_deep_host_stack_test(2, DEFAULT_HOST_DEPTH_LIMIT, function_name!());
+    let res = run_deep_host_stack_test(2, DEFAULT_HOST_DEPTH_LIMIT, 0, function_name!());
+    assert!(res.is_err());
+    let err = res.err().unwrap().error;
+    // We shouldn't run out of budget here, so the error would just
+    // be decorated as auth error.
+    assert!(err.is_type(ScErrorType::Auth));
+}
+
+#[test]
+fn test_deep_stack_call_succeeds_near_limit_with_xdr_deserialization() {
+    let res = run_deep_host_stack_test(
+        DEFAULT_HOST_DEPTH_LIMIT,
+        0,
+        DEFAULT_HOST_DEPTH_LIMIT - 2,
+        function_name!(),
+    );
+    assert!(res.is_ok());
+}
+
+#[test]
+fn test_deep_stack_call_fails_xdr_deserialization_exceeding_host_object_depth() {
+    let res = run_deep_host_stack_test(
+        DEFAULT_HOST_DEPTH_LIMIT,
+        0,
+        DEFAULT_HOST_DEPTH_LIMIT - 1,
+        function_name!(),
+    );
+    assert!(res.is_err());
+    let err = res.err().unwrap().error;
+    // We shouldn't run out of budget here, so the error would just
+    // be decorated as auth error.
+    assert!(err.is_type(ScErrorType::Auth));
+}
+
+#[test]
+fn test_deep_stack_call_fails_with_deep_xdr_deserialization() {
+    let res = run_deep_host_stack_test(
+        DEFAULT_HOST_DEPTH_LIMIT,
+        0,
+        DEFAULT_XDR_RW_LIMITS.depth,
+        function_name!(),
+    );
+    assert!(res.is_err());
+    let err = res.err().unwrap().error;
+    // We shouldn't run out of budget here, so the error would just
+    // be decorated as auth error.
+    assert!(err.is_type(ScErrorType::Auth));
+}
+
+#[test]
+fn test_deep_stack_call_fails_with_too_deep_xdr_deserialization() {
+    let res = run_deep_host_stack_test(
+        DEFAULT_HOST_DEPTH_LIMIT,
+        0,
+        DEFAULT_XDR_RW_LIMITS.depth * 2,
+        function_name!(),
+    );
     assert!(res.is_err());
     let err = res.err().unwrap().error;
     // We shouldn't run out of budget here, so the error would just

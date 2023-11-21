@@ -6,16 +6,29 @@ use crate::{
 };
 
 /// These constants are used to set limits on recursion and data length in the
-/// context of XDR (de)serialization. They serve as safeguards agaist both
-/// exccessive stack allocation, which could cause an unrecoverable `SIGABRT`,
-/// and exccessive heap memory allocation.
+/// context of XDR (de)serialization. They serve as safeguards against both
+/// excessive stack allocation, which could cause an unrecoverable `SIGABRT`,
+/// and excessive heap memory allocation.
 pub const DEFAULT_XDR_RW_LIMITS: Limits = Limits {
     // recursion limit for reading and writing XDR structures.
     depth: 500,
-    // maximum byte length for a data structure during serialization and
-    // deserialization to and from the XDR format. The limit of 16MiB
-    // corresponds to the overlay maximum message size.
-    len: 0x1000000,
+    // Maximum byte length for a data structure during serialization and
+    // deserialization to and from the XDR format.
+    // **DO NOT** use the default length for de-serialization. Instead,
+    // use the size of the input buffer (which should be much less than
+    // the limit defined here).
+    // The default 32 MB limit for serialization is the last-resort
+    // sanity check. Serialization can't be easily tampered with (unlike
+    // de-serialization) and is guarded by the budget both when the user
+    // creates the objects to be serialized and when we allocate memory
+    // to write these objects into.
+    // We want to be pretty non-restrictive and let budget do its work for
+    // deserialization. While 32 MB is much more data than we would ever
+    // like to materialize, it is possible that the user would
+    // just e.g. hash it without materializing, which seems like a much
+    // more plausible scenario where this can be reached given high
+    // enough memory/CPU instruction limits.
+    len: 32 * 1024 * 1024,
 };
 
 /// - `DEFAULT_HOST_DEPTH_LIMIT`: This limit applies to the host environment. It

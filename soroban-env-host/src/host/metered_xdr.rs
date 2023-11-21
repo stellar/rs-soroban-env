@@ -40,7 +40,9 @@ impl Host {
     pub fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
         let _span = tracy_span!("read xdr");
         self.charge_budget(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
-        self.map_err(T::from_xdr(bytes, DEFAULT_XDR_RW_LIMITS))
+        let mut limits = DEFAULT_XDR_RW_LIMITS;
+        limits.len = bytes.len();
+        self.map_err(T::from_xdr(bytes, limits))
     }
 
     pub(crate) fn metered_from_xdr_obj<T: ReadXdr>(
@@ -74,5 +76,7 @@ pub fn metered_from_xdr_with_budget<T: ReadXdr>(
 ) -> Result<T, HostError> {
     let _span = tracy_span!("read xdr with budget");
     budget.charge(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
-    T::from_xdr(bytes, DEFAULT_XDR_RW_LIMITS).map_err(|e| e.into())
+    let mut limits = DEFAULT_XDR_RW_LIMITS;
+    limits.len = bytes.len();
+    T::from_xdr(bytes, limits).map_err(|e| e.into())
 }

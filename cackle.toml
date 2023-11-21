@@ -41,6 +41,11 @@ no_auto_detect = [
     "syn",
 ]
 
+[api.env]
+no_auto_detect = [
+    "soroban-env-common",
+]
+
 [pkg.thiserror-impl]
 allow_proc_macro = true
 allow_apis = [
