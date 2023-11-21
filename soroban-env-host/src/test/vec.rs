@@ -379,11 +379,11 @@ fn large_vec_exceeds_budget() {
         .reset_limits(200_000_000, MEMORY_LIMIT)
         .unwrap();
     let start = Instant::now();
-    let mut v = host.map_new().unwrap();
+    let mut v = host.vec_new().unwrap();
     let mut i = 0;
     loop {
         i += 1;
-        let new_v_res = host.map_put(v, U32Val::from(i).into(), U32Val::from(i).into());
+        let new_v_res = host.vec_push_back(v, U32Val::from(i).into());
         match new_v_res {
             Ok(new_v) => {
                 v = new_v;

@@ -353,7 +353,7 @@ fn large_map_exceeds_budget() {
     let mut i = 0;
     loop {
         i += 1;
-        let new_m_res = host.map_put(m, U32Val::from(i).into(), U32Val::from(i).into());
+        let new_m_res = host.map_put(m, U32Val::from(u32::MAX - i).into(), U32Val::from(i).into());
         match new_m_res {
             Ok(new_m) => {
                 m = new_m;
