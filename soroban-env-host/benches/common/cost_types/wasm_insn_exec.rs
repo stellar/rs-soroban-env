@@ -311,7 +311,7 @@ macro_rules! generate_i64_store_insn_code {
                 for _ in 0..n {
                     fe.i32_const(0);
                     fe.i64_const(5);
-                    fe.$func_name(0);
+                    fe.$func_name(0, 0);
                 }
                 fe.push(Symbol::try_from_small_str("pass").unwrap());
                 let overhead = INSNS_OVERHEAD_CONST * (2 * n) as f64;
@@ -332,7 +332,7 @@ macro_rules! generate_i64_load_insn_code {
                 let mut fe = ModEmitter::default().func(Arity(0), 0);
                 for _ in 0..n {
                     fe.i32_const(0);
-                    fe.$func_name(0);
+                    fe.$func_name(0, 0);
                 }
                 fe.trap();
                 let overhead = INSNS_OVERHEAD_CONST * n as f64;

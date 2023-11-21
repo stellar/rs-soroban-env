@@ -198,7 +198,7 @@ fn store_i64() {
     let mut fe = ModEmitter::default().func(Arity(0), 0);
     fe.push(Operand::Const32(0));
     fe.push(Operand::Const64(5));
-    fe.i64_store(0);
+    fe.i64_store(0, 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
 
     let bytes = fe.finish_and_export("test").finish();
