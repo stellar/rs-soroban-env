@@ -288,6 +288,10 @@ impl FuncEmitter {
     pub fn memory_size(&mut self) -> &mut Self {
         self.insn(&Instruction::MemorySize(0))
     }
+    /// Emit an [`Instruction::MemoryFill`]
+    pub fn memory_fill(&mut self) -> &mut Self {
+        self.insn(&Instruction::MemoryFill(0))
+    }
     /// Emit an [`Instruction::Block`]
     pub fn block(&mut self) -> &mut Self {
         self.insn(&Instruction::Block(BlockType::Empty))
@@ -371,11 +375,13 @@ macro_rules! i64_mem_insn {
     {
         impl FuncEmitter {
         $(
-            pub fn $func_name(&mut self, memory_index: u32) -> &mut Self {
+            pub fn $func_name(&mut self, offset: u64,
+                align: u32
+            ) -> &mut Self {
                 self.insn(&Instruction::$insn(MemArg {
-                    offset: 0,
-                    align: 0,
-                    memory_index,
+                    offset,
+                    align,
+                    memory_index: 0,
                 }))
             }
         )*
