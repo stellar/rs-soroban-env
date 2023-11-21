@@ -1,7 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    auth::Context, contract, contractimpl, contracttype, BytesN, Env, Val, Vec, symbol_short, IntoVal, Address, xdr::ToXdr,
+    auth::Context, contract, contractimpl, contracttype, symbol_short, xdr::FromXdr, xdr::ToXdr,
+    Address, Bytes, BytesN, Env, IntoVal, Val, Vec,
 };
 
 #[contract]
@@ -11,12 +12,13 @@ struct RecursiveAccount;
 pub enum Signature {
     RedirectAddress(Address),
     SerializeValue,
+    DeserializeValue(Bytes),
 }
 
 fn create_recursive_val(env: &Env, depth: u32) -> Val {
     let mut curr = Vec::<Val>::new(env);
     for _ in 0..depth {
-        curr = (curr.to_val(), ).into_val(env);
+        curr = (curr.to_val(),).into_val(env);
     }
     curr.into()
 }
@@ -45,8 +47,14 @@ impl RecursiveAccount {
         match signature_redirect {
             Signature::RedirectAddress(address) => address.require_auth_for_args(().into_val(&env)),
             Signature::SerializeValue => {
-                let val = create_recursive_val(&env, env.storage().instance().get(&symbol_short!("d")).unwrap());
+                let val = create_recursive_val(
+                    &env,
+                    env.storage().instance().get(&symbol_short!("d")).unwrap(),
+                );
                 let _ = val.to_xdr(&env);
+            }
+            Signature::DeserializeValue(b) => {
+                let _: Val = FromXdr::from_xdr(&env, &b).unwrap();
             }
         }
     }
