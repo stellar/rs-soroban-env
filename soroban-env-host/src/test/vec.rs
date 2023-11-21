@@ -372,7 +372,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
 
 #[test]
 fn large_vec_exceeds_budget() {
-    let host = observe_host!(Host::default());
+    let host = Host::default();
     // Set a fixed budget higher than defaults, but still realistic.
     const MEMORY_LIMIT: u64 = 200 * 1024 * 1024;
     host.budget_ref()

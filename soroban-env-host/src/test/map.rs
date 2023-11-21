@@ -342,7 +342,7 @@ fn map_build_bad_element_integrity() -> Result<(), HostError> {
 
 #[test]
 fn large_map_exceeds_budget() {
-    let host = observe_host!(Host::default());
+    let host = Host::default();
     // Set a fixed budget higher than defaults, but still realistic.
     const MEMORY_LIMIT: u64 = 200 * 1024 * 1024;
     host.budget_ref()
