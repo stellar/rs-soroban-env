@@ -13,11 +13,19 @@ impl<'a> Arbitrary<'a> for Error {
         let error = Error::from(scerror);
         Ok(error)
     }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        <ScError as Arbitrary>::size_hint(depth)
+    }
 }
 
 impl<'a> Arbitrary<'a> for Void {
     fn arbitrary(_u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Val::VOID)
+    }
+
+    fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+        (0, Some(0))
     }
 }
 
@@ -47,5 +55,9 @@ impl<'a> Arbitrary<'a> for StorageType {
             StorageType::Temporary,
         ])
         .map(|x| *x)
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        <usize as Arbitrary>::size_hint(depth)
     }
 }

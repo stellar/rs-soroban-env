@@ -417,7 +417,7 @@ impl Host {
 
     #[allow(unused_variables)]
     pub fn set_base_prng_seed(&self, seed: prng::Seed) -> Result<(), HostError> {
-        let mut base_prng = Prng::new_from_seed(seed);
+        let mut base_prng = Prng::new_from_seed(seed, self.budget_ref())?;
         // NB: we must _create_ these PRNGs whether or not we're in a build that
         // stores / reveals them, so that the base_prng is left in the same state
         // regardless of build configuration.
@@ -2831,7 +2831,7 @@ impl VmCallerEnv for Host {
             self.charge_budget(ContractCostType::MemCpy, Some(prng::SEED_BYTES))?;
             if let Ok(seed32) = slice.try_into() {
                 self.with_current_prng(|prng| {
-                    *prng = Prng::new_from_seed(seed32);
+                    *prng = Prng::new_from_seed(seed32, self.budget_ref())?;
                     Ok(())
                 })?;
                 Ok(Val::VOID)
