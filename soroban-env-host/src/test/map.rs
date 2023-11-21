@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::time::Instant;
 
 use soroban_env_common::{
     xdr::{
@@ -337,4 +338,37 @@ fn map_build_bad_element_integrity() -> Result<(), HostError> {
     assert!(host.map_new_from_slices(&["hi"], &[bad_handle]).is_err());
 
     Ok(())
+}
+
+#[test]
+fn large_map_exceeds_budget() {
+    let host = observe_host!(Host::default());
+    // Set a fixed budget higher than defaults, but still realistic.
+    const MEMORY_LIMIT: u64 = 200 * 1024 * 1024;
+    host.budget_ref()
+        .reset_limits(200_000_000, MEMORY_LIMIT)
+        .unwrap();
+    let start = Instant::now();
+    let mut m = host.map_new().unwrap();
+    let mut i = 0;
+    loop {
+        i += 1;
+        let new_m_res = host.map_put(m, U32Val::from(i).into(), U32Val::from(i).into());
+        match new_m_res {
+            Ok(new_m) => {
+                m = new_m;
+            }
+            Err(e) => {
+                assert!(e.error.is_type(ScErrorType::Budget));
+                assert!(e.error.is_code(ScErrorCode::ExceededLimit));
+                assert!(host.budget_ref().get_mem_bytes_consumed().unwrap() > MEMORY_LIMIT);
+                break;
+            }
+        }
+    }
+    eprintln!(
+        "total iterations: {}, real time: {}",
+        i,
+        (Instant::now() - start).as_secs_f64()
+    );
 }
