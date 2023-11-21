@@ -1,6 +1,6 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call vec_front(Vec(obj#1))": "cpu:2785, mem:80, objs:-/1@3e25b2a0",
   "   2 ret vec_front -> Err(Error(Object, IndexBounds))": "cpu:3252",
-  "   3 end": "cpu:3252, mem:80, prngs:-/-, objs:-/1@3e25b2a0, vmem:-, evt:-, store:-/-"
+  "   3 end": "cpu:3252, mem:80, prngs:-/-, objs:-/1@3e25b2a0, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

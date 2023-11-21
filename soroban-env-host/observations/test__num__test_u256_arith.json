@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call obj_from_u256_pieces(18446744073709551615, 18446744073709551615, 18446744073709551615, 18446744073709551614)": "",
   "   2 ret obj_from_u256_pieces -> Ok(U256(obj#1))": "cpu:1249, mem:64, objs:-/1@a6c11d09",
   "   3 call obj_from_u256_pieces(18446744073709551615, 18446744073709551615, 18446744073709551615, 18446744073709551613)": "",
@@ -78,5 +78,5 @@
   "  76 ret u256_shr -> Ok(U256(1))": "cpu:44484, mem:2169",
   "  77 call u256_shr(U256(16), U32(257))": "",
   "  78 ret u256_shr -> Err(Error(Object, ArithDomain))": "cpu:44896, mem:2288",
-  "  79 end": "cpu:44896, mem:2288, prngs:-/-, objs:-/6@e83c1113, vmem:-, evt:-, store:-/-"
+  "  79 end": "cpu:44896, mem:2288, prngs:-/-, objs:-/6@e83c1113, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }
