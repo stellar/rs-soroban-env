@@ -1,6 +1,0 @@
-{
-  "   0 begin": "cpu:9996, mem:0, prngs:-/9b4a753, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 push TEST:   0:()": "cpu:64312, mem:2670, objs:-/3@f25d6726, store:-/2@8f53be5d",
-  "   2 pop TEST:   0: -> Ok(Void)": "",
-  "   3 end": "cpu:64312, mem:2670, prngs:-/9b4a753, objs:-/3@f25d6726, vmem:-, evt:-, store:-/2@8f53be5d"
-}
