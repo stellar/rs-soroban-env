@@ -496,9 +496,9 @@ fn many_large_segments_exceeds_budget() -> Result<(), HostError> {
 }
 
 #[test]
-fn way_too_many_segments_exceeds_budget() -> Result<(), HostError> {
+fn too_many_segments_exceeds_budget() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
-    let res = instantiate_with_page_and_segment_count(&host, 1, 10_000_000, 1);
+    let res = instantiate_with_page_and_segment_count(&host, 1, 50_000_000, 1);
     assert!(HostError::result_matches_err(
         res,
         Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
@@ -542,24 +542,24 @@ fn excessive_logging() -> Result<(), HostError> {
 
     let expected_budget = expect![[r#"
         =======================================================
-        Cpu limit: 2000000; used: 1077542
-        Mem limit: 500000; used: 203445
+        Cpu limit: 2000000; used: 516578
+        Mem limit: 500000; used: 202423
         =======================================================
         CostType                 cpu_insns      mem_bytes      
-        WasmInsnExec             294            0              
-        MemAlloc                 19915          67248          
-        MemCpy                   11658          0              
-        MemCmp                   3786           0              
-        DispatchHostFunction     263            0              
-        VisitObject              432            0              
+        WasmInsnExec             196            0              
+        MemAlloc                 8253           67248          
+        MemCpy                   2658           0              
+        MemCmp                   786            0              
+        DispatchHostFunction     1368           32             
+        VisitObject              240            0              
         ValSer                   0              0              
         ValDeser                 0              0              
-        ComputeSha256Hash        2924           0              
+        ComputeSha256Hash        3739           0              
         ComputeEd25519PubKey     0              0              
         VerifyEd25519Sig         0              0              
-        VmInstantiation          1037145        136183         
+        VmInstantiation          498103         135129         
         VmCachedInstantiation    0              0              
-        InvokeVmFunction         1125           14             
+        InvokeVmFunction         1235           14             
         ComputeKeccak256Hash     0              0              
         ComputeEcdsaSecp256k1Sig 0              0              
         RecoverEcdsaSecp256k1Key 0              0              
