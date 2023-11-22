@@ -1,6 +1,6 @@
+mod frame;
 pub(crate) mod observe;
 pub(crate) mod util;
-mod frame;
 pub(crate) use util::wasm as wasm_util;
 
 mod address;
