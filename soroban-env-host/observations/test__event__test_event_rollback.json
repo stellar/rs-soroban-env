@@ -1,8 +1,8 @@
 {
-  "   0 begin": "cpu:9996, mem:0, prngs:-/9b4a753, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 call call(Address(obj#1), Symbol(add), Vec(obj#3))": "cpu:52909, mem:1822, objs:-/3@1aa2506e, store:-/2@8f53be5d",
-  "   2 push TEST:   0:add(I32(1), I32(2))": "cpu:78488, mem:2982, objs:-/4@1ddf9399",
-  "   3 pop TEST:   0:add -> Ok(Void)": "cpu:90661, mem:3432, objs:-/7@652e762b, evt:2@f1afdada",
-  "   4 ret call -> Ok(Void)": "",
-  "   5 end": "cpu:98259, mem:4088, prngs:-/9b4a753, objs:-/7@652e762b, vmem:-, evt:2@26df635e, store:-/2@8f53be5d"
+  "   0 begin": "cpu:9996, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call call(Address(obj#1), Symbol(add), Vec(obj#3))": "cpu:52909, mem:1822, objs:-/3@3e2c291c, store:-/2@8f53be5d, foot:2@b5543661",
+  "   2 push TEST:   0:add(I32(1), I32(2))": "cpu:78488, mem:2982, objs:-/4@d7708f9, stk:1@415daa75, auth:1@ab264b90/-",
+  "   3 pop TEST:   0:add -> Ok(Void)": "cpu:90661, mem:3432, objs:-/7@70af5289, evt:2@f1afdada",
+  "   4 ret call -> Ok(Void)": " stk:-, auth:-/-",
+  "   5 end": "cpu:98259, mem:4088, prngs:-/9b4a753, objs:-/7@70af5289, vm:-/-, evt:2@26df635e, store:-/2@8f53be5d, foot:2@b5543661, stk:-, auth:-/-"
 }

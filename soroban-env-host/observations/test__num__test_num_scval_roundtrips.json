@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call obj_from_i64(-36028797018963969)": "",
   "   2 ret obj_from_i64 -> Ok(I64(obj#1))": "cpu:1249, mem:64, objs:-/1@92305f19",
   "   3 call obj_to_i64(I64(obj#3))": "cpu:3000, mem:128, objs:-/2@fcd7721d",
@@ -348,5 +348,5 @@
   " 346 ret obj_to_i256_lo_lo -> Ok(18364758544493064720)": "cpu:149154",
   " 347 call obj_cmp(I256(obj#133), I256(obj#135))": "",
   " 348 ret obj_cmp -> Ok(0)": "cpu:149840",
-  " 349 end": "cpu:149840, mem:4352, prngs:-/-, objs:-/68@93205b4f, vmem:-, evt:-, store:-/-"
+  " 349 end": "cpu:149840, mem:4352, prngs:-/-, objs:-/68@93205b4f, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

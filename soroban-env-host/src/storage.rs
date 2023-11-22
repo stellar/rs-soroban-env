@@ -26,9 +26,17 @@ pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<EntryWithLiveUntil>, B
 /// contains entries from the `ScMap` of the corresponding `ScContractInstance`
 /// contract data entry.
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) struct InstanceStorageMap {
     pub(crate) map: MeteredOrdMap<Val, Val, Host>,
     pub(crate) is_modified: bool,
+}
+
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for StorageMap {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.map.hash(state);
+    }
 }
 
 impl InstanceStorageMap {
@@ -44,6 +52,7 @@ impl InstanceStorageMap {
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
 /// in a given transaction.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is only read.
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is only _allowed_ to be read.
@@ -71,7 +80,15 @@ pub trait SnapshotSource {
 /// against a suitably fresh [SnapshotSource].
 // Notes on metering: covered by the underneath `MeteredOrdMap`.
 #[derive(Clone, Default)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub struct Footprint(pub FootprintMap);
+
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for FootprintMap {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.map.hash(state);
+    }
+}
 
 impl Footprint {
     pub fn record_access(

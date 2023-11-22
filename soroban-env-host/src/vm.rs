@@ -59,6 +59,13 @@ pub struct Vm {
     pub(crate) memory: Option<Memory>,
 }
 
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for Vm {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.contract_id.hash(state);
+    }
+}
+
 /// Minimal description of a single function defined in a WASM module.
 #[derive(Clone, Eq, PartialEq)]
 pub struct VmFunction {
@@ -451,5 +458,67 @@ impl Vm {
         let mut ctx: StoreContextMut<Host> = store.into();
         let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
         f(caller)
+    }
+
+    #[cfg(feature = "testutils")]
+    pub(crate) fn memory_hash_and_size(&self) -> (u64, usize) {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        if let Some(mem) = self.memory {
+            if let Ok((hash, size)) = self.with_vmcaller(|vmcaller| {
+                let mut state = DefaultHasher::default();
+                let data = mem.data(vmcaller.try_ref()?);
+                data.hash(&mut state);
+                Ok((state.finish(), data.len()))
+            }) {
+                return (hash, size);
+            }
+        }
+        (0, 0)
+    }
+
+    #[cfg(feature = "testutils")]
+    // This is pretty weak: we just observe the state that wasmi exposes through
+    // wasm _exports_. There might be tables or globals a wasm doesn't export
+    // but there's no obvious way to observe them.
+    pub(crate) fn exports_hash_and_size(&self) -> (u64, usize) {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        use wasmi::{Extern, StoreContext};
+        if let Ok((hash, size)) = self.with_vmcaller(|vmcaller| {
+            let ctx: StoreContext<'_, _> = vmcaller.try_ref()?.into();
+            let mut size: usize = 0;
+            let mut state = DefaultHasher::default();
+            for export in self.instance.exports(vmcaller.try_ref()?) {
+                size = size.saturating_add(1);
+                export.name().hash(&mut state);
+
+                match export.into_extern() {
+                    // Funcs are immutable, memory we hash separately above.
+                    Extern::Func(_) | Extern::Memory(_) => (),
+
+                    Extern::Table(t) => {
+                        let sz = t.size(&ctx);
+                        sz.hash(&mut state);
+                        size = size.saturating_add(sz as usize);
+                        for i in 0..sz {
+                            if let Some(elem) = t.get(&ctx, i) {
+                                let s = format!("{:?}", elem);
+                                s.hash(&mut state);
+                            }
+                        }
+                    }
+                    Extern::Global(g) => {
+                        let s = format!("{:?}", g.get(&ctx));
+                        s.hash(&mut state);
+                    }
+                }
+            }
+            Ok((state.finish(), size))
+        }) {
+            (hash, size)
+        } else {
+            (0, 0)
+        }
     }
 }

@@ -1,6 +1,6 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 call vec_first_index_of(Vec(obj#1), U32(2))": "cpu:2791, mem:128, objs:-/1@71bbf2be",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_first_index_of(Vec(obj#1), U32(2))": "cpu:2791, mem:128, objs:-/1@b8a6abc",
   "   2 ret vec_first_index_of -> Ok(U32(2))": "cpu:3263",
   "   3 call vec_last_index_of(Vec(obj#1), U32(2))": "",
   "   4 ret vec_last_index_of -> Ok(U32(4))": "cpu:3735",
@@ -8,5 +8,5 @@
   "   6 ret vec_first_index_of -> Ok(Void)": "cpu:4207",
   "   7 call vec_last_index_of(Vec(obj#1), U32(1))": "",
   "   8 ret vec_last_index_of -> Ok(Void)": "cpu:4679",
-  "   9 end": "cpu:4679, mem:128, prngs:-/-, objs:-/1@71bbf2be, vmem:-, evt:-, store:-/-"
+  "   9 end": "cpu:4679, mem:128, prngs:-/-, objs:-/1@b8a6abc, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

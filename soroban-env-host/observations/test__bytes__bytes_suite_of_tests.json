@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call bytes_new()": "",
   "   2 ret bytes_new -> Ok(Bytes(obj#1))": "cpu:1249, mem:64, objs:-/1@5b7170d7",
   "   3 call bytes_push(Bytes(obj#1), U32(0))": "",
@@ -140,5 +140,5 @@
   " 138 ret bytes_append -> Ok(Bytes(obj#125))": "cpu:201136, mem:6172, objs:-/63@8405b0bb",
   " 139 call obj_cmp(Bytes(obj#119), Bytes(obj#125))": "",
   " 140 ret obj_cmp -> Ok(0)": "cpu:201819",
-  " 141 end": "cpu:201819, mem:6172, prngs:-/-, objs:-/63@8405b0bb, vmem:-, evt:-, store:-/-"
+  " 141 end": "cpu:201819, mem:6172, prngs:-/-, objs:-/63@8405b0bb, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

@@ -68,6 +68,19 @@ pub(crate) struct TestContractFrame {
     pub(crate) instance: ScContractInstance,
 }
 
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for TestContractFrame {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.func.hash(state);
+        self.args.hash(state);
+        if let Some(panic) = self.panic.borrow().as_ref() {
+            panic.hash(state);
+        }
+        self.instance.hash(state);
+    }
+}
+
 #[cfg(any(test, feature = "testutils"))]
 impl TestContractFrame {
     pub fn new(id: Hash, func: Symbol, args: Vec<Val>, instance: ScContractInstance) -> Self {
@@ -84,6 +97,7 @@ impl TestContractFrame {
 /// Context pairs a variable-case [`Frame`] enum with state that's common to all
 /// cases (eg. a [`Prng`]).
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) struct Context {
     pub(crate) frame: Frame,
     pub(crate) prng: Option<Prng>,
@@ -102,6 +116,7 @@ pub(crate) struct Context {
 /// the host state when it is pushed, and the [`FrameGuard`] will either
 /// commit or roll back that state when it pops the stack.
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) enum Frame {
     ContractVM {
         vm: Rc<Vm>,

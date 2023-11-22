@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call obj_from_i256_pieces(9223372036854775807, 18446744073709551615, 18446744073709551615, 18446744073709551614)": "",
   "   2 ret obj_from_i256_pieces -> Ok(I256(obj#1))": "cpu:1249, mem:64, objs:-/1@1ff2b1ba",
   "   3 call obj_from_i256_pieces(9223372036854775807, 18446744073709551615, 18446744073709551615, 18446744073709551613)": "",
@@ -148,5 +148,5 @@
   " 146 ret i256_shr -> Ok(I256(1))": "cpu:67798, mem:2992",
   " 147 call i256_shr(I256(16), U32(256))": "",
   " 148 ret i256_shr -> Err(Error(Object, ArithDomain))": "cpu:68210, mem:3111",
-  " 149 end": "cpu:68210, mem:3111, prngs:-/-, objs:-/17@41dc1fd9, vmem:-, evt:-, store:-/-"
+  " 149 end": "cpu:68210, mem:3111, prngs:-/-, objs:-/17@41dc1fd9, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

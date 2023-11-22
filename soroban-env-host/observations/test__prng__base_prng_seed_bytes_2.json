@@ -1,12 +1,12 @@
 {
-  "   0 begin": "cpu:9996, mem:0, prngs:-/9b4a753, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 call call(Address(obj#1), Symbol(bytes_new), Vec(obj#5))": "cpu:62904, mem:1814, prngs:-/da694490, objs:-/3@df638363, store:-/2@8f53be5d",
-  "   2 push TEST:   0:bytes_new(U64(0))": "cpu:88482, mem:2966, objs:-/4@c23de825",
+  "   0 begin": "cpu:9996, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call call(Address(obj#1), Symbol(bytes_new), Vec(obj#5))": "cpu:62904, mem:1814, prngs:-/da694490, objs:-/3@f0860f59, store:-/2@8f53be5d, foot:2@b5543661",
+  "   2 push TEST:   0:bytes_new(U64(0))": "cpu:88482, mem:2966, objs:-/4@25344d49, stk:1@cbfac19a, auth:1@20da541b/-",
   "   3 call prng_bytes_new(U32(32))": "",
-  "   4 ret prng_bytes_new -> Ok(Bytes(obj#9))": "cpu:102677, mem:3078, prngs:a3ae41e/f3d00d54, objs:-/5@3eaa40d1",
+  "   4 ret prng_bytes_new -> Ok(Bytes(obj#9))": "cpu:102677, mem:3078, prngs:a3ae41e/f3d00d54, objs:-/5@5bdb66ac, stk:1@da251c32",
   "   5 pop TEST:   0:bytes_new -> Ok(Bytes(obj#9))": "",
-  "   6 ret call -> Ok(Bytes(obj#9))": "cpu:102785, prngs:-/f3d00d54",
+  "   6 ret call -> Ok(Bytes(obj#9))": "cpu:102785, prngs:-/f3d00d54, stk:-, auth:-/-",
   "   7 call bytes_copy_to_slice(Bytes(obj#9), U32(0), 32)": "",
   "   8 ret bytes_copy_to_slice -> Ok(())": "cpu:103147",
-  "   9 end": "cpu:103147, mem:3078, prngs:-/f3d00d54, objs:-/5@3eaa40d1, vmem:-, evt:-, store:-/2@8f53be5d"
+  "   9 end": "cpu:103147, mem:3078, prngs:-/f3d00d54, objs:-/5@5bdb66ac, vm:-/-, evt:-, store:-/2@8f53be5d, foot:2@b5543661, stk:-, auth:-/-"
 }
