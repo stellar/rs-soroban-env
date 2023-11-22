@@ -1,8 +1,8 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 call vec_append(Vec(obj#1), Vec(obj#3))": "cpu:5576, mem:208, objs:-/2@8d9e686c",
-  "   2 ret vec_append -> Ok(Vec(obj#5))": "cpu:8907, mem:336, objs:-/3@a554df6a",
-  "   3 call obj_cmp(Vec(obj#5), Vec(obj#7))": "cpu:11698, mem:464, objs:-/4@685e122e",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_append(Vec(obj#1), Vec(obj#3))": "cpu:5576, mem:208, objs:-/2@61762f85",
+  "   2 ret vec_append -> Ok(Vec(obj#5))": "cpu:8907, mem:336, objs:-/3@a4800db2",
+  "   3 call obj_cmp(Vec(obj#5), Vec(obj#7))": "cpu:11698, mem:464, objs:-/4@9360955",
   "   4 ret obj_cmp -> Ok(0)": "cpu:12386",
-  "   5 end": "cpu:12386, mem:464, prngs:-/-, objs:-/4@685e122e, vmem:-, evt:-, store:-/-"
+  "   5 end": "cpu:12386, mem:464, prngs:-/-, objs:-/4@9360955, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

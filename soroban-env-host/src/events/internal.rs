@@ -63,6 +63,34 @@ pub struct InternalDiagnosticEvent {
     pub args: Vec<InternalDiagnosticArg>,
 }
 
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for InternalEvent {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            InternalEvent::Contract(c) => {
+                c.type_.hash(state);
+                match c.contract_id {
+                    Some(cid) => cid.to_val().get_payload().hash(state),
+                    None => 0.hash(state),
+                }
+                c.data.get_payload().hash(state);
+                c.topics.to_val().get_payload().hash(state);
+            }
+            InternalEvent::Diagnostic(_) => (),
+        }
+    }
+}
+
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for EventError {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            EventError::FromFailedCall => 0.hash(state),
+            EventError::FromSuccessfulCall => 1.hash(state),
+        }
+    }
+}
+
 // As mentioned above, we want to support storing "plain" rust datatypes as
 // arguments to diagnostic events (in the form of ScVals), but in certain cases
 // the user will be providing an _existing_ host object reference in which case

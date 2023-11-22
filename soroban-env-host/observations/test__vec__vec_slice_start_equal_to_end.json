@@ -1,6 +1,6 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
-  "   1 call vec_slice(Vec(obj#1), U32(1), U32(1))": "cpu:2788, mem:104, objs:-/1@d548e8c1",
-  "   2 ret vec_slice -> Ok(Vec(obj#3))": "cpu:5897, mem:184, objs:-/2@5157599f",
-  "   3 end": "cpu:7649, mem:200, prngs:-/-, objs:-/2@5157599f, vmem:-, evt:-, store:-/-"
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_slice(Vec(obj#1), U32(1), U32(1))": "cpu:2788, mem:104, objs:-/1@c38361c",
+  "   2 ret vec_slice -> Ok(Vec(obj#3))": "cpu:5897, mem:184, objs:-/2@87c38dca",
+  "   3 end": "cpu:7649, mem:200, prngs:-/-, objs:-/2@87c38dca, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

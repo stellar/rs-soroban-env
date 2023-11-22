@@ -14,18 +14,17 @@
 // want to make an intentional change, run with UPDATE_OBSERVATIONS=1.
 
 #![cfg_attr(any(feature = "next", not(feature = "testutils")), allow(dead_code))]
+#![cfg_attr(
+    any(feature = "next", not(feature = "testutils")),
+    allow(unused_imports)
+)]
 
 #[cfg(all(not(feature = "next"), feature = "testutils"))]
 use crate::host::{error::HostError, HostLifecycleEvent};
 
 use crate::{
-    budget::AsBudget,
-    events::{EventError, InternalEvent},
-    host::Frame,
-    host_object::{HostMap, HostVec},
-    storage::StorageMap,
-    xdr::{self, ContractExecutable},
-    Host, Symbol, SymbolObject, SymbolSmall,
+    budget::AsBudget, events::InternalEvent, host::Frame, xdr::ContractExecutable, Host, Symbol,
+    SymbolObject, SymbolSmall,
 };
 use itertools::Itertools;
 use std::{
@@ -70,6 +69,7 @@ fn diff_line(last: &String, new: &String) -> String {
         .join(",")
 }
 
+#[cfg(all(not(feature = "next"), feature = "testutils"))]
 impl Observations {
     fn load(testname: &str) -> Self {
         let path = full_path(testname);
@@ -226,7 +226,6 @@ impl Display for Step {
         }
     }
 }
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Observation {
     step: Step,
@@ -240,12 +239,22 @@ struct Observation {
     global_objs_hash: u64,
     vm_mem_size: usize,
     vm_mem_hash: u64,
+    vm_exports_size: usize,
+    vm_exports_hash: u64,
     events_size: usize,
     events_hash: u64,
     instance_storage_size: usize,
     instance_storage_hash: u64,
     ledger_storage_size: usize,
     ledger_storage_hash: u64,
+    storage_footprint_size: usize,
+    storage_footprint_hash: u64,
+    auth_stack_size: usize,
+    auth_stack_hash: u64,
+    auth_trackers_size: usize,
+    auth_trackers_hash: u64,
+    context_stack_size: usize,
+    context_stack_hash: u64,
 }
 
 fn hash_one<H: Hash>(h: &H) -> u64 {
@@ -268,56 +277,7 @@ fn hash_optional<H: Hash>(h: &Option<H>) -> u64 {
     }
 }
 
-impl Hash for HostVec {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.vec.len().hash(state);
-        hash_iter(self.vec.iter().map(|x| x.get_payload()));
-    }
-}
-
-impl Hash for HostMap {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.len().hash(state);
-        hash_iter(
-            self.map
-                .iter()
-                .map(|(x, y)| (x.get_payload(), y.get_payload())),
-        );
-    }
-}
-
-impl Hash for StorageMap {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.map.hash(state);
-    }
-}
-
-impl Hash for InternalEvent {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            InternalEvent::Contract(c) => {
-                c.type_.hash(state);
-                match c.contract_id {
-                    Some(cid) => cid.to_val().get_payload().hash(state),
-                    None => 0.hash(state),
-                }
-                c.data.get_payload().hash(state);
-                c.topics.to_val().get_payload().hash(state);
-            }
-            InternalEvent::Diagnostic(_) => (),
-        }
-    }
-}
-
-impl Hash for EventError {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            EventError::FromFailedCall => 0.hash(state),
-            EventError::FromSuccessfulCall => 1.hash(state),
-        }
-    }
-}
-
+#[cfg(all(not(feature = "next"), feature = "testutils"))]
 impl Host {
     fn base_prng_hash(&self) -> u64 {
         if let Ok(prng) = self.try_borrow_base_prng() {
@@ -374,37 +334,15 @@ impl Host {
             0
         }
     }
-    fn memory_size(&self) -> usize {
+    fn memory_hash_and_size(&self) -> (u64, usize) {
         if let Ok(ctxs) = self.try_borrow_context_stack() {
             if let Some(ctx) = ctxs.last() {
                 if let Frame::ContractVM { vm, .. } = &ctx.frame {
-                    if let Some(mem) = vm.memory {
-                        if let Ok(len) =
-                            vm.with_vmcaller(|vmcaller| Ok(mem.data(vmcaller.try_ref()?).len()))
-                        {
-                            return len;
-                        }
-                    }
+                    return vm.memory_hash_and_size();
                 }
             }
         }
-        0
-    }
-    fn memory_hash(&self) -> u64 {
-        if let Ok(ctxs) = self.try_borrow_context_stack() {
-            if let Some(ctx) = ctxs.last() {
-                if let Frame::ContractVM { vm, .. } = &ctx.frame {
-                    if let Some(mem) = vm.memory {
-                        if let Ok(hash) = vm
-                            .with_vmcaller(|vmcaller| Ok(hash_one(&mem.data(vmcaller.try_ref()?))))
-                        {
-                            return hash;
-                        }
-                    }
-                }
-            }
-        }
-        0
+        (0, 0)
     }
     fn events_size(&self) -> usize {
         if let Ok(evts) = self.try_borrow_events() {
@@ -463,8 +401,70 @@ impl Host {
             0
         }
     }
+
+    fn auth_stack_size(&self) -> usize {
+        if let Ok(auth_mgr) = self.try_borrow_authorization_manager() {
+            auth_mgr.stack_size()
+        } else {
+            0
+        }
+    }
+    fn auth_stack_hash(&self) -> u64 {
+        if let Ok(auth_mgr) = self.try_borrow_authorization_manager() {
+            auth_mgr.stack_hash()
+        } else {
+            0
+        }
+    }
+    fn auth_trackers_hash_and_size(&self) -> (u64, usize) {
+        if let Ok(auth_mgr) = self.try_borrow_authorization_manager() {
+            auth_mgr.trackers_hash_and_size()
+        } else {
+            (0, 0)
+        }
+    }
+    fn context_stack_size(&self) -> usize {
+        if let Ok(frames) = self.try_borrow_context_stack() {
+            frames.len()
+        } else {
+            0
+        }
+    }
+    fn context_stack_hash(&self) -> u64 {
+        if let Ok(frames) = self.try_borrow_context_stack() {
+            hash_iter(frames.iter())
+        } else {
+            0
+        }
+    }
+    fn storage_footprint_size(&self) -> usize {
+        if let Ok(storage) = self.try_borrow_storage() {
+            storage.footprint.0.len()
+        } else {
+            0
+        }
+    }
+    fn storage_footprint_hash(&self) -> u64 {
+        if let Ok(storage) = self.try_borrow_storage() {
+            hash_one(&storage.footprint.0)
+        } else {
+            0
+        }
+    }
+
+    fn vm_exports_hash_and_size(&self) -> (u64, usize) {
+        if let Ok(ctxs) = self.try_borrow_context_stack() {
+            if let Some(ctx) = ctxs.last() {
+                if let Frame::ContractVM { vm, .. } = &ctx.frame {
+                    return vm.exports_hash_and_size();
+                }
+            }
+        }
+        (0, 0)
+    }
 }
 
+#[cfg(all(not(feature = "next"), feature = "testutils"))]
 impl Observation {
     fn render_hash(hash: u64) -> String {
         // Truncate the hash to u32, to fit on a line.
@@ -490,7 +490,7 @@ impl Observation {
         (
             format!("{:4.4} {}", n, self.step),
             format!(
-                "cpu:{}, mem:{}, prngs:{}/{}, objs:{}/{}, vmem:{}, evt:{}, store:{}/{}",
+                "cpu:{}, mem:{}, prngs:{}/{}, objs:{}/{}, vm:{}/{}, evt:{}, store:{}/{}, foot:{}, stk:{}, auth:{}/{}",
                 self.cpu_insns,
                 self.mem_bytes,
                 Self::render_hash(self.local_prng_hash),
@@ -498,14 +498,22 @@ impl Observation {
                 Self::render_size_and_hash(self.local_objs_size, self.local_objs_hash),
                 Self::render_size_and_hash(self.global_objs_size, self.global_objs_hash),
                 Self::render_size_and_hash(self.vm_mem_size, self.vm_mem_hash),
+                Self::render_size_and_hash(self.vm_exports_size, self.vm_exports_hash),
                 Self::render_size_and_hash(self.events_size, self.events_hash),
                 Self::render_size_and_hash(self.instance_storage_size, self.instance_storage_hash),
-                Self::render_size_and_hash(self.ledger_storage_size, self.ledger_storage_hash)
+                Self::render_size_and_hash(self.ledger_storage_size, self.ledger_storage_hash),
+                Self::render_size_and_hash(self.storage_footprint_size, self.storage_footprint_hash),
+                Self::render_size_and_hash(self.context_stack_size, self.context_stack_hash),
+                Self::render_size_and_hash(self.auth_stack_size, self.auth_stack_hash),
+                Self::render_size_and_hash(self.auth_trackers_size, self.auth_trackers_hash),
             ),
         )
     }
-
     fn observe(host: &Host, step: Step) -> Self {
+        let (vm_mem_hash, vm_mem_size) = host.memory_hash_and_size();
+        let (vm_exports_hash, vm_exports_size) = host.vm_exports_hash_and_size();
+        let (auth_trackers_hash, auth_trackers_size) = host.auth_trackers_hash_and_size();
+
         Observation {
             step,
             cpu_insns: host.as_budget().get_cpu_insns_consumed().unwrap(),
@@ -516,14 +524,24 @@ impl Observation {
             local_objs_hash: host.local_objs_hash(),
             global_objs_size: host.global_objs_size(),
             global_objs_hash: host.global_objs_hash(),
-            vm_mem_size: host.memory_size(),
-            vm_mem_hash: host.memory_hash(),
+            vm_mem_size,
+            vm_mem_hash,
+            vm_exports_size,
+            vm_exports_hash,
             events_size: host.events_size(),
             events_hash: host.events_hash(),
             instance_storage_size: host.instance_storage_size(),
             instance_storage_hash: host.instance_storage_hash(),
             ledger_storage_size: host.ledger_storage_size(),
             ledger_storage_hash: host.ledger_storage_hash(),
+            storage_footprint_size: host.storage_footprint_size(),
+            storage_footprint_hash: host.storage_footprint_hash(),
+            context_stack_size: host.context_stack_size(),
+            context_stack_hash: host.context_stack_hash(),
+            auth_stack_size: host.auth_stack_size(),
+            auth_stack_hash: host.auth_stack_hash(),
+            auth_trackers_size,
+            auth_trackers_hash,
         }
     }
 }
@@ -563,7 +581,7 @@ impl Step {
             HostLifecycleEvent::EnvRet(fname, res) => Step::Ret(fname.to_string(), res.clone()),
         }
     }
-    fn short_hash(hash: &xdr::Hash) -> String {
+    fn short_hash(hash: &crate::xdr::Hash) -> String {
         let word: [u8; 4] = hash.0[0..4]
             .try_into()
             .expect("extracting 4 bytes from hash");
@@ -657,6 +675,7 @@ impl ObservedHost {
         })
     }
 
+    #[cfg(all(not(feature = "next"), feature = "testutils"))]
     fn observe_and_check(&self, step: Step) {
         let ob = Observation::observe(&self.host, step);
         Observations::check(

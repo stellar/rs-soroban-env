@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vmem:-, evt:-, store:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call bytes_new()": "",
   "   2 ret bytes_new -> Ok(Bytes(obj#1))": "cpu:1249, mem:64, objs:-/1@5b7170d7",
   "   3 call bytes_push(Bytes(obj#1), U32(97))": "",
@@ -118,5 +118,5 @@
   " 116 ret bytes_get -> Ok(U32(121))": "cpu:96818",
   " 117 call bytes_get(Bytes(obj#59), U32(25))": "",
   " 118 ret bytes_get -> Ok(U32(122))": "cpu:97034",
-  " 119 end": "cpu:97034, mem:2813, prngs:-/-, objs:-/30@4eca5389, vmem:-, evt:-, store:-/-"
+  " 119 end": "cpu:97034, mem:2813, prngs:-/-, objs:-/30@4eca5389, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

@@ -291,6 +291,7 @@ enum AccountTrackersSnapshot {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 enum AuthorizationMode {
     Enforcing,
     #[cfg(any(test, feature = "recording_auth"))]
@@ -310,6 +311,16 @@ struct RecordingAuthInfo {
     // Whether to allow root authorized invocation to not match the root
     // contract invocation.
     disable_non_root_auth: bool,
+}
+
+#[cfg(feature = "testutils")]
+impl std::hash::Hash for RecordingAuthInfo {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        if let Ok(tracker_by_address_handle) = self.tracker_by_address_handle.try_borrow() {
+            tracker_by_address_handle.hash(state);
+        }
+        self.disable_non_root_auth.hash(state);
+    }
 }
 
 #[cfg(any(test, feature = "recording_auth"))]
@@ -337,6 +348,7 @@ impl RecordingAuthInfo {
 // Helper for matching the 'sparse' tree of authorized invocations to the actual
 // call tree.
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 struct InvocationTracker {
     // Root of the authorized invocation tree.
     // The authorized invocation tree only contains the contract invocations
@@ -364,6 +376,7 @@ struct InvocationTracker {
 // In the recording mode this will record the invocations that are authorized
 // on behalf of the address.
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) struct AccountAuthorizationTracker {
     // Tracked address.
     address: AddressObject,
@@ -395,24 +408,28 @@ pub(crate) struct AccountAuthorizationTrackerSnapshot {
 
 // Stores all the authorizations performed by contracts at runtime.
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) struct InvokerContractAuthorizationTracker {
     contract_address: AddressObject,
     invocation_tracker: InvocationTracker,
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) enum AuthStackFrame {
     Contract(ContractInvocation),
     CreateContractHostFn(CreateContractArgs),
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) struct ContractInvocation {
     pub(crate) contract_address: AddressObject,
     pub(crate) function_name: Symbol,
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) struct ContractFunction {
     pub(crate) contract_address: AddressObject,
     pub(crate) function_name: Symbol,
@@ -420,6 +437,7 @@ pub(crate) struct ContractFunction {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) enum AuthorizedFunction {
     ContractFn(ContractFunction),
     CreateContractHostFn(CreateContractArgs),
@@ -428,6 +446,7 @@ pub(crate) enum AuthorizedFunction {
 // A single node in the authorized invocation tree.
 // This represents an invocation and all it's authorized sub-invocations.
 #[derive(Clone)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) struct AuthorizedInvocation {
     pub(crate) function: AuthorizedFunction,
     pub(crate) sub_invocations: Vec<AuthorizedInvocation>,
@@ -1323,6 +1342,53 @@ impl AuthorizationManager {
                     .metered_collect(host)
             })
             .unwrap()
+    }
+}
+
+// Some helper extensions to support test-observation.
+#[cfg(all(test, not(feature = "next"), feature = "testutils"))]
+impl AuthorizationManager {
+    pub(crate) fn stack_size(&self) -> usize {
+        if let Ok(call_stack) = self.call_stack.try_borrow() {
+            call_stack.len()
+        } else {
+            0
+        }
+    }
+
+    pub(crate) fn stack_hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        if let Ok(call_stack) = self.call_stack.try_borrow() {
+            let mut state = DefaultHasher::new();
+            call_stack.hash(&mut state);
+            state.finish()
+        } else {
+            0
+        }
+    }
+
+    pub(crate) fn trackers_hash_and_size(&self) -> (u64, usize) {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut size: usize = 0;
+        let mut state = DefaultHasher::new();
+        self.mode.hash(&mut state);
+        if let Ok(account_trackers) = self.account_trackers.try_borrow() {
+            for tracker in account_trackers.iter() {
+                if let Ok(tracker) = tracker.try_borrow() {
+                    size = size.saturating_add(1);
+                    tracker.hash(&mut state);
+                }
+            }
+        }
+        if let Ok(invoker_contract_trackers) = self.invoker_contract_trackers.try_borrow() {
+            for tracker in invoker_contract_trackers.iter() {
+                size = size.saturating_add(1);
+                tracker.hash(&mut state);
+            }
+        }
+        (state.finish(), size)
     }
 }
 
