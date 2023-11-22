@@ -242,6 +242,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
         &footprint,
         encoded_ledger_entries,
         encoded_ttl_entries,
+        ledger_info.sequence_number,
     )?;
 
     let storage_map = storage_and_ttl_maps.0;
@@ -393,6 +394,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     footprint: &Footprint,
     encoded_ledger_entries: I,
     encoded_ttl_entries: I,
+    ledger_num: u32,
 ) -> Result<(StorageMap, TtlEntryMap), HostError> {
     let mut storage_map = StorageMap::new();
     let mut ttl_map = TtlEntryMap::new();
@@ -417,6 +419,14 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
                 metered_from_xdr_with_budget::<TtlEntry>(ttl_buf.as_ref(), budget)?,
                 budget,
             )?;
+
+            if ee.live_until_ledger_seq < ledger_num {
+                return Err(Error::from_type_and_code(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
+                )
+                .into());
+            }
 
             live_until_ledger = Some(ee.live_until_ledger_seq);
 
