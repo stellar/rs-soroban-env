@@ -9,7 +9,7 @@ use crate::{
 };
 use more_asserts::assert_ge;
 use soroban_test_wasms::LINEAR_MEMORY;
-use std::{rc::Rc, time::Instant};
+use std::{ops::Deref, rc::Rc, time::Instant};
 
 const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
@@ -411,7 +411,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
         wasm_util::wasm_module_with_large_map_from_linear_memory(100, U32Val::from(7).to_val());
 
     // sanity check, constructing a short map is ok
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(wasm_short.as_slice());
     let res = host.call(
         contract_id_obj,
@@ -420,7 +420,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
     );
     assert!(res.is_ok());
     assert_eq!(
-        host.map_len(MapObject::try_from_val(&host, &res?).unwrap())?
+        host.map_len(MapObject::try_from_val(host.deref(), &res?).unwrap())?
             .to_val()
             .get_payload(),
         U32Val::from(100).to_val().get_payload()
@@ -464,25 +464,25 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
 
 #[test]
 fn metered_map_initialization() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = observe_host!(Host::default());
     let k1 = SymbolSmall::try_from_str("a")?.to_val();
     let k2 = SymbolSmall::try_from_str("b")?.to_val();
     let v1 = U32Val::from(1).to_val();
     let v2 = U32Val::from(2).to_val();
     let v = vec![(k1, v1), (k2, v2)];
-    let m = MeteredOrdMap::from_map(v.clone(), &host);
+    let m = MeteredOrdMap::from_map(v.clone(), host.deref());
     assert!(m.is_ok());
-    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), &host);
+    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), host.deref());
     assert!(m.is_ok());
 
     // out of order keys
     let v = vec![(k2, v1), (k1, v2)];
-    let m = MeteredOrdMap::from_map(v.clone(), &host);
+    let m = MeteredOrdMap::from_map(v.clone(), host.deref());
     assert!(HostError::result_matches_err(
         m,
         (ScErrorType::Object, ScErrorCode::InvalidInput)
     ));
-    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), &host);
+    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), host.deref());
     assert!(HostError::result_matches_err(
         m,
         (ScErrorType::Object, ScErrorCode::InvalidInput)
@@ -490,12 +490,12 @@ fn metered_map_initialization() -> Result<(), HostError> {
 
     // duplicate keys
     let v = vec![(k1, v1), (k1, v2)];
-    let m = MeteredOrdMap::from_map(v.clone(), &host);
+    let m = MeteredOrdMap::from_map(v.clone(), host.deref());
     assert!(HostError::result_matches_err(
         m,
         (ScErrorType::Object, ScErrorCode::InvalidInput)
     ));
-    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), &host);
+    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), host.deref());
     assert!(HostError::result_matches_err(
         m,
         (ScErrorType::Object, ScErrorCode::InvalidInput)

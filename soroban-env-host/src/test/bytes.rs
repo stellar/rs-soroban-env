@@ -7,6 +7,7 @@ use crate::{
 };
 use more_asserts::assert_ge;
 use soroban_test_wasms::LINEAR_MEMORY;
+use std::ops::Deref;
 
 #[test]
 fn bytes_suite_of_tests() -> Result<(), HostError> {
@@ -264,7 +265,7 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
     let wasm_short = wasm_util::wasm_module_with_large_bytes_from_linear_memory(100, 7);
 
     // sanity check, constructing a short vec is ok
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(wasm_short.as_slice());
     let res = host.call(
         contract_id_obj,
@@ -273,7 +274,7 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
     );
     assert!(res.is_ok());
     assert_eq!(
-        host.bytes_len(BytesObject::try_from_val(&host, &res?).unwrap())?
+        host.bytes_len(BytesObject::try_from_val(host.deref(), &res?).unwrap())?
             .to_val()
             .get_payload(),
         U32Val::from(100).to_val().get_payload()

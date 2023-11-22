@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call map_new_from_slices(2)": "",
+  "   2 call map_new_from_slices(2)": "cpu:1906, mem:64",
+  "   3 call map_new_from_slices(5)": "cpu:936284, mem:7000208, objs:-/1@6363ea2",
+  "   4 ret map_new_from_slices -> Ok(Map(obj#3))": "cpu:939889, mem:7000408, objs:-/2@d6ca48aa",
+  "   5 end": "cpu:4723936, mem:42001144, prngs:-/-, objs:-/2@d6ca48aa, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

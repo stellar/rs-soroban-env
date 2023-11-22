@@ -6,7 +6,7 @@ use crate::{
 use core::cmp::Ordering;
 use more_asserts::assert_ge;
 use soroban_test_wasms::LINEAR_MEMORY;
-use std::time::Instant;
+use std::{ops::Deref, time::Instant};
 
 #[test]
 fn vec_as_seen_by_host() -> Result<(), HostError> {
@@ -439,7 +439,7 @@ fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
         wasm_util::wasm_module_with_large_vector_from_linear_memory(100, U32Val::from(7).to_val());
 
     // sanity check, constructing a short vec is ok
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(wasm_short.as_slice());
     let res = host.call(
         contract_id_obj,
@@ -448,7 +448,7 @@ fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
     );
     assert!(res.is_ok());
     assert_eq!(
-        host.vec_len(VecObject::try_from_val(&host, &res?).unwrap())?
+        host.vec_len(VecObject::try_from_val(host.deref(), &res?).unwrap())?
             .to_val()
             .get_payload(),
         U32Val::from(100).to_val().get_payload()
