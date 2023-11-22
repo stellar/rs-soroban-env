@@ -18,7 +18,7 @@ use crate::testutils::{generate_account_id, generate_bytes_array};
 // 2. they cannot be run in parallel with multiple threads, due to contention of the `global_tracker`.
 //
 // Run with the following command:
-// RUST_TEST_THREADS=1  cargo test --release --package soroban-env-host --lib -- test::metering_benchmark  --nocapture --ignored
+// RUST_TEST_THREADS=1  cargo test --release --package soroban-env-host --lib --features testutils -- test::metering_benchmark  --nocapture --ignored
 
 const LEDGER_INFO: LedgerInfo = LedgerInfo {
     protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
