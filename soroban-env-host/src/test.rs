@@ -13,6 +13,7 @@ mod depth_limit;
 mod dispatch;
 mod event;
 mod finish;
+mod frame;
 mod hostile;
 #[cfg(opt_build)]
 mod hostile_opt;
