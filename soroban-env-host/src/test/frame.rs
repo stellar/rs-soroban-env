@@ -6,7 +6,7 @@ use soroban_env_common::{
 use std::rc::Rc;
 
 #[test]
-fn in_frame() -> Result<(), HostError> {
+fn has_frame() -> Result<(), HostError> {
     struct NoopContractFunctionSet;
     impl ContractFunctionSet for NoopContractFunctionSet {
         fn call(&self, _func: &Symbol, _host: &Host, _args: &[Val]) -> Option<Val> {
