@@ -692,15 +692,6 @@ checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 
 [[package]]
 name = "itertools"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
@@ -1103,7 +1094,7 @@ checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 name = "soroban-builtin-sdk-macros"
 version = "20.0.0-rc2"
 dependencies = [
- "itertools 0.11.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn",
@@ -1162,7 +1153,7 @@ dependencies = [
 name = "soroban-env-macros"
 version = "20.0.0-rc2"
 dependencies = [
- "itertools 0.11.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "serde",
@@ -1207,7 +1198,7 @@ version = "20.0.0-rc2"
 dependencies = [
  "crate-git-revision",
  "darling",
- "itertools 0.10.5",
+ "itertools",
  "proc-macro2",
  "quote",
  "rustc_version",
