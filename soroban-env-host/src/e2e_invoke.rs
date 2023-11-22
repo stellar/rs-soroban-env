@@ -431,6 +431,14 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
             live_until_ledger = Some(ee.live_until_ledger_seq);
 
             ttl_map = ttl_map.insert(key.clone(), ee, budget)?;
+        } else if matches!(le.as_ref().data, LedgerEntryData::ContractData(_))
+            || matches!(le.as_ref().data, LedgerEntryData::ContractCode(_))
+        {
+            return Err(Error::from_type_and_code(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+            )
+            .into());
         }
 
         if !footprint.0.contains_key::<LedgerKey>(&key, budget)? {
