@@ -1,6 +1,9 @@
-use soroban_env_common::Symbol;
-
-use crate::{host::HostError, Host};
+use crate::{host::HostError, ContractFunctionSet, Host};
+use soroban_env_common::{
+    xdr::{Hash, ScAddress},
+    Symbol, Val,
+};
+use std::rc::Rc;
 
 #[test]
 fn in_frame() -> Result<(), HostError> {
@@ -11,8 +14,16 @@ fn in_frame() -> Result<(), HostError> {
 
     // Host has a frame when executing a contract.
     let id = [0u8; 32];
+    let address = host.add_host_object(ScAddress::Contract(Hash(id)))?;
+    struct NoopContractFunctionSet;
+    impl ContractFunctionSet for NoopContractFunctionSet {
+        fn call(&self, _func: &Symbol, _host: &Host, _args: &[Val]) -> Option<Val> {
+            None
+        }
+    }
+    host.register_test_contract(address, Rc::new(NoopContractFunctionSet))?;
     let func = Symbol::try_from_small_str("")?;
-    host.with_test_contract_frame(id.into(), func, || {
+    host.with_test_contract_frame(Hash(id), func, || {
         assert!(host.has_frame()?);
         Ok(().into())
     })?;
