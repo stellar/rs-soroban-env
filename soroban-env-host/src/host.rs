@@ -1968,7 +1968,7 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn extend_contract_data(
+    fn extend_contract_data_ttl(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         k: Val,
@@ -1980,25 +1980,25 @@ impl VmCallerEnv for Host {
             return Err(self.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "instance storage should be extended via `extend_current_contract_instance_and_code` function only",
+                "instance storage should be extended via `extend_current_contract_instance_and_code_ttl` function only",
                 &[],
             ))?;
         }
         let key = self.contract_data_key_from_val(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
-            .extend(self, key, threshold.into(), extend_to.into())
+            .extend_ttl(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         Ok(Val::VOID)
     }
 
-    fn extend_current_contract_instance_and_code(
+    fn extend_current_contract_instance_and_code_ttl(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         threshold: U32Val,
         extend_to: U32Val,
     ) -> Result<Void, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        self.extend_contract_instance_and_code_from_contract_id(
+        self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
             extend_to.into(),
@@ -2006,7 +2006,7 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
-    fn extend_contract_instance_and_code(
+    fn extend_contract_instance_and_code_ttl(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
@@ -2014,7 +2014,7 @@ impl VmCallerEnv for Host {
         extend_to: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
-        self.extend_contract_instance_and_code_from_contract_id(
+        self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
             extend_to.into(),
