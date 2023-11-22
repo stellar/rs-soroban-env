@@ -117,6 +117,15 @@ pub(crate) enum Frame {
 }
 
 impl Host {
+    /// Returns if the host currently has a frame on the stack.
+    ///
+    /// A frame being on the stack indicates that a contract is currently
+    /// executing.
+    pub fn has_frame(&self) -> bool {
+        self.with_current_frame_opt(|_| Ok(true))
+            .unwrap_or_default()
+    }
+
     /// Helper function for [`Host::with_frame`] below. Pushes a new [`Context`]
     /// on the context stack, returning a [`RollbackPoint`] such that if
     /// operation fails, it can be used to roll the [`Host`] back to the state
