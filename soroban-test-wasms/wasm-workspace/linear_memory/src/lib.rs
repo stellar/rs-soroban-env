@@ -1,6 +1,6 @@
 #![no_std]
+use soroban_env_common::{EnvBase, MapObject, Val, VecObject};
 use soroban_sdk::{contract, contractimpl, Bytes, Env};
-use soroban_env_common::{VecObject, MapObject, Val, EnvBase, Error};
 
 #[contract]
 pub struct Contract;
@@ -30,47 +30,51 @@ impl Contract {
     }
 
     // Bounce a vector of vals off the host, successfully
-    pub fn vec_mem_ok(e: Env) -> Result<(), Error> {
+    pub fn vec_mem_ok(e: Env) {
         let in_buf: [Val; 3] = [Val::from(1), Val::from(2), Val::from(3)];
         let mut out_buf: [Val; 3] = [Val::from(0); 3];
-        let vec: VecObject = e.vec_new_from_slice(&in_buf)?;
-        e.vec_unpack_to_slice(vec, &mut out_buf)?;
+        let vec: VecObject = e.vec_new_from_slice(&in_buf).unwrap();
+        e.vec_unpack_to_slice(vec, &mut out_buf).unwrap();
         assert!(in_buf[0].shallow_eq(&out_buf[0]));
         assert!(in_buf[1].shallow_eq(&out_buf[1]));
         assert!(in_buf[2].shallow_eq(&out_buf[2]));
-        Ok(())
     }
 
-    // Same but with a length mismatch
-    pub fn vec_mem_bad(e: Env) -> Result<(), Error> {
+    // Same but with a length mismatch (too short)
+    pub fn vec_unpack_buf_too_short(e: Env) {
+        let in_buf: [Val; 3] = [Val::from(1), Val::from(2), Val::from(3)];
+        let mut short_buf: [Val; 2] = [Val::from(0); 2];
+        let vec = e.vec_new_from_slice(&in_buf).unwrap();
+        e.vec_unpack_to_slice(vec, &mut short_buf).unwrap();
+    }
+
+    // Same but with a length mismatch (too long)
+    pub fn vec_unpack_buf_too_long(e: Env) {
         let in_buf: [Val; 3] = [Val::from(1), Val::from(2), Val::from(3)];
         let mut long_buf: [Val; 4] = [Val::from(0); 4];
-        let mut short_buf: [Val; 2] = [Val::from(0); 2];
-        let vec: VecObject = e.vec_new_from_slice(&in_buf)?;
-        assert!(e.vec_unpack_to_slice(vec, &mut short_buf).is_err());
-        assert!(e.vec_unpack_to_slice(vec, &mut long_buf).is_err());
-        Ok(())
+        let vec = e.vec_new_from_slice(&in_buf).unwrap();
+        e.vec_unpack_to_slice(vec, &mut long_buf).unwrap();
     }
 
     // Bounce a map of vals off the host, successfully
-    pub fn map_mem_ok(e: Env) -> Result<(), Error> {
-        let map: MapObject = e.map_new_from_slices(&["a", "b"], &[1u32.into(), 2u32.into()])?;
-
+    pub fn map_mem_ok(e: Env) {
+        let map: MapObject = e
+            .map_new_from_slices(&["a", "b"], &[1u32.into(), 2u32.into()])
+            .unwrap();
         let key_buf = ["a", "b"];
         let mut val_buf: [Val; 2] = [Val::from(0); 2];
-
-        e.map_unpack_to_slice(map, &key_buf, &mut val_buf)?;
-        Ok(())
+        e.map_unpack_to_slice(map, &key_buf, &mut val_buf).unwrap();
     }
 
     // Same but with out of order keys
-    pub fn map_mem_bad(e: Env) -> Result<(), Error> {
-        // out of order
-        assert!(e.map_new_from_slices(&["b", "a"], &[1u32.into(), 2u32.into()]).is_err());
+    pub fn map_keys_out_of_order(e: Env) -> MapObject {
+        e.map_new_from_slices(&["b", "a"], &[1u32.into(), 2u32.into()])
+            .unwrap()
+    }
 
-        // duplicate
-        assert!(e.map_new_from_slices(&["a", "a"], &[1u32.into(), 2u32.into()]).is_err());
-
-        Ok(())
+    // Same but with duplicate keys
+    pub fn map_duplicate_keys(e: Env) -> MapObject {
+        e.map_new_from_slices(&["a", "a"], &[1u32.into(), 2u32.into()])
+            .unwrap()
     }
 }

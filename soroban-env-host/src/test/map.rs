@@ -1,19 +1,15 @@
-use std::rc::Rc;
-use std::time::Instant;
-
-use soroban_env_common::{
-    xdr::{
-        AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, ScErrorCode, ScErrorType,
-        Uint256,
-    },
-    MapObject, U32Val,
-};
-use soroban_test_wasms::LINEAR_MEMORY;
-
 use crate::{
-    xdr::{ScMap, ScMapEntry, ScVal, ScVec, VecM},
-    Env, Error, Host, HostError, Symbol, TryFromVal, Val,
+    test::wasm_util,
+    xdr::{
+        AccountId, ContractCostType, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey,
+        ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal, ScVec, Uint256, VecM,
+    },
+    Env, Error, Host, HostError, MapObject, MeteredOrdMap, Symbol, SymbolSmall, TryFromVal, U32Val,
+    Val,
 };
+use more_asserts::assert_ge;
+use soroban_test_wasms::LINEAR_MEMORY;
+use std::{rc::Rc, time::Instant};
 
 const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
@@ -389,16 +385,121 @@ fn initialization_invalid() -> Result<(), HostError> {
         .map_new_from_slices(&["a", "a"], &[1u32.into(), 2u32.into()])
         .is_err());
 
-    let buf = vec![0; 7000000];
+    // large map from slices
+    let buf = vec![0; 7_000_000];
     let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());
     let bytes_val = host.to_host_val(&scv_bytes)?;
 
-    // roughly consumes 7*5=42MiB (> 40 MiB is the budget limit)
     let vals = vec![bytes_val; 5];
     let keys = ["a", "b", "c", "d", "e"];
 
-    let res = host.map_new_from_slices(&keys, &vals.as_slice())?;
-    assert!(host.from_host_val(res.to_val()).is_err());
+    let map = host.map_new_from_slices(&keys, &vals.as_slice())?;
+    let res = host.from_host_val(map.to_val());
+    // This is actually Budget::ExceededLimit, but ScVal::try_from_val converts
+    // he error to a ConversionError. We have an issue for it https://github.com/stellar/rs-soroban-env/issues/1046
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
+    let wasm_short =
+        wasm_util::wasm_module_with_large_map_from_linear_memory(100, U32Val::from(7).to_val());
+
+    // sanity check, constructing a short map is ok
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(wasm_short.as_slice());
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    assert!(res.is_ok());
+    assert_eq!(
+        host.map_len(MapObject::try_from_val(&host, &res?).unwrap())?
+            .to_val()
+            .get_payload(),
+        U32Val::from(100).to_val().get_payload()
+    );
+
+    // constructing a big map will cause budget limit exceeded error
+    let wasm_long =
+        wasm_util::wasm_module_with_large_map_from_linear_memory(10000, U32Val::from(7).to_val());
+    host.budget_ref().reset_unlimited()?;
+    let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
+    host.budget_ref().reset_default()?;
+    let res = host.call(
+        contract_id_obj2,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    // This currently won't pass VmInstantiation, in the future if VmInstantiation cost goes down, we need
+    // to adjust the maximum length.
+    // Here we check the mem inputs match expectation.
+    assert_ge!(
+        host.budget_ref()
+            .get_tracker(ContractCostType::MemAlloc)?
+            .1
+            .unwrap(),
+        240000
+    );
+    assert_ge!(
+        host.budget_ref()
+            .get_tracker(ContractCostType::MemCpy)?
+            .1
+            .unwrap(),
+        240000
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn metered_map_initialization() -> Result<(), HostError> {
+    let host = Host::default();
+    let k1 = SymbolSmall::try_from_str("a")?.to_val();
+    let k2 = SymbolSmall::try_from_str("b")?.to_val();
+    let v1 = U32Val::from(1).to_val();
+    let v2 = U32Val::from(2).to_val();
+    let v = vec![(k1, v1), (k2, v2)];
+    let m = MeteredOrdMap::from_map(v.clone(), &host);
+    assert!(m.is_ok());
+    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), &host);
+    assert!(m.is_ok());
+
+    // out of order keys
+    let v = vec![(k2, v1), (k1, v2)];
+    let m = MeteredOrdMap::from_map(v.clone(), &host);
+    assert!(HostError::result_matches_err(
+        m,
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), &host);
+    assert!(HostError::result_matches_err(
+        m,
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+
+    // duplicate keys
+    let v = vec![(k1, v1), (k1, v2)];
+    let m = MeteredOrdMap::from_map(v.clone(), &host);
+    assert!(HostError::result_matches_err(
+        m,
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+    let m = MeteredOrdMap::from_exact_iter(v.into_iter(), &host);
+    assert!(HostError::result_matches_err(
+        m,
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
 
     Ok(())
 }
@@ -424,11 +525,26 @@ fn linear_memory_operations() -> Result<(), HostError> {
         let args = host.vec_new()?;
         let res = host.call(
             id_obj,
-            Symbol::try_from_val(&*host, &"map_mem_bad").unwrap(),
+            Symbol::try_from_val(&*host, &"map_keys_out_of_order").unwrap(),
             args,
         );
-        assert!(res.is_err());
-        assert!(res.unwrap_err().error.is_code(ScErrorCode::InvalidInput));
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    {
+        let args = host.vec_new()?;
+        let res = host.call(
+            id_obj,
+            Symbol::try_from_val(&*host, &"map_duplicate_keys").unwrap(),
+            args,
+        );
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
     }
     Ok(())
 }

@@ -94,6 +94,16 @@ impl Budget {
         self.reset_tracker()
     }
 
+    pub fn cpu_limit_exceeded(&self) -> Result<bool, HostError> {
+        let cpu = &self.0.try_borrow_or_err()?.cpu_insns;
+        Ok(cpu.total_count > cpu.limit)
+    }
+
+    pub fn mem_limit_exceeded(&self) -> Result<bool, HostError> {
+        let mem = &self.0.try_borrow_or_err()?.mem_bytes;
+        Ok(mem.total_count > mem.limit)
+    }
+
     pub fn reset_tracker(&self) -> Result<(), HostError> {
         self.0.try_borrow_mut_or_err()?.tracker.reset();
         Ok(())

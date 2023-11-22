@@ -280,7 +280,7 @@ impl Host {
 }
 
 pub(crate) mod wasm {
-    use crate::Symbol;
+    use crate::{Symbol, U32Val, Val};
     use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
@@ -399,7 +399,7 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
-    pub(crate) fn wasm_module_with_multiple_data_sections(
+    pub(crate) fn wasm_module_with_multiple_data_segments(
         num_pages: u32,
         num_sgmts: u32,
         seg_size: u32,
@@ -413,6 +413,79 @@ pub(crate) mod wasm {
         // a local wasm function
         let mut fe = me.func(Arity(0), 0);
         fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_large_bytes_from_linear_memory(
+        num_bytes: u32,
+        initial: u8,
+    ) -> Vec<u8> {
+        let num_pages = num_bytes / 0x10_000 + 1;
+        let mut me = ModEmitter::from_configs(num_pages, 128);
+        me.define_data_segment(0, vec![initial; num_bytes as usize]);
+        let mut fe = me.func(Arity(0), 0);
+        fe.bytes_new_from_linear_memory(U32Val::from(0), U32Val::from(num_bytes));
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_large_vector_from_linear_memory(
+        num_vals: u32,
+        initial: Val,
+    ) -> Vec<u8> {
+        let num_pages = num_vals * 8 / 0x10_000 + 1;
+        let mut me = ModEmitter::from_configs(num_pages, 128);
+        let bytes: Vec<u8> = (0..num_vals)
+            .into_iter()
+            .map(|_| initial.get_payload().to_le_bytes())
+            .flat_map(|a| a.into_iter())
+            .collect();
+        me.define_data_segment(0, bytes);
+        let mut fe = me.func(Arity(0), 0);
+        fe.vec_new_from_linear_memory(U32Val::from(0), U32Val::from(num_vals));
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_large_map_from_linear_memory(
+        num_vals: u32,
+        initial: Val,
+    ) -> Vec<u8> {
+        // slice is 8 bytes, we choose 8 byte key, val is 8 bytes
+        let num_pages = (num_vals * 8) * 3 / 0x10_000 + 1;
+        let mut me = ModEmitter::from_configs(num_pages, 128);
+
+        let key_bytes: Vec<u8> = (0..num_vals)
+            .into_iter()
+            .map(|i| format!("{:0>width$}", i, width = 8))
+            .flat_map(|s| s.into_bytes().into_iter())
+            .collect();
+
+        let val_bytes: Vec<u8> = (0..num_vals)
+            .into_iter()
+            .map(|_| initial.get_payload().to_le_bytes())
+            .flat_map(|a| a.into_iter())
+            .collect();
+
+        let slices: Vec<u8> = (0..num_vals)
+            .into_iter()
+            .map(|ptr| {
+                let slice = 8_u64 << 32 | (ptr * 8) as u64;
+                slice.to_le_bytes()
+            })
+            .flat_map(|s| s.into_iter())
+            .collect();
+
+        let bytes: Vec<u8> = key_bytes
+            .into_iter()
+            .chain(val_bytes.into_iter())
+            .chain(slices.into_iter())
+            .collect();
+
+        me.define_data_segment(0, bytes);
+        let mut fe = me.func(Arity(0), 0);
+
+        let vals_pos = U32Val::from(num_vals * 8);
+        let keys_pos = U32Val::from(num_vals * 16);
+        fe.map_new_from_linear_memory(keys_pos, vals_pos, U32Val::from(num_vals));
         fe.finish_and_export("test").finish()
     }
 }
