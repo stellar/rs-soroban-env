@@ -121,9 +121,8 @@ impl Host {
     ///
     /// A frame being on the stack indicates that a contract is currently
     /// executing.
-    pub fn has_frame(&self) -> bool {
-        self.with_current_frame_opt(|_| Ok(true))
-            .unwrap_or_default()
+    pub fn has_frame(&self) -> Result<bool, HostError> {
+        self.with_current_frame_opt(|opt| Ok(opt.is_some()))
     }
 
     /// Helper function for [`Host::with_frame`] below. Pushes a new [`Context`]
