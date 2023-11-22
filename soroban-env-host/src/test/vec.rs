@@ -1,4 +1,5 @@
 use core::cmp::Ordering;
+use std::time::Instant;
 
 use soroban_env_common::{xdr::ScVal, Compare, Symbol, Tag, TryFromVal, U32Val};
 use soroban_test_wasms::LINEAR_MEMORY;
@@ -367,4 +368,37 @@ fn linear_memory_operations() -> Result<(), HostError> {
         assert!(res.unwrap_err().error.is_code(ScErrorCode::UnexpectedSize));
     }
     Ok(())
+}
+
+#[test]
+fn large_vec_exceeds_budget() {
+    let host = Host::default();
+    // Set a fixed budget higher than defaults, but still realistic.
+    const MEMORY_LIMIT: u64 = 200 * 1024 * 1024;
+    host.budget_ref()
+        .reset_limits(200_000_000, MEMORY_LIMIT)
+        .unwrap();
+    let start = Instant::now();
+    let mut v = host.vec_new().unwrap();
+    let mut i = 0;
+    loop {
+        i += 1;
+        let new_v_res = host.vec_push_back(v, U32Val::from(i).into());
+        match new_v_res {
+            Ok(new_v) => {
+                v = new_v;
+            }
+            Err(e) => {
+                assert!(e.error.is_type(ScErrorType::Budget));
+                assert!(e.error.is_code(ScErrorCode::ExceededLimit));
+                assert!(host.budget_ref().get_mem_bytes_consumed().unwrap() > MEMORY_LIMIT);
+                break;
+            }
+        }
+    }
+    eprintln!(
+        "total iterations: {}, real time: {}",
+        i,
+        (Instant::now() - start).as_secs_f64()
+    );
 }
