@@ -88,7 +88,7 @@ impl ResourceLimiter for Host {
         };
 
         if allow {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "testutils"))]
             {
                 self.as_budget()
                     .track_wasm_mem_alloc(delta)

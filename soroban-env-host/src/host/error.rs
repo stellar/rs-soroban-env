@@ -125,7 +125,7 @@ impl Debug for HostError {
 }
 
 impl HostError {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     pub fn result_matches_err<T, C>(res: Result<T, HostError>, code: C) -> bool
     where
         Error: From<C>,

@@ -129,9 +129,8 @@ struct HostImpl {
     #[cfg(any(test, feature = "recording_auth"))]
     recording_auth_nonce_prng: RefCell<Option<ChaCha20Rng>>,
     // Some tests _of the host_ rely on pseudorandom _input_ data. For these cases we attach
-    // yet another unmetered PRNG to the host. This should not be exposed through "testutils"
-    // to clients testing contracts _against_ the host.
-    #[cfg(test)]
+    // yet another unmetered PRNG to the host.
+    #[cfg(any(test, feature = "testutils"))]
     test_prng: RefCell<Option<ChaCha20Rng>>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
@@ -255,7 +254,7 @@ impl_checked_borrow_helpers!(
     try_borrow_recording_auth_nonce_prng_mut
 );
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
     test_prng,
     Option<ChaCha20Rng>,
@@ -274,7 +273,7 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager_mut
 );
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
     lifecycle_event_hook,
     Option<HostLifecycleHook>,
@@ -324,7 +323,7 @@ impl Host {
             base_prng: RefCell::new(None),
             #[cfg(any(test, feature = "recording_auth"))]
             recording_auth_nonce_prng: RefCell::new(None),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "testutils"))]
             test_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
@@ -348,12 +347,12 @@ impl Host {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn source_account_id(&self) -> Result<Option<AccountId>, HostError> {
         self.try_borrow_source_account()?.metered_clone(self)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn with_test_prng<T>(
         &self,
         f: impl FnOnce(&mut ChaCha20Rng) -> Result<T, HostError>,
@@ -423,7 +422,7 @@ impl Host {
         // regardless of build configuration.
         let recording_auth_nonce_prng = base_prng.unmetered_raw_sub_prng();
         let test_prng = base_prng.unmetered_raw_sub_prng();
-        #[cfg(test)]
+        #[cfg(any(test, feature = "testutils"))]
         {
             *self.try_borrow_test_prng_mut()? = Some(test_prng);
         }
@@ -2913,14 +2912,15 @@ impl Host {
     /// allocate it on contract creation or to deplete it on callbacks from
     /// the VM or host functions.
     #[allow(dead_code)]
-    pub(crate) fn with_budget<T, F>(&self, f: F) -> Result<T, HostError>
+    pub fn with_budget<T, F>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(Budget) -> Result<T, HostError>,
     {
         f(self.0.budget.clone())
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
+    #[allow(dead_code)]
     pub(crate) fn set_lifecycle_event_hook(
         &self,
         hook: Option<HostLifecycleHook>,
@@ -2938,61 +2938,5 @@ impl Host {
             Some(hook) => hook(self, event),
             None => Ok(()),
         }
-    }
-}
-
-#[cfg(any(test, feature = "testutils"))]
-pub(crate) mod testutils {
-    use std::cell::Cell;
-    use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
-    use std::sync::Once;
-
-    /// Catch panics while suppressing the default panic hook that prints to the
-    /// console.
-    ///
-    /// For the purposes of test reporting we don't want every panicking (but
-    /// caught) contract call to print to the console. This requires overriding
-    /// the panic hook, a global resource. This is an awkward thing to do with
-    /// tests running in parallel.
-    ///
-    /// This function lazily performs a one-time wrapping of the existing panic
-    /// hook. It then uses a thread local variable to track contract call depth.
-    /// If a panick occurs during a contract call the original hook is not
-    /// called, otherwise it is called.
-    pub fn call_with_suppressed_panic_hook<C, R>(closure: C) -> std::thread::Result<R>
-    where
-        C: FnOnce() -> R + UnwindSafe,
-    {
-        thread_local! {
-            static TEST_CONTRACT_CALL_COUNT: Cell<u64> = Cell::new(0);
-        }
-
-        static WRAP_PANIC_HOOK: Once = Once::new();
-
-        WRAP_PANIC_HOOK.call_once(|| {
-            let existing_panic_hook = take_hook();
-            set_hook(Box::new(move |info| {
-                let calling_test_contract = TEST_CONTRACT_CALL_COUNT.with(|c| c.get() != 0);
-                if !calling_test_contract {
-                    existing_panic_hook(info)
-                }
-            }))
-        });
-
-        TEST_CONTRACT_CALL_COUNT.with(|c| {
-            let old_count = c.get();
-            let new_count = old_count.checked_add(1).expect("overflow");
-            c.set(new_count);
-        });
-
-        let res = catch_unwind(closure);
-
-        TEST_CONTRACT_CALL_COUNT.with(|c| {
-            let old_count = c.get();
-            let new_count = old_count.checked_sub(1).expect("overflow");
-            c.set(new_count);
-        });
-
-        res
     }
 }

@@ -259,10 +259,7 @@ impl Host {
         self.scbytes_from_slice(hash.as_slice())
     }
 
-    pub(crate) fn scaddress_from_address(
-        &self,
-        address: AddressObject,
-    ) -> Result<ScAddress, HostError> {
+    pub fn scaddress_from_address(&self, address: AddressObject) -> Result<ScAddress, HostError> {
         self.visit_obj(address, |addr: &ScAddress| addr.metered_clone(self))
     }
 

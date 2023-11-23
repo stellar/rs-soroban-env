@@ -1,3 +1,8 @@
+use std::cell::Cell;
+use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
+use std::sync::Once;
+
+use crate::{StorageType, SymbolSmall};
 use std::{collections::BTreeMap, rc::Rc};
 
 use rand::RngCore;
@@ -12,8 +17,57 @@ use crate::{
     AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, Val, VecObject,
 };
 
+/// Catch panics while suppressing the default panic hook that prints to the
+/// console.
+///
+/// For the purposes of test reporting we don't want every panicking (but
+/// caught) contract call to print to the console. This requires overriding
+/// the panic hook, a global resource. This is an awkward thing to do with
+/// tests running in parallel.
+///
+/// This function lazily performs a one-time wrapping of the existing panic
+/// hook. It then uses a thread local variable to track contract call depth.
+/// If a panick occurs during a contract call the original hook is not
+/// called, otherwise it is called.
+pub fn call_with_suppressed_panic_hook<C, R>(closure: C) -> std::thread::Result<R>
+where
+    C: FnOnce() -> R + UnwindSafe,
+{
+    thread_local! {
+        static TEST_CONTRACT_CALL_COUNT: Cell<u64> = Cell::new(0);
+    }
+
+    static WRAP_PANIC_HOOK: Once = Once::new();
+
+    WRAP_PANIC_HOOK.call_once(|| {
+        let existing_panic_hook = take_hook();
+        set_hook(Box::new(move |info| {
+            let calling_test_contract = TEST_CONTRACT_CALL_COUNT.with(|c| c.get() != 0);
+            if !calling_test_contract {
+                existing_panic_hook(info)
+            }
+        }))
+    });
+
+    TEST_CONTRACT_CALL_COUNT.with(|c| {
+        let old_count = c.get();
+        let new_count = old_count.checked_add(1).expect("overflow");
+        c.set(new_count);
+    });
+
+    let res = catch_unwind(closure);
+
+    TEST_CONTRACT_CALL_COUNT.with(|c| {
+        let old_count = c.get();
+        let new_count = old_count.checked_sub(1).expect("overflow");
+        c.set(new_count);
+    });
+
+    res
+}
+
 // Test utilities for the host, used in various tests in sub-modules.
-pub(crate) trait AsScVal {
+pub trait AsScVal {
     fn as_scval(&self) -> ScVal;
 }
 
@@ -47,23 +101,23 @@ impl AsScVal for ScVec {
     }
 }
 
-pub(crate) fn generate_account_id(host: &Host) -> AccountId {
+pub fn generate_account_id(host: &Host) -> AccountId {
     AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
         generate_bytes_array(host),
     )))
 }
 
-pub(crate) fn generate_bytes_array(host: &Host) -> [u8; 32] {
+pub fn generate_bytes_array(host: &Host) -> [u8; 32] {
     let mut bytes: [u8; 32] = Default::default();
     host.with_test_prng(|chacha| Ok(chacha.fill_bytes(&mut bytes)))
         .unwrap();
     bytes
 }
 
-pub(crate) struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
+pub struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
 
 impl MockSnapshotSource {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self(BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new())
     }
 }
@@ -82,15 +136,15 @@ impl SnapshotSource for MockSnapshotSource {
 }
 
 impl Host {
-    pub(crate) const TEST_PRNG_SEED: &'static [u8; 32] = b"12345678901234567890123456789012";
+    pub const TEST_PRNG_SEED: &'static [u8; 32] = b"12345678901234567890123456789012";
 
-    pub(crate) fn test_host() -> Self {
+    pub fn test_host() -> Self {
         let host = Host::default();
         host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
         host
     }
 
-    pub(crate) fn test_host_with_recording_footprint() -> Self {
+    pub fn test_host_with_recording_footprint() -> Self {
         let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
         let storage = Storage::with_recording_footprint(snapshot_source);
         let host = Host::with_storage_and_budget(storage, Budget::default());
@@ -111,7 +165,7 @@ impl Host {
         host
     }
 
-    pub(crate) fn test_budget(self, cpu: u64, mem: u64) -> Self {
+    pub fn test_budget(self, cpu: u64, mem: u64) -> Self {
         self.with_budget(|budget| {
             budget.reset_limits(cpu, mem)?; // something big but finite that we may exceed
             budget.reset_models()?;
@@ -121,7 +175,7 @@ impl Host {
         self
     }
 
-    pub(crate) fn enable_model(
+    pub fn enable_model(
         self,
         ty: ContractCostType,
         const_cpu: u64,
@@ -136,26 +190,26 @@ impl Host {
         self
     }
 
-    pub(crate) fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {
+    pub fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {
         let v: Vec<ScVal> = vals.iter().map(|x| x.as_scval()).collect();
         self.map_err(v.try_into())
     }
 
-    pub(crate) fn test_vec_obj<T: AsScVal>(&self, vals: &[T]) -> Result<VecObject, HostError> {
+    pub fn test_vec_obj<T: AsScVal>(&self, vals: &[T]) -> Result<VecObject, HostError> {
         let v = self.test_scvec(vals)?;
         Ok(self.to_host_val(&ScVal::Vec(Some(v)))?.try_into()?)
     }
 
-    pub(crate) fn test_vec_val<T: AsScVal>(&self, vals: &[T]) -> Result<Val, HostError> {
+    pub fn test_vec_val<T: AsScVal>(&self, vals: &[T]) -> Result<Val, HostError> {
         let v = self.test_scvec(vals)?;
         self.to_host_val(&ScVal::Vec(Some(v)))
     }
 
-    pub(crate) fn test_bin_scobj(&self, vals: &[u8]) -> Result<ScVal, HostError> {
+    pub fn test_bin_scobj(&self, vals: &[u8]) -> Result<ScVal, HostError> {
         Ok(ScVal::Bytes(self.map_err(vals.to_vec().try_into())?))
     }
 
-    pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<BytesObject, HostError> {
+    pub fn test_bin_obj(&self, vals: &[u8]) -> Result<BytesObject, HostError> {
         let scval: ScVal = self.test_bin_scobj(vals)?;
         let val: Val = self.to_host_val(&scval)?;
         Ok(val.try_into()?)
@@ -166,7 +220,7 @@ impl Host {
     // The contract address deterministically depends on the input account and
     // salt, so this can be used with enforcing ledger footprint (but the
     // footprint still has to be specified outside of this).
-    pub(crate) fn register_test_contract_wasm_from_source_account(
+    pub fn register_test_contract_wasm_from_source_account(
         &self,
         contract_wasm: &[u8],
         account: AccountId,
@@ -198,7 +252,7 @@ impl Host {
     // contract's address.
     // The contract address will be generated randomly, so this won't work with
     // enforcing ledger footprint.
-    pub(crate) fn register_test_contract_wasm(&self, contract_wasm: &[u8]) -> AddressObject {
+    pub fn register_test_contract_wasm(&self, contract_wasm: &[u8]) -> AddressObject {
         self.register_test_contract_wasm_from_source_account(
             contract_wasm,
             generate_account_id(self),
@@ -207,7 +261,37 @@ impl Host {
         .unwrap()
     }
 
-    #[cfg(feature = "testutils")]
+    pub fn test_host_with_wasm_and_enforcing_footprint(
+        contract_wasm: &[u8],
+        extra_read_keys: &[(Val, StorageType)],
+        extra_write_keys: &[(Val, StorageType)],
+    ) -> (Host, AddressObject) {
+        let host = Self::test_host_with_recording_footprint();
+        let contract = host.register_test_contract_wasm(contract_wasm);
+        let ScAddress::Contract(contract_hash) = host.scaddress_from_address(contract).unwrap()
+        else {
+            panic!()
+        };
+        let test = SymbolSmall::try_from_str("test").unwrap();
+        host.with_test_contract_frame(contract_hash, test.into(), || {
+            for (rv, rt) in extra_read_keys {
+                host.has_contract_data(*rv, *rt).unwrap();
+            }
+            for (wv, wt) in extra_write_keys {
+                host.del_contract_data(*wv, *wt).unwrap();
+            }
+            Ok(Val::VOID.into())
+        })
+        .unwrap();
+        host.with_mut_storage(|storage| {
+            storage.mode = crate::storage::FootprintMode::Enforcing;
+            Ok(())
+        })
+        .unwrap();
+        (host, contract)
+    }
+
+    #[cfg(test)]
     pub(crate) fn measured_call(
         &self,
         contract: AddressObject,
@@ -279,6 +363,7 @@ impl Host {
     }
 }
 
+#[cfg(test)]
 pub(crate) mod wasm {
     use crate::Symbol;
     use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};

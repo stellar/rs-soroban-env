@@ -14,8 +14,6 @@ use crate::{
 };
 
 #[cfg(any(test, feature = "testutils"))]
-use crate::host::testutils;
-#[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
 use std::rc::Rc;
 
@@ -717,7 +715,7 @@ impl Host {
                     // be a bit forgiving.
                     let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
                     let res: Result<Option<Val>, PanicVal> =
-                        testutils::call_with_suppressed_panic_hook(closure);
+                        crate::testutils::call_with_suppressed_panic_hook(closure);
                     match res {
                         Ok(Some(val)) => {
                             self.fn_return_diagnostics(id, &func, &val);
