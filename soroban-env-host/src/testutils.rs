@@ -261,24 +261,30 @@ impl Host {
         .unwrap()
     }
 
-    pub fn test_host_with_wasm_and_enforcing_footprint(
-        contract_wasm: &[u8],
-        extra_read_keys: &[(Val, StorageType)],
-        extra_write_keys: &[(Val, StorageType)],
-    ) -> (Host, AddressObject) {
+    pub fn test_host_with_wasms_and_enforcing_footprint(
+        contract_wasms: &[&[u8]],
+        contract_zero_extra_read_keys: &[(ScVal, StorageType)],
+        contract_zero_extra_write_keys: &[(ScVal, StorageType)],
+    ) -> (Host, Vec<AddressObject>) {
         let host = Self::test_host_with_recording_footprint();
-        let contract = host.register_test_contract_wasm(contract_wasm);
-        let ScAddress::Contract(contract_hash) = host.scaddress_from_address(contract).unwrap()
+        let mut contract_addresses = Vec::new();
+        for contract_wasm in contract_wasms.iter() {
+            contract_addresses.push(host.register_test_contract_wasm(contract_wasm));
+        }
+        let ScAddress::Contract(contract_hash) =
+            host.scaddress_from_address(contract_addresses[0]).unwrap()
         else {
             panic!()
         };
         let test = SymbolSmall::try_from_str("test").unwrap();
         host.with_test_contract_frame(contract_hash, test.into(), || {
-            for (rv, rt) in extra_read_keys {
-                host.has_contract_data(*rv, *rt).unwrap();
+            for (rv, rt) in contract_zero_extra_read_keys {
+                let val = host.to_host_val(rv).unwrap();
+                host.has_contract_data(val, *rt).unwrap();
             }
-            for (wv, wt) in extra_write_keys {
-                host.del_contract_data(*wv, *wt).unwrap();
+            for (wv, wt) in contract_zero_extra_write_keys {
+                let val = host.to_host_val(wv).unwrap();
+                host.del_contract_data(val, *wt).unwrap();
             }
             Ok(Val::VOID.into())
         })
@@ -288,7 +294,7 @@ impl Host {
             Ok(())
         })
         .unwrap();
-        (host, contract)
+        (host, contract_addresses)
     }
 
     #[cfg(all(test, feature = "testutils"))]
