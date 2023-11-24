@@ -536,7 +536,9 @@ impl Host {
         } else {
             // This should only ever happen if we try to access the contract ID
             // from a HostFunction frame (meaning before a contract is running).
-            // Doing so is a logic bug on our part.
+            // Doing so is a logic bug on our part. If we simply run out of
+            // budget while cloning the Hash we won't get here, the `?` above
+            // will propagate the budget error.
             Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -903,14 +905,7 @@ impl Host {
             }
         })?;
         if updated_instance_storage.is_some() {
-            let contract_id = self.get_current_contract_id_internal().map_err(|_| {
-                self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                    "unexpected missing contract for instance storage",
-                    &[],
-                )
-            })?;
+            let contract_id = self.get_current_contract_id_internal()?;
             let key = self.contract_instance_ledger_key(&contract_id)?;
 
             self.store_contract_instance(None, updated_instance_storage, contract_id, &key)?;
