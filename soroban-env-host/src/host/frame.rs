@@ -147,13 +147,17 @@ impl Host {
         let auth_manager = self.try_borrow_authorization_manager()?;
         let auth_snapshot = auth_manager.snapshot(self)?;
         auth_manager.push_frame(self, &ctx.frame)?;
-        Vec::<Context>::charge_bulk_init_cpy(1, self.as_budget())?;
-        self.try_borrow_context_stack_mut()?.push(ctx);
-        Ok(RollbackPoint {
+        // Establish the rp first, since this might run out of gas and fail.
+        let rp = RollbackPoint {
             storage: self.try_borrow_storage()?.map.metered_clone(self)?,
             events: self.try_borrow_events()?.vec.len(),
             auth: auth_snapshot,
-        })
+        };
+        // Charge for the push, which might also run out of gas.
+        Vec::<Context>::charge_bulk_init_cpy(1, self.as_budget())?;
+        // Finally commit to doing the push.
+        self.try_borrow_context_stack_mut()?.push(ctx);
+        Ok(rp)
     }
 
     /// Helper function for [`Host::with_frame`] below. Pops a [`Context`] off
