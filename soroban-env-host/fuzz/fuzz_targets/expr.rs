@@ -4,7 +4,7 @@ use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use soroban_env_host::{
     xdr::{HostFunction, InvokeContractArgs, ScErrorCode, ScErrorType, ScSymbol, ScVal, Validate},
-    Host, StorageType, Val
+    Host, StorageType, Val,
 };
 use soroban_synth_wasm::{Emit, Expr};
 
@@ -13,14 +13,13 @@ use soroban_synth_wasm::{Emit, Expr};
 struct TestCase {
     contract_a_expr: Expr,
     contract_b_expr: Expr,
-    read_keys: Vec<(ScVal, StorageType)>,
-    write_keys: Vec<(ScVal, StorageType)>,
+    // we use u32 vals because they are always valid and we don't want to
+    // bother generating and rejecting complex values, we can generate them
+    // _inside_ the contract more constructively.
+    read_keys: Vec<(u32, StorageType)>,
+    write_keys: Vec<(u32, StorageType)>,
     cpu_budget: u32,
     mem_budget: u32,
-}
-
-fn is_ok(s: &ScVal) -> bool{
-    Val::can_represent_scval(s) && s.validate().is_ok()
 }
 
 const TEST_FN_NAME: &'static str = "test";
@@ -31,45 +30,43 @@ fuzz_target!(|test: TestCase| {
     // host functions correctly. Contract B takes exactly one argument so that
     // it's at least _plausible_ that contract A will figure out how to call it
     // correctly (passing 1 Val arg).
-    let mut arg_tys_a: Vec<&'static str> = vec!["AddressObject", "AddressObject"];
-    let mut args_a: Vec<ScVal> = vec![];
-    let read_keys = test.read_keys.iter().filter(|(k, _)| is_ok(k)).cloned().collect::<Vec<_>>();
-    let write_keys = test.write_keys.iter().filter(|(k, _)| is_ok(k)).cloned().collect::<Vec<_>>();
-    for arg in read_keys.iter().chain(write_keys.iter()) {
-        use soroban_env_host::xdr::ScValType;
-        let ty = match arg.0.discriminant() {
-            ScValType::Bool => "Bool",
-            ScValType::Void => "Void",
-            ScValType::Error => "Error",
-            ScValType::U32 => "U32Val",
-            ScValType::I32 => "I32Val",
-            ScValType::U64 =>  "U64Val",
-            ScValType::I64 =>  "I64Val",
-            ScValType::Timepoint => "TimepointVal",
-            ScValType::Duration =>  "DurationVal",
-            ScValType::U128 =>  "U128Val",
-            ScValType::I128 =>  "I128Val",
-            ScValType::U256 =>  "U256Val",
-            ScValType::I256 =>  "I256Val",
-            ScValType::Bytes =>  "BytesObject",
-            ScValType::String =>  "StringObject",
-            ScValType::Symbol =>  "Symbol",
-            ScValType::Vec =>  "VecObject",
-            ScValType::Map =>  "MapObject",
-            ScValType::Address =>  "AddressObject",
-            ScValType::ContractInstance |
-            ScValType::LedgerKeyContractInstance |
-            ScValType::LedgerKeyNonce => unreachable!()
-        };
-        arg_tys_a.push(ty);
-        args_a.push(arg.0.clone());
-    }
-    let args_b = vec!["Val"];
-    let wasm_a = test.contract_a_expr.0.as_single_function_wasm_module(TEST_FN_NAME, &arg_tys_a);
-    let wasm_b = test.contract_b_expr.0.as_single_function_wasm_module(TEST_FN_NAME, &args_b);
-    let (host, contracts) = Host::test_host_with_wasms_and_enforcing_footprint(&[wasm_a.as_slice(), wasm_b.as_slice()], &read_keys, &write_keys);
+    let read_keys: Vec<(ScVal, StorageType)> = test
+        .read_keys
+        .iter()
+        .map(|(k, ty)| (ScVal::U32(*k), *ty))
+        .collect();
+    let write_keys: Vec<(ScVal, StorageType)> = test
+        .write_keys
+        .iter()
+        .map(|(k, ty)| (ScVal::U32(*k), *ty))
+        .collect();
+
+    let mut args_a: Vec<ScVal> = read_keys
+        .iter()
+        .chain(write_keys.iter())
+        .map(|(k, _)| k.clone())
+        .collect();
+    let mut arg_tys_a: Vec<&'static str> = args_a.iter().map(|_| "U32Val").collect();
+    arg_tys_a.push("AddressObject"); // contract A
+    arg_tys_a.push("AddressObject"); // contract B
+
+    let arg_tys_b = vec!["Val"];
+
+    let wasm_a = test
+        .contract_a_expr
+        .0
+        .as_single_function_wasm_module(TEST_FN_NAME, &arg_tys_a);
+    let wasm_b = test
+        .contract_b_expr
+        .0
+        .as_single_function_wasm_module(TEST_FN_NAME, &arg_tys_b);
+    let (host, contracts) = Host::test_host_with_wasms_and_enforcing_footprint(
+        &[wasm_a.as_slice(), wasm_b.as_slice()],
+        &read_keys,
+        &write_keys,
+    );
     for a in contracts.iter() {
-        args_a.insert(0, ScVal::Address(host.scaddress_from_address(*a).unwrap()));
+        args_a.push(ScVal::Address(host.scaddress_from_address(*a).unwrap()));
     }
     let contract_address_a = host.scaddress_from_address(contracts[0]).unwrap();
     host.with_budget(|budget| {
