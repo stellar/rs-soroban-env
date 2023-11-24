@@ -373,7 +373,7 @@ pub(crate) mod wasm {
         let arg = fe.args[0];
         fe.push(Operand::Const64(1));
         for i in 0..n {
-            fe.push(arg);
+            fe.push(arg.0);
             fe.push(Operand::Const64(i as i64));
             fe.i64_mul();
             fe.i64_add();
