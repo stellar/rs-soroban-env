@@ -291,7 +291,7 @@ impl Host {
         (host, contract)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "testutils"))]
     pub(crate) fn measured_call(
         &self,
         contract: AddressObject,
