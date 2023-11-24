@@ -47,8 +47,8 @@ fuzz_target!(|test: TestCase| {
         .map(|(k, _)| k.clone())
         .collect();
     let mut arg_tys_a: Vec<&'static str> = args_a.iter().map(|_| "U32Val").collect();
-    arg_tys_a.push("AddressObject"); // contract A
     arg_tys_a.push("AddressObject"); // contract B
+    arg_tys_a.push("Symbol"); // test function name
 
     let arg_tys_b = vec!["Val"];
 
@@ -65,10 +65,16 @@ fuzz_target!(|test: TestCase| {
         &read_keys,
         &write_keys,
     );
-    for a in contracts.iter() {
-        args_a.push(ScVal::Address(host.scaddress_from_address(*a).unwrap()));
-    }
+
     let contract_address_a = host.scaddress_from_address(contracts[0]).unwrap();
+
+    // Pass contract B's ID and the function name as args so the fuzzer has a chance of figuring
+    // out that it can call the test function on contract B.
+    args_a.push(ScVal::Address(
+        host.scaddress_from_address(contracts[1]).unwrap(),
+    ));
+    args_a.push(ScVal::Symbol(ScSymbol(TEST_FN_NAME.try_into().unwrap())));
+
     host.with_budget(|budget| {
         // Mask the budget down to 268m instructions / 256MiB memory so we don't
         // literally run out of time or memory on the machine we're fuzzing on;
