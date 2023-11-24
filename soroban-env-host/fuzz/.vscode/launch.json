@@ -1,0 +1,19 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug fuzz artifact",
+            "program": "${workspaceFolder}/target/x86_64-unknown-linux-gnu/debug/expr",
+            "args": [
+                "-artifact_prefix=${workspaceFolder}/artifacts/expr/",
+                "artifacts/expr/crash-706a7c9b567b00b52b549c186859c316673505d5"
+            ],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
