@@ -753,8 +753,12 @@ impl AuthorizedInvocation {
             // This would be a bug.
             return Err((ScErrorType::Auth, ScErrorCode::InternalError).into());
         }
-        for (i, sub_invocation) in self.sub_invocations.iter_mut().enumerate() {
-            sub_invocation.rollback(&snapshot.sub_invocations[i])?;
+        for (sub, snap) in self
+            .sub_invocations
+            .iter_mut()
+            .zip(snapshot.sub_invocations.iter())
+        {
+            sub.rollback(snap)?
         }
         Ok(())
     }
@@ -882,7 +886,9 @@ impl AuthorizationManager {
 
             // Try matching the direct invoker contract first. It is considered to
             // have authorized any direct calls.
-            let invoker_frame = &call_stack[call_stack.len() - 2];
+            let Some(invoker_frame) = &call_stack.get(call_stack.len() - 2) else {
+                return Err((ScErrorType::Auth, ScErrorCode::InternalError).into());
+            };
             if let AuthStackFrame::Contract(invoker_contract) = invoker_frame {
                 if host
                     .compare(&invoker_contract.contract_address, &address)?
@@ -1012,9 +1018,16 @@ impl AuthorizationManager {
                     // The tracker should not be borrowed recursively in
                     // recording mode, as we don't call `__check_auth` in this
                     // flow.
-                    if let Ok(mut tracker) =
-                        self.try_borrow_account_trackers(host)?[tracker_id].try_borrow_mut()
-                    {
+                    let trackers = self.try_borrow_account_trackers(host)?;
+                    let Some(trackercell) = trackers.get(tracker_id) else {
+                        return Err(host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "bad index for existing tracker",
+                            &[],
+                        ));
+                    };
+                    if let Ok(mut tracker) = trackercell.try_borrow_mut() {
                         // The recording invariant is that trackers are created
                         // with the first authorized invocation, which means
                         // that when their stack no longer has authorized
@@ -1034,7 +1047,7 @@ impl AuthorizationManager {
                             "unexpected recursive tracker borrow in recording mode",
                             &[],
                         ));
-                    }
+                    };
                 }
                 // If there is no active tracker for this exact address object,
                 // try to find any matching active tracker for the address.
@@ -1176,7 +1189,15 @@ impl AuthorizationManager {
                     ));
                 }
                 for (i, tracker) in trackers.iter().enumerate() {
-                    if let Some(tracker_snapshot) = &trackers_snapshot[i] {
+                    let Some(snapopt) = trackers_snapshot.get(i) else {
+                        return Err(host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected auth snapshot index",
+                            &[],
+                        ));
+                    };
+                    if let Some(tracker_snapshot) = snapopt {
                         tracker
                             .try_borrow_mut()
                             .map_err(|_| {
