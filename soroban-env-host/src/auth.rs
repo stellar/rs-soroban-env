@@ -345,8 +345,61 @@ impl RecordingAuthInfo {
     }
 }
 
-// Helper for matching the 'sparse' tree of authorized invocations to the actual
-// call tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "testutils", derive(Hash))]
+enum MatchState {
+    Unmatched,
+    RootMatch,
+    SubMatch { index_in_parent: usize },
+}
+
+impl MatchState {
+    fn is_matched(&self) -> bool {
+        *self != MatchState::Unmatched
+    }
+}
+
+/// An `InvocationTracker` is responsible for incrementally matching a single
+/// [`AuthorizedInvocation`] tree against the actual invocation tree. In this
+/// way the nodes that make up the `AuthorizedInvocation` act as a pattern, and
+/// the `InvocationTracker` is an incremental pattern-matcher. The same
+/// `InvocationTracker` type is used as the pattern-matching sub-component of
+/// [`AccountAuthorizationTracker`] and [`InvokerContractAuthorizationTracker`],
+/// as the matching logic is the same in both cases.
+///
+/// The `InvocationTracker` maintains a [`InvocationTracker::match_stack`] of
+/// [`MatchState`] values that correspond to the frames in
+/// [`AuthorizationManager::call_stack`], pushing and popping those values as
+/// frames are are pushed and popped from that call stack. The values in the
+/// match stack are initially all [`MatchState::Unmatched`].
+///
+/// Matching is initiated by a contract calling
+/// [`AuthorizationManager::require_auth`], and the auth manager then works its
+/// way through many possible trackers asking each to try to match itself
+/// against the current [`AuthorizationManager::call_stack`] context, the last
+/// entry of which is the frame requesting the authorization.
+///
+/// A tracker may be active or inactive. If active, it means that the
+/// `InvocationTracker` has begun matching itself against the call stack
+/// already, and the frame requesting authorization will be matched against the
+/// _children_ of the last (deepest) already-matched node in the tracker's
+/// [`AuthorizedInvocation`]. If inactive, it means that the `InvocationTracker`
+/// has not yet begun matching and so the frame requesting authorization will be
+/// matched against the root node of the [`AuthorizedInvocation`]. Any
+/// successful match is recorded in the [`InvocationTracker::match_stack`] by
+/// overwriting the value at the match, changing it from
+/// [`MatchState::Unmatched`] to either [`MatchState::RootMatch`] or
+/// [`MatchState::SubMatch`] as appropriate. This match-extension logic is in
+/// [`InvocationTracker::maybe_extend_invocation_match`]
+///
+/// The active-ness of a tracker is defined by the
+/// [`AuthorizedInvocation::exhausted`] flag on the root node it's matching, as
+/// well as the continued presence of the [`MatchState::RootMatch`] node on the
+/// match stack. In other words: the tracker becomes "active" as soon as the
+/// root match is pushed on the match stack (which exhausts the root node), and
+/// the tracker stops being active when the root match is popped from the match
+/// stack. At this point the [`InvocationTracker::is_fully_processed`] flag is
+/// set.
 #[derive(Clone)]
 #[cfg_attr(feature = "testutils", derive(Hash))]
 struct InvocationTracker {
@@ -354,16 +407,24 @@ struct InvocationTracker {
     // The authorized invocation tree only contains the contract invocations
     // that explicitly require authorization on behalf of the address.
     root_authorized_invocation: AuthorizedInvocation,
-    // Call stack that tracks the current walk in the tree of authorized
-    // invocations.
-    // This is set to `None` if the invocation didn't require authorization on
-    // behalf of the address.
-    // When not `None` this is an index of the authorized invocation in the
-    // parent's `sub_invocations` vector or 0 for the
-    // `root_authorized_invocation`.
-    invocation_id_in_call_stack: Vec<Option<usize>>,
+    // Stack that tracks the current match of the tree of authorized invocations
+    // against the actual invocations made by the host. There is one entry in
+    // this vector for each entry in [`AuthorizationManager::call_stack`]
+    // (unless the tracker has been temporary suppressed due to reentry).
+    //
+    // The values in the match stack are always initially
+    // `MatchState::Unmatched`. The match stack may (if the tracker is active)
+    // contain a subsequence of values in it beginning with
+    // `MatchState::RootMatch` and continuing with a mixture of
+    // `MatchState::SubMatch` and `MatchState::Unmatched` values, corresponding
+    // to frames in the call stack that match or are ignored (respectively) by
+    // nodes in the `AuthorizedInvocation` pattern tree. If this vector ever
+    // contains a subsequence starting with `MatchState::SubMatch` (i.e. without
+    // a root), or contains more than one `MatchState::RootMatch`, there is a
+    // logic error somewhere.
+    match_stack: Vec<MatchState>,
     // If root invocation is exhausted, the index of the stack frame where it
-    // was exhausted (i.e. index in `invocation_id_in_call_stack`).
+    // was exhausted (i.e. index in `match_stack`).
     root_exhausted_frame: Option<usize>,
     // Indicates whether this tracker is fully processed, i.e. the authorized
     // root frame has been exhausted and then popped from the stack.
@@ -638,32 +699,37 @@ impl AuthorizedInvocation {
         })
     }
 
-    // Walks a path in the tree defined by `invocation_id_in_call_stack` and
+    // Walks a path in the tree defined by `match_stack` and
     // returns the last visited authorized node.
     // metering: free
     fn last_authorized_invocation_mut(
         &mut self,
-        invocation_id_in_call_stack: &Vec<Option<usize>>,
+        match_stack: &Vec<MatchState>,
         call_stack_id: usize,
-    ) -> &mut AuthorizedInvocation {
+    ) -> Result<&mut AuthorizedInvocation, HostError> {
         // Start walking the stack from `call_stack_id`. We trust the callers to
-        // hold the invariant that `invocation_id_in_call_stack[call_stack_id - 1]`
+        // hold the invariant that `match_stack[call_stack_id - 1]`
         // corresponds to this invocation tree, so that the next non-`None` child
         // corresponds to the child of the current tree.
-        for (i, id) in invocation_id_in_call_stack
-            .iter()
-            .enumerate()
-            .skip(call_stack_id)
-        {
-            if let Some(id) = id {
-                // We trust the caller to have the correct sub-invocation
-                // indices.
-                return self.sub_invocations[*id]
-                    .last_authorized_invocation_mut(invocation_id_in_call_stack, i + 1);
+        for (i, m) in match_stack.iter().enumerate().skip(call_stack_id) {
+            match m {
+                MatchState::SubMatch { index_in_parent } => {
+                    // We trust the caller to have the correct sub-invocation
+                    // indices.
+                    if let Some(sub) = self.sub_invocations.get_mut(*index_in_parent) {
+                        return sub.last_authorized_invocation_mut(match_stack, i + 1);
+                    } else {
+                        return Err((ScErrorType::Auth, ScErrorCode::InternalError).into());
+                    }
+                }
+                MatchState::RootMatch => {
+                    return Err((ScErrorType::Auth, ScErrorCode::InternalError).into());
+                }
+                // Skip Unmatched invocations as they don't require authorization.
+                MatchState::Unmatched => (),
             }
-            // Skip `None` invocations as they don't require authorization.
         }
-        self
+        Ok(self)
     }
 
     // metering: covered
@@ -1399,7 +1465,7 @@ impl InvocationTracker {
     ) -> Result<Self, HostError> {
         Ok(Self {
             root_authorized_invocation: AuthorizedInvocation::from_xdr(host, root_invocation)?,
-            invocation_id_in_call_stack: vec![],
+            match_stack: vec![],
             root_exhausted_frame: None,
             is_fully_processed: false,
         })
@@ -1409,7 +1475,7 @@ impl InvocationTracker {
     fn new(root_authorized_invocation: AuthorizedInvocation) -> Self {
         Self {
             root_authorized_invocation,
-            invocation_id_in_call_stack: vec![],
+            match_stack: vec![],
             root_exhausted_frame: None,
             is_fully_processed: false,
         }
@@ -1418,48 +1484,56 @@ impl InvocationTracker {
     // metering: free for recording
     #[cfg(any(test, feature = "recording_auth"))]
     fn new_recording(function: AuthorizedFunction, current_stack_len: usize) -> Self {
-        // Create the stack of `None` leading to the current invocation to
+        // Create the stack of `MatchState::Unmatched` leading to the current invocation to
         // represent invocations that didn't need authorization on behalf of
         // the tracked address.
-        let mut invocation_id_in_call_stack = vec![None; current_stack_len - 1];
-        // Add the id for the current(root) invocation.
-        invocation_id_in_call_stack.push(Some(0));
-        let root_exhausted_frame = Some(invocation_id_in_call_stack.len() - 1);
+        let mut match_stack = vec![MatchState::Unmatched; current_stack_len - 1];
+        // Add a MatchState for the current(root) invocation.
+        match_stack.push(MatchState::RootMatch);
+        let root_exhausted_frame = Some(match_stack.len() - 1);
         Self {
             root_authorized_invocation: AuthorizedInvocation::new_recording(function),
-            invocation_id_in_call_stack,
+            match_stack,
             root_exhausted_frame,
             is_fully_processed: false,
         }
     }
 
-    // Walks a path in the tree defined by `invocation_id_in_call_stack` and
+    // Walks a path in the tree defined by `match_stack` and
     // returns the last visited authorized node.
     // metering: free
-    fn last_authorized_invocation_mut(&mut self) -> Option<&mut AuthorizedInvocation> {
-        for i in 0..self.invocation_id_in_call_stack.len() {
-            if self.invocation_id_in_call_stack[i].is_some() {
-                return Some(
-                    self.root_authorized_invocation
-                        .last_authorized_invocation_mut(&self.invocation_id_in_call_stack, i + 1),
-                );
+    fn last_authorized_invocation_mut(
+        &mut self,
+    ) -> Result<Option<&mut AuthorizedInvocation>, HostError> {
+        for (i, m) in self.match_stack.iter().enumerate() {
+            match m {
+                MatchState::RootMatch => {
+                    return Ok(Some(
+                        self.root_authorized_invocation
+                            .last_authorized_invocation_mut(&self.match_stack, i + 1)?,
+                    ));
+                }
+                MatchState::SubMatch { .. } => {
+                    return Err((ScErrorType::Auth, ScErrorCode::InternalError).into())
+                }
+                MatchState::Unmatched => (),
             }
         }
-        None
+        Ok(None)
     }
 
     // metering: covered
     fn push_frame(&mut self, budget: &Budget) -> Result<(), HostError> {
         Vec::<usize>::charge_bulk_init_cpy(1, budget)?;
-        self.invocation_id_in_call_stack.push(None);
+        self.match_stack.push(MatchState::Unmatched);
         Ok(())
     }
 
     // metering: free
     fn pop_frame(&mut self) {
-        self.invocation_id_in_call_stack.pop();
+        self.match_stack.pop();
         if let Some(root_exhausted_frame) = self.root_exhausted_frame {
-            if root_exhausted_frame >= self.invocation_id_in_call_stack.len() {
+            if root_exhausted_frame >= self.match_stack.len() {
                 self.is_fully_processed = true;
             }
         }
@@ -1467,7 +1541,7 @@ impl InvocationTracker {
 
     // metering: free
     fn is_empty(&self) -> bool {
-        self.invocation_id_in_call_stack.is_empty()
+        self.match_stack.is_empty()
     }
 
     // metering: free
@@ -1477,18 +1551,23 @@ impl InvocationTracker {
 
     // metering: free
     fn current_frame_is_already_matched(&self) -> bool {
-        match self.invocation_id_in_call_stack.last() {
-            Some(Some(_)) => true,
+        match self.match_stack.last() {
+            Some(x) => x.is_matched(),
             _ => false,
         }
     }
 
-    // Tries to match the provided invocation to the authorized sub-invocation
-    // of the current tree and push it to the call stack.
+    // Tries to match the provided invocation as an extension of the last
+    // currently-matched sub-invocation of the authorized invocation tree (or
+    // the root, if there is no matched invocation yet). If matching succeeds,
+    // it writes the match to the corresponding entry in
+    // [`InvocationTracker::match_stack`].
+    //
     // Returns `true` if the match has been found for the first time per current
     // frame.
+    //
     // Metering: covered by components
-    fn maybe_push_matching_invocation_frame(
+    fn maybe_extend_invocation_match(
         &mut self,
         host: &Host,
         function: &AuthorizedFunction,
@@ -1497,13 +1576,15 @@ impl InvocationTracker {
         if self.current_frame_is_already_matched() {
             return Ok(false);
         }
-        let mut frame_index = None;
-        if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
-            for (i, sub_invocation) in curr_invocation.sub_invocations.iter_mut().enumerate() {
+        let mut new_match_state = MatchState::Unmatched;
+        if let Some(curr_invocation) = self.last_authorized_invocation_mut()? {
+            for (index_in_parent, sub_invocation) in
+                curr_invocation.sub_invocations.iter_mut().enumerate()
+            {
                 if !sub_invocation.is_exhausted
                     && host.compare(&sub_invocation.function, function)?.is_eq()
                 {
-                    frame_index = Some(i);
+                    new_match_state = MatchState::SubMatch { index_in_parent };
                     sub_invocation.is_exhausted = true;
                     break;
                 }
@@ -1514,21 +1595,21 @@ impl InvocationTracker {
                 .compare(&self.root_authorized_invocation.function, &function)?
                 .is_eq()
         {
-            frame_index = Some(0);
+            new_match_state = MatchState::RootMatch;
             self.root_authorized_invocation.is_exhausted = true;
-            self.root_exhausted_frame = Some(self.invocation_id_in_call_stack.len() - 1);
+            self.root_exhausted_frame = Some(self.match_stack.len() - 1);
         }
-        if frame_index.is_some() {
-            *self.invocation_id_in_call_stack.last_mut().ok_or_else(|| {
+        if new_match_state.is_matched() {
+            *self.match_stack.last_mut().ok_or_else(|| {
                 host.err(
                     ScErrorType::Auth,
                     ScErrorCode::InternalError,
-                    "invalid invocation_id_in_call_stack",
+                    "invalid match_stack",
                     &[],
                 )
-            })? = frame_index;
+            })? = new_match_state;
         }
-        Ok(frame_index.is_some())
+        Ok(new_match_state.is_matched())
     }
 
     // Records the invocation in this tracker.
@@ -1550,12 +1631,12 @@ impl InvocationTracker {
                 &[],
             ));
         }
-        if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
+        if let Some(curr_invocation) = self.last_authorized_invocation_mut()? {
             curr_invocation
                 .sub_invocations
                 .push(AuthorizedInvocation::new_recording(function));
-            *self.invocation_id_in_call_stack.last_mut().unwrap() =
-                Some(curr_invocation.sub_invocations.len() - 1);
+            let index_in_parent = curr_invocation.sub_invocations.len() - 1;
+            *self.match_stack.last_mut().unwrap() = MatchState::SubMatch { index_in_parent };
         } else {
             // This would be a bug
             return Err(host.err(
@@ -1571,7 +1652,7 @@ impl InvocationTracker {
     // metering: free
     #[cfg(any(test, feature = "recording_auth"))]
     fn has_matched_invocations_in_stack(&self) -> bool {
-        self.invocation_id_in_call_stack.iter().any(|i| i.is_some())
+        self.match_stack.iter().any(|i| i.is_matched())
     }
 
     // metering: covered
@@ -1668,9 +1749,9 @@ impl AccountAuthorizationTracker {
         // Create the stack of `None` leading to the current invocation to
         // represent invocations that didn't need authorization on behalf of
         // the tracked address.
-        let mut invocation_id_in_call_stack = vec![None; current_stack_len - 1];
+        let mut match_stack = vec![None; current_stack_len - 1];
         // Add the id for the current(root) invocation.
-        invocation_id_in_call_stack.push(Some(0));
+        match_stack.push(Some(0));
         Ok(Self {
             address,
             invocation_tracker: InvocationTracker::new_recording(function, current_stack_len),
@@ -1696,10 +1777,11 @@ impl AccountAuthorizationTracker {
         function: &AuthorizedFunction,
         allow_matching_root: bool,
     ) -> Result<bool, HostError> {
-        if !self
-            .invocation_tracker
-            .maybe_push_matching_invocation_frame(host, function, allow_matching_root)?
-        {
+        if !self.invocation_tracker.maybe_extend_invocation_match(
+            host,
+            function,
+            allow_matching_root,
+        )? {
             // The call isn't found in the currently tracked tree or is already
             // authorized in it.
             // That doesn't necessarily mean it's unauthorized (it can be
@@ -1991,7 +2073,7 @@ impl InvokerContractAuthorizationTracker {
         // Authorization is successful if function is just matched by the
         // tracker. No authentication is needed.
         self.invocation_tracker
-            .maybe_push_matching_invocation_frame(host, function, true)
+            .maybe_extend_invocation_match(host, function, true)
     }
 }
 
