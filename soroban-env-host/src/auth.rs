@@ -447,8 +447,8 @@ pub(crate) struct AccountAuthorizationTracker {
     // Value representing the signature created by the address to authorize
     // the invocations tracked here.
     signature: Val,
-    // Indicates whether this is a tracker for the transaction invoker.
-    is_invoker: bool,
+    // Indicates whether this is a tracker for the transaction source account.
+    is_transaction_source_account: bool,
     // When `true`, indicates that the tracker has been successfully verified,
     // specifically it has been authenticated and has nonce verified and
     // consumed.
@@ -1680,35 +1680,37 @@ impl AccountAuthorizationTracker {
         host: &Host,
         auth_entry: SorobanAuthorizationEntry,
     ) -> Result<Self, HostError> {
-        let (address, nonce, signature) = match auth_entry.credentials {
-            SorobanCredentials::SourceAccount => (
-                host.source_account_address()?.ok_or_else(|| {
-                    host.err(
-                        ScErrorType::Auth,
-                        ScErrorCode::InternalError,
-                        "source account is missing when setting auth entries",
-                        &[],
-                    )
-                })?,
-                None,
-                Val::VOID.into(),
-            ),
-            SorobanCredentials::Address(address_creds) => (
-                host.add_host_object(address_creds.address)?,
-                Some((
-                    address_creds.nonce,
-                    address_creds.signature_expiration_ledger,
-                )),
-                host.to_host_val(&address_creds.signature)?,
-            ),
-        };
-        let is_invoker = nonce.is_none();
+        let (address, nonce, signature, is_transaction_source_account) =
+            match auth_entry.credentials {
+                SorobanCredentials::SourceAccount => (
+                    host.source_account_address()?.ok_or_else(|| {
+                        host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "source account is missing when setting auth entries",
+                            &[],
+                        )
+                    })?,
+                    None,
+                    Val::VOID.into(),
+                    true,
+                ),
+                SorobanCredentials::Address(address_creds) => (
+                    host.add_host_object(address_creds.address)?,
+                    Some((
+                        address_creds.nonce,
+                        address_creds.signature_expiration_ledger,
+                    )),
+                    host.to_host_val(&address_creds.signature)?,
+                    false,
+                ),
+            };
         Ok(Self {
             address,
             invocation_tracker: InvocationTracker::from_xdr(host, auth_entry.root_invocation)?,
             signature,
             verified: false,
-            is_invoker,
+            is_transaction_source_account,
             nonce,
         })
     }
@@ -1730,15 +1732,15 @@ impl AccountAuthorizationTracker {
                 &[],
             ));
         }
-        // If the invoker account is known, set it to `None`, so that the final
-        // recorded payload wouldn't contain the address. This makes it easier
-        // to use more optimal payload when only invoker auth is used.
-        let is_invoker = if let Some(source_acc) = host.source_account_address()? {
-            host.compare(&source_acc, &address)?.is_eq()
-        } else {
-            false
-        };
-        let nonce = if !is_invoker {
+        // Decide if we're tracking the transaction source account, and if so
+        // don't bother with a nonce.
+        let is_transaction_source_account =
+            if let Some(source_acc) = host.source_account_address()? {
+                host.compare(&source_acc, &address)?.is_eq()
+            } else {
+                false
+            };
+        let nonce = if !is_transaction_source_account {
             let random_nonce: i64 =
                 host.with_recording_auth_nonce_prng(|p| Ok(p.gen_range(0..=i64::MAX)))?;
             host.consume_nonce(address, random_nonce, 0)?;
@@ -1751,7 +1753,7 @@ impl AccountAuthorizationTracker {
             invocation_tracker: InvocationTracker::new_recording(function, current_stack_len),
             signature: Val::VOID.into(),
             verified: true,
-            is_invoker,
+            is_transaction_source_account,
             nonce,
         })
     }
@@ -1833,7 +1835,7 @@ impl AccountAuthorizationTracker {
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
         host.as_budget().with_observable_shadow_mode(|| {
             Ok(RecordedAuthPayload {
-                address: if !self.is_invoker {
+                address: if !self.is_transaction_source_account {
                     Some(host.visit_obj(self.address, |a: &ScAddress| a.metered_clone(host))?)
                 } else {
                     None
@@ -1877,7 +1879,7 @@ impl AccountAuthorizationTracker {
 
     // metering: covered
     fn verify_and_consume_nonce(&mut self, host: &Host) -> Result<(), HostError> {
-        if self.is_invoker {
+        if self.is_transaction_source_account {
             return Ok(());
         }
         if let Some((nonce, live_until_ledger)) = &self.nonce {
@@ -1943,7 +1945,7 @@ impl AccountAuthorizationTracker {
 
     // metering: covered by the hsot
     fn authenticate(&self, host: &Host) -> Result<(), HostError> {
-        if self.is_invoker {
+        if self.is_transaction_source_account {
             return Ok(());
         }
 
@@ -1972,7 +1974,7 @@ impl AccountAuthorizationTracker {
     // metering: covered
     #[cfg(any(test, feature = "recording_auth"))]
     fn emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
-        if self.is_invoker {
+        if self.is_transaction_source_account {
             return Ok(());
         }
         let sc_addr = host.scaddress_from_address(self.address)?;
