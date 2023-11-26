@@ -1746,12 +1746,6 @@ impl AccountAuthorizationTracker {
         } else {
             None
         };
-        // Create the stack of `None` leading to the current invocation to
-        // represent invocations that didn't need authorization on behalf of
-        // the tracked address.
-        let mut match_stack = vec![None; current_stack_len - 1];
-        // Add the id for the current(root) invocation.
-        match_stack.push(Some(0));
         Ok(Self {
             address,
             invocation_tracker: InvocationTracker::new_recording(function, current_stack_len),
