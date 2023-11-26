@@ -199,8 +199,8 @@ pub struct AuthorizationManager {
     // Contract authorizations are always enforced independently of the `mode`,
     // as they are self-contained and fully defined by the contract logic.
     invoker_contract_trackers: RefCell<Vec<InvokerContractAuthorizationTracker>>,
-    // Current call stack consisting only of the contract invocations (i.e. not
-    // the host functions).
+    // Call stack of relevant host function and contract invocations, moves mostly
+    // in lock step with context stack in the host.
     call_stack: RefCell<Vec<AuthStackFrame>>,
 }
 
