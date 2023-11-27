@@ -239,11 +239,11 @@ impl Default for BudgetImpl {
                 // other flotsam accumulates around a typical memory copy.
                 ContractCostType::MemCpy => {
                     cpu.const_term = 250;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
+                    cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::MemCmp => {
                     cpu.const_term = 250;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
+                    cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::DispatchHostFunction => {
                     cpu.const_term = 263;
@@ -255,11 +255,11 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::ValSer => {
                     cpu.const_term = 1000;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
+                    cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::ValDeser => {
                     cpu.const_term = 1000;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
+                    cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::ComputeSha256Hash => {
                     cpu.const_term = 2924;
@@ -336,7 +336,7 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::MemAlloc => {
                     mem.const_term = 16;
-                    mem.lin_term = ScaledU64(128);
+                    mem.lin_term = ScaledU64::from_unscaled_u64(1);
                 }
                 ContractCostType::MemCpy => {
                     mem.const_term = 0;
@@ -360,7 +360,7 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::ValDeser => {
                     mem.const_term = 16;
-                    mem.lin_term = ScaledU64(128);
+                    mem.lin_term = ScaledU64::from_unscaled_u64(1);
                 }
                 ContractCostType::ComputeSha256Hash => {
                     mem.const_term = 0;
