@@ -615,17 +615,7 @@ impl AuthorizedFunction {
     fn to_xdr(&self, host: &Host) -> Result<SorobanAuthorizedFunction, HostError> {
         match self {
             AuthorizedFunction::ContractFn(contract_fn) => {
-                let function_name_sc_val = host.from_host_val(contract_fn.function_name.into())?;
-                let function_name = if let ScVal::Symbol(s) = function_name_sc_val {
-                    s
-                } else {
-                    return Err(host.err(
-                        ScErrorType::Object,
-                        ScErrorCode::InternalError,
-                        "unexpected non-symbol function name",
-                        &[],
-                    ));
-                };
+                let function_name = host.scsymbol_from_symbol(contract_fn.function_name)?;
                 Ok(SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                     contract_address: host.scaddress_from_address(contract_fn.contract_address)?,
                     function_name,
