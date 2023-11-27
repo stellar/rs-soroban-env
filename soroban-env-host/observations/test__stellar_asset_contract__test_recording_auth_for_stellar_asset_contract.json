@@ -123,7 +123,7 @@
   " 121 ret obj_cmp -> Ok(0)": "cpu:349517",
   " 122 ret get_contract_data -> Ok(Address(obj#55))": "cpu:349878, store:3@e1791713/4@629c8fce, stk:1@302984d4",
   " 123 call require_auth(Address(obj#55))": "",
-  " 124 ret require_auth -> Ok(Void)": "cpu:373662, mem:16460, store:3@e1791713/5@db2f841d, foot:5@5fe75cd6, auth:1@a9d84fb6/1@f85e07da",
+  " 124 ret require_auth -> Ok(Void)": "cpu:373662, mem:16460, store:3@e1791713/5@db2f841d, foot:5@5fe75cd6, auth:1@a9d84fb6/1@c95f6f33",
   " 125 call extend_current_contract_instance_and_code_ttl(U32(103680), U32(120960))": "",
   " 126 call get_ledger_sequence()": "cpu:378416, mem:16596, store:3@e1791713/-, foot:-",
   " 127 ret get_ledger_sequence -> Ok(U32(123))": "",

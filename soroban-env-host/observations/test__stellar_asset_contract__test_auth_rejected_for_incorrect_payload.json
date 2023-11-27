@@ -439,7 +439,7 @@
   " 437 ret verify_sig_ed25519 -> Ok(Void)": "cpu:1795058",
   " 438 call bytes_copy_to_slice(Bytes(obj#317), U32(0), 32)": "",
   " 439 ret bytes_copy_to_slice -> Ok(())": "cpu:1795420",
-  " 440 ret require_auth -> Ok(Void)": "cpu:1817453, mem:61302, store:3@9f3a03b0/5@a12062ad, foot:5@e7b1853b, auth:1@5fb2fd8f/1@fff74b5e",
+  " 440 ret require_auth -> Ok(Void)": "cpu:1817453, mem:61302, store:3@9f3a03b0/5@a12062ad, foot:5@e7b1853b, auth:1@5fb2fd8f/1@391c9a6f",
   " 441 call extend_current_contract_instance_and_code_ttl(U32(103680), U32(120960))": "",
   " 442 call get_ledger_sequence()": "cpu:1822207, mem:61438, store:3@9f3a03b0/-, foot:-",
   " 443 ret get_ledger_sequence -> Ok(U32(123))": "",

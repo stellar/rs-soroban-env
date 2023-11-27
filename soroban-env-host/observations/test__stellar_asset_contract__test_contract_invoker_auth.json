@@ -155,7 +155,7 @@
   " 153 ret verify_sig_ed25519 -> Ok(Void)": "cpu:861276",
   " 154 call bytes_copy_to_slice(Bytes(obj#67), U32(0), 32)": "",
   " 155 ret bytes_copy_to_slice -> Ok(())": "cpu:861638",
-  " 156 ret require_auth -> Ok(Void)": "cpu:881497, mem:19439, store:3@2b8780fe/3@fc224754, foot:3@b9b1cd27, auth:1@ef930bf4/1@c999bcec",
+  " 156 ret require_auth -> Ok(Void)": "cpu:881497, mem:19439, store:3@2b8780fe/3@fc224754, foot:3@b9b1cd27, auth:1@ef930bf4/1@a615223",
   " 157 call extend_current_contract_instance_and_code_ttl(U32(103680), U32(120960))": "",
   " 158 call get_ledger_sequence()": "cpu:886992, mem:19575, store:3@2b8780fe/-, foot:-",
   " 159 ret get_ledger_sequence -> Ok(U32(123))": "",

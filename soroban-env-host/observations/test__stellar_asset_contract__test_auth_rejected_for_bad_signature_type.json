@@ -131,7 +131,7 @@
   " 129 ret obj_cmp -> Ok(0)": "cpu:399420",
   " 130 call obj_cmp(Address(obj#51), Address(obj#39))": "",
   " 131 ret obj_cmp -> Ok(0)": "cpu:400106",
-  " 132 ret require_auth -> Err(Error(Auth, InvalidAction))": "cpu:431143, mem:17834, auth:1@323ddbfc/1@9cd64734",
+  " 132 ret require_auth -> Err(Error(Auth, InvalidAction))": "cpu:431143, mem:17834, auth:1@323ddbfc/1@1c4b52eb",
   " 133 pop SAC:a010db6c:mint -> Err(Error(Auth, InvalidAction))": "",
   " 134 ret call -> Err(Error(Auth, InvalidAction))": " store:-/4@629c8fce, stk:-, auth:-/-",
   " 135 end": "cpu:431143, mem:17834, prngs:-/9b4a753, objs:-/41@e79fc0a, vm:-/-, evt:-, store:-/4@629c8fce, foot:4@ac059c1c, stk:-, auth:-/-"
