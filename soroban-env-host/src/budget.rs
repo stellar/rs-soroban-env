@@ -85,19 +85,20 @@ impl BudgetImpl {
     }
 
     fn init_tracker(&mut self) {
-        for ct in ContractCostType::variants() {
-            // Define what inputs actually mean. For any constant-cost types -- whether it is a
-            // true constant unit cost type, or empirically assigned (via measurement) constant
-            // type -- we leave the input as `None`, otherwise, we initialize the input to 0.
-            let mut init_input = |i: usize| {
-                self.tracker.cost_tracker[i].1 = Some(0);
-            };
-            let i = ct as usize;
+        for (ct, tracker) in ContractCostType::variants()
+            .iter()
+            .zip(self.tracker.cost_tracker.iter_mut())
+        {
+            // Define what inputs actually mean. For any constant-cost types --
+            // whether it is a true constant unit cost type, or empirically
+            // assigned (via measurement) constant type -- we leave the input as
+            // `None`, otherwise, we initialize the input to `Some(0)``.
+            let mut init_input = || tracker.1 = Some(0);
             match ct {
                 ContractCostType::WasmInsnExec => (),
-                ContractCostType::MemAlloc => init_input(i), // number of bytes in host memory to allocate
-                ContractCostType::MemCpy => init_input(i),   // number of bytes in host to copy
-                ContractCostType::MemCmp => init_input(i),   // number of bytes in host to compare
+                ContractCostType::MemAlloc => init_input(), // number of bytes in host memory to allocate
+                ContractCostType::MemCpy => init_input(),   // number of bytes in host to copy
+                ContractCostType::MemCmp => init_input(),   // number of bytes in host to compare
                 ContractCostType::DispatchHostFunction => (),
                 ContractCostType::VisitObject => (),
                 // The inputs for `ValSer` and `ValDeser` are subtly different:
@@ -107,15 +108,15 @@ impl BudgetImpl {
                 // the bytes buffer recursively without worrying about budget charging. So the input
                 // is the length of the total buffer.
                 // This has implication on how their calibration should be set up.
-                ContractCostType::ValSer => init_input(i), // number of bytes in the result buffer
-                ContractCostType::ValDeser => init_input(i), // number of bytes in the input buffer
-                ContractCostType::ComputeSha256Hash => init_input(i), // number of bytes in the buffer
+                ContractCostType::ValSer => init_input(), // number of bytes in the result buffer
+                ContractCostType::ValDeser => init_input(), // number of bytes in the input buffer
+                ContractCostType::ComputeSha256Hash => init_input(), // number of bytes in the buffer
                 ContractCostType::ComputeEd25519PubKey => (),
-                ContractCostType::VerifyEd25519Sig => init_input(i), // length of the signed message
-                ContractCostType::VmInstantiation => init_input(i),  // length of the wasm bytes,
-                ContractCostType::VmCachedInstantiation => init_input(i), // length of the wasm bytes,
+                ContractCostType::VerifyEd25519Sig => init_input(), // length of the signed message
+                ContractCostType::VmInstantiation => init_input(),  // length of the wasm bytes,
+                ContractCostType::VmCachedInstantiation => init_input(), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
-                ContractCostType::ComputeKeccak256Hash => init_input(i), // number of bytes in the buffer
+                ContractCostType::ComputeKeccak256Hash => init_input(), // number of bytes in the buffer
                 ContractCostType::ComputeEcdsaSecp256k1Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
                 ContractCostType::Int256AddSub => (),
@@ -123,7 +124,7 @@ impl BudgetImpl {
                 ContractCostType::Int256Div => (),
                 ContractCostType::Int256Pow => (),
                 ContractCostType::Int256Shift => (),
-                ContractCostType::ChaCha20DrawBytes => init_input(i), // number of random bytes to draw
+                ContractCostType::ChaCha20DrawBytes => init_input(), // number of random bytes to draw
             }
         }
     }
@@ -171,11 +172,13 @@ impl BudgetImpl {
 
     fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
         let cpu_remaining = self.cpu_insns.get_remaining();
-        let cpu_per_fuel = self
+        let Some(cost_model) = self
             .cpu_insns
             .get_cost_model(ContractCostType::WasmInsnExec)
-            .const_term
-            .max(1);
+        else {
+            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
+        };
+        let cpu_per_fuel = cost_model.const_term.max(1);
         // Due to rounding, the amount of cpu converted to fuel will be slightly
         // less than the total cpu available. This is okay because 1. that rounded-off
         // amount should be very small (less than the cpu_per_fuel) 2. it does
@@ -186,7 +189,7 @@ impl BudgetImpl {
         // be withheld from the host. And this may not be the only source of
         // unspendable residual budget (see the other comment in `vm::wrapped_func_call`).
         // So it should be okay.
-        Ok(cpu_remaining / cpu_per_fuel)
+        Ok(cpu_remaining.checked_div(cpu_per_fuel).unwrap_or(0))
     }
 }
 
@@ -205,7 +208,9 @@ impl Default for BudgetImpl {
 
         for ct in ContractCostType::variants() {
             // define the cpu cost model parameters
-            let cpu = &mut b.cpu_insns.get_cost_model_mut(ct);
+            let Some(cpu) = &mut b.cpu_insns.get_cost_model_mut(ct) else {
+                continue;
+            };
             match ct {
                 // This is the host cpu insn cost per wasm "fuel". Every "base" wasm
                 // instruction costs 1 fuel (by default), and some particular types of
@@ -234,11 +239,11 @@ impl Default for BudgetImpl {
                 // other flotsam accumulates around a typical memory copy.
                 ContractCostType::MemCpy => {
                     cpu.const_term = 250;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
+                    cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::MemCmp => {
                     cpu.const_term = 250;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
+                    cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::DispatchHostFunction => {
                     cpu.const_term = 263;
@@ -250,11 +255,11 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::ValSer => {
                     cpu.const_term = 1000;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
+                    cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::ValDeser => {
                     cpu.const_term = 1000;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
+                    cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::ComputeSha256Hash => {
                     cpu.const_term = 2924;
@@ -319,7 +324,9 @@ impl Default for BudgetImpl {
             }
 
             // define the memory cost model parameters
-            let mem = b.mem_bytes.get_cost_model_mut(ct);
+            let Some(mem) = b.mem_bytes.get_cost_model_mut(ct) else {
+                continue;
+            };
             match ct {
                 // This type is designated to the cpu cost. By definition, the memory cost
                 // of a (cpu) fuel is zero.
@@ -329,7 +336,7 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::MemAlloc => {
                     mem.const_term = 16;
-                    mem.lin_term = ScaledU64(128);
+                    mem.lin_term = ScaledU64::from_unscaled_u64(1);
                 }
                 ContractCostType::MemCpy => {
                     mem.const_term = 0;
@@ -353,7 +360,7 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::ValDeser => {
                     mem.const_term = 16;
-                    mem.lin_term = ScaledU64(128);
+                    mem.lin_term = ScaledU64::from_unscaled_u64(1);
                 }
                 ContractCostType::ComputeSha256Hash => {
                     mem.const_term = 0;
@@ -593,8 +600,8 @@ impl Budget {
         )?))))
     }
 
-    // Helper function to avoid multiple borrow_mut
-    fn mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
+    // Helper function to avoid panics from multiple borrow_muts
+    fn with_mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(RefMut<BudgetImpl>) -> Result<T, HostError>,
     {
@@ -642,7 +649,7 @@ impl Budget {
         let mut prev = false;
 
         if self
-            .mut_budget(|mut b| {
+            .with_mut_budget(|mut b| {
                 prev = b.is_in_shadow_mode;
                 b.is_in_shadow_mode = true;
                 b.cpu_insns.check_budget_limit(IsShadowMode(true))?;
@@ -653,7 +660,7 @@ impl Budget {
             let _ = f();
         }
 
-        let _ = self.mut_budget(|mut b| {
+        let _ = self.with_mut_budget(|mut b| {
             b.is_in_shadow_mode = prev;
             Ok(())
         });

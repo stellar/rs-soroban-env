@@ -46,7 +46,6 @@ impl ScaledU64 {
         self.0 >> COST_MODEL_LIN_TERM_SCALE_BITS
     }
 
-    #[cfg(test)]
     pub const fn from_unscaled_u64(u: u64) -> Self {
         ScaledU64(u << COST_MODEL_LIN_TERM_SCALE_BITS)
     }
@@ -57,6 +56,13 @@ impl ScaledU64 {
 
     pub const fn saturating_mul(&self, rhs: u64) -> Self {
         ScaledU64(self.0.saturating_mul(rhs))
+    }
+
+    pub const fn safe_div(&self, rhs: u64) -> Self {
+        ScaledU64(match self.0.checked_div(rhs) {
+            Some(v) => v,
+            None => 0,
+        })
     }
 }
 
