@@ -151,7 +151,7 @@ impl StellarAssetContract {
 
     pub fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("stellar asset contract allowance");
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -170,7 +170,7 @@ impl StellarAssetContract {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -189,7 +189,7 @@ impl StellarAssetContract {
     // Metering: covered by components
     pub fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("stellar asset contract balance");
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -199,7 +199,7 @@ impl StellarAssetContract {
     // Metering: covered by components
     pub fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
         let _span = tracy_span!("stellar asset contract authorized");
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -212,7 +212,7 @@ impl StellarAssetContract {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -235,7 +235,7 @@ impl StellarAssetContract {
         check_nonnegative_amount(e, amount)?;
         spender.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -256,7 +256,7 @@ impl StellarAssetContract {
 
         from.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -280,7 +280,7 @@ impl StellarAssetContract {
 
         spender.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -301,7 +301,7 @@ impl StellarAssetContract {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -317,7 +317,7 @@ impl StellarAssetContract {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -336,7 +336,7 @@ impl StellarAssetContract {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
@@ -352,7 +352,7 @@ impl StellarAssetContract {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.extend_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
