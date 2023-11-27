@@ -5,7 +5,7 @@ use crate::{
     budget::{AsBudget, Budget},
     host_object::HostVec,
     storage::Storage,
-    test::wasm_util,
+    testutils::wasm as wasm_util,
     xdr::{AccountId, ContractCostType, PublicKey, ScErrorCode, ScErrorType, Uint256},
     DiagnosticLevel, Env, EnvBase, Error, Host, HostError, Symbol, SymbolSmall, Tag, Val,
     VecObject,

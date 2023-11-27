@@ -94,7 +94,7 @@ pub fn write_allowance(
                 && allowance_with_live_until.1.unwrap_or(0) < live_until
             {
                 let live_for = live_until - ledger_seq + 1;
-                e.extend_contract_data(
+                e.extend_contract_data_ttl(
                     key.try_into_val(e)?,
                     StorageType::Temporary,
                     live_for.into(),

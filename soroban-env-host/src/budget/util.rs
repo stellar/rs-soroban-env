@@ -4,10 +4,10 @@ use crate::{budget::Budget, HostError};
 #[cfg(any(test, feature = "testutils"))]
 use crate::host::error::TryBorrowOrErr;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testutils"))]
 use crate::{budget::model::ScaledU64, xdr::ContractCostType};
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testutils"))]
 impl Budget {
     pub fn reset_models(&self) -> Result<(), HostError> {
         self.with_mut_budget(|mut b| {
@@ -66,7 +66,7 @@ impl Budget {
         Ok(())
     }
 
-    pub(crate) fn get_wasm_mem_alloc(&self) -> Result<u64, HostError> {
+    pub fn get_wasm_mem_alloc(&self) -> Result<u64, HostError> {
         Ok(self.0.try_borrow_or_err()?.tracker.wasm_memory)
     }
 }

@@ -634,8 +634,7 @@ impl AuthorizedInvocation {
                 .filter(|i| i.is_exhausted || !exhausted_sub_invocations_only)
                 .map(|i| i.to_xdr(host, exhausted_sub_invocations_only))
                 .metered_collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>(host)??
-                .try_into()
-                .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
+                .try_into()?,
         })
     }
 

@@ -22,9 +22,12 @@ pub(crate) trait RelativeObjectConversion: WasmiMarshal {
         Ok(self)
     }
     fn try_marshal_from_relative_value(v: wasmi::Value, host: &Host) -> Result<Self, Trap> {
-        let val = Self::try_marshal_from_value(v).ok_or(Trap::from(HostError::from(
-            Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput),
-        )))?;
+        let val = Self::try_marshal_from_value(v).ok_or_else(|| {
+            Trap::from(HostError::from(Error::from_type_and_code(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+            )))
+        })?;
         Ok(val.relative_to_absolute(host)?)
     }
     fn marshal_relative_from_self(self, host: &Host) -> Result<wasmi::Value, Trap> {
