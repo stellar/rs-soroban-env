@@ -25,13 +25,19 @@ impl Budget {
         const_mem: u64,
         lin_mem: ScaledU64,
     ) -> Result<(), HostError> {
+        use crate::xdr::{ScErrorCode, ScErrorType};
+
         let mut bgt = self.0.try_borrow_mut_or_err()?;
 
-        let cpu_model = bgt.cpu_insns.get_cost_model_mut(ty);
+        let Some(cpu_model) = bgt.cpu_insns.get_cost_model_mut(ty) else {
+            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
+        };
         cpu_model.const_term = const_cpu;
         cpu_model.lin_term = lin_cpu;
 
-        let mem_model = bgt.mem_bytes.get_cost_model_mut(ty);
+        let Some(mem_model) = bgt.mem_bytes.get_cost_model_mut(ty) else {
+            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
+        };
         mem_model.const_term = const_mem;
         mem_model.lin_term = lin_mem;
         Ok(())
