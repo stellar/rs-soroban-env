@@ -109,8 +109,11 @@ pub fn generate_account_id(host: &Host) -> AccountId {
 
 pub fn generate_bytes_array(host: &Host) -> [u8; 32] {
     let mut bytes: [u8; 32] = Default::default();
-    host.with_test_prng(|chacha| Ok(chacha.fill_bytes(&mut bytes)))
-        .unwrap();
+    host.with_test_prng(|chacha| {
+        chacha.fill_bytes(&mut bytes);
+        Ok(())
+    })
+    .unwrap();
     bytes
 }
 
