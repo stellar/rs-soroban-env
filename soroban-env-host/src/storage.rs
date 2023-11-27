@@ -422,8 +422,11 @@ impl Storage {
             ));
         }
 
-        let mut new_live_until =
-            host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
+        let mut new_live_until = host.with_ledger_info(|li| {
+            li.sequence_number
+                .checked_add(extend_to)
+                .ok_or_else(|| host.err_arith_overflow())
+        })?;
 
         if new_live_until > host.max_live_until_ledger()? {
             if let Some(durability) = get_key_durability(&key) {

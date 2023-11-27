@@ -954,10 +954,13 @@ impl VmCallerEnv for Host {
             let msg = String::from_utf8_lossy(&msg);
 
             let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
-            Vec::<Val>::charge_bulk_init_cpy(len.saturating_add(1) as u64, self)?;
+            Vec::<Val>::charge_bulk_init_cpy((len as u64).saturating_add(1), self)?;
             let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
             // charge for conversion from bytes to `Val`s
-            self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
+            self.charge_budget(
+                ContractCostType::MemCpy,
+                Some((len as u64).saturating_mul(8)),
+            )?;
             self.metered_vm_read_vals_from_linear_memory::<8, Val>(
                 vmcaller,
                 &vm,
@@ -1510,7 +1513,10 @@ impl VmCallerEnv for Host {
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
         // charge for conversion from bytes to `Val`s
-        self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
+        self.charge_budget(
+            ContractCostType::MemCpy,
+            Some((len as u64).saturating_mul(8)),
+        )?;
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
             &vm,
@@ -1581,7 +1587,7 @@ impl VmCallerEnv for Host {
 
             // Step 2: write all vals.
             // charges memcpy of converting map entries into bytes
-            self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
+            self.charge_budget(ContractCostType::MemCpy, Some((len as u64).saturating_mul(8)))?;
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
                 &vm,
@@ -1806,7 +1812,10 @@ impl VmCallerEnv for Host {
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
         // charge for conversion from bytes to `Val`s
-        self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
+        self.charge_budget(
+            ContractCostType::MemCpy,
+            Some((len as u64).saturating_mul(8)),
+        )?;
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
             &vm,
@@ -1838,7 +1847,7 @@ impl VmCallerEnv for Host {
                 ));
             }
             // charges memcpy of converting vec entries into bytes
-            self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
+            self.charge_budget(ContractCostType::MemCpy, Some((len as u64).saturating_mul(8)))?;
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
                 &vm,
@@ -2416,8 +2425,10 @@ impl VmCallerEnv for Host {
         let vnew = self.visit_obj(b, |hv: &ScBytes| {
             self.validate_index_lt_bound(i, hv.len())?;
             let mut vnew: Vec<u8> = hv.metered_clone(self)?.into();
-            // len > i has been verified above but use saturating_sub just in case
-            let n_elts = (hv.len() as u64).saturating_sub(i as u64);
+            // len > i has been verified above but use checked_sub just in case
+            let n_elts = (hv.len() as u64)
+                .checked_sub(i as u64)
+                .ok_or_else(|| self.err_arith_overflow())?;
             // remove elements incurs the cost of moving bytes, it does not incur
             // allocation/deallocation
             metered_clone::charge_shallow_copy::<u8>(n_elts, self)?;
