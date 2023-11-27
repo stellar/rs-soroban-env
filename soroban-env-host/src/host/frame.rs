@@ -14,8 +14,6 @@ use crate::{
 };
 
 #[cfg(any(test, feature = "testutils"))]
-use crate::host::testutils;
-#[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
 use std::rc::Rc;
 
@@ -149,13 +147,17 @@ impl Host {
         let auth_manager = self.try_borrow_authorization_manager()?;
         let auth_snapshot = auth_manager.snapshot(self)?;
         auth_manager.push_frame(self, &ctx.frame)?;
-        Vec::<Context>::charge_bulk_init_cpy(1, self.as_budget())?;
-        self.try_borrow_context_stack_mut()?.push(ctx);
-        Ok(RollbackPoint {
+        // Establish the rp first, since this might run out of gas and fail.
+        let rp = RollbackPoint {
             storage: self.try_borrow_storage()?.map.metered_clone(self)?,
             events: self.try_borrow_events()?.vec.len(),
             auth: auth_snapshot,
-        })
+        };
+        // Charge for the push, which might also run out of gas.
+        Vec::<Context>::charge_bulk_init_cpy(1, self.as_budget())?;
+        // Finally commit to doing the push.
+        self.try_borrow_context_stack_mut()?.push(ctx);
+        Ok(rp)
     }
 
     /// Helper function for [`Host::with_frame`] below. Pops a [`Context`] off
@@ -538,7 +540,9 @@ impl Host {
         } else {
             // This should only ever happen if we try to access the contract ID
             // from a HostFunction frame (meaning before a contract is running).
-            // Doing so is a logic bug on our part.
+            // Doing so is a logic bug on our part. If we simply run out of
+            // budget while cloning the Hash we won't get here, the `?` above
+            // will propagate the budget error.
             Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -717,7 +721,7 @@ impl Host {
                     // be a bit forgiving.
                     let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
                     let res: Result<Option<Val>, PanicVal> =
-                        testutils::call_with_suppressed_panic_hook(closure);
+                        crate::testutils::call_with_suppressed_panic_hook(closure);
                     match res {
                         Ok(Some(val)) => {
                             self.fn_return_diagnostics(id, &func, &val);
@@ -905,14 +909,7 @@ impl Host {
             }
         })?;
         if updated_instance_storage.is_some() {
-            let contract_id = self.get_current_contract_id_internal().map_err(|_| {
-                self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                    "unexpected missing contract for instance storage",
-                    &[],
-                )
-            })?;
+            let contract_id = self.get_current_contract_id_internal()?;
             let key = self.contract_instance_ledger_key(&contract_id)?;
 
             self.store_contract_instance(None, updated_instance_storage, contract_id, &key)?;

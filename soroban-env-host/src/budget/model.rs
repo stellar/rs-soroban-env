@@ -27,7 +27,7 @@ use core::fmt::{Debug, Display};
 pub trait HostCostModel {
     fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError>;
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     fn reset(&mut self);
 }
 
@@ -122,7 +122,7 @@ impl HostCostModel for MeteredCostComponent {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     fn reset(&mut self) {
         self.const_term = 0;
         self.lin_term = ScaledU64(0);

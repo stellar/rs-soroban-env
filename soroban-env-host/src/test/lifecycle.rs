@@ -19,7 +19,7 @@ use soroban_env_common::{xdr::ScBytes, EnvBase, TryIntoVal, Val};
 use soroban_env_common::{StorageType, VecObject};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
-use super::util::{generate_account_id, generate_bytes_array};
+use crate::testutils::{generate_account_id, generate_bytes_array};
 
 fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
     let storage_key = host.contract_instance_ledger_key(&contract_id).unwrap();

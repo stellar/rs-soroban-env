@@ -4,7 +4,7 @@ use crate::{
         Events, InternalContractEvent, InternalDiagnosticArg, InternalDiagnosticEvent,
         InternalEvent,
     },
-    test::util::AsScVal,
+    testutils::AsScVal,
     xdr::{
         ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
         ExtensionPoint, Hash, ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,

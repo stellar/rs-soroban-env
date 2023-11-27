@@ -84,7 +84,7 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
 
 #[test]
 fn test_vm_fuel_metering() -> Result<(), HostError> {
-    use super::wasm_util::wasm_module_with_4n_insns;
+    use crate::testutils::wasm::wasm_module_with_4n_insns;
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(&wasm_module_with_4n_insns(1000));
     let sym = Symbol::try_from_small_str("test").unwrap();
