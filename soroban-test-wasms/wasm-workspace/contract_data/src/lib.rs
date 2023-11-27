@@ -82,6 +82,14 @@ impl Contract {
             .extend_ttl(threshold, extend_to)
     }
 
+    pub fn put_large_key(e: Env, key: Bytes, val: u64) {
+        e.storage().persistent().set(&key, &val)
+    }
+
+    pub fn get_large_key(e: Env, key: Bytes) -> u64 {
+        e.storage().persistent().get(&key).unwrap()
+    }
+
     pub fn replace_with_bytes_and_extend(
         e: Env,
         key: Symbol,
