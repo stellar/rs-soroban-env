@@ -10,7 +10,7 @@ use crate::{budget::model::ScaledU64, xdr::ContractCostType};
 #[cfg(test)]
 impl Budget {
     pub fn reset_models(&self) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
+        self.with_mut_budget(|mut b| {
             b.cpu_insns.reset_models();
             b.mem_bytes.reset_models();
             Ok(())
@@ -85,7 +85,7 @@ impl Budget {
     }
 
     pub fn reset_unlimited_cpu(&self) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
+        self.with_mut_budget(|mut b| {
             b.cpu_insns.reset(u64::MAX);
             Ok(())
         })?; // panic means multiple-mut-borrow bug
@@ -93,7 +93,7 @@ impl Budget {
     }
 
     pub fn reset_unlimited_mem(&self) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
+        self.with_mut_budget(|mut b| {
             b.mem_bytes.reset(u64::MAX);
             Ok(())
         })?;
@@ -106,7 +106,7 @@ impl Budget {
     }
 
     pub fn reset_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
+        self.with_mut_budget(|mut b| {
             b.cpu_insns.reset(cpu);
             b.mem_bytes.reset(mem);
             Ok(())
@@ -172,7 +172,7 @@ impl Budget {
         F: FnOnce() -> Result<T, HostError>,
     {
         let mut prev = false;
-        let should_execute = self.mut_budget(|mut b| {
+        let should_execute = self.with_mut_budget(|mut b| {
             prev = b.is_in_shadow_mode;
             b.is_in_shadow_mode = true;
             b.cpu_insns
@@ -186,7 +186,7 @@ impl Budget {
             Err(e) => Err(e),
         };
 
-        self.mut_budget(|mut b| {
+        self.with_mut_budget(|mut b| {
             b.is_in_shadow_mode = prev;
             Ok(())
         })?;

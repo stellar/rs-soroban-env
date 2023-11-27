@@ -600,8 +600,8 @@ impl Budget {
         )?))))
     }
 
-    // Helper function to avoid multiple borrow_mut
-    fn mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
+    // Helper function to avoid panics from multiple borrow_muts
+    fn with_mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(RefMut<BudgetImpl>) -> Result<T, HostError>,
     {
@@ -649,7 +649,7 @@ impl Budget {
         let mut prev = false;
 
         if self
-            .mut_budget(|mut b| {
+            .with_mut_budget(|mut b| {
                 prev = b.is_in_shadow_mode;
                 b.is_in_shadow_mode = true;
                 b.cpu_insns.check_budget_limit(IsShadowMode(true))?;
@@ -660,7 +660,7 @@ impl Budget {
             let _ = f();
         }
 
-        let _ = self.mut_budget(|mut b| {
+        let _ = self.with_mut_budget(|mut b| {
             b.is_in_shadow_mode = prev;
             Ok(())
         });
