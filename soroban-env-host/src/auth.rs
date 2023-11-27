@@ -986,6 +986,116 @@ impl AuthorizationManager {
         ))
     }
 
+    #[cfg(any(test, feature = "recording_auth"))]
+    fn require_auth_recording(
+        &self,
+        host: &Host,
+        address: AddressObject,
+        function: AuthorizedFunction,
+        recording_info: &RecordingAuthInfo,
+    ) -> Result<(), HostError> {
+        // At first, try to find the tracker for this exact address
+        // object.
+        // This is a best-effort heuristic to come up with a reasonably
+        // looking recording tree for cases when multiple instances of
+        // the same exact address are used.
+        let address_obj_handle = address.get_handle();
+        let existing_tracker_id = recording_info
+            .try_borrow_tracker_by_address_handle(host)?
+            .get(&address_obj_handle)
+            .copied();
+        if let Some(tracker_id) = existing_tracker_id {
+            // The tracker should not be borrowed recursively in
+            // recording mode, as we don't call `__check_auth` in this
+            // flow.
+            let trackers = self.try_borrow_account_trackers(host)?;
+            let Some(trackercell) = trackers.get(tracker_id) else {
+                return Err(host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "bad index for existing tracker",
+                    &[],
+                ));
+            };
+            if let Ok(mut tracker) = trackercell.try_borrow_mut() {
+                // The recording invariant is that trackers are created
+                // with the first authorized invocation, which means
+                // that when their stack no longer has authorized
+                // invocation, then we've popped frames past its root
+                // and hence need to create a new tracker.
+                if !tracker.has_authorized_invocations_in_stack() {
+                    recording_info
+                        .try_borrow_tracker_by_address_handle_mut(host)?
+                        .remove(&address_obj_handle);
+                } else {
+                    return tracker.record_invocation(host, function);
+                }
+            } else {
+                return Err(host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "unexpected recursive tracker borrow in recording mode",
+                    &[],
+                ));
+            };
+        }
+        // If there is no active tracker for this exact address object,
+        // try to find any matching active tracker for the address.
+        for tracker in self.try_borrow_account_trackers(host)?.iter() {
+            if let Ok(mut tracker) = tracker.try_borrow_mut() {
+                if !host.compare(&tracker.address, &address)?.is_eq() {
+                    continue;
+                }
+                // Take the first tracker that is still active (i.e. has
+                // active authorizations in the current call stack) and
+                // hasn't been used for this stack frame yet.
+                if tracker.has_authorized_invocations_in_stack()
+                    && !tracker.current_frame_is_already_matched()
+                {
+                    return tracker.record_invocation(host, function);
+                }
+            } else {
+                return Err(host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "unexpected borrowed tracker in recording auth mode",
+                    &[],
+                ));
+            }
+        }
+        // At this stage there is no active tracker to which we could
+        // match the current invocation, thus we need to create a new
+        // tracker.
+        // Alert the user in `disable_non_root_auth` mode if we're not
+        // in the root stack frame.
+        if recording_info.disable_non_root_auth && self.try_borrow_call_stack(host)?.len() != 1 {
+            return Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InvalidAction,
+                "[recording authorization only] encountered authorization not tied \
+                to the root contract invocation for an address. Use `require_auth()` \
+                in the top invocation or enable non-root authorization.",
+                &[address.into()],
+            ));
+        }
+        // If a tracker for the new tree doesn't exist yet, create
+        // it and initialize with the current invocation.
+        self.try_borrow_account_trackers_mut(host)?
+            .push(RefCell::new(AccountAuthorizationTracker::new_recording(
+                host,
+                address,
+                function,
+                self.try_borrow_call_stack(host)?.len(),
+            )?));
+        recording_info
+            .try_borrow_tracker_by_address_handle_mut(host)?
+            .insert(
+                address_obj_handle,
+                self.try_borrow_account_trackers(host)?.len() - 1,
+            );
+        Ok(())
+    }
+
     // metering: covered
     fn require_auth_internal(
         &self,
@@ -993,118 +1103,17 @@ impl AuthorizationManager {
         address: AddressObject,
         function: AuthorizedFunction,
     ) -> Result<(), HostError> {
-        // First check the InvokerContractAuthTrackers
+        // First check the InvokerContractAuthorizationTrackers
         if self.maybe_authorize_as_invoker_contract(host, address, &function)? {
             return Ok(());
         }
-
+        // Then check the AccountAuthorizationTrackers
         match &self.mode {
             AuthorizationMode::Enforcing => self.require_auth_enforcing(host, address, &function),
-            #[cfg(any(test, feature = "recording_auth"))]
             // metering: free for recording
+            #[cfg(any(test, feature = "recording_auth"))]
             AuthorizationMode::Recording(recording_info) => {
-                // At first, try to find the tracker for this exact address
-                // object.
-                // This is a best-effort heuristic to come up with a reasonably
-                // looking recording tree for cases when multiple instances of
-                // the same exact address are used.
-                let address_obj_handle = address.get_handle();
-                let existing_tracker_id = recording_info
-                    .try_borrow_tracker_by_address_handle(host)?
-                    .get(&address_obj_handle)
-                    .copied();
-                if let Some(tracker_id) = existing_tracker_id {
-                    // The tracker should not be borrowed recursively in
-                    // recording mode, as we don't call `__check_auth` in this
-                    // flow.
-                    let trackers = self.try_borrow_account_trackers(host)?;
-                    let Some(trackercell) = trackers.get(tracker_id) else {
-                        return Err(host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "bad index for existing tracker",
-                            &[],
-                        ));
-                    };
-                    if let Ok(mut tracker) = trackercell.try_borrow_mut() {
-                        // The recording invariant is that trackers are created
-                        // with the first authorized invocation, which means
-                        // that when their stack no longer has authorized
-                        // invocation, then we've popped frames past its root
-                        // and hence need to create a new tracker.
-                        if !tracker.has_authorized_invocations_in_stack() {
-                            recording_info
-                                .try_borrow_tracker_by_address_handle_mut(host)?
-                                .remove(&address_obj_handle);
-                        } else {
-                            return tracker.record_invocation(host, function);
-                        }
-                    } else {
-                        return Err(host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "unexpected recursive tracker borrow in recording mode",
-                            &[],
-                        ));
-                    };
-                }
-                // If there is no active tracker for this exact address object,
-                // try to find any matching active tracker for the address.
-                for tracker in self.try_borrow_account_trackers(host)?.iter() {
-                    if let Ok(mut tracker) = tracker.try_borrow_mut() {
-                        if !host.compare(&tracker.address, &address)?.is_eq() {
-                            continue;
-                        }
-                        // Take the first tracker that is still active (i.e. has
-                        // active authorizations in the current call stack) and
-                        // hasn't been used for this stack frame yet.
-                        if tracker.has_authorized_invocations_in_stack()
-                            && !tracker.current_frame_is_already_matched()
-                        {
-                            return tracker.record_invocation(host, function);
-                        }
-                    } else {
-                        return Err(host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "unexpected borrowed tracker in recording auth mode",
-                            &[],
-                        ));
-                    }
-                }
-                // At this stage there is no active tracker to which we could
-                // match the current invocation, thus we need to create a new
-                // tracker.
-                // Alert the user in `disable_non_root_auth` mode if we're not
-                // in the root stack frame.
-                if recording_info.disable_non_root_auth
-                    && self.try_borrow_call_stack(host)?.len() != 1
-                {
-                    return Err(host.err(
-                        ScErrorType::Auth,
-                        ScErrorCode::InvalidAction,
-                        "[recording authorization only] encountered authorization not tied \
-                        to the root contract invocation for an address. Use `require_auth()` \
-                        in the top invocation or enable non-root authorization.",
-                        &[address.into()],
-                    ));
-                }
-                // If a tracker for the new tree doesn't exist yet, create
-                // it and initialize with the current invocation.
-                self.try_borrow_account_trackers_mut(host)?
-                    .push(RefCell::new(AccountAuthorizationTracker::new_recording(
-                        host,
-                        address,
-                        function,
-                        self.try_borrow_call_stack(host)?.len(),
-                    )?));
-                recording_info
-                    .try_borrow_tracker_by_address_handle_mut(host)?
-                    .insert(
-                        address_obj_handle,
-                        self.try_borrow_account_trackers(host)?.len() - 1,
-                    );
-                Ok(())
+                self.require_auth_recording(host, address, function, recording_info)
             }
         }
     }
