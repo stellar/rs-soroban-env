@@ -76,7 +76,8 @@ pub struct LedgerInfo {
     pub max_entry_ttl: u32,
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
+#[allow(dead_code)]
 pub(crate) enum HostLifecycleEvent<'a> {
     PushCtx(&'a Context),
     PopCtx(&'a Context, &'a Result<Val, HostError>),
@@ -84,7 +85,7 @@ pub(crate) enum HostLifecycleEvent<'a> {
     EnvRet(&'static str, &'a Result<String, String>),
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
 pub(crate) type HostLifecycleHook =
     Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
@@ -150,7 +151,7 @@ struct HostImpl {
     // the host's execution. No guarantees are made about the stability of this
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
     // Store a simple contract invocation hook for public usage.
     // The hook triggers when the top-level contract invocation
@@ -176,7 +177,7 @@ impl Default for Host {
 macro_rules! impl_checked_borrow_helpers {
     ($field:ident, $t:ty, $borrow:ident, $borrow_mut:ident) => {
         impl Host {
-            #[allow(dead_code)]
+            #[allow(dead_code, unused_imports)]
             pub(crate) fn $borrow(&self) -> Result<std::cell::Ref<'_, $t>, HostError> {
                 use crate::host::error::TryBorrowOrErr;
                 self.0.$field.try_borrow_or_err_with(
@@ -184,7 +185,7 @@ macro_rules! impl_checked_borrow_helpers {
                     concat!("host.0.", stringify!($field), ".try_borrow failed"),
                 )
             }
-            #[allow(dead_code)]
+            #[allow(dead_code, unused_imports)]
             pub(crate) fn $borrow_mut(&self) -> Result<std::cell::RefMut<'_, $t>, HostError> {
                 use crate::host::error::TryBorrowOrErr;
                 self.0.$field.try_borrow_mut_or_err_with(
@@ -329,7 +330,7 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
-            #[cfg(feature = "testutils")]
+            #[cfg(any(test, feature = "testutils"))]
             lifecycle_event_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
