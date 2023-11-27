@@ -854,7 +854,7 @@ impl AuthorizationManager {
     }
 
     // metering: covered
-    pub(crate) fn add_invoker_contract_auth(
+    pub(crate) fn add_invoker_contract_auth_with_curr_contract_as_invoker(
         &self,
         host: &Host,
         auth_entries: VecObject,
@@ -865,13 +865,15 @@ impl AuthorizationManager {
         Vec::<Val>::charge_bulk_init_cpy(auth_entries.len() as u64, host)?;
         trackers.reserve(auth_entries.len());
         for e in auth_entries {
-            trackers.push(InvokerContractAuthorizationTracker::new(host, e)?)
+            trackers.push(
+                InvokerContractAuthorizationTracker::new_with_curr_contract_as_invoker(host, e)?,
+            )
         }
         Ok(())
     }
 
     // metering: covered by components
-    fn verify_contract_invoker_auth(
+    fn maybe_authorize_as_invoker_contract(
         &self,
         host: &Host,
         address: AddressObject,
@@ -991,11 +993,8 @@ impl AuthorizationManager {
         address: AddressObject,
         function: AuthorizedFunction,
     ) -> Result<(), HostError> {
-        // For now we give a blanket approval of the invoker contract to any
-        // calls it made, but never to the deeper calls. It's possible
-        // to eventually add a capability to pre-authorize arbitrary call
-        // stacks on behalf of the contract.
-        if self.verify_contract_invoker_auth(host, address, &function)? {
+        // First check the InvokerContractAuthTrackers
+        if self.maybe_authorize_as_invoker_contract(host, address, &function)? {
             return Ok(());
         }
 
@@ -2052,7 +2051,10 @@ impl AccountAuthorizationTracker {
 
 impl InvokerContractAuthorizationTracker {
     // metering: covered by components
-    fn new(host: &Host, invoker_auth_entry: Val) -> Result<Self, HostError> {
+    fn new_with_curr_contract_as_invoker(
+        host: &Host,
+        invoker_auth_entry: Val,
+    ) -> Result<Self, HostError> {
         let invoker_sc_addr = ScAddress::Contract(host.get_current_contract_id_internal()?);
         let authorized_invocation = invoker_contract_auth_to_authorized_invocation(
             host,
