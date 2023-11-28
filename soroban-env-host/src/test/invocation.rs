@@ -379,6 +379,10 @@ fn unrecoverable_error_with_cross_contract_try_call() -> Result<(), HostError> {
 
     // Running out of budget is a unrecoverable error
     assert!(res.is_err());
+    let err = res.err().unwrap().error;
+
+    assert!(err.is_type(ScErrorType::Budget));
+    assert!(err.is_code(ScErrorCode::ExceededLimit));
 
     Ok(())
 }
@@ -406,5 +410,9 @@ fn unrecoverable_error_with_try_call() -> Result<(), HostError> {
 
     // Running out of budget is a unrecoverable error
     assert!(res.is_err());
+    let err = res.err().unwrap().error;
+
+    assert!(err.is_type(ScErrorType::Budget));
+    assert!(err.is_code(ScErrorCode::ExceededLimit));
     Ok(())
 }
