@@ -2727,7 +2727,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         Ok(self
             .try_borrow_authorization_manager()?
-            .add_invoker_contract_auth(self, auth_entries)?
+            .add_invoker_contract_auth_with_curr_contract_as_invoker(self, auth_entries)?
             .into())
     }
 

@@ -9,7 +9,7 @@
   "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
   "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:1075814, mem:203008, objs:-/5@bd41b8ef, auth:1@c2070508/-",
   "   9 ret obj_cmp -> Ok(0)": "cpu:1076500",
-  "  10 call get_ledger_network_id()": "cpu:1076758, auth:1@c2070508/1@f3e8ad8a",
+  "  10 call get_ledger_network_id()": "cpu:1076758, auth:1@c2070508/1@17648570",
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:1079655, mem:203120, objs:-/6@de093601",
   "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1117520, mem:204626, objs:-/7@7c2c3650, store:-/2@11790c6, foot:2@15d0f60e, auth:-/1@ff7036f5",
   "  13 call call(Address(obj#13), Symbol(test), Vec(obj#17))": "cpu:1119802, mem:204754, objs:-/9@ae6c54ad, auth:-/-",
