@@ -172,7 +172,7 @@ impl BudgetDimension {
     }
 
     // Resets all model parameters to zero (so that we can override and test individual ones later).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn reset_models(&mut self) {
         for model in &mut self.cost_models {
             model.reset()

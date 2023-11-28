@@ -2,15 +2,13 @@ use crate::{
     budget::Budget,
     host_object::HostVec,
     storage::{Footprint, Storage},
+    testutils::{generate_account_id, generate_bytes_array},
     Host, HostError, MeteredOrdMap,
 };
 use soroban_env_common::{Env, Symbol};
 use soroban_test_wasms::COMPLEX;
 
-use super::{
-    observe::ObservedHost,
-    util::{generate_account_id, generate_bytes_array},
-};
+use super::observe::ObservedHost;
 
 #[test]
 fn run_complex() -> Result<(), HostError> {

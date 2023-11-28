@@ -381,7 +381,7 @@ impl Storage {
     ///
     /// This operation does not modify any ledger entries, but does change the
     /// internal storage
-    pub(crate) fn extend(
+    pub(crate) fn extend_ttl(
         &mut self,
         host: &Host,
         key: Rc<LedgerKey>,

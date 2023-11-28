@@ -115,7 +115,12 @@ pub struct FuncEmitter {
     /// vector be `k` elements long, and the `n`th element of it will be the
     /// `n`th argument passed to the function (and will happen to have index
     /// `n`, but the point here is to let client code ignore that fact).
-    pub args: Vec<LocalRef>,
+    ///
+    /// We also store an optional `&'static str` associated with each arg,
+    /// indicating that it's _allocated_ to a specific type of value (with
+    /// meaning of the strings decided by the caller). This is a convention
+    /// maintained by [`FuncEmitter::alloc_arg`].
+    pub args: Vec<(LocalRef, Option<&'static str>)>,
 
     /// A vector of [`LocalRef`]s that cover the locals declared inside the
     /// function, with local indexes starting _after_ the argument indexes. If
@@ -140,7 +145,7 @@ impl FuncEmitter {
     /// directly to get the corresponding [`LocalRef`]s.
     pub fn new(mod_emit: ModEmitter, arity: Arity, n_locals: u32) -> Self {
         let func = Function::new([(n_locals, ValType::I64)]);
-        let args = (0..arity.0).map(LocalRef).collect();
+        let args = (0..arity.0).map(|n| (LocalRef(n), None)).collect();
         let locals = (arity.0..arity.0 + n_locals)
             .map(|n| (LocalRef(n), None))
             .collect();
@@ -151,6 +156,20 @@ impl FuncEmitter {
             args,
             locals,
         }
+    }
+
+    pub fn alloc_arg(&mut self, ty: &'static str) -> LocalRef {
+        for (lref, ltag) in self.args.iter_mut() {
+            if ltag.is_none() {
+                *ltag = Some(ty);
+                return *lref;
+            }
+        }
+        panic!(
+            "alloc_arg exhausted {} args without finding room for {:?}",
+            self.args.len(),
+            ty
+        )
     }
 
     pub fn alloc_local(&mut self, ty: &'static str) -> LocalRef {
@@ -173,14 +192,15 @@ impl FuncEmitter {
         lr
     }
 
-    // A utility function for selecting a typed local based on an index into
-    // the subsequence of locals with a given tag. If no appropriate local can
-    // be found, we return None.
+    // A utility function for selecting a typed local based on an index into the
+    // subsequence of locals (or args) with a given tag. If no appropriate local
+    // can be found, we return None.
     pub fn maybe_choose_local(&mut self, ty: &'static str, index: u8) -> Option<LocalRef> {
-        let index = (index as usize) % self.locals.len();
+        let index = (index as usize) % (self.args.len() + self.locals.len());
         if let Some((local, _)) = self
-            .locals
+            .args
             .iter()
+            .chain(self.locals.iter())
             .filter(|(_, tyopt)| *tyopt == Some(ty))
             .cycle()
             .nth(index)

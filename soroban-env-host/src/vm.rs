@@ -491,7 +491,7 @@ impl Vm {
         f(caller)
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(all(test, not(feature = "next"), feature = "testutils"))]
     pub(crate) fn memory_hash_and_size(&self) -> (u64, usize) {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -508,7 +508,7 @@ impl Vm {
         (0, 0)
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(all(test, not(feature = "next"), feature = "testutils"))]
     // This is pretty weak: we just observe the state that wasmi exposes through
     // wasm _exports_. There might be tables or globals a wasm doesn't export
     // but there's no obvious way to observe them.

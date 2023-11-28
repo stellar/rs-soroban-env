@@ -39,9 +39,12 @@ pub trait Emit {
     /// num_locals() results from all of self's subexpressions plus one.
     fn num_locals(&self) -> u32;
 
-    fn as_single_function_wasm_module(&self, name: &str) -> Vec<u8> {
+    fn as_single_function_wasm_module(&self, name: &str, argtypes: &[&'static str]) -> Vec<u8> {
         let n_locals = self.num_locals();
-        let mut fe = ModEmitter::default().func(Arity(0), n_locals);
+        let mut fe = ModEmitter::default().func(Arity(argtypes.len() as u32), n_locals);
+        for arg in argtypes.iter() {
+            fe.alloc_arg(arg);
+        }
         let result = self.emit(&mut fe);
         fe.push(result);
         fe.finish_and_export(name).finish()

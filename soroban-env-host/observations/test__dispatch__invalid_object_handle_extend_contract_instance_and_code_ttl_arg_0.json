@@ -14,7 +14,7 @@
   "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1119257, mem:204751, objs:-/7@5c7c9c3, store:-/2@61fc9f3f, foot:2@ca89a209, auth:-/1@683aed9e",
   "  13 call call(Address(obj#13), Symbol(test), Vec(obj#15))": "cpu:1120398, mem:204815, objs:-/8@478829d0, auth:-/-",
   "  14 push VM:b7c471f4:test(Address(obj#123), U32(123), U32(123))": "cpu:2190172, mem:407915, objs:-/9@b233cf49, vm:65536@b1cd98b9/2@2f94d90d, stk:1@96e7954e, auth:1@d7dc1364/-",
-  "  15 call extend_contract_instance_and_code(Address(obj#123), U32(123), U32(123))": "cpu:2194088, mem:408017, objs:1@f40b9f61/9@b233cf49, vm:-/-, stk:1@cc11b71",
+  "  15 call extend_contract_instance_and_code_ttl(Address(obj#123), U32(123), U32(123))": "cpu:2194088, mem:408017, objs:1@f40b9f61/9@b233cf49, vm:-/-, stk:1@cc11b71",
   "  16 pop VM:b7c471f4:test -> Err(Error(Value, InvalidInput))": "cpu:2194747, vm:65536@b1cd98b9/2@2f94d90d",
   "  17 ret call -> Err(Error(Value, InvalidInput))": " objs:-/9@b233cf49, vm:-/-, stk:-, auth:-/-",
   "  18 end": "cpu:2194747, mem:408017, prngs:-/9b4a753, objs:-/9@b233cf49, vm:-/-, evt:-, store:-/2@61fc9f3f, foot:2@ca89a209, stk:-, auth:-/-"
