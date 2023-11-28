@@ -15,7 +15,7 @@ mv Cargo.toml.bak Cargo.toml
 
 # Package the crates that will be published. Verification is disabled because
 # we aren't ready to verify yet.
-cargo-hack hack --ignore-private package --no-verify --each-feature
+cargo-hack hack --ignore-private package --locked --no-verify --each-feature
 
 # Add each crate that was packaged to the vendor/ directory.
 for crate in target/package/*.crate
@@ -36,4 +36,5 @@ cargo-hack hack \
     --config "source.crates-io.replace-with = 'vendored-sources'" \
     --config "source.vendored-sources.directory = 'vendor'" \
     package \
+    --locked \
     --target x86_64-unknown-linux-gnu

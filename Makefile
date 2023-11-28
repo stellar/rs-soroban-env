@@ -34,7 +34,7 @@ reobserve-tests:
 	UPDATE_OBSERVATIONS=1 cargo test --locked -p soroban-env-host --features testutils --profile test-opt
 
 publish:
-	cargo workspaces publish --all --force '*' --from-git --yes
+	cargo workspaces publish --locked --all --force '*' --from-git --yes
 
 publish-dry-run:
 	./publish-dry-run.sh
