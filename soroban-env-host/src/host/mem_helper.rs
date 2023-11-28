@@ -411,7 +411,7 @@ impl Host {
 
     // Test function for calibration purpose. The caller needs to ensure `src` and `dest` has
     // the same length or else it panics.
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(feature = "bench")]
     pub(crate) fn mem_copy_from_slice<T: Copy + super::declared_size::DeclaredSizeForMetering>(
         &self,
         src: &[T],

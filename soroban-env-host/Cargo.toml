@@ -66,16 +66,17 @@ testutils = ["soroban-env-common/testutils", "soroban-synth-wasm/testutils", "re
 next = ["soroban-env-common/next", "soroban-synth-wasm/next", "soroban-bench-utils/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_auth = []
+bench = []
 
 [[bench]]
-required-features = ["testutils"]
+required-features = ["bench"]
 harness = false
 bench = true
 name = "worst_case_linear_models"
 path = "benches/worst_case_linear_models.rs"
 
 [[bench]]
-required-features = ["testutils"]
+required-features = ["bench"]
 harness = false
 bench = true
 name = "variation_histograms"

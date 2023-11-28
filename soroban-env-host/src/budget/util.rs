@@ -1,13 +1,18 @@
-#[cfg(any(test, feature = "testutils", feature = "recording_auth"))]
+#[cfg(any(
+    test,
+    feature = "testutils",
+    feature = "bench",
+    feature = "recording_auth"
+))]
 use crate::{budget::Budget, HostError};
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(any(test, feature = "testutils", feature = "bench"))]
 use crate::host::error::TryBorrowOrErr;
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::{budget::model::ScaledU64, xdr::ContractCostType};
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(any(test, feature = "testutils", feature = "bench"))]
 impl Budget {
     pub fn reset_models(&self) -> Result<(), HostError> {
         self.with_mut_budget(|mut b| {
@@ -15,49 +20,6 @@ impl Budget {
             b.mem_bytes.reset_models();
             Ok(())
         })
-    }
-
-    pub(crate) fn override_model_with_scaled_params(
-        &self,
-        ty: ContractCostType,
-        const_cpu: u64,
-        lin_cpu: ScaledU64,
-        const_mem: u64,
-        lin_mem: ScaledU64,
-    ) -> Result<(), HostError> {
-        use crate::xdr::{ScErrorCode, ScErrorType};
-
-        let mut bgt = self.0.try_borrow_mut_or_err()?;
-
-        let Some(cpu_model) = bgt.cpu_insns.get_cost_model_mut(ty) else {
-            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
-        };
-        cpu_model.const_term = const_cpu;
-        cpu_model.lin_term = lin_cpu;
-
-        let Some(mem_model) = bgt.mem_bytes.get_cost_model_mut(ty) else {
-            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
-        };
-        mem_model.const_term = const_mem;
-        mem_model.lin_term = lin_mem;
-        Ok(())
-    }
-
-    pub(crate) fn override_model_with_unscaled_params(
-        &self,
-        ty: ContractCostType,
-        const_cpu: u64,
-        lin_cpu: u64,
-        const_mem: u64,
-        lin_mem: u64,
-    ) -> Result<(), HostError> {
-        self.override_model_with_scaled_params(
-            ty,
-            const_cpu,
-            ScaledU64::from_unscaled_u64(lin_cpu),
-            const_mem,
-            ScaledU64::from_unscaled_u64(lin_mem),
-        )
     }
 
     pub(crate) fn track_wasm_mem_alloc(&self, delta: u64) -> Result<(), HostError> {
@@ -69,10 +31,7 @@ impl Budget {
     pub fn get_wasm_mem_alloc(&self) -> Result<u64, HostError> {
         Ok(self.0.try_borrow_or_err()?.tracker.wasm_memory)
     }
-}
 
-#[cfg(any(test, feature = "testutils"))]
-impl Budget {
     pub fn reset_default(&self) -> Result<(), HostError> {
         *self.0.try_borrow_mut_or_err()? = super::BudgetImpl::default();
         Ok(())
@@ -144,6 +103,52 @@ impl Budget {
         let mem = &self.0.try_borrow_or_err()?.mem_bytes;
         Ok(mem.shadow_total_count > mem.shadow_limit)
     }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+impl Budget {
+    pub(crate) fn override_model_with_scaled_params(
+        &self,
+        ty: ContractCostType,
+        const_cpu: u64,
+        lin_cpu: ScaledU64,
+        const_mem: u64,
+        lin_mem: ScaledU64,
+    ) -> Result<(), HostError> {
+        use crate::xdr::{ScErrorCode, ScErrorType};
+
+        let mut bgt = self.0.try_borrow_mut_or_err()?;
+
+        let Some(cpu_model) = bgt.cpu_insns.get_cost_model_mut(ty) else {
+            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
+        };
+        cpu_model.const_term = const_cpu;
+        cpu_model.lin_term = lin_cpu;
+
+        let Some(mem_model) = bgt.mem_bytes.get_cost_model_mut(ty) else {
+            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
+        };
+        mem_model.const_term = const_mem;
+        mem_model.lin_term = lin_mem;
+        Ok(())
+    }
+
+    pub(crate) fn override_model_with_unscaled_params(
+        &self,
+        ty: ContractCostType,
+        const_cpu: u64,
+        lin_cpu: u64,
+        const_mem: u64,
+        lin_mem: u64,
+    ) -> Result<(), HostError> {
+        self.override_model_with_scaled_params(
+            ty,
+            const_cpu,
+            ScaledU64::from_unscaled_u64(lin_cpu),
+            const_mem,
+            ScaledU64::from_unscaled_u64(lin_mem),
+        )
+    }    
 }
 
 #[cfg(any(test, feature = "recording_auth"))]

@@ -30,22 +30,19 @@ struct MeterTracker {
     cost_tracker: [(u64, Option<u64>); ContractCostType::variants().len()],
     // Total number of times the meter is called
     count: u32,
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(any(test, feature = "testutils", feature = "bench"))]
     wasm_memory: u64,
 }
 
 impl MeterTracker {
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(any(test, feature = "testutils", feature = "bench"))]
     fn reset(&mut self) {
         self.count = 0;
         for tracker in &mut self.cost_tracker {
             tracker.0 = 0;
             tracker.1 = tracker.1.map(|_| 0);
         }
-        #[cfg(any(test, feature = "testutils"))]
-        {
-            self.wasm_memory = 0;
-        }
+        self.wasm_memory = 0;
     }
 }
 

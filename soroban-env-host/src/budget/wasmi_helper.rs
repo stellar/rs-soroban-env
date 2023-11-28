@@ -41,7 +41,7 @@ impl Default for FuelConfig {
 
 impl FuelConfig {
     // These values are the "factory default" and used for calibration.
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(any(test, feature = "testutils", feature = "bench"))]
     pub(crate) fn reset(&mut self) {
         self.base = 1;
         self.entity = 1;
@@ -88,7 +88,7 @@ impl ResourceLimiter for Host {
         };
 
         if allow {
-            #[cfg(any(test, feature = "testutils"))]
+            #[cfg(any(test, feature = "testutils", feature = "bench"))]
             {
                 self.as_budget()
                     .track_wasm_mem_alloc(delta)

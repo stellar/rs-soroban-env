@@ -2896,14 +2896,17 @@ impl VmCallerEnv for Host {
     // endregion: "prng" module functions
 }
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(feature = "bench")]
 impl Host {
     // Testing interface to create values directly for later use via Env functions.
     // It needs to be a `pub` method because benches are considered a separate crate.
     pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
         self.to_host_val(v).map(Into::into)
     }
+}
 
+#[cfg(any(test, feature = "testutils"))]
+impl Host {
     /// Sets a hook to track top-level contract invocations.
     /// The hook triggers right before the top-level contract invocation
     /// starts and right after it ends.
