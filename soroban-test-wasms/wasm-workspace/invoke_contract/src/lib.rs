@@ -20,6 +20,18 @@ impl Contract {
             vec![&env, x.into_val(&env), y.into_val(&env)],
         )
     }
+
+    // Ignore error so we can test unrecoverable errors
+    pub fn add_with_try(env: Env, x: i32, y: i32, contract_id: Address) -> i32 {
+        env.events()
+            .publish((symbol_short!("add_with"),), (x, y, contract_id.clone()));
+        let _ = env.try_invoke_contract::<i32, Error>(
+            &contract_id,
+            &symbol_short!("add"),
+            vec![&env, x.into_val(&env), y.into_val(&env)],
+        );
+        0
+    }
     
     // This is used through a single test case to test various rollback scenarios 
     pub fn invoke(env: Env, contract_id: Address, function_name: Symbol, token: Address) {

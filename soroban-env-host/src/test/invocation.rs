@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use expect_test::expect;
 use soroban_env_common::{
-    xdr::{self, ScErrorCode},
-    Env, EnvBase, TryFromVal, Val,
+    xdr::{self, ContractCostType, ScErrorCode},
+    Env, EnvBase, TryFromVal, TryIntoVal, Val,
 };
 
 use crate::{
@@ -351,5 +351,60 @@ fn error_spoof_rejected() -> Result<(), HostError> {
         panic!("got non-Error: {:?}", val)
     };
     assert!(err.is_type(ScErrorType::Context) && err.is_code(ScErrorCode::InvalidAction));
+    Ok(())
+}
+
+#[test]
+fn unrecoverable_error_with_cross_contract_try_call() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let contract_id_obj = host.register_test_contract_wasm(ADD_I32);
+    let invoke_contract_id_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
+
+    let _ = host.clone().test_budget(5789, 10_048_576).enable_model(
+        ContractCostType::WasmInsnExec,
+        6,
+        0,
+        0,
+        0,
+    );
+
+    let a = 4i32;
+    let b = 7i32;
+
+    let res = host.try_call(
+        invoke_contract_id_obj,
+        Symbol::try_from_val(&*host, &"add_with_try")?,
+        test_vec![&*host, a, b, contract_id_obj].into(),
+    );
+
+    // Running out of budget is a unrecoverable error
+    assert!(res.is_err());
+
+    Ok(())
+}
+
+#[test]
+fn unrecoverable_error_with_try_call() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let contract_id_obj = host.register_test_contract_wasm(ADD_I32);
+
+    let _ = host.clone().test_budget(2015, 1_048_576).enable_model(
+        ContractCostType::WasmInsnExec,
+        6,
+        0,
+        0,
+        0,
+    );
+
+    let a = 4i32;
+    let b = 7i32;
+    let res = host.try_call(
+        contract_id_obj,
+        Symbol::try_from_small_str("add")?,
+        host.test_vec_obj(&[a, b])?,
+    );
+
+    // Running out of budget is a unrecoverable error
+    assert!(res.is_err());
     Ok(())
 }
