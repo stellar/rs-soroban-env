@@ -1,6 +1,7 @@
-use soroban_env_common::xdr::{ContractDataDurability, LedgerKey};
-
-use crate::{Host, HostError, LedgerInfo};
+use crate::{
+    xdr::{ContractDataDurability, LedgerKey, ScErrorCode, ScErrorType},
+    Error, Host, HostError, LedgerInfo,
+};
 
 impl Host {
     pub(crate) fn get_min_live_until_ledger(
@@ -18,7 +19,16 @@ impl Host {
         };
         ledger_seq
             .checked_add(min_live_until.saturating_sub(1))
-            .ok_or_else(|| self.err_arith_overflow())
+            .ok_or_else(|| {
+                // overflowing here means a misconfiguration of the network (the
+                // ttl is too large), in which case we immediately flag it as an
+                // unrecoverable `InternalError`, even though the source is
+                // external to the host.
+                HostError::from(Error::from_type_and_code(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                ))
+            })
     }
 
     pub(crate) fn max_live_until_ledger(&self) -> Result<u32, HostError> {
@@ -27,7 +37,16 @@ impl Host {
                 // Entry can live for at most max_entry_live_until ledgers from
                 // now, counting the current one.
                 .checked_add(li.max_entry_ttl.saturating_sub(1))
-                .ok_or_else(|| self.err_arith_overflow())
+                .ok_or_else(|| {
+                    // overflowing here means a misconfiguration of the network
+                    // (the ttl is too large), in which case we immediately flag
+                    // it as an unrecoverable `InternalError`, even though the
+                    // source is external to the host.
+                    HostError::from(Error::from_type_and_code(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                    ))
+                })
         })
     }
 }
