@@ -2426,9 +2426,9 @@ impl VmCallerEnv for Host {
             self.validate_index_lt_bound(i, hv.len())?;
             let mut vnew: Vec<u8> = hv.metered_clone(self)?.into();
             // len > i has been verified above but use checked_sub just in case
-            let n_elts = (hv.len() as u64)
-                .checked_sub(i as u64)
-                .ok_or_else(|| self.err_arith_overflow())?;
+            let n_elts = (hv.len() as u64).checked_sub(i as u64).ok_or_else(|| {
+                Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError)
+            })?;
             // remove elements incurs the cost of moving bytes, it does not incur
             // allocation/deallocation
             metered_clone::charge_shallow_copy::<u8>(n_elts, self)?;

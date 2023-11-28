@@ -97,7 +97,7 @@ impl DepthLimiter for BudgetImpl {
     // doesn't exceed the initial depth limit.
     fn leave(&mut self) -> Result<(), HostError> {
         self.depth_limit = self.depth_limit.checked_add(1).ok_or_else(|| {
-            Error::from_type_and_code(ScErrorType::Value, ScErrorCode::ArithDomain)
+            Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError)
         })?;
         Ok(())
     }
