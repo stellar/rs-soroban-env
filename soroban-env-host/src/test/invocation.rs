@@ -1,9 +1,9 @@
-use std::rc::Rc;
+use std::{cmp::Ordering, rc::Rc};
 
 use expect_test::expect;
 use soroban_env_common::{
-    xdr::{self, ContractCostType, ScErrorCode},
-    Env, EnvBase, TryFromVal, TryIntoVal, Val,
+    xdr::{self, ContractCostType, ScError, ScErrorCode},
+    Compare, Env, EnvBase, TryFromVal, TryIntoVal, Val,
 };
 
 use crate::{
@@ -414,5 +414,57 @@ fn unrecoverable_error_with_try_call() -> Result<(), HostError> {
 
     assert!(err.is_type(ScErrorType::Budget));
     assert!(err.is_code(ScErrorCode::ExceededLimit));
+    Ok(())
+}
+
+#[test]
+fn host_function_error() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    let addr = host.register_test_contract_wasm(ERR);
+
+    let sym = Symbol::try_from_val(&*host, &"missing_wasm")?;
+    let args = host.vec_new_from_slice(&[])?;
+    let call_err = host.call(addr, sym, args).err().unwrap();
+    let try_call_res = host.try_call(addr, sym, args)?;
+
+    assert!(call_err.error.is_type(ScErrorType::Storage));
+    assert!(call_err.error.is_code(ScErrorCode::MissingValue));
+
+    // Storage(MissingValue) is a recoverable error
+    // It gets narrowed to a Context error so granular host
+    // error codes aren't hashed in to the blockchain, making the
+    // protocol less flexible in the future
+    let e = Error::from_scerror(ScError::Context(ScErrorCode::InvalidAction));
+    assert_eq!(
+        (*host).compare(&e.to_val(), &try_call_res)?,
+        Ordering::Equal
+    );
+    Ok(())
+}
+
+#[test]
+fn guest_error() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    let addr = host.register_test_contract_wasm(ERR);
+
+    let sym = Symbol::try_from_val(&*host, &"divide")?;
+    let args = host.vec_new_from_slice(&[0.into()])?;
+    let call_err = host.call(addr, sym, args).err().unwrap();
+    let try_call_res = host.try_call(addr, sym, args)?;
+
+    assert!(call_err.error.is_type(ScErrorType::WasmVm));
+    assert!(call_err.error.is_code(ScErrorCode::InvalidAction));
+
+    // WasmVm(InvalidAction) is a recoverable error
+    // It gets narrowed to a Context error so granular host
+    // error codes aren't hashed in to the blockchain, making the
+    // protocol less flexible in the future
+    let e = Error::from_scerror(ScError::Context(ScErrorCode::InvalidAction));
+    assert_eq!(
+        (*host).compare(&e.to_val(), &try_call_res)?,
+        Ordering::Equal
+    );
     Ok(())
 }

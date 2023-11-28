@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracterror, Val, Error, Env, Symbol, Address, symbol_short, token};
+use soroban_sdk::{contract, contractimpl, contracterror, Val, Error, Env, Symbol, Address, symbol_short, token, bytes};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 #[contract]
 pub struct Contract;
@@ -45,6 +45,18 @@ impl Contract {
 
     pub fn val() -> Val {
         Error::from_contract_error(12345).into()
+    }
+
+    pub fn missing_wasm(env: Env) {
+        let bin = bytes![&env, [0, 5, 6, 37, 7]];
+
+        let hash = env.crypto().sha256(&bin);
+        env.deployer().update_current_contract_wasm(hash);
+    }
+
+    pub fn divide(denominator: u32) -> u32 {
+        // Pass in zero to error
+        10 / denominator
     }
 
     // This function is used in a try_call invocation test to make sure
