@@ -1,14 +1,14 @@
 all: build test test-opt
 
 test:
-	cargo hack --each-feature test
+	cargo hack --locked --each-feature test
 
 test-opt:
-	cargo hack --each-feature test --profile test-opt
+	cargo hack --locked --each-feature test --profile test-opt
 
 build:
-	cargo hack --each-feature clippy
-	cargo hack clippy --target wasm32-unknown-unknown
+	cargo hack --locked --each-feature clippy
+	cargo hack --locked clippy --target wasm32-unknown-unknown
 
 # We use "run" to run the soroban-env-host/src/bin/main.rs
 # entrypoint, which both excludes dev-deps (noisy) and
@@ -31,7 +31,7 @@ regenerate-test-wasms:
 	make -C soroban-test-wasms regenerate-test-wasms
 
 reobserve-tests:
-	UPDATE_OBSERVATIONS=1 cargo test -p soroban-env-host --features testutils --profile test-opt
+	UPDATE_OBSERVATIONS=1 cargo test --locked -p soroban-env-host --features testutils --profile test-opt
 
 publish:
 	cargo workspaces publish --all --force '*' --from-git --yes

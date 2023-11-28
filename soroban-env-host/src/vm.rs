@@ -37,6 +37,8 @@ use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
 impl wasmi::core::HostError for HostError {}
 
+const MAX_VM_ARGS: usize = 32;
+
 /// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
 /// [Vm]s may be held in a single [Host], and each contains a single WASM module
 /// instantiation.
@@ -186,6 +188,25 @@ impl Vm {
         }
     }
 
+    fn check_max_args(host: &Host, m: &Module) -> Result<(), HostError> {
+        for e in m.exports() {
+            match e.ty() {
+                wasmi::ExternType::Func(f) => {
+                    if f.params().len() > MAX_VM_ARGS || f.results().len() > MAX_VM_ARGS {
+                        return Err(host.err(
+                            ScErrorType::WasmVm,
+                            ScErrorCode::InvalidInput,
+                            "Too many arguments or results in wasm export",
+                            &[],
+                        ));
+                    }
+                }
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+
     /// Constructs a new instance of a [Vm] within the provided [Host],
     /// establishing a new execution context for a contract identified by
     /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
@@ -236,6 +257,7 @@ impl Vm {
             host.map_err(Module::new(&engine, module_wasm_code))?
         };
 
+        Self::check_max_args(host, &module)?;
         Self::check_meta_section(host, &module)?;
 
         let mut store = Store::new(&engine, host.clone());
@@ -335,6 +357,15 @@ impl Vm {
             }
             Some(e) => e,
         };
+
+        if inputs.len() > MAX_VM_ARGS {
+            return Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidInput,
+                "Too many arguments in wasm invocation",
+                &[func_sym.to_val()],
+            ));
+        }
 
         // call the function
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
