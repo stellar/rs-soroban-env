@@ -33,12 +33,6 @@ regenerate-test-wasms:
 reobserve-tests:
 	UPDATE_OBSERVATIONS=1 cargo test --locked -p soroban-env-host --features testutils --profile test-opt
 
-publish:
-	cargo workspaces publish --locked --all --force '*' --from-git --yes
-
-publish-dry-run:
-	./publish-dry-run.sh
-
 # Requires: `cargo install cargo-llvm-cov`
 coverage:
 	rm -f lcov.info
