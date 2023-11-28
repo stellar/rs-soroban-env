@@ -863,7 +863,7 @@ impl AuthorizationManager {
     }
 
     // metering: covered by components
-    fn maybe_authorize_as_invoker_contract(
+    fn maybe_check_invoker_contract_auth(
         &self,
         host: &Host,
         address: AddressObject,
@@ -1094,7 +1094,7 @@ impl AuthorizationManager {
         function: AuthorizedFunction,
     ) -> Result<(), HostError> {
         // First check the InvokerContractAuthorizationTrackers
-        if self.maybe_authorize_as_invoker_contract(host, address, &function)? {
+        if self.maybe_check_invoker_contract_auth(host, address, &function)? {
             return Ok(());
         }
         // Then check the AccountAuthorizationTrackers

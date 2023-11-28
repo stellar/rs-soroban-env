@@ -207,7 +207,7 @@ pub(crate) fn check_account_authentication(
     // of future-proofing against changed assumptions.
     let Some(threshold) = account.thresholds.0.get(ThresholdIndexes::Med as usize) else {
         return Err(host.error(
-            ContractError::AuthenticationError.into(),
+            (ScErrorType::Auth, ScErrorCode::InternalError).into(),
             "unexpected thresholds-array size",
             &[],
         ));
