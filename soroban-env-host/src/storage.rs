@@ -9,14 +9,12 @@
 
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{ContractDataDurability, ScErrorCode, ScErrorType};
-use soroban_env_common::{Env, Val};
-
-use crate::budget::Budget;
-use crate::host::ledger_info_helper::get_key_durability;
-use crate::xdr::{LedgerEntry, LedgerKey};
-use crate::Host;
-use crate::{host::metered_map::MeteredOrdMap, HostError};
+use crate::{
+    budget::Budget,
+    host::{ledger_info_helper::get_key_durability, metered_map::MeteredOrdMap},
+    xdr::{ContractDataDurability, LedgerEntry, LedgerKey, ScErrorCode, ScErrorType},
+    Env, Error, Host, HostError, Val,
+};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type EntryWithLiveUntil = (Rc<LedgerEntry>, Option<u32>);
@@ -422,8 +420,18 @@ impl Storage {
             ));
         }
 
-        let mut new_live_until =
-            host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
+        let mut new_live_until = host.with_ledger_info(|li| {
+            li.sequence_number.checked_add(extend_to).ok_or_else(|| {
+                // overflowing here means a misconfiguration of the network (the
+                // ttl is too large), in which case we immediately flag it as an
+                // unrecoverable `InternalError`, even though the source is
+                // external to the host.
+                HostError::from(Error::from_type_and_code(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                ))
+            })
+        })?;
 
         if new_live_until > host.max_live_until_ledger()? {
             if let Some(durability) = get_key_durability(&key) {
