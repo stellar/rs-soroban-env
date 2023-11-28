@@ -1,8 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation}, Error,
-    contract, contractimpl, contracttype, symbol_short, vec, Address, Env, IntoVal, Vec,
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
+    contract, contractimpl, contracttype, symbol_short, vec, Address, Env, Error, IntoVal, Vec,
 };
 
 #[contract]
@@ -60,11 +60,11 @@ impl AuthContract {
         addr.require_auth();
     }
 
-    pub fn invoker_auth_fn(env: Env, tree: TreeNode) {
-        // Build auth entries from children - tree root auth works
+    pub fn invoker_auth_fn(env: Env, tree: TreeNode, auth_tree: TreeNode) {
+        // Build auth entries from `auth_tree` children - tree root auth works
         // automatically.
         let mut auth_entries = vec![&env];
-        for child in tree.children.iter() {
+        for child in auth_tree.children.iter() {
             auth_entries.push_back(tree_to_invoker_contract_auth(&env, &child));
         }
         env.authorize_as_current_contract(auth_entries);
@@ -85,6 +85,58 @@ impl AuthContract {
             auth_entries.push_back(tree_to_invoker_contract_auth(&env, &child));
         }
         env.authorize_as_current_contract(auth_entries);
+    }
+
+    // Function for specifically testing that invoker contract auth is never reused,
+    // whether the contract call fails or not.
+    // `failing_tree` should be different from `tree` (so that `tree` auth is not
+    // suitable for it).
+    // Note: the contract could build both trees itself, we only pass them externally
+    // for convenience (there are test helpers for building these trees).
+    pub fn invoker_auth_no_reuse(env: Env, tree: TreeNode, failing_tree: TreeNode) {
+        let curr_address = env.current_contract_address();
+        let mut auth_entries = vec![&env];
+        for child in tree.children.iter() {
+            auth_entries.push_back(tree_to_invoker_contract_auth(&env, &child));
+        }
+        env.authorize_as_current_contract(auth_entries.clone());
+        // Make sure authorization succeeds for the `tree`.
+        assert!(env
+            .try_invoke_contract::<(), Error>(
+                &tree.contract,
+                &symbol_short!("tree_fn"),
+                (vec![&env, curr_address.clone()], tree.clone()).into_val(&env),
+            )
+            .is_ok());
+        // Now the identical call should fail because auth is consumed.
+        assert!(env
+            .try_invoke_contract::<(), Error>(
+                &tree.contract,
+                &symbol_short!("tree_fn"),
+                (vec![&env, curr_address.clone()], tree.clone()).into_val(&env),
+            )
+            .is_err());
+
+        // Authorize the next call again.
+        env.authorize_as_current_contract(auth_entries.clone());
+        let curr_address = env.current_contract_address();
+        // Use the `failing_tree` that requires different auth entries.
+        assert!(env
+            .try_invoke_contract::<(), Error>(
+                &tree.contract,
+                &symbol_short!("tree_fn"),
+                (vec![&env, curr_address.clone()], failing_tree).into_val(&env),
+            )
+            .is_err());
+        // The 'valid' call should still fail because auth entries are
+        // consumed even by the failing invocations.
+        assert!(env
+            .try_invoke_contract::<(), Error>(
+                &tree.contract,
+                &symbol_short!("tree_fn"),
+                (vec![&env, curr_address.clone()], tree.clone()).into_val(&env),
+            )
+            .is_err());
     }
 
     pub fn store(env: Env, addresses: Vec<Address>) {
@@ -133,11 +185,7 @@ impl AuthContract {
             (address.clone(), 123_u32).into_val(&env),
         );
         // Call `allow` on the account contract.
-        env.invoke_contract::<()>(
-            &address,
-            &symbol_short!("allow"),
-            ().into_val(&env),
-        );
+        env.invoke_contract::<()>(&address, &symbol_short!("allow"), ().into_val(&env));
         env.invoke_contract::<()>(
             &contract_address,
             &symbol_short!("do_auth"),

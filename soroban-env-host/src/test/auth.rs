@@ -278,12 +278,16 @@ impl AuthTest {
         }
 
         self.host.set_authorization_entries(contract_auth).unwrap();
-        assert_eq!(
-            self.host
-                .call(contract_address.into(), fn_name, args.into())
-                .is_ok(),
-            success
-        );
+        let res = self
+            .host
+            .call(contract_address.into(), fn_name, args.into());
+        if res.is_err() && success {
+            eprintln!(
+                "invocation failed while success expected, error: {:?}",
+                res.clone().err().unwrap()
+            );
+        }
+        assert_eq!(res.is_ok(), success);
     }
 
     fn read_nonce_live_until(&self, address: &Address, nonce: i64) -> Option<u32> {
@@ -370,6 +374,28 @@ impl AuthTest {
             .call(contract_address.clone().into(), fn_name, args.into())
             .unwrap();
         self.host.get_recorded_auth_payloads().unwrap()
+    }
+
+    fn test_recording_and_enforcing_no_auth(
+        &mut self,
+        contract_address: Address,
+        fn_name: Symbol,
+        args: HostVec,
+        success: bool,
+    ) {
+        self.host.switch_to_recording_auth(true).unwrap();
+        assert_eq!(
+            self.host
+                .call(
+                    contract_address.clone().into(),
+                    fn_name,
+                    args.clone().into()
+                )
+                .is_ok(),
+            success
+        );
+
+        self.test_enforcing(contract_address.clone(), fn_name, args, vec![], success);
     }
 
     fn key_to_sc_address(&self, key: &SigningKey) -> ScAddress {
@@ -1647,20 +1673,101 @@ fn test_invoker_subcontract_auth() {
     );
 
     let tree = test.convert_setup_tree(&setup);
-    let args = test_vec![&test.host, tree];
+    let args = test_vec![&test.host, &tree, &tree];
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
-    assert_eq!(
-        test.run_recording(&test.contracts[5], fn_name, args.clone(), true),
-        vec![]
-    );
-
-    test.test_enforcing(
+    test.test_recording_and_enforcing_no_auth(
         test.contracts[5].clone(),
         fn_name,
         args.clone(),
-        vec![],
         true,
-    )
+    );
+}
+
+#[test]
+fn test_invoker_subcontract_auth_with_duplicates() {
+    let mut test = AuthTest::setup(0, 6);
+
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                ],
+            ),
+        ],
+    );
+
+    let tree = test.convert_setup_tree(&setup);
+    let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
+    test.test_recording_and_enforcing_no_auth(
+        test.contracts[5].clone(),
+        fn_name,
+        test_vec![&test.host, &tree, &tree],
+        true,
+    );
+    // Remove the top-level duplicate node from contract's authorizations - the call
+    // must fail now.
+    let incomplete_tree = test.convert_setup_tree(&SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![SetupNode::new(
+            &test.contracts[1],
+            vec![true],
+            vec![
+                SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                SetupNode::new(&test.contracts[2], vec![true], vec![]),
+            ],
+        )],
+    ));
+    test.test_recording_and_enforcing_no_auth(
+        test.contracts[5].clone(),
+        fn_name,
+        test_vec![&test.host, &tree, &incomplete_tree],
+        false,
+    );
+    // Remove the inner duplicate node from contract's authorizations - the call
+    // must fail now.
+    let incomplete_tree = test.convert_setup_tree(&SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                    // Missing one auth here.
+                ],
+            ),
+        ],
+    ));
+    test.test_recording_and_enforcing_no_auth(
+        test.contracts[5].clone(),
+        fn_name,
+        test_vec![&test.host, &tree, &incomplete_tree],
+        false,
+    );
 }
 
 #[test]
@@ -1676,11 +1783,11 @@ fn test_invoker_subcontract_with_gaps() {
     );
 
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
-
+    let top_gap_tree = test.convert_setup_tree(&top_gap_setup);
     test.test_enforcing(
         test.contracts[3].clone(),
         fn_name,
-        test_vec![&test.host, test.convert_setup_tree(&top_gap_setup)],
+        test_vec![&test.host, &top_gap_tree, &top_gap_tree],
         vec![],
         true,
     );
@@ -1696,13 +1803,158 @@ fn test_invoker_subcontract_with_gaps() {
             vec![SetupNode::new(&test.contracts[2], vec![true], vec![])],
         )],
     );
-
+    let mid_gap_tree = test.convert_setup_tree(&mid_gap_setup);
     test.test_enforcing(
         test.contracts[3].clone(),
         fn_name,
-        test_vec![&test.host, test.convert_setup_tree(&mid_gap_setup)],
+        test_vec![&test.host, &mid_gap_tree, &mid_gap_tree],
         vec![],
         false,
+    );
+}
+
+#[test]
+fn test_invoker_subcontract_auth_with_rollbacks() {
+    let mut test = AuthTest::setup(0, 7);
+
+    // Setup the call tree that allows contract failures at different levels.
+    let call_setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![
+            // Allow auth failure right after the root call (root call itself is authorized by
+            // default).
+            SetupNode::new_try_call(&test.contracts[1], vec![true], vec![]),
+            SetupNode::new(&test.contracts[2], vec![true], vec![]),
+            // Add a nested call that might fail in sub-calls.
+            SetupNode::new_try_call(
+                &test.contracts[3],
+                vec![true],
+                vec![SetupNode::new(&test.contracts[4], vec![true], vec![])],
+            ),
+            // Add a nested call that is expected to succeed.
+            SetupNode::new(
+                &test.contracts[3],
+                vec![true],
+                vec![
+                    // Allow failure deeper in the stack.
+                    SetupNode::new_try_call(&test.contracts[4], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[5], vec![true], vec![]),
+                ],
+            ),
+        ],
+    );
+
+    let call_tree = test.convert_setup_tree(&call_setup);
+    let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
+
+    // Authorize the whole tree - should succeed.
+    test.test_recording_and_enforcing_no_auth(
+        test.contracts[6].clone(),
+        fn_name,
+        test_vec![&test.host, &call_tree, &call_tree],
+        true,
+    );
+    // Skip authorizing the fallible calls - this should still succeed.
+    let tree_without_optional_auth = test.convert_setup_tree(&SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![
+            SetupNode::new(&test.contracts[2], vec![true], vec![]),
+            // Note, that this should be matched to try_call for contract 3 first, then
+            // rolled back due to failure, then used again for 3->5 auth.
+            SetupNode::new(
+                &test.contracts[3],
+                vec![true],
+                vec![SetupNode::new(&test.contracts[5], vec![true], vec![])],
+            ),
+        ],
+    ));
+    test.test_recording_and_enforcing_no_auth(
+        test.contracts[6].clone(),
+        fn_name,
+        test_vec![&test.host, &call_tree, &tree_without_optional_auth],
+        true,
+    );
+    // Authorize only fallible calls, but not infallible - now invocation should fail.
+    let tree_without_mandatory_auth = test.convert_setup_tree(&SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![
+            // Allow auth failure right after the root call (root call itself is authorized by
+            // default).
+            SetupNode::new(&test.contracts[1], vec![true], vec![]),
+            // Add a nested call that might fail in sub-calls.
+            SetupNode::new(
+                &test.contracts[3],
+                vec![true],
+                vec![SetupNode::new(&test.contracts[4], vec![true], vec![])],
+            ),
+        ],
+    ));
+    test.test_recording_and_enforcing_no_auth(
+        test.contracts[6].clone(),
+        fn_name,
+        test_vec![&test.host, &call_tree, &tree_without_mandatory_auth],
+        false,
+    );
+    // Add a mix of fallible and mandatory auth, with mandatory auth missing.
+    let tree_with_incorrect_auth = test.convert_setup_tree(&SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![
+            // Allow auth failure right after the root call (root call itself is authorized by
+            // default).
+            SetupNode::new(&test.contracts[1], vec![true], vec![]),
+            SetupNode::new(&test.contracts[2], vec![true], vec![]),
+            // Add a nested call that is expected to succeed.
+            SetupNode::new(
+                &test.contracts[3],
+                vec![true],
+                vec![
+                    // Allow failure deeper in the stack.
+                    SetupNode::new_try_call(&test.contracts[4], vec![true], vec![]),
+                    // Incorrect auth - this needs to be contract 5 to pass.
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                ],
+            ),
+        ],
+    ));
+    test.test_recording_and_enforcing_no_auth(
+        test.contracts[6].clone(),
+        fn_name,
+        test_vec![&test.host, &call_tree, &tree_with_incorrect_auth],
+        false,
+    );
+}
+
+#[test]
+fn test_invoker_subcontract_auth_is_not_reused() {
+    let mut test = AuthTest::setup(0, 4);
+
+    let call_tree = SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![SetupNode::new(&test.contracts[1], vec![true], vec![])],
+    );
+    let failing_tree = SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![SetupNode::new(&test.contracts[2], vec![true], vec![])],
+    );
+
+    let args = test_vec![
+        &test.host,
+        test.convert_setup_tree(&call_tree),
+        test.convert_setup_tree(&failing_tree)
+    ];
+    let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_no_reuse").unwrap();
+
+    test.test_recording_and_enforcing_no_auth(
+        test.contracts[3].clone(),
+        fn_name,
+        args.clone(),
+        true,
     );
 }
 
@@ -1737,16 +1989,10 @@ fn test_invoker_subcontract_auth_without_subcontract_calls() {
     let tree = test.convert_setup_tree(&setup);
     let args = test_vec![&test.host, tree];
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn_no_call").unwrap();
-    assert_eq!(
-        test.run_recording(&test.contracts[5], fn_name, args.clone(), true),
-        vec![]
-    );
-
-    test.test_enforcing(
+    test.test_recording_and_enforcing_no_auth(
         test.contracts[5].clone(),
         fn_name,
         args.clone(),
-        vec![],
         true,
     );
 }
