@@ -212,7 +212,7 @@ impl Host {
             drop(context_guard);
             Err(self.err(
                 ScErrorType::Context,
-                ScErrorCode::MissingValue,
+                ScErrorCode::InternalError,
                 "no contract running",
                 &[],
             ))
@@ -243,7 +243,7 @@ impl Host {
             drop(context_guard);
             Err(self.err(
                 ScErrorType::Context,
-                ScErrorCode::MissingValue,
+                ScErrorCode::InternalError,
                 "no contract running",
                 &[],
             ))
