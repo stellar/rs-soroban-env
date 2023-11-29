@@ -1,5 +1,5 @@
 use crate::{
-    test::wasm_util,
+    testutils::wasm,
     xdr::{ContractCostType, ScErrorCode, ScErrorType, ScVal},
     Compare, Env, Host, HostError, Object, Symbol, Tag, TryFromVal, U32Val, Val, VecObject,
 };
@@ -436,7 +436,7 @@ fn instantiate_oversized_vec_from_slice() -> Result<(), HostError> {
 #[test]
 fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
     let wasm_short =
-        wasm_util::wasm_module_with_large_vector_from_linear_memory(100, U32Val::from(7).to_val());
+        wasm::wasm_module_with_large_vector_from_linear_memory(100, U32Val::from(7).to_val());
 
     // sanity check, constructing a short vec is ok
     let host = observe_host!(Host::test_host_with_recording_footprint());
@@ -455,10 +455,8 @@ fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
     );
 
     // constructing a big map will cause budget limit exceeded error
-    let wasm_long = wasm_util::wasm_module_with_large_vector_from_linear_memory(
-        30000,
-        U32Val::from(7).to_val(),
-    );
+    let wasm_long =
+        wasm::wasm_module_with_large_vector_from_linear_memory(60000, U32Val::from(7).to_val());
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
     host.budget_ref().reset_default()?;
@@ -475,14 +473,14 @@ fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
             .get_tracker(ContractCostType::MemAlloc)?
             .1
             .unwrap(),
-        240000
+        480000
     );
     assert_ge!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemCpy)?
             .1
             .unwrap(),
-        240000
+        480000
     );
     assert!(HostError::result_matches_err(
         res,

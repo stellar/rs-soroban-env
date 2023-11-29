@@ -1,6 +1,6 @@
 use crate::{
     budget::AsBudget,
-    test::wasm_util,
+    testutils::wasm,
     xdr::{ContractCostType, ScBytes, ScError, ScErrorCode, ScErrorType, ScVal, ScVec, WriteXdr},
     BytesObject, Compare, Env, EnvBase, Error, Host, HostError, Symbol, TryFromVal, U32Val, Val,
     DEFAULT_XDR_RW_LIMITS,
@@ -262,7 +262,7 @@ fn instantiate_oversized_bytes_from_slice() -> Result<(), HostError> {
 
 #[test]
 fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
-    let wasm_short = wasm_util::wasm_module_with_large_bytes_from_linear_memory(100, 7);
+    let wasm_short = wasm::wasm_module_with_large_bytes_from_linear_memory(100, 7);
 
     // sanity check, constructing a short vec is ok
     let host = observe_host!(Host::test_host_with_recording_footprint());
@@ -281,7 +281,7 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
     );
 
     // constructing a big map will cause budget limit exceeded error
-    let wasm_long = wasm_util::wasm_module_with_large_bytes_from_linear_memory(240000, 7);
+    let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(480000, 7);
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
     host.budget_ref().reset_default()?;
@@ -298,14 +298,14 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
             .get_tracker(ContractCostType::MemAlloc)?
             .1
             .unwrap(),
-        240000
+        480000
     );
     assert_ge!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemCpy)?
             .1
             .unwrap(),
-        240000
+        480000
     );
     assert!(HostError::result_matches_err(
         res,

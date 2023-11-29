@@ -1,5 +1,5 @@
 use crate::{
-    test::wasm_util,
+    testutils::wasm,
     xdr::{
         AccountId, ContractCostType, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey,
         ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal, ScVec, Uint256, VecM,
@@ -385,6 +385,18 @@ fn initialization_invalid() -> Result<(), HostError> {
         .map_new_from_slices(&["a", "a"], &[1u32.into(), 2u32.into()])
         .is_err());
 
+    // large map key
+    let key: String = ('0'..'9').chain('a'..'z').collect();
+    let buf = vec![1; 32];
+    let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());
+    let val = host.to_host_val(&scv_bytes)?;
+    let res = host.map_new_from_slices(&[key.as_str()], &[val]);
+    // conversion error from symbol
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Value, ScErrorCode::InvalidInput)
+    ));
+
     // large map from slices
     let buf = vec![0; 7_000_000];
     let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());
@@ -408,7 +420,7 @@ fn initialization_invalid() -> Result<(), HostError> {
 #[test]
 fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
     let wasm_short =
-        wasm_util::wasm_module_with_large_map_from_linear_memory(100, U32Val::from(7).to_val());
+        wasm::wasm_module_with_large_map_from_linear_memory(100, U32Val::from(7).to_val());
 
     // sanity check, constructing a short map is ok
     let host = observe_host!(Host::test_host_with_recording_footprint());
@@ -428,7 +440,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
 
     // constructing a big map will cause budget limit exceeded error
     let wasm_long =
-        wasm_util::wasm_module_with_large_map_from_linear_memory(10000, U32Val::from(7).to_val());
+        wasm::wasm_module_with_large_map_from_linear_memory(20000, U32Val::from(7).to_val());
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
     host.budget_ref().reset_default()?;
@@ -445,14 +457,14 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
             .get_tracker(ContractCostType::MemAlloc)?
             .1
             .unwrap(),
-        240000
+        480000
     );
     assert_ge!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemCpy)?
             .1
             .unwrap(),
-        240000
+        480000
     );
     assert!(HostError::result_matches_err(
         res,
