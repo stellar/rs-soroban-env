@@ -134,6 +134,16 @@ impl Frame {
             Frame::TestContract(tc) => Some(&tc.id),
         }
     }
+
+    fn instance(&self) -> Option<&ScContractInstance> {
+        match self {
+            Frame::ContractVM { instance, .. } => Some(instance),
+            Frame::HostFunction(_) => None,
+            Frame::StellarAssetContract(_, _, _, instance) => Some(instance),
+            #[cfg(any(test, feature = "testutils"))]
+            Frame::TestContract(tc) => Some(&tc.instance),
+        }
+    }
 }
 
 impl Host {
@@ -882,23 +892,18 @@ impl Host {
         if ctx.storage.is_some() {
             return Ok(());
         }
-        let storage_map = match &ctx.frame {
-            Frame::ContractVM { instance, .. } => &instance.storage,
-            Frame::HostFunction(_) => {
-                return Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InvalidAction,
-                    "can't access instance storage from host function",
-                    &[],
-                ));
-            }
-            Frame::StellarAssetContract(_, _, _, instance) => &instance.storage,
-            #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(t) => &t.instance.storage,
+
+        let Some(instance) = ctx.frame.instance() else {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "access to instance in frame without instance",
+                &[],
+            ));
         };
 
         ctx.storage = Some(InstanceStorageMap::from_map(
-            storage_map.as_ref().map_or_else(
+            instance.storage.as_ref().map_or_else(
                 || Ok(vec![]),
                 |m| {
                     m.iter()
