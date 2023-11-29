@@ -124,6 +124,18 @@ pub(crate) enum Frame {
     TestContract(TestContractFrame),
 }
 
+impl Frame {
+    fn contract_id(&self) -> Option<&Hash> {
+        match self {
+            Frame::ContractVM { vm, .. } => Some(&vm.contract_id),
+            Frame::HostFunction(_) => None,
+            Frame::StellarAssetContract(id, ..) => Some(id),
+            #[cfg(any(test, feature = "testutils"))]
+            Frame::TestContract(tc) => Some(&tc.id),
+        }
+    }
+}
+
 impl Host {
     /// Returns if the host currently has a frame on the stack.
     ///
@@ -526,13 +538,10 @@ impl Host {
     /// non-contract frame on top.
     pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame_opt(|opt_frame| match opt_frame {
-            Some(frame) => match frame {
-                Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
-                Frame::HostFunction(_) => Ok(None),
-                Frame::StellarAssetContract(id, ..) => Ok(Some(id.metered_clone(self)?)),
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
-            },
+            Some(frame) => frame
+                .contract_id()
+                .map(|id| id.metered_clone(self))
+                .transpose(),
             None => Ok(None),
         })
     }
@@ -654,23 +663,27 @@ impl Host {
                 &[func.to_val()],
             ));
         }
+
         if !matches!(reentry_mode, ContractReentryMode::Allowed) {
-            let mut is_last_non_host_frame = true;
-            for ctx in self.try_borrow_context_stack()?.iter().rev() {
-                let exist_id = match &ctx.frame {
-                    Frame::ContractVM { vm, .. } => &vm.contract_id,
-                    Frame::StellarAssetContract(id, ..) => id,
-                    #[cfg(any(test, feature = "testutils"))]
-                    Frame::TestContract(tc) => &tc.id,
-                    Frame::HostFunction(_) => continue,
-                };
-                if id == exist_id {
-                    if matches!(reentry_mode, ContractReentryMode::SelfAllowed)
-                        && is_last_non_host_frame
-                    {
-                        is_last_non_host_frame = false;
-                        continue;
-                    }
+            let reentry_distance = self
+                .try_borrow_context_stack()?
+                .iter()
+                .rev()
+                .filter_map(|c| c.frame.contract_id())
+                .position(|caller| caller == id);
+
+            match (reentry_mode, reentry_distance) {
+                // Non-reentrant calls, or calls in Allowed mode,
+                // or immediate-reentry calls in SelfAllowed mode
+                // are all acceptable.
+                (_, None)
+                | (ContractReentryMode::Allowed, _)
+                | (ContractReentryMode::SelfAllowed, Some(0)) => (),
+
+                // But any non-immediate-reentry in SelfAllowed mode,
+                // or any reentry at all in Prohibited mode, are errors.
+                (ContractReentryMode::SelfAllowed, Some(_))
+                | (ContractReentryMode::Prohibited, Some(_)) => {
                     return Err(self.err(
                         ScErrorType::Context,
                         ScErrorCode::InvalidAction,
@@ -678,7 +691,6 @@ impl Host {
                         &[],
                     ));
                 }
-                is_last_non_host_frame = false;
             }
         }
 
