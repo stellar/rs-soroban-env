@@ -1,28 +1,23 @@
-use soroban_env_common::{
-    xdr::{ContractIdPreimage, ScAddress, ScContractInstance, ScErrorCode, ScErrorType},
-    AddressObject,
-};
-
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
     err,
+    host::{
+        metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
+        prng::Prng,
+    },
     storage::{InstanceStorageMap, StorageMap},
-    xdr::{ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
-    Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
-    DEFAULT_HOST_DEPTH_LIMIT,
+    xdr::{
+        ContractExecutable, ContractIdPreimage, Hash, HostFunction, HostFunctionType, ScAddress,
+        ScContractInstance, ScErrorCode, ScErrorType, ScVal,
+    },
+    AddressObject, Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
+    Vm, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
 #[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
 use std::rc::Rc;
-
-use crate::Vm;
-
-use super::{
-    metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
-    prng::Prng,
-};
 
 /// Determines the re-entry mode for calling a contract.
 pub(crate) enum ContractReentryMode {
