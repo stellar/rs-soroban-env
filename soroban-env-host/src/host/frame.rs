@@ -826,7 +826,7 @@ impl Host {
     }
 
     // Notes on metering: covered by the called components.
-    fn invoke_function_raw(&self, hf: HostFunction) -> Result<Val, HostError> {
+    fn invoke_function_and_return_val(&self, hf: HostFunction) -> Result<Val, HostError> {
         let hf_type = hf.discriminant();
         match hf {
             HostFunction::InvokeContract(invoke_args) => {
@@ -874,7 +874,7 @@ impl Host {
 
     // Notes on metering: covered by the called components.
     pub fn invoke_function(&self, hf: HostFunction) -> Result<ScVal, HostError> {
-        let rv = self.invoke_function_raw(hf)?;
+        let rv = self.invoke_function_and_return_val(hf)?;
         self.from_host_val(rv)
     }
 
