@@ -828,9 +828,10 @@ impl Host {
     // Notes on metering: covered by the called components.
     fn invoke_function_and_return_val(&self, hf: HostFunction) -> Result<Val, HostError> {
         let hf_type = hf.discriminant();
+        let frame = Frame::HostFunction(hf_type);
         match hf {
             HostFunction::InvokeContract(invoke_args) => {
-                self.with_frame(Frame::HostFunction(hf_type), || {
+                self.with_frame(frame, || {
                     // Metering: conversions to host objects are covered.
                     let ScAddress::Contract(ref contract_id) = invoke_args.contract_address else {
                         return Err(self.err(
@@ -853,22 +854,19 @@ impl Host {
                     )
                 })
             }
-            HostFunction::CreateContract(args) => {
-                self.with_frame(Frame::HostFunction(hf_type), || {
-                    let deployer: Option<AddressObject> = match &args.contract_id_preimage {
-                        ContractIdPreimage::Address(preimage_from_addr) => Some(
-                            self.add_host_object(preimage_from_addr.address.metered_clone(self)?)?,
-                        ),
-                        ContractIdPreimage::Asset(_) => None,
-                    };
-                    self.create_contract_internal(deployer, args)
-                        .map(<Val>::from)
-                })
-            }
-            HostFunction::UploadContractWasm(wasm) => self
-                .with_frame(Frame::HostFunction(hf_type), || {
-                    self.upload_contract_wasm(wasm.to_vec()).map(<Val>::from)
-                }),
+            HostFunction::CreateContract(args) => self.with_frame(frame, || {
+                let deployer: Option<AddressObject> = match &args.contract_id_preimage {
+                    ContractIdPreimage::Address(preimage_from_addr) => {
+                        Some(self.add_host_object(preimage_from_addr.address.metered_clone(self)?)?)
+                    }
+                    ContractIdPreimage::Asset(_) => None,
+                };
+                self.create_contract_internal(deployer, args)
+                    .map(<Val>::from)
+            }),
+            HostFunction::UploadContractWasm(wasm) => self.with_frame(frame, || {
+                self.upload_contract_wasm(wasm.to_vec()).map(<Val>::from)
+            }),
         }
     }
 
