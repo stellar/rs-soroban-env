@@ -1,14 +1,13 @@
 use crate::{
-    xdr::{ScError, ScVal},
-    Env, Host, HostError, Val, DEFAULT_XDR_RW_LIMITS,
+    budget::AsBudget,
+    testutils::wasm,
+    xdr::{ContractCostType, ScBytes, ScError, ScErrorCode, ScErrorType, ScVal, ScVec, WriteXdr},
+    BytesObject, Compare, Env, EnvBase, Error, Host, HostError, Symbol, TryFromVal, U32Val, Val,
+    DEFAULT_XDR_RW_LIMITS,
 };
-use soroban_env_common::{
-    xdr::{ScBytes, ScErrorCode, ScErrorType, ScVec, WriteXdr},
-    Compare, EnvBase, Error,
-};
-
-use crate::Symbol;
+use more_asserts::assert_ge;
 use soroban_test_wasms::LINEAR_MEMORY;
+use std::ops::Deref;
 
 #[test]
 fn bytes_suite_of_tests() -> Result<(), HostError> {
@@ -164,8 +163,6 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 
 #[test]
 fn linear_memory_operations() -> Result<(), HostError> {
-    use soroban_env_common::BytesObject;
-
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY);
     // tests bytes_new_from_linear_memory
@@ -198,6 +195,122 @@ fn linear_memory_operations() -> Result<(), HostError> {
             core::cmp::Ordering::Equal
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_bytes_out_of_cpu_budget() -> Result<(), HostError> {
+    let host = observe_host!(Host::default());
+    host.as_budget().reset_unlimited_cpu()?;
+    let mut b1 = host.bytes_new_from_slice(&[2; 1])?;
+    loop {
+        let res = host.bytes_append(b1, b1.clone());
+        if res.is_err() {
+            assert!(HostError::result_matches_err(
+                res,
+                (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+            ));
+            break;
+        }
+        b1 = res?;
+    }
+    assert!(host.budget_ref().mem_limit_exceeded()?);
+    Ok(())
+}
+
+#[test]
+fn test_bytes_out_of_mem_budget() -> Result<(), HostError> {
+    let host = observe_host!(Host::default());
+    host.as_budget().reset_unlimited_mem()?;
+    let mut b1 = host.bytes_new_from_slice(&[2; 1])?;
+    loop {
+        let res = host.bytes_append(b1, b1.clone());
+        if res.is_err() {
+            assert!(HostError::result_matches_err(
+                res,
+                (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+            ));
+            break;
+        }
+        b1 = res?;
+    }
+    assert!(host.budget_ref().cpu_limit_exceeded()?);
+    Ok(())
+}
+
+#[test]
+fn instantiate_oversized_bytes_from_slice() -> Result<(), HostError> {
+    use crate::EnvBase;
+    let host = observe_host!(Host::default());
+
+    let buf = vec![0; 42_000_000];
+    let res = host.bytes_new_from_slice(&buf);
+    assert_eq!(
+        host.budget_ref()
+            .get_tracker(ContractCostType::MemAlloc)?
+            .1
+            .unwrap(),
+        42_000_000
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
+    let wasm_short = wasm::wasm_module_with_large_bytes_from_linear_memory(100, 7);
+
+    // sanity check, constructing a short vec is ok
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let contract_id_obj = host.register_test_contract_wasm(wasm_short.as_slice());
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    assert!(res.is_ok());
+    assert_eq!(
+        host.bytes_len(BytesObject::try_from_val(host.deref(), &res?).unwrap())?
+            .to_val()
+            .get_payload(),
+        U32Val::from(100).to_val().get_payload()
+    );
+
+    // constructing a big map will cause budget limit exceeded error
+    let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(480000, 7);
+    host.budget_ref().reset_unlimited()?;
+    let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
+    host.budget_ref().reset_default()?;
+    let res = host.call(
+        contract_id_obj2,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    // This currently won't pass VmInstantiation, in the future if VmInstantiation cost goes down, we need
+    // to adjust the maximum length.
+    // Here we check the mem inputs match expectation.
+    assert_ge!(
+        host.budget_ref()
+            .get_tracker(ContractCostType::MemAlloc)?
+            .1
+            .unwrap(),
+        480000
+    );
+    assert_ge!(
+        host.budget_ref()
+            .get_tracker(ContractCostType::MemCpy)?
+            .1
+            .unwrap(),
+        480000
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
 
     Ok(())
 }

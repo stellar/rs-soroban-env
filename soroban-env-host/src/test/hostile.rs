@@ -460,7 +460,7 @@ fn instantiate_with_page_and_segment_count(
     num_sgmts: u32,
     seg_size: u32,
 ) -> Result<crate::AddressObject, HostError> {
-    let wasm = wasm_util::wasm_module_with_multiple_data_sections(num_pages, num_sgmts, seg_size);
+    let wasm = wasm_util::wasm_module_with_multiple_data_segments(num_pages, num_sgmts, seg_size);
     host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),

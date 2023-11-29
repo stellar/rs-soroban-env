@@ -1,13 +1,12 @@
-use core::cmp::Ordering;
-use std::time::Instant;
-
-use soroban_env_common::{xdr::ScVal, Compare, Symbol, Tag, TryFromVal, U32Val};
-use soroban_test_wasms::LINEAR_MEMORY;
-
 use crate::{
-    xdr::{ScErrorCode, ScErrorType},
-    Env, Host, HostError, Object, Val,
+    testutils::wasm,
+    xdr::{ContractCostType, ScErrorCode, ScErrorType, ScVal},
+    Compare, Env, Host, HostError, Object, Symbol, Tag, TryFromVal, U32Val, Val, VecObject,
 };
+use core::cmp::Ordering;
+use more_asserts::assert_ge;
+use soroban_test_wasms::LINEAR_MEMORY;
+use std::{ops::Deref, time::Instant};
 
 #[test]
 fn vec_as_seen_by_host() -> Result<(), HostError> {
@@ -361,7 +360,17 @@ fn linear_memory_operations() -> Result<(), HostError> {
         let args = host.vec_new()?;
         let res = host.call(
             id_obj,
-            Symbol::try_from_val(&*host, &"vec_mem_bad").unwrap(),
+            Symbol::try_from_val(&*host, &"vec_unpack_buf_too_short").unwrap(),
+            args,
+        );
+        assert!(res.is_err());
+        assert!(res.unwrap_err().error.is_code(ScErrorCode::UnexpectedSize));
+    }
+    {
+        let args = host.vec_new()?;
+        let res = host.call(
+            id_obj,
+            Symbol::try_from_val(&*host, &"vec_unpack_buf_too_long").unwrap(),
             args,
         );
         assert!(res.is_err());
@@ -401,4 +410,82 @@ fn large_vec_exceeds_budget() {
         i,
         (Instant::now() - start).as_secs_f64()
     );
+}
+
+#[test]
+fn instantiate_oversized_vec_from_slice() -> Result<(), HostError> {
+    use crate::EnvBase;
+    let host = observe_host!(Host::default());
+
+    let buf = vec![0; 7_000_000];
+    let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());
+    let bytes_val = host.to_host_val(&scv_bytes)?;
+
+    let vals = vec![bytes_val; 5];
+    let vec = host.vec_new_from_slice(&vals.as_slice())?;
+    let res = host.from_host_val(vec.to_val());
+    // This is actually Budget::ExceededLimit, but ScVal::try_from_val converts
+    // he error to a ConversionError. We have an issue for it https://github.com/stellar/rs-soroban-env/issues/1046
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+    ));
+    Ok(())
+}
+
+#[test]
+fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
+    let wasm_short =
+        wasm::wasm_module_with_large_vector_from_linear_memory(100, U32Val::from(7).to_val());
+
+    // sanity check, constructing a short vec is ok
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let contract_id_obj = host.register_test_contract_wasm(wasm_short.as_slice());
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    assert!(res.is_ok());
+    assert_eq!(
+        host.vec_len(VecObject::try_from_val(host.deref(), &res?).unwrap())?
+            .to_val()
+            .get_payload(),
+        U32Val::from(100).to_val().get_payload()
+    );
+
+    // constructing a big map will cause budget limit exceeded error
+    let wasm_long =
+        wasm::wasm_module_with_large_vector_from_linear_memory(60000, U32Val::from(7).to_val());
+    host.budget_ref().reset_unlimited()?;
+    let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
+    host.budget_ref().reset_default()?;
+    let res = host.call(
+        contract_id_obj2,
+        Symbol::try_from_small_str("test")?,
+        host.test_vec_obj::<u32>(&[])?,
+    );
+    // This currently won't pass VmInstantiation, in the future if VmInstantiation cost goes down, we need
+    // to adjust the maximum length.
+    // Here we check the mem inputs match expectation.
+    assert_ge!(
+        host.budget_ref()
+            .get_tracker(ContractCostType::MemAlloc)?
+            .1
+            .unwrap(),
+        480000
+    );
+    assert_ge!(
+        host.budget_ref()
+            .get_tracker(ContractCostType::MemCpy)?
+            .1
+            .unwrap(),
+        480000
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+
+    Ok(())
 }
