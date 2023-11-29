@@ -12,7 +12,7 @@ mod dispatch;
 mod fuel_refillable;
 mod func_info;
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(feature = "bench")]
 pub(crate) use dispatch::dummy0;
 
 use crate::{
@@ -33,7 +33,7 @@ use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::VmCaller;
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(any(test, feature = "testutils", feature = "bench"))]
 use wasmi::{Caller, StoreContextMut};
 impl wasmi::core::HostError for HostError {}
 
@@ -480,7 +480,7 @@ impl Vm {
         f(&mut vmcaller)
     }
 
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(feature = "bench")]
     pub(crate) fn with_caller<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(Caller<Host>) -> Result<T, HostError>,

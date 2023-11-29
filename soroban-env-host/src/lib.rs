@@ -45,7 +45,7 @@ pub use soroban_env_common::*;
 pub mod e2e_invoke;
 pub mod fees;
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(feature = "bench")]
 #[doc(hidden)]
 pub mod cost_runner;
 
