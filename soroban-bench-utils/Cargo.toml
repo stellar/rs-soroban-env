@@ -12,7 +12,7 @@ publish = false
 
 [dependencies]
 soroban-env-common = { workspace = true }
-tracking-allocator = "0.4.0"
+tracking-allocator = "=0.4.0"
 
 [features]
 next = ["soroban-env-common/next"]

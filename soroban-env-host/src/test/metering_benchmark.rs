@@ -7,7 +7,7 @@ use crate::{
 use soroban_env_common::{Env, Symbol};
 use soroban_test_wasms::{ADD_I32, COMPLEX};
 
-use super::util::{generate_account_id, generate_bytes_array};
+use crate::testutils::{generate_account_id, generate_bytes_array};
 
 // The follow tests enables resource (cpu and mem) trackers, their main purpose is to evaluate
 // metering accuracy by comparing modeled resource usage from the budget vs actual resource usage.
@@ -18,7 +18,7 @@ use super::util::{generate_account_id, generate_bytes_array};
 // 2. they cannot be run in parallel with multiple threads, due to contention of the `global_tracker`.
 //
 // Run with the following command:
-// RUST_TEST_THREADS=1  cargo test --release --package soroban-env-host --lib -- test::metering_benchmark  --nocapture --ignored
+// RUST_TEST_THREADS=1  cargo test --release --package soroban-env-host --lib --features testutils -- test::metering_benchmark  --nocapture --ignored
 
 const LEDGER_INFO: LedgerInfo = LedgerInfo {
     protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),

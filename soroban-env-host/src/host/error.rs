@@ -125,7 +125,7 @@ impl Debug for HostError {
 }
 
 impl HostError {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils"))]
     pub fn result_matches_err<T, C>(res: Result<T, HostError>, code: C) -> bool
     where
         Error: From<C>,
@@ -465,16 +465,17 @@ pub(crate) trait DebugArg {
     fn debug_arg(host: &Host, arg: &Self) -> Val {
         // We similarly guard against double-faulting here by try-acquiring the event buffer,
         // which will fail if we're re-entering error reporting _while_ forming a debug argument.
-        let mut val: Val =
-            Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError).to_val();
+        let mut val: Option<Val> = None;
         if let Ok(_guard) = host.0.events.try_borrow_mut() {
             host.with_debug_mode(|| {
                 if let Ok(v) = Self::debug_arg_maybe_expensive_or_fallible(host, arg) {
-                    val = v;
+                    val = Some(v);
                 }
                 Ok(())
             });
-            val
+            val.unwrap_or_else(|| {
+                Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError).into()
+            })
         } else {
             Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError).into()
         }

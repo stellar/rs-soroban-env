@@ -1,23 +1,21 @@
 use std::rc::Rc;
 
-use super::metered_clone::{
-    charge_shallow_copy, MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator,
-};
-use crate::budget::{AsBudget, DepthLimiter};
-use crate::err;
-use crate::host_object::{HostMap, HostObject, HostVec};
-use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
-use crate::{xdr::ContractCostType, Host, HostError, Val};
-use soroban_env_common::num::{
-    i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
-};
-use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, ContractDataDurability, Int128Parts, Int256Parts, ScAddress,
-    ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts, UInt256Parts, VecM,
-};
-use soroban_env_common::{
-    AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,
-    U32Val, VecObject,
+use crate::{
+    budget::{AsBudget, DepthLimiter},
+    err,
+    host::metered_clone::{
+        charge_shallow_copy, MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator,
+    },
+    host_object::{HostMap, HostObject, HostVec},
+    num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
+    xdr::{
+        self, int128_helpers, AccountId, ContractCostType, ContractDataDurability, Hash,
+        Int128Parts, Int256Parts, LedgerKey, LedgerKeyContractData, ScAddress, ScBytes,
+        ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScSymbol, ScVal, ScVec, UInt128Parts,
+        UInt256Parts, Uint256, VecM,
+    },
+    AddressObject, BytesObject, Convert, Host, HostError, Object, ScValObjRef, ScValObject, Symbol,
+    SymbolObject, TryFromVal, TryIntoVal, U32Val, Val, VecObject,
 };
 
 impl Host {
@@ -259,11 +257,16 @@ impl Host {
         self.scbytes_from_slice(hash.as_slice())
     }
 
-    pub(crate) fn scaddress_from_address(
-        &self,
-        address: AddressObject,
-    ) -> Result<ScAddress, HostError> {
+    pub fn scaddress_from_address(&self, address: AddressObject) -> Result<ScAddress, HostError> {
         self.visit_obj(address, |addr: &ScAddress| addr.metered_clone(self))
+    }
+
+    pub(crate) fn scsymbol_from_symbol(&self, symbol: Symbol) -> Result<ScSymbol, HostError> {
+        if let Ok(sobj) = SymbolObject::try_from(symbol) {
+            self.visit_obj(sobj, |sym: &ScSymbol| sym.metered_clone(self))
+        } else {
+            self.map_err(ScSymbol::try_from_val(self, &symbol))
+        }
     }
 
     pub(crate) fn host_map_to_scmap(&self, map: &HostMap) -> Result<ScMap, HostError> {

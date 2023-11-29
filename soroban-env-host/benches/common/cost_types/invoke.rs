@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::common::HostCostMeasurement;
 use rand::rngs::StdRng;
 use soroban_env_host::{
@@ -8,9 +6,13 @@ use soroban_env_host::{
     Host, Symbol, Vm,
 };
 use soroban_synth_wasm::{Arity, ModEmitter};
+use std::rc::Rc;
+use wasmi::Value;
+
+const MAX_VM_ARGS: usize = 32;
 
 fn wasm_module_with_empty_invoke() -> Vec<u8> {
-    let mut fe = ModEmitter::default().func(Arity(0), 0);
+    let mut fe = ModEmitter::default().func(Arity(MAX_VM_ARGS as u32), 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
 }
@@ -23,10 +25,12 @@ pub(crate) struct InvokeVmFunctionMeasure;
 impl HostCostMeasurement for InvokeVmFunctionMeasure {
     type Runner = InvokeVmFunctionRun;
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, _input: u64) -> Rc<Vm> {
+    fn new_random_case(host: &Host, _rng: &mut StdRng, _input: u64) -> (Rc<Vm>, Vec<Value>) {
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_empty_invoke();
-        Vm::new(&host, id, &code).unwrap()
+        let vm = Vm::new(&host, id, &code).unwrap();
+        let args = vec![Value::I64(0); MAX_VM_ARGS];
+        (vm, args)
     }
 }
 
@@ -41,6 +45,6 @@ impl HostCostMeasurement for InvokeHostFunctionMeasure {
     type Runner = InvokeHostFunctionRun;
 
     fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Rc<Vm> {
-        InvokeVmFunctionMeasure::new_random_case(host, rng, input)
+        InvokeVmFunctionMeasure::new_random_case(host, rng, input).0
     }
 }

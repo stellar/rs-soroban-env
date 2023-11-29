@@ -34,24 +34,27 @@ mod builtin_contracts;
 pub mod auth;
 pub mod vm;
 pub use vm::Vm;
-#[cfg(any(test, feature = "testutils"))]
-#[doc(hidden)]
-pub mod cost_runner;
 pub mod storage;
-#[cfg(test)]
-mod test;
-
 pub use budget::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
-#[cfg(any(test, feature = "testutils"))]
-#[doc(hidden)]
-pub use host::testutils::call_with_suppressed_panic_hook;
 pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo, Seed,
     SEED_BYTES,
 };
-#[cfg(any(test, feature = "testutils"))]
-pub use host::{ContractFunctionSet, ContractInvocationEvent};
 pub use soroban_env_common::*;
 
 pub mod e2e_invoke;
 pub mod fees;
+
+#[cfg(feature = "bench")]
+#[doc(hidden)]
+pub mod cost_runner;
+
+#[cfg(any(test, feature = "testutils"))]
+pub use host::{ContractFunctionSet, ContractInvocationEvent};
+
+#[cfg(any(test, feature = "testutils"))]
+#[doc(hidden)]
+pub mod testutils;
+
+#[cfg(test)]
+mod test;

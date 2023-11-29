@@ -68,7 +68,7 @@ where
     // This is purely used for the cost calibration of allocating host memory.
     // Do *not* use it for construction, since `MeteredVector` is immutable,
     // the allocation will be wasted.
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(feature = "bench")]
     pub fn with_capacity(capacity: usize, budget: &Budget) -> Result<Self, HostError> {
         super::metered_clone::charge_heap_alloc::<A>(capacity as u64, budget)?;
         Self::from_vec(Vec::with_capacity(capacity))

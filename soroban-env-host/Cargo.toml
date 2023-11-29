@@ -15,67 +15,68 @@ build = "build.rs"
 soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi"] }
 wasmi = { workspace = true }
-stellar-strkey = "0.0.8"
-static_assertions = "1.1.0"
-sha2 = "0.10.0"
-hex-literal = "0.4.1"
-hmac = "0.12.1"
-ed25519-dalek = {version = "2.0.0", features = ["rand_core"] }
+stellar-strkey = "=0.0.8"
+static_assertions = "=1.1.0"
+sha2 = "=0.10.8"
+hex-literal = "=0.4.1"
+hmac = "=0.12.1"
+ed25519-dalek = {version = "=2.0.0", features = ["rand_core"] }
 # NB: this must match the same rand version used by ed25519-dalek above
-rand = "0.8.5"
+rand = "=0.8.5"
 # NB: this must match the same rand_chacha version used by ed25519-dalek above
-rand_chacha = "0.3.1"
-num-traits = "0.2.17"
-num-integer = "0.1.45"
-num-derive = "0.4.1"
-backtrace = { version = "0.3", optional = true }
-k256 = {version = "0.13.1", features=["ecdsa", "arithmetic"]}
+rand_chacha = "=0.3.1"
+num-traits = "=0.2.17"
+num-integer = "=0.1.45"
+num-derive = "=0.4.1"
+backtrace = { version = "=0.3.69", optional = true }
+k256 = {version = "=0.13.1", features=["ecdsa", "arithmetic"]}
 # NB: getrandom is a transitive dependency of k256 which we're not using directly
 # but we have to specify it here in order to enable its 'js' feature which
 # is needed to build the host for wasm (a rare but supported config).
-getrandom = { version = "0.2", features=["js"] }
-sha3 = "0.10.8"
+getrandom = { version = "=0.2.11", features=["js"] }
+sha3 = "=0.10.8"
 # NB: this must match the same curve25519-dalek version used by ed25519-dalek above
 # used only for calibration
-curve25519-dalek = { version = "4", default-features = false, features = ["digest"]}
+curve25519-dalek = { version = "=4.1.1", default-features = false, features = ["digest"]}
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], default-features = false, optional = true }
 
 [dev-dependencies]
-hex = "0.4.3"
-itertools = "0.11.0"
-tabwriter = "1.3.0"
-thousands = "0.2.0"
+hex = "=0.4.3"
+itertools = "=0.11.0"
+tabwriter = "=1.3.0"
+thousands = "=0.2.0"
 soroban-env-macros = { workspace = true }
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
 soroban-bench-utils = { package = "soroban-bench-utils", path = "../soroban-bench-utils" }
-bytes-lit = "0.0.5"
-textplots = "0.8.4"
-wasmprinter = "0.2.72"
-expect-test = "1.4.1"
-more-asserts = "0.3.1"
-linregress = "0.5.3"
-pretty_assertions = "1.4.0"
-backtrace = "0.3"
-serde_json = "1.0.0"
+bytes-lit = "=0.0.5"
+textplots = "=0.8.4"
+wasmprinter = "=0.2.72"
+expect-test = "=1.4.1"
+more-asserts = "=0.3.1"
+linregress = "=0.5.3"
+pretty_assertions = "=1.4.0"
+backtrace = "=0.3.69"
+serde_json = "=1.0.108"
 
 [features]
 testutils = ["soroban-env-common/testutils", "soroban-synth-wasm/testutils", "recording_auth", "dep:backtrace"]
 next = ["soroban-env-common/next", "soroban-synth-wasm/next", "soroban-bench-utils/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_auth = []
+bench = []
 
 [[bench]]
-required-features = ["testutils"]
+required-features = ["bench"]
 harness = false
 bench = true
 name = "worst_case_linear_models"
 path = "benches/worst_case_linear_models.rs"
 
 [[bench]]
-required-features = ["testutils"]
+required-features = ["bench"]
 harness = false
 bench = true
 name = "variation_histograms"

@@ -1,4 +1,5 @@
 use soroban_env_common::ConversionError;
+use wasmi::Value;
 
 use crate::{
     cost_runner::{CostRunner, CostType},
@@ -18,14 +19,19 @@ const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
 impl CostRunner for InvokeVmFunctionRun {
     const COST_TYPE: CostType = CostType::Contract(InvokeVmFunction);
 
-    type SampleType = Rc<Vm>;
+    type SampleType = (Rc<Vm>, Vec<Value>);
 
-    type RecycledType = (Option<Val>, Rc<Vm>);
+    type RecycledType = (Option<Val>, Self::SampleType);
 
     const RUN_ITERATIONS: u64 = 100;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let rv = black_box(sample.metered_func_call(host, &TEST_SYM, &[]).unwrap());
+        let rv = black_box(
+            sample
+                .0
+                .metered_func_call(host, &TEST_SYM, sample.1.as_slice())
+                .unwrap(),
+        );
         (Some(rv), sample)
     }
 

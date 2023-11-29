@@ -39,7 +39,7 @@ pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
             if let Some(raw_balance) =
                 StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
-                e.extend_contract_data(
+                e.extend_contract_data_ttl(
                     key.try_into_val(e)?,
                     StorageType::Persistent,
                     BALANCE_TTL_THRESHOLD.into(),
@@ -63,7 +63,7 @@ fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), H
         StorageType::Persistent,
     )?;
 
-    e.extend_contract_data(
+    e.extend_contract_data_ttl(
         key.try_into_val(e)?,
         StorageType::Persistent,
         BALANCE_TTL_THRESHOLD.into(),

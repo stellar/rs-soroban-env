@@ -198,18 +198,27 @@ pub(crate) fn check_account_authentication(
             ));
         }
         // Overflow isn't possible here as
-        // 255 * MAX_ACCOUNT_SIGNATURES is < u32::MAX.
-        weight += signer_weight as u32;
+        // 255 * MAX_ACCOUNT_SIGNATURES is < u32::MAX,
+        // but to future-proof the code we do saturating_add.
+        weight = weight.saturating_add(signer_weight as u32);
         prev_pk = Some(sig.public_key);
     }
-    let threshold = account.thresholds.0[ThresholdIndexes::Med as usize];
-    if weight < threshold as u32 {
+    // This should always work but again, we err on side
+    // of future-proofing against changed assumptions.
+    let Some(threshold) = account.thresholds.0.get(ThresholdIndexes::Med as usize) else {
+        return Err(host.error(
+            (ScErrorType::Auth, ScErrorCode::InternalError).into(),
+            "unexpected thresholds-array size",
+            &[],
+        ));
+    };
+    if weight < *threshold as u32 {
         Err(err!(
             host,
             ContractError::AuthenticationError,
             "signature weight is lower than threshold",
             weight,
-            threshold as u32
+            *threshold as u32
         ))
     } else {
         Ok(())

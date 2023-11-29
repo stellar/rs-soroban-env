@@ -12,7 +12,7 @@ mod dispatch;
 mod fuel_refillable;
 mod func_info;
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(feature = "bench")]
 pub(crate) use dispatch::dummy0;
 
 use crate::{
@@ -33,9 +33,11 @@ use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::VmCaller;
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(any(test, feature = "testutils", feature = "bench"))]
 use wasmi::{Caller, StoreContextMut};
 impl wasmi::core::HostError for HostError {}
+
+const MAX_VM_ARGS: usize = 32;
 
 /// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
 /// [Vm]s may be held in a single [Host], and each contains a single WASM module
@@ -186,6 +188,25 @@ impl Vm {
         }
     }
 
+    fn check_max_args(host: &Host, m: &Module) -> Result<(), HostError> {
+        for e in m.exports() {
+            match e.ty() {
+                wasmi::ExternType::Func(f) => {
+                    if f.params().len() > MAX_VM_ARGS || f.results().len() > MAX_VM_ARGS {
+                        return Err(host.err(
+                            ScErrorType::WasmVm,
+                            ScErrorCode::InvalidInput,
+                            "Too many arguments or results in wasm export",
+                            &[],
+                        ));
+                    }
+                }
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+
     /// Constructs a new instance of a [Vm] within the provided [Host],
     /// establishing a new execution context for a contract identified by
     /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
@@ -236,6 +257,7 @@ impl Vm {
             host.map_err(Module::new(&engine, module_wasm_code))?
         };
 
+        Self::check_max_args(host, &module)?;
         Self::check_meta_section(host, &module)?;
 
         let mut store = Store::new(&engine, host.clone());
@@ -335,6 +357,15 @@ impl Vm {
             }
             Some(e) => e,
         };
+
+        if inputs.len() > MAX_VM_ARGS {
+            return Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidInput,
+                "Too many arguments in wasm invocation",
+                &[func_sym.to_val()],
+            ));
+        }
 
         // call the function
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
@@ -449,7 +480,7 @@ impl Vm {
         f(&mut vmcaller)
     }
 
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(feature = "bench")]
     pub(crate) fn with_caller<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(Caller<Host>) -> Result<T, HostError>,
@@ -460,7 +491,7 @@ impl Vm {
         f(caller)
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(all(test, not(feature = "next"), feature = "testutils"))]
     pub(crate) fn memory_hash_and_size(&self) -> (u64, usize) {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -477,7 +508,7 @@ impl Vm {
         (0, 0)
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(all(test, not(feature = "next"), feature = "testutils"))]
     // This is pretty weak: we just observe the state that wasmi exposes through
     // wasm _exports_. There might be tables or globals a wasm doesn't export
     // but there's no obvious way to observe them.

@@ -42,14 +42,14 @@ where
     fn charge_access<B: AsBudget>(&self, count: usize, b: &B) -> Result<(), HostError> {
         b.as_budget().charge(
             ContractCostType::MemCpy,
-            Some(Self::ENTRY_SIZE * count as u64),
+            Some(Self::ENTRY_SIZE.saturating_mul(count as u64)),
         )
     }
 
     fn charge_scan<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         b.as_budget().charge(
             ContractCostType::MemCpy,
-            Some(Self::ENTRY_SIZE * self.map.len() as u64),
+            Some(Self::ENTRY_SIZE.saturating_mul(self.map.len() as u64)),
         )
     }
 
@@ -59,7 +59,7 @@ where
         let mag = 64 - (self.map.len() as u64).leading_zeros();
         b.as_budget().charge(
             ContractCostType::MemCpy,
-            Some(Self::ENTRY_SIZE * (1 + mag) as u64),
+            Some(Self::ENTRY_SIZE.saturating_mul((1 + mag) as u64)),
         )
     }
 }

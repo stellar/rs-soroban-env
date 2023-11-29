@@ -16,7 +16,7 @@ use crate::{
         },
     },
     host::{frame::TestContractFrame, Frame},
-    test::util::generate_bytes_array,
+    testutils::generate_bytes_array,
     Host, HostError, LedgerInfo,
 };
 use ed25519_dalek::SigningKey;

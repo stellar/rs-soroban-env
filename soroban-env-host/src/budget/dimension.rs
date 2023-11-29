@@ -90,12 +90,15 @@ impl BudgetDimension {
         })
     }
 
-    pub(crate) fn get_cost_model(&self, ty: ContractCostType) -> &MeteredCostComponent {
-        &self.cost_models[ty as usize]
+    pub(crate) fn get_cost_model(&self, ty: ContractCostType) -> Option<&MeteredCostComponent> {
+        self.cost_models.get(ty as usize)
     }
 
-    pub(crate) fn get_cost_model_mut(&mut self, ty: ContractCostType) -> &mut MeteredCostComponent {
-        &mut self.cost_models[ty as usize]
+    pub(crate) fn get_cost_model_mut(
+        &mut self,
+        ty: ContractCostType,
+    ) -> Option<&mut MeteredCostComponent> {
+        self.cost_models.get_mut(ty as usize)
     }
 
     pub(crate) fn get_total_count(&self) -> u64 {
@@ -143,7 +146,9 @@ impl BudgetDimension {
         _is_cpu: IsCpu,
         is_shadow: IsShadowMode,
     ) -> Result<(), HostError> {
-        let cm = self.get_cost_model(ty);
+        let Some(cm) = self.get_cost_model(ty) else {
+            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
+        };
         let amount = cm.evaluate(input)?.saturating_mul(iterations);
 
         #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
@@ -167,7 +172,7 @@ impl BudgetDimension {
     }
 
     // Resets all model parameters to zero (so that we can override and test individual ones later).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testutils", feature = "bench"))]
     pub(crate) fn reset_models(&mut self) {
         for model in &mut self.cost_models {
             model.reset()
