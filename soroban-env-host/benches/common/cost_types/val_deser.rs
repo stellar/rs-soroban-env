@@ -9,6 +9,7 @@ pub(crate) struct ValDeserMeasure;
 
 impl HostCostMeasurement for ValDeserMeasure {
     type Runner = ValDeserRun;
+    const STEP_SIZE: u64 = 128;
 
     fn new_random_case(
         host: &soroban_env_host::Host,
@@ -19,8 +20,29 @@ impl HostCostMeasurement for ValDeserMeasure {
         scval.0.to_xdr(DEFAULT_XDR_RW_LIMITS).unwrap()
     }
 
-    // The worst case is a deeply nested structure, each level containing minimal
-    // bytes to move around.
+    // The worst cpu case is a deeply nested structure looking like this:
+    //
+    //                             Vec
+    //                       /      |       \
+    //                     Vec    U64(0)    U64(0)
+    //
+    //                /     |     \
+    //             Vec    U64(0)    U64(0)
+    //
+    //        /     |     \
+    //     Vec    U64(0)    U64(0)
+    //  ...
+    //
+    // The total length is propotional to the input size, each input is an
+    // additional U64 that needs to be read which is cheap by itself but the cpu
+    // needs to navigate all the levels to get to it.
+    //
+    // There will be lots of intermediate vec! allocation, which results in
+    // large mem_bytes in the measurements, but most of these are transient and
+    // the final mem cost should be close to the bytes size of the input
+    // structure. For this reason the memory cost parameter is not extracted
+    // from this measurement but rather derived analytically, based on results
+    // from `ValSer` measurement.
     fn new_worst_case(
         _host: &soroban_env_host::Host,
         _rng: &mut rand::prelude::StdRng,
