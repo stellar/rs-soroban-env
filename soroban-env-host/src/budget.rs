@@ -584,6 +584,67 @@ impl Display for BudgetImpl {
     }
 }
 
+#[allow(unused)]
+#[cfg(test)]
+impl BudgetImpl {
+    fn retrieve_unscaled_param(param: ScaledU64, is_protocol20: bool) -> u64 {
+        const PROTOCOL_20_LIN_TERM_SCALE_BITS: u32 = 7;
+        match is_protocol20 {
+            true => param.unscale() << PROTOCOL_20_LIN_TERM_SCALE_BITS,
+            false => param.0,
+        }
+    }
+
+    // Utility function for printing default budget cost parameters in cpp format
+    // so that it can be ported into stellar-core.
+    // When needing it, copy and run the following test
+    // ```
+    // #[test]
+    // fn test() {
+    //     let bi = BudgetImpl::default();
+    //     bi.print_default_params_in_cpp(true);
+    // }
+    // ```
+    // and copy the screen output.
+    fn print_default_params_in_cpp(&self, is_protocol20: bool) {
+        // cpu
+        println!();
+        println!();
+        println!();
+        for ct in ContractCostType::variants() {
+            let Some(cpu) = self.cpu_insns.get_cost_model(ct) else {
+                continue;
+            };
+            println!("case {}:", ct.name());
+            println!(
+                "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
+                cpu.const_term,
+                Self::retrieve_unscaled_param(cpu.lin_term.clone(), is_protocol20)
+            );
+            println!("break;");
+        }
+        // mem
+        println!();
+        println!();
+        println!();
+        for ct in ContractCostType::variants() {
+            let Some(mem) = self.mem_bytes.get_cost_model(ct) else {
+                continue;
+            };
+            println!("case {}:", ct.name());
+            println!(
+                "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
+                mem.const_term,
+                Self::retrieve_unscaled_param(mem.lin_term.clone(), is_protocol20)
+            );
+            println!("break;");
+        }
+        println!();
+        println!();
+        println!();
+    }
+}
+
 #[derive(Clone)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
