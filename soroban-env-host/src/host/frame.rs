@@ -251,7 +251,7 @@ impl Host {
     }
 
     /// Same as [`Self::with_current_frame`] but passes `None` when there is no current
-    /// frame, rather than logging an error.
+    /// frame, rather than failing with an error.
     pub(crate) fn with_current_frame_opt<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(Option<&Frame>) -> Result<U, HostError>,
