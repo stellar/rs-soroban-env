@@ -148,7 +148,7 @@ impl Budget {
             const_mem,
             ScaledU64::from_unscaled_u64(lin_mem),
         )
-    }    
+    }
 }
 
 #[cfg(any(test, feature = "recording_auth"))]

@@ -31,10 +31,10 @@ impl Default for FuelConfig {
     fn default() -> Self {
         FuelConfig {
             base: 1,
-            entity: 2,
-            load: 1,
+            entity: 3,
+            load: 2,
             store: 1,
-            call: 41,
+            call: 67,
         }
     }
 }
