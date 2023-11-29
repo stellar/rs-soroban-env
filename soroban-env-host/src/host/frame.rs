@@ -127,8 +127,8 @@ pub(crate) enum Frame {
 impl Host {
     /// Returns if the host currently has a frame on the stack.
     ///
-    /// A frame being on the stack indicates that a contract is currently
-    /// executing.
+    /// A frame being on the stack usually indicates that a contract is currently
+    /// executing, or is in a state just-before or just-after executing.
     pub fn has_frame(&self) -> Result<bool, HostError> {
         self.with_current_frame_opt(|opt| Ok(opt.is_some()))
     }
