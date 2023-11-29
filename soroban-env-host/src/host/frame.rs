@@ -300,37 +300,49 @@ impl Host {
     where
         F: FnOnce(&mut Prng) -> Result<U, HostError>,
     {
-        // We need to not hold the context borrow-guard over multiple
-        // error-generating calls here, since they will re-borrow the context to
-        // report any error. Instead we mem::take the context's PRNG into a
-        // local variable, and then put it back when we're done.
-        let mut curr_prng_opt =
+        // We mem::take the context's PRNG into a local variable and then put it
+        // back when we're done. This allows the callback to borrow the context
+        // to report errors if anything goes wrong in it. If the callback also
+        // installs a PRNG of its own (it shouldn't!) we notice when putting the
+        // context's PRNG back and fail with an internal error.
+        let curr_prng_opt =
             self.with_current_context_mut(|ctx| Ok(std::mem::take(&mut ctx.prng)))?;
-        let res: Result<U, HostError>;
-        if let Some(p) = &mut curr_prng_opt {
-            res = f(p)
-        } else {
-            let mut base_guard = self.try_borrow_base_prng_mut()?;
-            if let Some(base) = base_guard.as_mut() {
-                match base.sub_prng(self.as_budget()) {
-                    Ok(mut sub_prng) => {
-                        res = f(&mut sub_prng);
-                        curr_prng_opt = Some(sub_prng);
-                    }
-                    Err(e) => res = Err(e),
+
+        let mut curr_prng = match curr_prng_opt {
+            // There's already a context PRNG, so use it.
+            Some(prng) => prng,
+
+            // There's no context PRNG yet, seed one from the base PRNG (unless
+            // the base PRNG itself hasn't been seeded).
+            None => {
+                let mut base_guard = self.try_borrow_base_prng_mut()?;
+                if let Some(base) = base_guard.as_mut() {
+                    base.sub_prng(self.as_budget())?
+                } else {
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "host base PRNG was not seeded",
+                        &[],
+                    ));
                 }
-            } else {
-                res = Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::MissingValue,
-                    "host base PRNG was not seeded",
-                    &[],
-                ))
             }
-        }
+        };
+
+        // Call the callback with the new-or-existing context PRNG.
+        let res: Result<U, HostError> = f(&mut curr_prng);
+
         // Put the (possibly newly-initialized frame PRNG-option back)
         self.with_current_context_mut(|ctx| {
-            ctx.prng = curr_prng_opt;
+            if ctx.prng.is_some() {
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "callback re-entered with_current_prng",
+                    &[],
+                ));
+            }
+            ctx.prng = Some(curr_prng);
             Ok(())
         })?;
         res
