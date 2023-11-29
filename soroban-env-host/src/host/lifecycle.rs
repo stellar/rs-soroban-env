@@ -94,7 +94,8 @@ impl Host {
         // for them just to make auth work in a single case).
         let res = self.create_contract_with_optional_auth(deployer, args);
         if has_deployer {
-            self.try_borrow_authorization_manager()?.pop_frame(self)?;
+            self.try_borrow_authorization_manager()?
+                .pop_frame(self, None)?;
         }
         res
     }

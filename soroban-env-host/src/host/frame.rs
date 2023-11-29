@@ -145,8 +145,7 @@ impl Host {
     pub(super) fn push_context(&self, ctx: Context) -> Result<RollbackPoint, HostError> {
         let _span = tracy_span!("push context");
         let auth_manager = self.try_borrow_authorization_manager()?;
-        let auth_snapshot = auth_manager.snapshot(self)?;
-        auth_manager.push_frame(self, &ctx.frame)?;
+        let auth_snapshot = auth_manager.push_frame(self, &ctx.frame)?;
         // Establish the rp first, since this might run out of gas and fail.
         let rp = RollbackPoint {
             storage: self.try_borrow_storage()?.map.metered_clone(self)?,
@@ -167,7 +166,6 @@ impl Host {
         let _span = tracy_span!("pop context");
 
         let ctx = self.try_borrow_context_stack_mut()?.pop();
-        self.try_borrow_authorization_manager()?.pop_frame(self)?;
 
         #[cfg(any(test, feature = "recording_auth"))]
         if self.try_borrow_context_stack()?.is_empty() {
@@ -176,13 +174,14 @@ impl Host {
             self.try_borrow_authorization_manager()?
                 .maybe_emulate_authentication(self)?;
         }
-
+        let mut auth_snapshot = None;
         if let Some(rp) = orp {
             self.try_borrow_storage_mut()?.map = rp.storage;
             self.try_borrow_events_mut()?.rollback(rp.events)?;
-            self.try_borrow_authorization_manager()?
-                .rollback(self, rp.auth)?;
+            auth_snapshot = Some(rp.auth);
         }
+        self.try_borrow_authorization_manager()?
+            .pop_frame(self, auth_snapshot)?;
         ctx.ok_or_else(|| {
             self.err(
                 ScErrorType::Context,

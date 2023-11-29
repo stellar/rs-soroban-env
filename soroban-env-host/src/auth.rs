@@ -1110,7 +1110,7 @@ impl AuthorizationManager {
 
     // Returns a snapshot of `AuthorizationManager` to use for rollback.
     // metering: covered
-    pub(crate) fn snapshot(&self, host: &Host) -> Result<AuthorizationManagerSnapshot, HostError> {
+    fn snapshot(&self, host: &Host) -> Result<AuthorizationManagerSnapshot, HostError> {
         let _span = tracy_span!("snapshot auth");
         let account_trackers_snapshot = match &self.mode {
             AuthorizationMode::Enforcing => {
@@ -1143,11 +1143,7 @@ impl AuthorizationManager {
         let invoker_contract_tracker_root_snapshots = self
             .try_borrow_invoker_contract_trackers(host)?
             .iter()
-            .map(|t| {
-                t.invocation_tracker
-                    .root_authorized_invocation
-                    .snapshot(host.as_budget())
-            })
+            .map(|t| t.invocation_tracker.snapshot(host.as_budget()))
             .metered_collect::<Result<Vec<AuthorizedInvocationSnapshot>, HostError>>(host)??;
         #[cfg(any(test, feature = "recording_auth"))]
         let tracker_by_address_handle = match &self.mode {
@@ -1169,7 +1165,7 @@ impl AuthorizationManager {
 
     // Rolls back this `AuthorizationManager` to the snapshot state.
     // metering: covered
-    pub(crate) fn rollback(
+    fn rollback(
         &self,
         host: &Host,
         snapshot: AuthorizationManagerSnapshot,
@@ -1202,7 +1198,7 @@ impl AuthorizationManager {
                                 host.err(
                                     ScErrorType::Auth,
                                     ScErrorCode::InternalError,
-                                    "unexpected bad auth snapshot",
+                                    "unexpected bad auth borrow",
                                     &[],
                                 )
                             })?
@@ -1216,7 +1212,7 @@ impl AuthorizationManager {
             }
         }
 
-        let invoker_trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
+        let mut invoker_trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
         if invoker_trackers.len() != snapshot.invoker_contract_tracker_root_snapshots.len() {
             return Err(host.err(
                 ScErrorType::Auth,
@@ -1224,6 +1220,12 @@ impl AuthorizationManager {
                 "unexpected bad auth snapshot",
                 &[],
             ));
+        }
+        for (tracker, snapshot) in invoker_trackers
+            .iter_mut()
+            .zip(snapshot.invoker_contract_tracker_root_snapshots.iter())
+        {
+            tracker.invocation_tracker.rollback(snapshot)?;
         }
 
         #[cfg(any(test, feature = "recording_auth"))]
@@ -1269,10 +1271,15 @@ impl AuthorizationManager {
         self.push_tracker_frame(host)
     }
 
-    // Records a new call stack frame.
+    // Records a new call stack frame and returns a snapshot for rolling
+    // back this stack frame.
     // This should be called for every `Host` `push_frame`.
     // metering: covered
-    pub(crate) fn push_frame(&self, host: &Host, frame: &Frame) -> Result<(), HostError> {
+    pub(crate) fn push_frame(
+        &self,
+        host: &Host,
+        frame: &Frame,
+    ) -> Result<AuthorizationManagerSnapshot, HostError> {
         let _span = tracy_span!("push auth frame");
         let (contract_id, function_name) = match frame {
             Frame::ContractVM { vm, fn_name, .. } => {
@@ -1283,7 +1290,7 @@ impl AuthorizationManager {
             // Use the respective push (like
             // `push_create_contract_host_fn_frame`) functions instead to push
             // the frame with the required info.
-            Frame::HostFunction(_) => return Ok(()),
+            Frame::HostFunction(_) => return self.snapshot(host),
             Frame::StellarAssetContract(id, fn_name, ..) => (id.metered_clone(host)?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => (tc.id.metered_clone(host)?, tc.func),
@@ -1296,14 +1303,27 @@ impl AuthorizationManager {
                 function_name,
             }));
 
-        self.push_tracker_frame(host)
+        self.push_tracker_frame(host)?;
+        self.snapshot(host)
     }
 
-    // Pops a call stack frame.
+    // Pops a call stack frame and maybe rolls back the internal
+    // state according to the provided snapshot.
     // This should be called for every `Host` `pop_frame`.
     // metering: covered
-    pub(crate) fn pop_frame(&self, host: &Host) -> Result<(), HostError> {
+    pub(crate) fn pop_frame(
+        &self,
+        host: &Host,
+        snapshot: Option<AuthorizationManagerSnapshot>,
+    ) -> Result<(), HostError> {
         let _span = tracy_span!("pop auth frame");
+        // Important: rollback has to be performed before popping the frame
+        // from the tracker. This ensures correct work of invoker contract
+        // trackers for which snapshots are dependent on the current
+        // call stack.
+        if let Some(snapshot) = snapshot {
+            self.rollback(host, snapshot)?;
+        }
         {
             let mut call_stack = self.try_borrow_call_stack_mut(host)?;
             // Currently we don't push host function call frames, hence this may be
@@ -1331,6 +1351,16 @@ impl AuthorizationManager {
         // the tracker's frame itself is popped). Thus trackers form a stack
         // where the shorter lifetime trackers are at the top.
         while let Some(last) = invoker_contract_trackers.last() {
+            // *Subtle*: there are two possible scenarios when tracker is considered
+            // to be out of scope:
+            // - When the sub-contract call is finished. For example, contract A creates
+            // a tracker, then calls contract B. When we pop the frame of contract B,
+            // the tracker's stack will be empty and thus considered to be out of scope.
+            // - When the contract that created the tracker is going out of scope without
+            // calling any sub-contracts. For example, contract A creates a tracker and
+            // returns. When we pop the frame of contract A, the tracker's stack will be
+            // empty (because it's created empty), and thus considered to be out of scope.
+            // The invariant above is maintained in both scenarios.
             if last.is_out_of_scope() {
                 invoker_contract_trackers.pop();
             } else {
