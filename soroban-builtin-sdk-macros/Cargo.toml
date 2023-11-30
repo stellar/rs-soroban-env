@@ -13,9 +13,9 @@ rust-version = "1.74"
 proc-macro = true
 
 [dependencies]
-syn = {version="=2.0.39",features=["full"]}
-quote = "=1.0.33"
-proc-macro2 = "=1.0.69"
+syn = { version = "=2.0.32", features = ["full"] }
+quote = "=1.0.30"
+proc-macro2 = "=1.0.63"
 itertools = "=0.11.0"
 
 [package.metadata.docs.rs]
