@@ -5,7 +5,9 @@ use crate::builtin_contracts::contract_error::ContractError;
 use crate::builtin_contracts::stellar_asset_contract::allowance::{
     read_allowance, spend_allowance, write_allowance,
 };
-use crate::builtin_contracts::stellar_asset_contract::asset_info::{has_asset_info, validate_asset, write_asset_info};
+use crate::builtin_contracts::stellar_asset_contract::asset_info::{
+    has_asset_info, validate_asset, write_asset_info,
+};
 use crate::builtin_contracts::stellar_asset_contract::balance::{
     is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
 };
