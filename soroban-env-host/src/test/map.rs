@@ -303,6 +303,53 @@ fn scmap_out_of_order() {
 }
 
 #[test]
+fn scmap_duplicate() {
+    let host = observe_host!(Host::default());
+    let bad_scmap = ScVal::Map(Some(ScMap(
+        VecM::try_from(vec![
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(0),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(0),
+            },
+        ])
+        .unwrap(),
+    )));
+    assert!(Val::try_from_val(&*host, &bad_scmap).is_err());
+}
+
+#[test]
+fn scmap_invalid_element() {
+    let host = observe_host!(Host::default());
+    let bad_nested_scmap = ScVal::Map(Some(ScMap(
+        VecM::try_from(vec![
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(0),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(0),
+            },
+        ])
+        .unwrap(),
+    )));
+
+    let bad_scmap = ScVal::Map(Some(ScMap(
+        VecM::try_from(vec![ScMapEntry {
+            key: ScVal::U32(2),
+            val: bad_nested_scmap,
+        }])
+        .unwrap(),
+    )));
+
+    assert!(Val::try_from_val(&*host, &bad_scmap).is_err());
+}
+
+#[test]
 fn map_build_bad_element_integrity() -> Result<(), HostError> {
     use crate::EnvBase;
     let host = observe_host!(Host::default());
