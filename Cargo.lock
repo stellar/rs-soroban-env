@@ -1386,6 +1386,7 @@ dependencies = [
 name = "soroban-env-host"
 version = "20.0.0-rc2"
 dependencies = [
+ "arbitrary",
  "backtrace",
  "bytes-lit",
  "curve25519-dalek",
@@ -1417,6 +1418,7 @@ dependencies = [
  "soroban-wasmi",
  "static_assertions",
  "stellar-strkey",
+ "stellar-xdr",
  "tabwriter",
  "textplots",
  "thousands",
