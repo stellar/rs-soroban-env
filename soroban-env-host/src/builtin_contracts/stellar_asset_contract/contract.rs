@@ -6,7 +6,7 @@ use crate::builtin_contracts::stellar_asset_contract::allowance::{
     read_allowance, spend_allowance, write_allowance,
 };
 use crate::builtin_contracts::stellar_asset_contract::asset_info::{
-    has_asset_info, write_asset_info,
+    has_asset_info, validate_asset, write_asset_info,
 };
 use crate::builtin_contracts::stellar_asset_contract::balance::{
     is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
@@ -89,6 +89,7 @@ impl StellarAssetContract {
         }
 
         let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
+        validate_asset(e, &asset)?;
 
         let curr_contract_id = e.get_current_contract_id_internal()?;
         let expected_contract_id = e.get_asset_contract_id_hash(asset.metered_clone(e)?)?;

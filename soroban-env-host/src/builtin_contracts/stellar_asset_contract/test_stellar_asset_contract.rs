@@ -13,20 +13,21 @@ pub(crate) struct TestStellarAssetContract<'a> {
 }
 
 impl<'a> TestStellarAssetContract<'a> {
-    pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
+    pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Result<Self, HostError> {
         let mut asset_bytes_vec = Limited::new(vec![], DEFAULT_XDR_RW_LIMITS);
+        // Note: only asset creation should be return error, otherwise
+        // `unwrap`s are part of test setup and thus shouldn't be confused with
+        // contract creation errors we're interested in.
         asset.write_xdr(&mut asset_bytes_vec).unwrap();
-        let address_obj = host
-            .create_asset_contract(
-                Bytes::from_slice(host, &asset_bytes_vec.inner.as_slice())
-                    .unwrap()
-                    .into(),
-            )
-            .unwrap();
-        Self {
+        let address_obj = host.create_asset_contract(
+            Bytes::from_slice(host, &asset_bytes_vec.inner.as_slice())
+                .unwrap()
+                .into(),
+        )?;
+        Ok(Self {
             address: Address::try_from_val(host, &address_obj).unwrap(),
             host,
-        }
+        })
     }
 
     pub(crate) fn allowance(&self, from: Address, spender: Address) -> Result<i128, HostError> {
