@@ -27,10 +27,10 @@ use pretty_assertions::assert_eq;
 #[derive(Clone)]
 #[contracttype]
 pub struct ContractTreeNode {
-    pub contract: Address,
-    pub need_auth: HostVec,
-    pub children: HostVec,
-    pub try_call: bool,
+    pub(crate) contract: Address,
+    pub(crate) need_auth: HostVec,
+    pub(crate) children: HostVec,
+    pub(crate) try_call: bool,
 }
 
 struct AuthTest {

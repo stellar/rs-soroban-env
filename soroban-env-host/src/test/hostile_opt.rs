@@ -1,9 +1,9 @@
-use crate::budget::AsBudget;
-use crate::builtin_contracts::base_types::{Address, Bytes};
-use crate::test::observe::ObservedHost;
-use crate::{Host, HostError, DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
+use crate::{
+    budget::AsBudget, builtin_contracts::base_types::Address, test::observe::ObservedHost,
+    BytesObject, Env, EnvBase, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val,
+    DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS,
+};
 use soroban_builtin_sdk_macros::contracttype;
-use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal, Val};
 use soroban_test_wasms::RECURSIVE_ACCOUNT_CONTRACT;
 
 use crate::xdr::{
@@ -12,10 +12,10 @@ use crate::xdr::{
 };
 
 #[contracttype]
-pub enum RecursiveAccountSignature {
+enum RecursiveAccountSignature {
     RedirectAddress(Address),
     SerializeValue,
-    DeserializeValue(Bytes),
+    DeserializeValue(BytesObject),
 }
 
 fn create_recursive_serialized_scval(depth: u32) -> Vec<u8> {
@@ -70,8 +70,7 @@ fn run_deep_host_stack_test(
             if deserialization_depth > 0 {
                 assert_eq!(serialization_depth, 0);
                 RecursiveAccountSignature::DeserializeValue(
-                    Bytes::from_slice(
-                        &host,
+                    host.bytes_new_from_slice(
                         create_recursive_serialized_scval(deserialization_depth).as_slice(),
                     )
                     .unwrap(),

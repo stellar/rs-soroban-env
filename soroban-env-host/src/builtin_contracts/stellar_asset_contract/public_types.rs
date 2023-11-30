@@ -4,21 +4,21 @@ use soroban_env_common::TryIntoVal;
 
 #[derive(Clone)]
 #[contracttype]
-pub struct AlphaNum4AssetInfo {
+pub(crate) struct AlphaNum4AssetInfo {
     pub asset_code: String,
     pub issuer: BytesN<32>,
 }
 
 #[derive(Clone)]
 #[contracttype]
-pub struct AlphaNum12AssetInfo {
+pub(crate) struct AlphaNum12AssetInfo {
     pub asset_code: String,
     pub issuer: BytesN<32>,
 }
 
 #[derive(Clone)]
 #[contracttype]
-pub enum AssetInfo {
+pub(crate) enum AssetInfo {
     Native,
     AlphaNum4(AlphaNum4AssetInfo),
     AlphaNum12(AlphaNum12AssetInfo),

@@ -16,7 +16,7 @@ const METADATA_KEY: &str = "METADATA";
 
 #[derive(Clone)]
 #[contracttype]
-pub struct StellarAssetContractMetadata {
+pub(crate) struct StellarAssetContractMetadata {
     pub decimal: u32,
     pub name: String,
     pub symbol: String,
@@ -153,7 +153,7 @@ fn render_sep0011_asset<const N: usize>(
     ))
 }
 
-pub fn set_metadata(e: &Host) -> Result<(), HostError> {
+pub(crate) fn set_metadata(e: &Host) -> Result<(), HostError> {
     let name_and_symbol: (String, String) = match read_asset_info(e)? {
         AssetInfo::Native => {
             let n = String::try_from_val(e, &e.string_new_from_slice(b"native")?)?;
@@ -182,7 +182,7 @@ pub fn set_metadata(e: &Host) -> Result<(), HostError> {
     Ok(())
 }
 
-pub fn read_name(e: &Host) -> Result<String, HostError> {
+pub(crate) fn read_name(e: &Host) -> Result<String, HostError> {
     let key = SymbolSmall::try_from_str(METADATA_KEY)?;
     let metadata: StellarAssetContractMetadata = e
         .get_contract_data(key.try_into_val(e)?, StorageType::Instance)?
@@ -190,7 +190,7 @@ pub fn read_name(e: &Host) -> Result<String, HostError> {
     Ok(metadata.name)
 }
 
-pub fn read_symbol(e: &Host) -> Result<String, HostError> {
+pub(crate) fn read_symbol(e: &Host) -> Result<String, HostError> {
     let key = SymbolSmall::try_from_str(METADATA_KEY)?;
     let metadata: StellarAssetContractMetadata = e
         .get_contract_data(key.try_into_val(e)?, StorageType::Instance)?

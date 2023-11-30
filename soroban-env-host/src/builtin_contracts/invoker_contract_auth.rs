@@ -17,7 +17,7 @@ use soroban_env_common::{TryFromVal, TryIntoVal, Val};
 
 #[derive(Clone)]
 #[contracttype]
-pub struct SubContractInvocation {
+pub(crate) struct SubContractInvocation {
     pub context: ContractAuthorizationContext,
     pub sub_invocations: ContractTypeVec, // Vec of InvokerContractAuthEntry
 }
@@ -28,7 +28,7 @@ pub struct SubContractInvocation {
 /// contract.
 #[derive(Clone)]
 #[contracttype]
-pub enum InvokerContractAuthEntry {
+pub(crate) enum InvokerContractAuthEntry {
     Contract(SubContractInvocation),
     CreateContractHostFn(CreateContractHostFnContext),
 }

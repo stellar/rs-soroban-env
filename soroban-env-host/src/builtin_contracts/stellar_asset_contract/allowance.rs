@@ -9,7 +9,7 @@ use soroban_env_common::{Env, StorageType, TryIntoVal};
 use super::storage_types::AllowanceValue;
 
 // Metering: covered by components
-pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
+pub(crate) fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
     if let Some(allowance) = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Temporary)?
     {
@@ -25,7 +25,7 @@ pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128,
 }
 
 // Metering: covered by components
-pub fn write_allowance(
+pub(crate) fn write_allowance(
     e: &Host,
     from: Address,
     spender: Address,
@@ -127,7 +127,7 @@ fn write_allowance_amount(
 }
 
 // Metering: covered by components
-pub fn spend_allowance(
+pub(crate) fn spend_allowance(
     e: &Host,
     from: Address,
     spender: Address,

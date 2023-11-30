@@ -1,6 +1,6 @@
 use crate::{
     builtin_contracts::{
-        base_types::{Address, Bytes, String},
+        base_types::{Address, String},
         testutils::{authorize_single_invocation, ContractTypeVec, TestSigner},
     },
     xdr::{Asset, Limited, WriteXdr},
@@ -14,16 +14,14 @@ pub(crate) struct TestStellarAssetContract<'a> {
 
 impl<'a> TestStellarAssetContract<'a> {
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Result<Self, HostError> {
+        use crate::EnvBase;
         let mut asset_bytes_vec = Limited::new(vec![], DEFAULT_XDR_RW_LIMITS);
         // Note: only asset creation should be return error, otherwise
         // `unwrap`s are part of test setup and thus shouldn't be confused with
         // contract creation errors we're interested in.
         asset.write_xdr(&mut asset_bytes_vec).unwrap();
-        let address_obj = host.create_asset_contract(
-            Bytes::from_slice(host, &asset_bytes_vec.inner.as_slice())
-                .unwrap()
-                .into(),
-        )?;
+        let address_obj = host
+            .create_asset_contract(host.bytes_new_from_slice(&asset_bytes_vec.inner.as_slice())?)?;
         Ok(Self {
             address: Address::try_from_val(host, &address_obj).unwrap(),
             host,

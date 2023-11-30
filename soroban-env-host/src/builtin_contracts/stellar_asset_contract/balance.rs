@@ -31,7 +31,7 @@ use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRE
 /// by the issuer/admin before it's allowed to hold a balance.
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
+pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.into()),
         ScAddress::Contract(_) => {
@@ -73,7 +73,7 @@ fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), H
 }
 
 // Metering: covered by components.
-pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
+pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
     if !is_authorized(e, addr.metered_clone(e)?)? {
         return Err(e.error(
             ContractError::BalanceDeauthorizedError.into(),
@@ -123,7 +123,7 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
 }
 
 // TODO: Metering analysis
-pub fn spend_balance_no_authorization_check(
+pub(crate) fn spend_balance_no_authorization_check(
     e: &Host,
     addr: Address,
     amount: i128,
@@ -181,7 +181,7 @@ pub fn spend_balance_no_authorization_check(
 }
 
 // Metering: covered by components.
-pub fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
+pub(crate) fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
     if !is_authorized(e, addr.metered_clone(e)?)? {
         return Err(e.error(
             ContractError::BalanceDeauthorizedError.into(),
@@ -194,7 +194,7 @@ pub fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostEr
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
+pub(crate) fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => is_account_authorized(e, acc_id),
         ScAddress::Contract(_) => {
@@ -212,7 +212,11 @@ pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+pub(crate) fn write_authorization(
+    e: &Host,
+    addr: Address,
+    authorize: bool,
+) -> Result<(), HostError> {
     if !authorize && !is_asset_auth_revocable(e)? {
         return Err(e.error(
             ContractError::OperationNotSupportedError.into(),
@@ -246,7 +250,7 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
 }
 
 // TODO: Metering analysis
-pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
+pub(crate) fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
     let validate_trustline =
         |asset: TrustLineAsset, issuer: AccountId, account: AccountId| -> Result<(), HostError> {
             if issuer == account {
@@ -327,7 +331,11 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
 }
 
 // Metering: covered by components
-pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Result<(), HostError> {
+pub(crate) fn transfer_classic_balance(
+    e: &Host,
+    to_key: AccountId,
+    amount: i64,
+) -> Result<(), HostError> {
     let transfer_trustline_balance_safe =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
             if issuer == to {
