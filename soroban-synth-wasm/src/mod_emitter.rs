@@ -57,47 +57,49 @@ pub struct ModEmitter {
     import_refs: BTreeMap<(String, String, Arity), FuncRef>,
 }
 
+impl Default for ModEmitter {
+    fn default() -> Self {
+        let mut me = Self::new();
+        me.custom_section(
+            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
+            &soroban_env_common::meta::XDR,
+        );
+        me.table(RefType::FUNCREF, 128, None);
+        me.memory(1, None, false, false);
+        me.global(ValType::I64, true, &ConstExpr::i64_const(42));
+        me.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        me
+    }
+}
+
 impl ModEmitter {
     pub fn from_configs(mem_pages: u32, elem_count: u32) -> Self {
-        let mut module = Module::new();
+        let mut me = Self::new();
+        me.custom_section(
+            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
+            &soroban_env_common::meta::XDR,
+        );
+        me.table(RefType::FUNCREF, elem_count, None);
+        me.memory(mem_pages as u64, None, false, false);
+        me.global(ValType::I64, true, &ConstExpr::i64_const(42));
+        me.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        me
+    }
 
-        let metasection = CustomSection {
-            name: Cow::Borrowed(soroban_env_common::meta::ENV_META_V0_SECTION_NAME),
-            data: Cow::Borrowed(&soroban_env_common::meta::XDR),
-        };
-        module.section(&metasection);
-
+    pub fn new() -> Self {
+        let module = Module::new();
         let types = TypeSection::new();
         let imports = ImportSection::new();
         let funcs = FunctionSection::new();
-        let mut tables = TableSection::new();
-        tables.table(TableType {
-            element_type: RefType::FUNCREF,
-            minimum: elem_count,
-            maximum: None,
-        });
-        let mut memories = MemorySection::new();
-        memories.memory(MemoryType {
-            minimum: mem_pages as u64,
-            maximum: None,
-            memory64: false,
-            shared: false,
-        });
-        let mut globals = GlobalSection::new();
-        globals.global(
-            GlobalType {
-                val_type: ValType::I64,
-                mutable: true,
-            },
-            &ConstExpr::i64_const(42),
-        );
-        let mut exports = ExportSection::new();
-        exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        let tables = TableSection::new();
+        let memories = MemorySection::new();
+        let globals = GlobalSection::new();
+        let exports = ExportSection::new();
         let elements = ElementSection::new();
         let codes = CodeSection::new();
         let data = DataSection::new();
-        let typerefs = BTreeMap::new();
-        let importrefs = BTreeMap::new();
+        let type_refs = BTreeMap::new();
+        let import_refs = BTreeMap::new();
         Self {
             module,
             types,
@@ -110,9 +112,58 @@ impl ModEmitter {
             elements,
             codes,
             data,
-            type_refs: typerefs,
-            import_refs: importrefs,
+            type_refs,
+            import_refs,
         }
+    }
+
+    pub fn custom_section(&mut self, name: &str, data: &[u8]) -> &mut Self {
+        self.module.section(&CustomSection {
+            name: Cow::Borrowed(name),
+            data: Cow::Borrowed(data),
+        });
+        self
+    }
+
+    pub fn table(
+        &mut self,
+        element_type: RefType,
+        minimum: u32,
+        maximum: Option<u32>,
+    ) -> &mut Self {
+        self.tables.table(TableType {
+            element_type,
+            minimum,
+            maximum,
+        });
+        self
+    }
+
+    pub fn memory(
+        &mut self,
+        minimum: u64,
+        maximum: Option<u64>,
+        memory64: bool,
+        shared: bool,
+    ) -> &mut Self {
+        self.memories.memory(MemoryType {
+            minimum,
+            maximum,
+            memory64,
+            shared,
+        });
+        self
+    }
+
+    pub fn global(&mut self, val_type: ValType, mutable: bool, init_expr: &ConstExpr) -> &mut Self {
+        self.globals
+            .global(GlobalType { val_type, mutable }, init_expr);
+        self
+    }
+
+    pub fn export(&mut self, name: &str, kind: ExportKind, index: u32) -> &mut Self {
+        self.exports.export(name, kind, index);
+        self
     }
 
     /// Create a new [`FuncEmitter`] with the given [`Arity`] and locals count.
@@ -191,13 +242,7 @@ impl ModEmitter {
 
     pub fn define_global_i64(&mut self, val: i64, mutable: bool, export: Option<&str>) {
         let idx = self.globals.len();
-        self.globals.global(
-            GlobalType {
-                val_type: ValType::I64,
-                mutable,
-            },
-            &ConstExpr::i64_const(val),
-        );
+        self.global(ValType::I64, mutable, &ConstExpr::i64_const(val));
         if let Some(name) = export {
             self.exports.export(name, ExportKind::Global, idx);
         }
@@ -247,65 +292,6 @@ impl ModEmitter {
         match wasmparser::validate(bytes.as_slice()) {
             Ok(_) => bytes,
             Err(ty) => panic!("invalid WASM module: {:?}", ty.message()),
-        }
-    }
-}
-
-impl Default for ModEmitter {
-    fn default() -> Self {
-        let mut module = Module::new();
-
-        let metasection = CustomSection {
-            name: Cow::Borrowed(soroban_env_common::meta::ENV_META_V0_SECTION_NAME),
-            data: Cow::Borrowed(&soroban_env_common::meta::XDR),
-        };
-        module.section(&metasection);
-
-        let types = TypeSection::new();
-        let imports = ImportSection::new();
-        let funcs = FunctionSection::new();
-        let mut tables = TableSection::new();
-        tables.table(TableType {
-            element_type: RefType::FUNCREF,
-            minimum: 128,
-            maximum: None,
-        });
-        let mut memories = MemorySection::new();
-        memories.memory(MemoryType {
-            minimum: 1,
-            maximum: None,
-            memory64: false,
-            shared: false,
-        });
-        let mut globals = GlobalSection::new();
-        globals.global(
-            GlobalType {
-                val_type: ValType::I64,
-                mutable: true,
-            },
-            &ConstExpr::i64_const(42),
-        );
-        let mut exports = ExportSection::new();
-        exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
-        let elements = ElementSection::new();
-        let codes = CodeSection::new();
-        let data = DataSection::new();
-        let typerefs = BTreeMap::new();
-        let importrefs = BTreeMap::new();
-        Self {
-            module,
-            types,
-            imports,
-            funcs,
-            tables,
-            memories,
-            globals,
-            exports,
-            elements,
-            codes,
-            data,
-            type_refs: typerefs,
-            import_refs: importrefs,
         }
     }
 }

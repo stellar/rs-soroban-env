@@ -1,11 +1,6 @@
-use std::cell::Cell;
-use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
-use std::sync::Once;
-
-use crate::{StorageType, SymbolSmall};
-use std::{collections::BTreeMap, rc::Rc};
-
 use rand::RngCore;
+use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
+use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
 
 use crate::{
     budget::Budget,
@@ -14,7 +9,8 @@ use crate::{
         AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScErrorCode,
         ScErrorType, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, StorageType,
+    SymbolSmall, Val, VecObject,
 };
 
 /// Catch panics while suppressing the default panic hook that prints to the
@@ -374,7 +370,7 @@ impl Host {
 
 #[cfg(test)]
 pub(crate) mod wasm {
-    use crate::{Symbol, U32Val, Val};
+    use crate::{Symbol, Tag, U32Val, Val};
     use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
@@ -580,6 +576,30 @@ pub(crate) mod wasm {
         let vals_pos = U32Val::from(num_vals * 8);
         let keys_pos = U32Val::from(num_vals * 16);
         fe.map_new_from_linear_memory(keys_pos, vals_pos, U32Val::from(num_vals));
+
+        fe.finish_and_export("test").finish()
+    }
+
+    // Emit a wasm module that uses post-MVP WASM features. Specifically
+    // mutable-globals and sign-ext.
+    pub fn post_mvp_wasm_module() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+
+        // Emit an exported mutable global
+        me.define_global_i64(-100, true, Some("global"));
+
+        let mut fe = me.func(Arity(0), 0);
+        fe.i64_const(0x0000_0000_ffff_abcd_u64 as i64);
+
+        // Emit an op from the new sign-ext repertoire
+        fe.i64_extend32s();
+
+        // Turn this into a I64Small
+        fe.i64_const(8);
+        fe.i64_shl();
+        fe.i64_const(Tag::I64Small as i64);
+        fe.i64_or();
+
         fe.finish_and_export("test").finish()
     }
 }
