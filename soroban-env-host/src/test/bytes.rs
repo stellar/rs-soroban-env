@@ -1,11 +1,17 @@
+use crate::Symbol;
 use crate::{
     budget::AsBudget,
     testutils::wasm,
-    xdr::{ContractCostType, ScBytes, ScError, ScErrorCode, ScErrorType, ScVal, ScVec, WriteXdr},
-    BytesObject, Compare, Env, EnvBase, Error, Host, HostError, Symbol, TryFromVal, U32Val, Val,
+    xdr::{
+        AccountId, ContractCostType, Hash, PublicKey, ScAddress, ScBytes, ScError, ScErrorCode,
+        ScErrorType, ScMap, ScMapEntry, ScVal, ScVec, Uint256, WriteXdr,
+    },
+    BytesObject, Compare, Env, EnvBase, Error, Host, HostError, TryFromVal, U32Val, Val,
     DEFAULT_XDR_RW_LIMITS,
 };
+use arbitrary::{Arbitrary, Unstructured};
 use more_asserts::assert_ge;
+use rand::RngCore;
 use soroban_test_wasms::LINEAR_MEMORY;
 use std::ops::Deref;
 
@@ -110,13 +116,6 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
         assert_eq!((*host).compare(&rv, &rv_back)?, core::cmp::Ordering::Equal);
         Ok(())
     };
-    let deser_fails_bytes = |bytes: Vec<u8>| -> Result<(), HostError> {
-        let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
-        let res = host.deserialize_from_bytes(bo);
-        assert!(res.is_err());
-        assert!(res.err().unwrap().error.is_code(ScErrorCode::InvalidInput));
-        Ok(())
-    };
     let deser_fails_scv = |v: ScVal| -> Result<(), HostError> {
         let bytes: Vec<u8> = v.to_xdr(DEFAULT_XDR_RW_LIMITS)?;
         let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
@@ -137,29 +136,240 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     roundtrip(ScVal::I32(-3_i32))?;
     // static
     roundtrip(ScVal::Bool(true))?;
-    // object
-    {
-        // vec
-        let scval = ScVal::Vec(Some(host.test_scvec::<u32>(&[1, 2])?));
-        roundtrip(scval)?
-        // TODO: add other types
-    }
-    // Symbol
-    roundtrip(ScVal::Symbol(crate::xdr::ScSymbol(
-        host.map_err("stellar".to_string().try_into())?,
+    roundtrip(ScVal::Void)?;
+
+    // objects
+    // vec
+    // Valid
+    roundtrip(ScVal::Vec(Some(
+        vec![
+            ScVal::Error(ScError::Contract(123)),
+            ScVal::U32(u32::MAX),
+            ScVal::Symbol("abc".try_into().unwrap()),
+        ]
+        .try_into()?,
     )))?;
-    // error
-    roundtrip(ScVal::Error(ScError::Context(ScErrorCode::InternalError)))?;
-    // garbage bytes fail
-    deser_fails_bytes(vec![1, 2, 3, 4, 5])?;
-    // non-representable fails
-    deser_fails_scv(ScVal::LedgerKeyContractInstance)?;
+    // No payload fails
+    deser_fails_scv(ScVal::Map(None))?;
+
     // non-representable fails
     deser_fails_scv(ScVal::Vec(Some(ScVec(
-        vec![ScVal::LedgerKeyContractInstance].try_into()?,
+        vec![
+            ScVal::U32(4321),
+            ScVal::Vec(Some(ScVec(
+                vec![ScVal::LedgerKeyContractInstance].try_into()?,
+            ))),
+        ]
+        .try_into()?,
     ))))?;
+
+    // Map
+    // Valid
+    roundtrip(ScVal::Map(Some(ScMap(
+        vec![
+            ScMapEntry {
+                key: ScVal::Void,
+                val: ScVal::U32(123),
+            },
+            ScMapEntry {
+                key: ScVal::U64(222),
+                val: ScVal::U32(123),
+            },
+            ScMapEntry {
+                key: ScVal::U64(333),
+                val: ScVal::U32(123),
+            },
+        ]
+        .try_into()?,
+    ))))?;
+    // Duplicate key
+    deser_fails_scv(ScVal::Map(Some(ScMap(
+        vec![
+            ScMapEntry {
+                key: ScVal::Void,
+                val: ScVal::U32(123),
+            },
+            ScMapEntry {
+                key: ScVal::Void,
+                val: ScVal::U32(234),
+            },
+        ]
+        .try_into()?,
+    ))))?;
+
+    // No payload fails
+    deser_fails_scv(ScVal::Map(None))?;
+
+    // Out of order keys
+    deser_fails_scv(ScVal::Map(Some(ScMap(
+        vec![
+            ScMapEntry {
+                key: ScVal::U64(222),
+                val: ScVal::U32(123),
+            },
+            ScMapEntry {
+                key: ScVal::Void,
+                val: ScVal::U32(123),
+            },
+        ]
+        .try_into()?,
+    ))))?;
+    // Non-representable key
+    deser_fails_scv(ScVal::Map(Some(ScMap(
+        vec![
+            ScMapEntry {
+                key: ScVal::U64(222),
+                val: ScVal::U32(123),
+            },
+            ScMapEntry {
+                key: ScVal::LedgerKeyContractInstance,
+                val: ScVal::U32(123),
+            },
+        ]
+        .try_into()?,
+    ))))?;
+    // Non-representable value
+    deser_fails_scv(ScVal::Map(Some(ScMap(
+        vec![
+            ScMapEntry {
+                key: ScVal::U64(222),
+                val: ScVal::U32(123),
+            },
+            ScMapEntry {
+                key: ScVal::U64(333),
+                val: ScVal::LedgerKeyContractInstance,
+            },
+        ]
+        .try_into()?,
+    ))))?;
+
+    // Symbol
+    // Valid
+    roundtrip(ScVal::Symbol(crate::xdr::ScSymbol(
+        "_a_B_Z_d123456".try_into()?,
+    )))?;
+    // Empty, valid
+    roundtrip(ScVal::Symbol(crate::xdr::ScSymbol("".try_into()?)))?;
+    // Bad character
+    deser_fails_scv(ScVal::Symbol(crate::xdr::ScSymbol("a ".try_into()?)))?;
+    // error
+    roundtrip(ScVal::Error(ScError::Context(ScErrorCode::InternalError)))?;
+    // Address
+    // Account address
+    roundtrip(ScVal::Address(ScAddress::Account(AccountId(
+        PublicKey::PublicKeyTypeEd25519(Uint256([255; 32])),
+    ))))?;
+    // Contract address
+    roundtrip(ScVal::Address(ScAddress::Contract(Hash([255; 32]))))?;
+    // non-representable fails
+    deser_fails_scv(ScVal::LedgerKeyContractInstance)?;
+
     Ok(())
 }
+
+#[test]
+fn arbitrary_xdr_roundtrips() -> Result<(), HostError> {
+    const ITERATIONS: u32 = 50_000;
+    let host = Host::test_host();
+    host.budget_ref().reset_unlimited().unwrap();
+
+    let mut successes = 0;
+    let mut failures = 0;
+    let mut roundtrip_test = |v: ScVal| -> Result<(), HostError> {
+        let bytes: Vec<u8> = v.to_xdr(DEFAULT_XDR_RW_LIMITS)?;
+        let scval_bytes_obj = host
+            .add_host_object(ScBytes(bytes.try_into().unwrap()))
+            .unwrap();
+        // Not every randomly generated ScVal can be converted to `Val` due to non-representable
+        // values and invariants like map ordering.
+        let deserialize_res = host.deserialize_from_bytes(scval_bytes_obj);
+        match deserialize_res {
+            Ok(val) => {
+                let serialized_bytes = host.serialize_to_bytes(val)?;
+                assert_eq!(
+                    host.compare(&scval_bytes_obj, &serialized_bytes)?,
+                    core::cmp::Ordering::Equal
+                );
+                successes += 1;
+            }
+            Err(err) => {
+                assert!(err.error.is_code(ScErrorCode::UnexpectedType));
+                failures += 1;
+            }
+        }
+        Ok(())
+    };
+    for _ in 0..ITERATIONS {
+        let mut data = vec![0u8; 5000];
+        host.with_test_prng(|rng| {
+            rng.fill_bytes(data.as_mut_slice());
+            Ok(())
+        })?;
+
+        let sc_val = ScVal::arbitrary(&mut Unstructured::new(data.as_slice())).unwrap();
+        roundtrip_test(sc_val)?;
+    }
+    eprintln!("successful roundtrips: {successes}, failed roundtrips: {failures}");
+    // We don't hardcode the exact results here, but statistically there should be more valid
+    // `ScVal`s generated.
+    assert!(successes > failures);
+    Ok(())
+}
+
+#[test]
+fn test_malformed_xdr_decoding() -> Result<(), HostError> {
+    let host = observe_host!(Host::default());
+    let run_test = |bytes: Vec<u8>| -> Result<(), HostError> {
+        let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
+        let res = host.deserialize_from_bytes(bo);
+        assert!(res.is_err());
+        Ok(())
+    };
+    run_test(vec![])?;
+    run_test(vec![1, 2, 3, 4, 5])?;
+    // Invalid enum variant.
+    let mut v = ScVal::Void.to_xdr(DEFAULT_XDR_RW_LIMITS)?;
+    v[0] = 1;
+    run_test(v)?;
+
+    let vec_xdr = ScVal::Vec(Some(ScVec(
+        vec![ScVal::U32(100), ScVal::U32(101)].try_into().unwrap(),
+    )))
+    .to_xdr(DEFAULT_XDR_RW_LIMITS)?;
+
+    let mut too_short_vec = vec_xdr.clone();
+    too_short_vec[11] = 1;
+    run_test(too_short_vec)?;
+
+    let mut too_long_vec = vec_xdr.clone();
+    too_long_vec[11] = 3;
+    run_test(too_long_vec)?;
+
+    let mut very_long_vec = vec_xdr.clone();
+    very_long_vec[8] = 0xff;
+    run_test(very_long_vec)?;
+
+    let address_xdr = ScVal::Address(ScAddress::Account(AccountId(
+        PublicKey::PublicKeyTypeEd25519(Uint256([255; 32])),
+    )))
+    .to_xdr(DEFAULT_XDR_RW_LIMITS)?;
+    let mut add_char_address = address_xdr.clone();
+    add_char_address.push(255);
+    run_test(add_char_address)?;
+
+    let mut remove_char_address = address_xdr.clone();
+    remove_char_address.pop();
+    run_test(remove_char_address)?;
+
+    let mut wrong_variant_address = address_xdr.clone();
+    wrong_variant_address[7] = 1;
+    run_test(wrong_variant_address)?;
+
+    Ok(())
+}
+
+#[test]
+fn test_overly_large_bytes_xdr_decoding() {}
 
 #[test]
 fn linear_memory_operations() -> Result<(), HostError> {
