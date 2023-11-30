@@ -38,11 +38,14 @@ fn xdr_object_conversion() -> Result<(), HostError> {
         // - 1 for the vec cpy
         // - 1 for the bulk bytes cpy
         // - 1 for Vec -> MeteredOrdMap element scan
-        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.0, 3);
+        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.iterations, 3);
         // 120 bytes in total:
         // - 72 bytes copied for the ScVal->Val conversion: 24 (Vec bytes) + 2 (map entries) x (8 (padding bytes) + 8 (key bytes) + 8 (val bytes))
         // - 48 bytes for element scan: 2 elements * 24 bytes per element (8 padding bytes + 8 key bytes + 8 val bytes)
-        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.1, Some(120));
+        assert_eq!(
+            budget.get_tracker(ContractCostType::MemCpy)?.inputs,
+            Some(120)
+        );
         Ok(())
     })?;
     Ok(())
@@ -67,11 +70,16 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     // try_call
     host.try_call(id_obj, sym, args)?;
     host.with_budget(|budget| {
-        assert_eq!(budget.get_tracker(ContractCostType::InvokeVmFunction)?.0, 1);
+        assert_eq!(
+            budget
+                .get_tracker(ContractCostType::InvokeVmFunction)?
+                .iterations,
+            1
+        );
         assert_eq!(
             budget
                 .get_tracker(ContractCostType::DispatchHostFunction)?
-                .0,
+                .iterations,
             2
         );
         assert_eq!(budget.get_cpu_insns_consumed()?, 30);
@@ -100,7 +108,9 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     host.call(id_obj, sym, args)?;
     let (cpu_count, cpu_consumed, mem_consumed, wasm_mem_alloc) = host.with_budget(|budget| {
         Ok((
-            budget.get_tracker(ContractCostType::WasmInsnExec)?.0,
+            budget
+                .get_tracker(ContractCostType::WasmInsnExec)?
+                .iterations,
             budget.get_cpu_insns_consumed()?,
             budget.get_mem_bytes_consumed()?,
             budget.get_wasm_mem_alloc()?,
@@ -181,7 +191,7 @@ fn metered_xdr() -> Result<(), HostError> {
     metered_write_xdr(host.budget_ref(), &scmap, &mut w)?;
     host.with_budget(|budget| {
         assert_eq!(
-            budget.get_tracker(ContractCostType::ValSer)?.1,
+            budget.get_tracker(ContractCostType::ValSer)?.inputs,
             Some(w.len() as u64)
         );
         Ok(())
@@ -190,7 +200,7 @@ fn metered_xdr() -> Result<(), HostError> {
     host.metered_from_xdr::<ScMap>(w.as_slice())?;
     host.with_budget(|budget| {
         assert_eq!(
-            budget.get_tracker(ContractCostType::ValDeser)?.1,
+            budget.get_tracker(ContractCostType::ValDeser)?.inputs,
             Some(w.len() as u64)
         );
         Ok(())
@@ -249,7 +259,12 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
         //  + 4 more to do same 2+2 visits when validating order of new map
         //  + 5 lookups on objects returned from 5 host fn calls to check their integrity
         // = 17
-        assert_eq!(budget.get_tracker(ContractCostType::VisitObject)?.0, 17);
+        assert_eq!(
+            budget
+                .get_tracker(ContractCostType::VisitObject)?
+                .iterations,
+            17
+        );
         // upper bound of number of map-accesses, counting both binary-search, point-access and validate-scan.
         Ok(())
     })?;
@@ -292,7 +307,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     expect!["864"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::MemAlloc)?
-            .1
+            .inputs
             .unwrap()
             .to_string()
             .as_str(),
@@ -302,7 +317,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     expect!["888"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::MemCpy)?
-            .1
+            .inputs
             .unwrap()
             .to_string()
             .as_str(),

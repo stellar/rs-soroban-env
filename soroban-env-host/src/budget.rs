@@ -25,72 +25,40 @@ use model::ScaledU64;
 use wasmi_helper::FuelConfig;
 
 #[derive(Clone, Default)]
-struct MeterTracker {
+pub struct CostTracker {
+    pub iterations: u64,
+    pub inputs: Option<u64>,
+    pub cpu: u64,
+    pub mem: u64,
+}
+
+#[derive(Clone)]
+struct BudgetTracker {
     // Tracks the `(sum_of_iterations, total_input)` for each `CostType`
-    cost_tracker: [(u64, Option<u64>); ContractCostType::variants().len()],
+    cost_tracker: [CostTracker; ContractCostType::variants().len()],
     // Total number of times the meter is called
-    count: u32,
+    meter_count: u32,
     #[cfg(any(test, feature = "testutils", feature = "bench"))]
     wasm_memory: u64,
 }
 
-impl MeterTracker {
-    #[cfg(any(test, feature = "testutils", feature = "bench"))]
-    fn reset(&mut self) {
-        self.count = 0;
-        for tracker in &mut self.cost_tracker {
-            tracker.0 = 0;
-            tracker.1 = tracker.1.map(|_| 0);
-        }
-        self.wasm_memory = 0;
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct BudgetImpl {
-    cpu_insns: BudgetDimension,
-    mem_bytes: BudgetDimension,
-    /// For the purpose of calibration and reporting; not used for budget-limiting per se.
-    tracker: MeterTracker,
-    is_in_shadow_mode: bool,
-    fuel_config: FuelConfig,
-    depth_limit: u32,
-}
-
-impl BudgetImpl {
-    /// Initializes the budget from network configuration settings.
-    fn try_from_configs(
-        cpu_limit: u64,
-        mem_limit: u64,
-        cpu_cost_params: ContractCostParams,
-        mem_cost_params: ContractCostParams,
-    ) -> Result<Self, HostError> {
-        let mut b = Self {
-            cpu_insns: BudgetDimension::try_from_config(cpu_cost_params)?,
-            mem_bytes: BudgetDimension::try_from_config(mem_cost_params)?,
-            tracker: Default::default(),
-            is_in_shadow_mode: false,
-            fuel_config: Default::default(),
-            depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
+impl Default for BudgetTracker {
+    fn default() -> Self {
+        let mut mt = Self {
+            cost_tracker: Default::default(),
+            meter_count: Default::default(),
+            #[cfg(any(test, feature = "testutils", feature = "bench"))]
+            wasm_memory: Default::default(),
         };
-
-        b.init_tracker();
-
-        b.cpu_insns.reset(cpu_limit);
-        b.mem_bytes.reset(mem_limit);
-        Ok(b)
-    }
-
-    fn init_tracker(&mut self) {
         for (ct, tracker) in ContractCostType::variants()
             .iter()
-            .zip(self.tracker.cost_tracker.iter_mut())
+            .zip(mt.cost_tracker.iter_mut())
         {
             // Define what inputs actually mean. For any constant-cost types --
             // whether it is a true constant unit cost type, or empirically
             // assigned (via measurement) constant type -- we leave the input as
             // `None`, otherwise, we initialize the input to `Some(0)``.
-            let mut init_input = || tracker.1 = Some(0);
+            let mut init_input = || tracker.inputs = Some(0);
             match ct {
                 ContractCostType::WasmInsnExec => (),
                 ContractCostType::MemAlloc => init_input(), // number of bytes in host memory to allocate
@@ -124,6 +92,55 @@ impl BudgetImpl {
                 ContractCostType::ChaCha20DrawBytes => init_input(), // number of random bytes to draw
             }
         }
+        mt
+    }
+}
+
+impl BudgetTracker {
+    #[cfg(any(test, feature = "testutils", feature = "bench"))]
+    fn reset(&mut self) {
+        self.meter_count = 0;
+        for tracker in &mut self.cost_tracker {
+            tracker.iterations = 0;
+            tracker.inputs = tracker.inputs.map(|_| 0);
+            tracker.cpu = 0;
+            tracker.mem = 0;
+        }
+        self.wasm_memory = 0;
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct BudgetImpl {
+    cpu_insns: BudgetDimension,
+    mem_bytes: BudgetDimension,
+    /// For the purpose of calibration and reporting; not used for budget-limiting nor does it affect consensus
+    tracker: BudgetTracker,
+    is_in_shadow_mode: bool,
+    fuel_config: FuelConfig,
+    depth_limit: u32,
+}
+
+impl BudgetImpl {
+    /// Initializes the budget from network configuration settings.
+    fn try_from_configs(
+        cpu_limit: u64,
+        mem_limit: u64,
+        cpu_cost_params: ContractCostParams,
+        mem_cost_params: ContractCostParams,
+    ) -> Result<Self, HostError> {
+        let mut b = Self {
+            cpu_insns: BudgetDimension::try_from_config(cpu_cost_params)?,
+            mem_bytes: BudgetDimension::try_from_config(mem_cost_params)?,
+            tracker: Default::default(),
+            is_in_shadow_mode: false,
+            fuel_config: Default::default(),
+            depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
+        };
+
+        b.cpu_insns.reset(cpu_limit);
+        b.mem_bytes.reset(mem_limit);
+        Ok(b)
     }
 
     pub fn charge(
@@ -132,18 +149,17 @@ impl BudgetImpl {
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
+        let tracker = self
+            .tracker
+            .cost_tracker
+            .get_mut(ty as usize)
+            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
+
         if !self.is_in_shadow_mode {
             // update tracker for reporting
-            self.tracker.count = self.tracker.count.saturating_add(1);
-            let (t_iters, t_inputs) = &mut self
-                .tracker
-                .cost_tracker
-                .get_mut(ty as usize)
-                .ok_or_else(|| {
-                    HostError::from((ScErrorType::Budget, ScErrorCode::InternalError))
-                })?;
-            *t_iters = t_iters.saturating_add(iterations);
-            match (t_inputs, input) {
+            self.tracker.meter_count = self.tracker.meter_count.saturating_add(1);
+            tracker.iterations = tracker.iterations.saturating_add(iterations);
+            match (&mut tracker.inputs, input) {
                 (None, None) => (),
                 (Some(t), Some(i)) => *t = t.saturating_add(i.saturating_mul(iterations)),
                 // internal logic error, a wrong cost type has been passed in
@@ -151,20 +167,31 @@ impl BudgetImpl {
             };
         }
 
-        self.cpu_insns.charge(
+        let cpu_charged = self.cpu_insns.charge(
             ty,
             iterations,
             input,
             IsCpu(true),
             IsShadowMode(self.is_in_shadow_mode),
         )?;
-        self.mem_bytes.charge(
+        if !self.is_in_shadow_mode {
+            tracker.cpu = tracker.cpu.saturating_add(cpu_charged);
+        }
+        self.cpu_insns
+            .check_budget_limit(IsShadowMode(self.is_in_shadow_mode))?;
+
+        let mem_charged = self.mem_bytes.charge(
             ty,
             iterations,
             input,
             IsCpu(false),
             IsShadowMode(self.is_in_shadow_mode),
-        )
+        )?;
+        if !self.is_in_shadow_mode {
+            tracker.mem = tracker.mem.saturating_add(mem_charged);
+        }
+        self.mem_bytes
+            .check_budget_limit(IsShadowMode(self.is_in_shadow_mode))
     }
 
     fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
@@ -195,8 +222,8 @@ impl BudgetImpl {
 impl Default for BudgetImpl {
     fn default() -> Self {
         let mut b = Self {
-            cpu_insns: BudgetDimension::new(),
-            mem_bytes: BudgetDimension::new(),
+            cpu_insns: BudgetDimension::default(),
+            mem_bytes: BudgetDimension::default(),
             tracker: Default::default(),
             is_in_shadow_mode: false,
             fuel_config: Default::default(),
@@ -425,8 +452,6 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(0);
                 }
             }
-
-            b.init_tracker();
         }
 
         // define the limits
@@ -469,10 +494,10 @@ impl Debug for BudgetImpl {
                 f,
                 "{:<25}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
                 format!("{:?}", ct),
-                self.tracker.cost_tracker[i].0,
-                format!("{:?}", self.tracker.cost_tracker[i].1),
-                self.cpu_insns.counts[i],
-                self.mem_bytes.counts[i],
+                self.tracker.cost_tracker[i].iterations,
+                format!("{:?}", self.tracker.cost_tracker[i].inputs),
+                self.tracker.cost_tracker[i].cpu,
+                self.tracker.cost_tracker[i].mem,
                 self.cpu_insns.cost_models[i].const_term,
                 format!("{}", self.cpu_insns.cost_models[i].lin_term),
                 self.mem_bytes.cost_models[i].const_term,
@@ -484,7 +509,11 @@ impl Debug for BudgetImpl {
             f,
             "Internal details (diagnostics info, does not affect fees) "
         )?;
-        writeln!(f, "Total # times meter was called: {}", self.tracker.count,)?;
+        writeln!(
+            f,
+            "Total # times meter was called: {}",
+            self.tracker.meter_count,
+        )?;
         writeln!(
             f,
             "Shadow cpu limit: {}; used: {}",
@@ -525,8 +554,8 @@ impl Display for BudgetImpl {
                 f,
                 "{:<25}{:<15}{:<15}",
                 format!("{:?}", ct),
-                self.cpu_insns.counts[i],
-                self.mem_bytes.counts[i],
+                self.tracker.cost_tracker[i].cpu,
+                self.tracker.cost_tracker[i].mem,
             )?;
         }
         writeln!(f, "{:=<55}", "")?;
@@ -678,13 +707,13 @@ impl Budget {
         Ok(())
     }
 
-    pub fn get_tracker(&self, ty: ContractCostType) -> Result<(u64, Option<u64>), HostError> {
+    pub fn get_tracker(&self, ty: ContractCostType) -> Result<CostTracker, HostError> {
         self.0
             .try_borrow_or_err()?
             .tracker
             .cost_tracker
             .get(ty as usize)
-            .map(|x| *x)
+            .map(|x| x.clone())
             .ok_or_else(|| (ScErrorType::Budget, ScErrorCode::InternalError).into())
     }
 

@@ -459,7 +459,7 @@ fn instantiate_oversized_bytes_from_slice() -> Result<(), HostError> {
     assert_eq!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemAlloc)?
-            .1
+            .inputs
             .unwrap(),
         42_000_000
     );
@@ -506,14 +506,14 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
     assert_ge!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemAlloc)?
-            .1
+            .inputs
             .unwrap(),
         480000
     );
     assert_ge!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemCpy)?
-            .1
+            .inputs
             .unwrap(),
         480000
     );

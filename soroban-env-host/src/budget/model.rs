@@ -38,7 +38,7 @@ pub trait HostCostModel {
 pub const COST_MODEL_LIN_TERM_SCALE_BITS: u32 = 7;
 
 /// A helper type that wraps an u64 to signify the wrapped value have been scaled.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct ScaledU64(pub(crate) u64);
 
 impl ScaledU64 {
@@ -78,7 +78,7 @@ impl Debug for ScaledU64 {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct MeteredCostComponent {
     pub(crate) const_term: u64,
     pub(crate) lin_term: ScaledU64,

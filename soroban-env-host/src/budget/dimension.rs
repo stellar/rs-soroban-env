@@ -1,6 +1,6 @@
-use super::model::{HostCostModel, MeteredCostComponent, ScaledU64};
+use super::model::{HostCostModel, MeteredCostComponent};
 use crate::xdr::{ContractCostParams, ContractCostType, ScErrorCode, ScErrorType};
-use crate::HostError;
+use crate::{Error, HostError};
 use core::fmt::Debug;
 
 /// Helper types to annotate boolean function arguments
@@ -14,14 +14,11 @@ pub(crate) struct BudgetDimension {
     /// tracked by this dimension (eg. cpu or memory). CostType enum values are
     /// used as indexes into this vector, to make runtime lookups as cheap as
     /// possible.
-    pub(crate) cost_models: Vec<MeteredCostComponent>,
+    pub(crate) cost_models: [MeteredCostComponent; ContractCostType::variants().len()],
 
     /// The limit against-which the count is compared to decide if we're
     /// over budget.
     pub(crate) limit: u64,
-
-    /// Tracks the output value from individual cost models
-    pub(crate) counts: Vec<u64>,
 
     /// Tracks the sum of _output_ values from the cost model, for purposes
     /// of comparing to limit.
@@ -47,7 +44,7 @@ impl Debug for BudgetDimension {
         )?;
 
         for ct in ContractCostType::variants() {
-            writeln!(f, "CostType {:?}, count {}", ct, self.counts[ct as usize])?;
+            writeln!(f, "CostType {:?}", ct)?;
             writeln!(f, "model: {:?}", self.cost_models[ct as usize])?;
         }
 
@@ -61,18 +58,6 @@ impl Debug for BudgetDimension {
 }
 
 impl BudgetDimension {
-    pub(crate) fn new() -> Self {
-        let mut bd = BudgetDimension::default();
-        for _ct in ContractCostType::variants() {
-            bd.cost_models.push(MeteredCostComponent {
-                const_term: 0,
-                lin_term: ScaledU64(0),
-            });
-            bd.counts.push(0);
-        }
-        bd
-    }
-
     pub(crate) fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
         let cost_models = cost_params
             .0
@@ -81,9 +66,14 @@ impl BudgetDimension {
             .collect::<Result<Vec<MeteredCostComponent>, HostError>>()?;
 
         Ok(Self {
-            cost_models,
+            cost_models: cost_models.try_into().map_err(|_| {
+                // error means the cost_params has the wrong dimension
+                HostError::from(Error::from_type_and_code(
+                    ScErrorType::Budget,
+                    ScErrorCode::InternalError,
+                ))
+            })?,
             limit: Default::default(),
-            counts: vec![0; cost_params.0.len()],
             total_count: Default::default(),
             shadow_limit: Default::default(),
             shadow_total_count: Default::default(),
@@ -112,9 +102,6 @@ impl BudgetDimension {
     pub(crate) fn reset(&mut self, limit: u64) {
         self.limit = limit;
         self.total_count = 0;
-        for v in &mut self.counts {
-            *v = 0;
-        }
         self.shadow_limit = limit;
         self.shadow_total_count = 0;
     }
@@ -138,6 +125,7 @@ impl BudgetDimension {
     /// input, assuming all batched units have the same input size. If input
     /// is `None`, the input is ignored and the model is treated as a constant
     /// model, and amount charged is iterations * const_term.
+    /// Returns the amount charged.
     pub(crate) fn charge(
         &mut self,
         ty: ContractCostType,
@@ -145,7 +133,7 @@ impl BudgetDimension {
         input: Option<u64>,
         _is_cpu: IsCpu,
         is_shadow: IsShadowMode,
-    ) -> Result<(), HostError> {
+    ) -> Result<u64, HostError> {
         let Some(cm) = self.get_cost_model(ty) else {
             return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
         };
@@ -161,14 +149,10 @@ impl BudgetDimension {
         if is_shadow.0 {
             self.shadow_total_count = self.shadow_total_count.saturating_add(amount);
         } else {
-            let cell = self.counts.get_mut(ty as usize).ok_or_else(|| {
-                HostError::from((ScErrorType::Budget, ScErrorCode::InternalError))
-            })?;
-            *cell = cell.saturating_add(amount);
             self.total_count = self.total_count.saturating_add(amount);
         }
 
-        self.check_budget_limit(is_shadow)
+        Ok(amount)
     }
 
     // Resets all model parameters to zero (so that we can override and test individual ones later).
