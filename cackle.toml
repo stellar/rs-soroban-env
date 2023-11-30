@@ -266,6 +266,7 @@ allow_unsafe = true
 build.allow_apis = [
     "env",
     "process",
+    "terminate",
 ]
 allow_unsafe = true
 
