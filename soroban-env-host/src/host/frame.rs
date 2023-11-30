@@ -1,28 +1,23 @@
-use soroban_env_common::{
-    xdr::{ContractIdPreimage, ScAddress, ScContractInstance, ScErrorCode, ScErrorType},
-    AddressObject,
-};
-
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
     err,
+    host::{
+        metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
+        prng::Prng,
+    },
     storage::{InstanceStorageMap, StorageMap},
-    xdr::{ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
-    Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
-    DEFAULT_HOST_DEPTH_LIMIT,
+    xdr::{
+        ContractExecutable, ContractIdPreimage, Hash, HostFunction, HostFunctionType, ScAddress,
+        ScContractInstance, ScErrorCode, ScErrorType, ScVal,
+    },
+    AddressObject, Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
+    Vm, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
 #[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
 use std::rc::Rc;
-
-use crate::Vm;
-
-use super::{
-    metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
-    prng::Prng,
-};
 
 /// Determines the re-entry mode for calling a contract.
 pub(crate) enum ContractReentryMode {
@@ -129,11 +124,33 @@ pub(crate) enum Frame {
     TestContract(TestContractFrame),
 }
 
+impl Frame {
+    fn contract_id(&self) -> Option<&Hash> {
+        match self {
+            Frame::ContractVM { vm, .. } => Some(&vm.contract_id),
+            Frame::HostFunction(_) => None,
+            Frame::StellarAssetContract(id, ..) => Some(id),
+            #[cfg(any(test, feature = "testutils"))]
+            Frame::TestContract(tc) => Some(&tc.id),
+        }
+    }
+
+    fn instance(&self) -> Option<&ScContractInstance> {
+        match self {
+            Frame::ContractVM { instance, .. } => Some(instance),
+            Frame::HostFunction(_) => None,
+            Frame::StellarAssetContract(_, _, _, instance) => Some(instance),
+            #[cfg(any(test, feature = "testutils"))]
+            Frame::TestContract(tc) => Some(&tc.instance),
+        }
+    }
+}
+
 impl Host {
     /// Returns if the host currently has a frame on the stack.
     ///
-    /// A frame being on the stack indicates that a contract is currently
-    /// executing.
+    /// A frame being on the stack usually indicates that a contract is currently
+    /// executing, or is in a state just-before or just-after executing.
     pub fn has_frame(&self) -> Result<bool, HostError> {
         self.with_current_frame_opt(|opt| Ok(opt.is_some()))
     }
@@ -217,7 +234,7 @@ impl Host {
             drop(context_guard);
             Err(self.err(
                 ScErrorType::Context,
-                ScErrorCode::MissingValue,
+                ScErrorCode::InternalError,
                 "no contract running",
                 &[],
             ))
@@ -248,7 +265,7 @@ impl Host {
             drop(context_guard);
             Err(self.err(
                 ScErrorType::Context,
-                ScErrorCode::MissingValue,
+                ScErrorCode::InternalError,
                 "no contract running",
                 &[],
             ))
@@ -256,7 +273,7 @@ impl Host {
     }
 
     /// Same as [`Self::with_current_frame`] but passes `None` when there is no current
-    /// frame, rather than logging an error.
+    /// frame, rather than failing with an error.
     pub(crate) fn with_current_frame_opt<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(Option<&Frame>) -> Result<U, HostError>,
@@ -305,37 +322,49 @@ impl Host {
     where
         F: FnOnce(&mut Prng) -> Result<U, HostError>,
     {
-        // We need to not hold the context borrow-guard over multiple
-        // error-generating calls here, since they will re-borrow the context to
-        // report any error. Instead we mem::take the context's PRNG into a
-        // local variable, and then put it back when we're done.
-        let mut curr_prng_opt =
+        // We mem::take the context's PRNG into a local variable and then put it
+        // back when we're done. This allows the callback to borrow the context
+        // to report errors if anything goes wrong in it. If the callback also
+        // installs a PRNG of its own (it shouldn't!) we notice when putting the
+        // context's PRNG back and fail with an internal error.
+        let curr_prng_opt =
             self.with_current_context_mut(|ctx| Ok(std::mem::take(&mut ctx.prng)))?;
-        let res: Result<U, HostError>;
-        if let Some(p) = &mut curr_prng_opt {
-            res = f(p)
-        } else {
-            let mut base_guard = self.try_borrow_base_prng_mut()?;
-            if let Some(base) = base_guard.as_mut() {
-                match base.sub_prng(self.as_budget()) {
-                    Ok(mut sub_prng) => {
-                        res = f(&mut sub_prng);
-                        curr_prng_opt = Some(sub_prng);
-                    }
-                    Err(e) => res = Err(e),
+
+        let mut curr_prng = match curr_prng_opt {
+            // There's already a context PRNG, so use it.
+            Some(prng) => prng,
+
+            // There's no context PRNG yet, seed one from the base PRNG (unless
+            // the base PRNG itself hasn't been seeded).
+            None => {
+                let mut base_guard = self.try_borrow_base_prng_mut()?;
+                if let Some(base) = base_guard.as_mut() {
+                    base.sub_prng(self.as_budget())?
+                } else {
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "host base PRNG was not seeded",
+                        &[],
+                    ));
                 }
-            } else {
-                res = Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::MissingValue,
-                    "host base PRNG was not seeded",
-                    &[],
-                ))
             }
-        }
+        };
+
+        // Call the callback with the new-or-existing context PRNG.
+        let res: Result<U, HostError> = f(&mut curr_prng);
+
         // Put the (possibly newly-initialized frame PRNG-option back)
         self.with_current_context_mut(|ctx| {
-            ctx.prng = curr_prng_opt;
+            if ctx.prng.is_some() {
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "callback re-entered with_current_prng",
+                    &[],
+                ));
+            }
+            ctx.prng = Some(curr_prng);
             Ok(())
         })?;
         res
@@ -519,13 +548,10 @@ impl Host {
     /// non-contract frame on top.
     pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame_opt(|opt_frame| match opt_frame {
-            Some(frame) => match frame {
-                Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
-                Frame::HostFunction(_) => Ok(None),
-                Frame::StellarAssetContract(id, ..) => Ok(Some(id.metered_clone(self)?)),
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
-            },
+            Some(frame) => frame
+                .contract_id()
+                .map(|id| id.metered_clone(self))
+                .transpose(),
             None => Ok(None),
         })
     }
@@ -647,23 +673,27 @@ impl Host {
                 &[func.to_val()],
             ));
         }
+
         if !matches!(reentry_mode, ContractReentryMode::Allowed) {
-            let mut is_last_non_host_frame = true;
-            for ctx in self.try_borrow_context_stack()?.iter().rev() {
-                let exist_id = match &ctx.frame {
-                    Frame::ContractVM { vm, .. } => &vm.contract_id,
-                    Frame::StellarAssetContract(id, ..) => id,
-                    #[cfg(any(test, feature = "testutils"))]
-                    Frame::TestContract(tc) => &tc.id,
-                    Frame::HostFunction(_) => continue,
-                };
-                if id == exist_id {
-                    if matches!(reentry_mode, ContractReentryMode::SelfAllowed)
-                        && is_last_non_host_frame
-                    {
-                        is_last_non_host_frame = false;
-                        continue;
-                    }
+            let reentry_distance = self
+                .try_borrow_context_stack()?
+                .iter()
+                .rev()
+                .filter_map(|c| c.frame.contract_id())
+                .position(|caller| caller == id);
+
+            match (reentry_mode, reentry_distance) {
+                // Non-reentrant calls, or calls in Allowed mode,
+                // or immediate-reentry calls in SelfAllowed mode
+                // are all acceptable.
+                (_, None)
+                | (ContractReentryMode::Allowed, _)
+                | (ContractReentryMode::SelfAllowed, Some(0)) => (),
+
+                // But any non-immediate-reentry in SelfAllowed mode,
+                // or any reentry at all in Prohibited mode, are errors.
+                (ContractReentryMode::SelfAllowed, Some(_))
+                | (ContractReentryMode::Prohibited, Some(_)) => {
                     return Err(self.err(
                         ScErrorType::Context,
                         ScErrorCode::InvalidAction,
@@ -671,7 +701,6 @@ impl Host {
                         &[],
                     ));
                 }
-                is_last_non_host_frame = false;
             }
         }
 
@@ -807,11 +836,12 @@ impl Host {
     }
 
     // Notes on metering: covered by the called components.
-    fn invoke_function_raw(&self, hf: HostFunction) -> Result<Val, HostError> {
+    fn invoke_function_and_return_val(&self, hf: HostFunction) -> Result<Val, HostError> {
         let hf_type = hf.discriminant();
+        let frame = Frame::HostFunction(hf_type);
         match hf {
             HostFunction::InvokeContract(invoke_args) => {
-                self.with_frame(Frame::HostFunction(hf_type), || {
+                self.with_frame(frame, || {
                     // Metering: conversions to host objects are covered.
                     let ScAddress::Contract(ref contract_id) = invoke_args.contract_address else {
                         return Err(self.err(
@@ -834,28 +864,25 @@ impl Host {
                     )
                 })
             }
-            HostFunction::CreateContract(args) => {
-                self.with_frame(Frame::HostFunction(hf_type), || {
-                    let deployer: Option<AddressObject> = match &args.contract_id_preimage {
-                        ContractIdPreimage::Address(preimage_from_addr) => Some(
-                            self.add_host_object(preimage_from_addr.address.metered_clone(self)?)?,
-                        ),
-                        ContractIdPreimage::Asset(_) => None,
-                    };
-                    self.create_contract_internal(deployer, args)
-                        .map(<Val>::from)
-                })
-            }
-            HostFunction::UploadContractWasm(wasm) => self
-                .with_frame(Frame::HostFunction(hf_type), || {
-                    self.upload_contract_wasm(wasm.to_vec()).map(<Val>::from)
-                }),
+            HostFunction::CreateContract(args) => self.with_frame(frame, || {
+                let deployer: Option<AddressObject> = match &args.contract_id_preimage {
+                    ContractIdPreimage::Address(preimage_from_addr) => {
+                        Some(self.add_host_object(preimage_from_addr.address.metered_clone(self)?)?)
+                    }
+                    ContractIdPreimage::Asset(_) => None,
+                };
+                self.create_contract_internal(deployer, args)
+                    .map(<Val>::from)
+            }),
+            HostFunction::UploadContractWasm(wasm) => self.with_frame(frame, || {
+                self.upload_contract_wasm(wasm.to_vec()).map(<Val>::from)
+            }),
         }
     }
 
     // Notes on metering: covered by the called components.
     pub fn invoke_function(&self, hf: HostFunction) -> Result<ScVal, HostError> {
-        let rv = self.invoke_function_raw(hf)?;
+        let rv = self.invoke_function_and_return_val(hf)?;
         self.from_host_val(rv)
     }
 
@@ -865,23 +892,18 @@ impl Host {
         if ctx.storage.is_some() {
             return Ok(());
         }
-        let storage_map = match &ctx.frame {
-            Frame::ContractVM { instance, .. } => &instance.storage,
-            Frame::HostFunction(_) => {
-                return Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InvalidAction,
-                    "can't access instance storage from host function",
-                    &[],
-                ));
-            }
-            Frame::StellarAssetContract(_, _, _, instance) => &instance.storage,
-            #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(t) => &t.instance.storage,
+
+        let Some(instance) = ctx.frame.instance() else {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "access to instance in frame without instance",
+                &[],
+            ));
         };
 
         ctx.storage = Some(InstanceStorageMap::from_map(
-            storage_map.as_ref().map_or_else(
+            instance.storage.as_ref().map_or_else(
                 || Ok(vec![]),
                 |m| {
                     m.iter()
