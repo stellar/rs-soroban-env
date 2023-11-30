@@ -1,8 +1,6 @@
-use crate::{xdr, Host, HostError};
-use soroban_builtin_sdk_macros::contracttype;
-use soroban_env_common::TryIntoVal;
-
 use super::base_types::BytesN;
+use crate::{xdr, Host, HostError, TryIntoVal};
+use soroban_builtin_sdk_macros::contracttype;
 
 #[derive(Clone)]
 #[contracttype]
