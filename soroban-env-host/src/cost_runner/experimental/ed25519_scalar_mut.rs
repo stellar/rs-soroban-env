@@ -1,6 +1,9 @@
 use std::hint::black_box;
 
-use crate::cost_runner::{CostRunner, CostType};
+use crate::{
+    budget::CostTracker,
+    cost_runner::{CostRunner, CostType},
+};
 use curve25519_dalek::{edwards, scalar};
 
 use super::ExperimentalCostType;
@@ -32,8 +35,13 @@ impl CostRunner for Ed25519ScalarMulRun {
         black_box(sample)
     }
 
-    fn get_tracker(_host: &crate::Host) -> (u64, Option<u64>) {
-        (Self::RUN_ITERATIONS, None)
+    fn get_tracker(_host: &crate::Host) -> CostTracker {
+        CostTracker {
+            iterations: Self::RUN_ITERATIONS,
+            inputs: None,
+            cpu: 0,
+            mem: 0,
+        }
     }
 
     fn run_baseline_iter(

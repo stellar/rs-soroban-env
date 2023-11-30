@@ -455,14 +455,14 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
     assert_ge!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemAlloc)?
-            .1
+            .inputs
             .unwrap(),
         480000
     );
     assert_ge!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemCpy)?
-            .1
+            .inputs
             .unwrap(),
         480000
     );

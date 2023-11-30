@@ -1,7 +1,7 @@
 use std::hint::black_box;
 
 use crate::{
-    budget::AsBudget,
+    budget::{AsBudget, CostTracker},
     cost_runner::{experimental::ExperimentalCostType::ReadXdrByteArray, CostRunner, CostType},
     xdr::{ContractCostType::ValDeser, ScVal},
 };
@@ -32,7 +32,7 @@ impl CostRunner for ReadXdrByteArrayRun {
         black_box((None, sample))
     }
 
-    fn get_tracker(host: &crate::Host) -> (u64, Option<u64>) {
+    fn get_tracker(host: &crate::Host) -> CostTracker {
         // internally this is still charged under `ValDeser`
         host.as_budget().get_tracker(ValDeser).unwrap()
     }

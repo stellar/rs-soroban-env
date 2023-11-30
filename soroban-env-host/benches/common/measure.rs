@@ -1,7 +1,7 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
 use soroban_env_host::{
-    budget::{AsBudget, COST_MODEL_LIN_TERM_SCALE_BITS},
+    budget::{AsBudget, CostTracker, COST_MODEL_LIN_TERM_SCALE_BITS},
     cost_runner::{CostRunner, CostType},
     Host,
 };
@@ -315,7 +315,7 @@ pub trait HostCostMeasurement: Sized {
         <Self::Runner as CostRunner>::run(host, samples, recycled_samples)
     }
 
-    fn get_tracker(host: &Host) -> (u64, Option<u64>) {
+    fn get_tracker(host: &Host) -> CostTracker {
         <Self::Runner as CostRunner>::get_tracker(host)
     }
 
@@ -361,10 +361,10 @@ where
 
     // Note: the `iterations` here is not same as `RUN_ITERATIONS`. This is the `N` part of the
     // cost model, which is `RUN_ITERATIONS` * "model iterations from the sample"
-    let (iterations, inputs) = HCM::get_tracker(&host);
+    let ct = HCM::get_tracker(&host);
     Measurement {
-        iterations,
-        inputs,
+        iterations: ct.iterations,
+        inputs: ct.inputs,
         cpu_insns,
         mem_bytes,
         time_nsecs,
