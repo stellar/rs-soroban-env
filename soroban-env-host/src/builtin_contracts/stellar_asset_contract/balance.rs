@@ -284,33 +284,21 @@ pub(crate) fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostErro
         };
 
     match addr.to_sc_address()? {
-        ScAddress::Account(acc_id) => match read_asset_info(e)? {
-            AssetInfo::Native => Err(e.error(
+        ScAddress::Account(acc_id) => match read_asset(e)? {
+            Asset::Native => Err(e.error(
                 ContractError::OperationNotSupportedError.into(),
                 "cannot clawback native asset",
                 &[],
             )),
-            AssetInfo::AlphaNum4(asset) => {
-                let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-                validate_trustline(
-                    e.create_asset_4(
-                        asset.asset_code.to_array()?,
-                        issuer_account_id.metered_clone(e)?,
-                    ),
-                    issuer_account_id,
-                    acc_id,
-                )
+            Asset::CreditAlphanum4(asset) => {
+                let issuer = asset.issuer.metered_clone(e)?;
+                let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+                validate_trustline(tlasset, issuer, acc_id)
             }
-            AssetInfo::AlphaNum12(asset) => {
-                let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-                validate_trustline(
-                    e.create_asset_12(
-                        asset.asset_code.to_array()?,
-                        issuer_account_id.metered_clone(e)?,
-                    ),
-                    issuer_account_id,
-                    acc_id,
-                )
+            Asset::CreditAlphanum12(asset) => {
+                let issuer = asset.issuer.metered_clone(e)?;
+                let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+                validate_trustline(tlasset, issuer, acc_id)
             }
         },
         ScAddress::Contract(_) => {
@@ -348,7 +336,7 @@ pub(crate) fn transfer_classic_balance(
     to_key: AccountId,
     amount: i64,
 ) -> Result<(), HostError> {
-    let transfer_trustline_balance_safe =
+    let transfer_trustline_balance_unless_issuer =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
             if issuer == to {
                 return Ok(());
@@ -357,69 +345,43 @@ pub(crate) fn transfer_classic_balance(
             transfer_trustline_balance(e, to, asset, amount)
         };
 
-    match read_asset_info(e)? {
-        AssetInfo::Native => transfer_account_balance(e, to_key, amount)?,
-        AssetInfo::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            transfer_trustline_balance_safe(
-                e.create_asset_4(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )?
+    match read_asset(e)? {
+        Asset::Native => transfer_account_balance(e, to_key, amount),
+        Asset::CreditAlphanum4(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+            transfer_trustline_balance_unless_issuer(tlasset, issuer, to_key)
         }
-        AssetInfo::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            transfer_trustline_balance_safe(
-                e.create_asset_12(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )?
+        Asset::CreditAlphanum12(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+            transfer_trustline_balance_unless_issuer(tlasset, issuer, to_key)
         }
-    };
-    Ok(())
+    }
 }
 
 // TODO: Metering: covered by components.
-fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<i64, HostError> {
-    let get_trustline_balance_safe =
-        |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<i64, HostError> {
-            if issuer == to {
+fn get_classic_balance(e: &Host, acct: AccountId) -> Result<i64, HostError> {
+    let get_trustline_balance_or_max_if_issuer =
+        |asset: TrustLineAsset, issuer: AccountId, acct: AccountId| -> Result<i64, HostError> {
+            if issuer == acct {
                 return Ok(i64::MAX);
             }
 
-            get_trustline_balance(e, to, asset)
+            get_trustline_balance(e, acct, asset)
         };
 
-    match read_asset_info(e)? {
-        AssetInfo::Native => get_account_balance(e, to_key),
-        AssetInfo::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            get_trustline_balance_safe(
-                e.create_asset_4(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )
+    match read_asset(e)? {
+        Asset::Native => get_account_balance(e, acct),
+        Asset::CreditAlphanum4(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+            get_trustline_balance_or_max_if_issuer(tlasset, issuer, acct)
         }
-
-        AssetInfo::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            get_trustline_balance_safe(
-                e.create_asset_12(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )
+        Asset::CreditAlphanum12(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+            get_trustline_balance_or_max_if_issuer(tlasset, issuer, acct)
         }
     }
 }
@@ -702,7 +664,7 @@ fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, 
 
 // TODO: Metering: covered by components.
 fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostError> {
-    let is_trustline_authorized_safe =
+    let is_trustline_authorized_or_issuer =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<bool, HostError> {
             if issuer == to {
                 return Ok(true);
@@ -710,29 +672,17 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
             is_trustline_authorized(e, to, asset)
         };
 
-    match read_asset_info(e)? {
-        AssetInfo::Native => Ok(true),
-        AssetInfo::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            is_trustline_authorized_safe(
-                e.create_asset_4(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                account_id,
-            )
+    match read_asset(e)? {
+        Asset::Native => Ok(true),
+        Asset::CreditAlphanum4(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+            is_trustline_authorized_or_issuer(tlasset, issuer, account_id)
         }
-        AssetInfo::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            is_trustline_authorized_safe(
-                e.create_asset_12(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                account_id,
-            )
+        Asset::CreditAlphanum12(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+            is_trustline_authorized_or_issuer(tlasset, issuer, account_id)
         }
     }
 }
@@ -770,10 +720,10 @@ fn is_trustline_authorized(
     Ok(tl_flags & (TrustLineFlags::AuthorizedFlag as u32) != 0)
 }
 
-fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(), HostError> {
-    let set_trustline_authorization_safe =
-        |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
-            if issuer == to {
+fn set_authorization(e: &Host, acct: AccountId, authorize: bool) -> Result<(), HostError> {
+    let set_trustline_authorization_unless_issuer =
+        |asset: TrustLineAsset, issuer: AccountId, acct: AccountId| -> Result<(), HostError> {
+            if issuer == acct {
                 return Err(e.error(
                     ContractError::OperationNotSupportedError.into(),
                     "issuer doesn't have a trustline",
@@ -781,36 +731,24 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
                 ));
             }
 
-            set_trustline_authorization(e, to, asset, authorize)
+            set_trustline_authorization(e, acct, asset, authorize)
         };
 
-    match read_asset_info(e)? {
-        AssetInfo::Native => Err(e.error(
+    match read_asset(e)? {
+        Asset::Native => Err(e.error(
             ContractError::OperationNotSupportedError.into(),
             "expected trustline asset",
             &[],
         )),
-        AssetInfo::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            set_trustline_authorization_safe(
-                e.create_asset_4(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )
+        Asset::CreditAlphanum4(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+            set_trustline_authorization_unless_issuer(tlasset, issuer, acct)
         }
-        AssetInfo::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            set_trustline_authorization_safe(
-                e.create_asset_12(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )
+        Asset::CreditAlphanum12(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+            set_trustline_authorization_unless_issuer(tlasset, issuer, acct)
         }
     }
 }

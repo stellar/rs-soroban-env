@@ -23,6 +23,10 @@ pub(crate) fn read_asset_info(e: &Host) -> Result<AssetInfo, HostError> {
     rv.try_into_val(e)
 }
 
+pub(crate) fn read_asset(e: &Host) -> Result<Asset, HostError> {
+    read_asset_info(e)?.try_into_val(e)
+}
+
 pub(crate) fn has_asset_info(e: &Host) -> Result<bool, HostError> {
     let key = InstanceDataKey::AssetInfo;
     let rv = e.has_contract_data(key.try_into_val(e)?, StorageType::Instance)?;
