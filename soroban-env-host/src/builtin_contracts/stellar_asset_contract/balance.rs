@@ -59,7 +59,15 @@ pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
 }
 
 // Metering: covered by components.
-fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), HostError> {
+fn write_contract_balance(
+    e: &Host,
+    addr: Address,
+    balance: BalanceValue,
+    // We take an unused reference to a "witness" contract-id Hash here, to help
+    // ensure this function is only called from a context where `addr` has been
+    // matched as an ScAddress::Contract(hash) rather than ScAddress::Account(_)
+    _witness_addr_contract_id: &crate::xdr::Hash,
+) -> Result<(), HostError> {
     let key = DataKey::Balance(addr);
     e.put_contract_data(
         key.try_into_val(e)?,
@@ -97,7 +105,7 @@ pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(
             })?;
             Ok(transfer_classic_balance(e, acc_id, i64_amount)?)
         }
-        ScAddress::Contract(_) => {
+        ScAddress::Contract(id) => {
             let key = DataKey::Balance(addr.metered_clone(e)?);
             let mut balance = if let Some(raw_balance) =
                 e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
@@ -121,7 +129,7 @@ pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(
             })?;
 
             balance.amount = new_balance;
-            write_balance(e, addr, balance)
+            write_contract_balance(e, addr, balance, &id)
         }
     }
 }
@@ -143,7 +151,7 @@ pub(crate) fn spend_balance_no_authorization_check(
             })?;
             transfer_classic_balance(e, acc_id, -i64_amount)
         }
-        ScAddress::Contract(_) => {
+        ScAddress::Contract(id) => {
             // If a balance exists, calculate new amount and write the existing authorized state as is because
             // this can be used to clawback when deauthorized.
             let key = DataKey::Balance(addr.metered_clone(e)?);
@@ -169,7 +177,7 @@ pub(crate) fn spend_balance_no_authorization_check(
                     })?;
                     balance.amount = new_balance;
 
-                    write_balance(e, addr, balance)?
+                    write_contract_balance(e, addr, balance, &id)?
                 }
             } else if amount > 0 {
                 return Err(err!(
@@ -231,14 +239,14 @@ pub(crate) fn write_authorization(
 
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => set_authorization(e, acc_id, authorize),
-        ScAddress::Contract(_) => {
+        ScAddress::Contract(id) => {
             let key = DataKey::Balance(addr.metered_clone(e)?);
             if let Some(raw_balance) =
                 e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 balance.authorized = authorize;
-                write_balance(e, addr, balance)
+                write_contract_balance(e, addr, balance, &id)
             } else {
                 // Balance does not exist, so write a 0 amount along with the authorization flag.
                 // No need to check auth_required because this function can only be called by the admin.
@@ -247,7 +255,7 @@ pub(crate) fn write_authorization(
                     authorized: authorize,
                     clawback: is_asset_clawback_enabled(e)?,
                 };
-                write_balance(e, addr, balance)
+                write_contract_balance(e, addr, balance, &id)
             }
         }
     }
