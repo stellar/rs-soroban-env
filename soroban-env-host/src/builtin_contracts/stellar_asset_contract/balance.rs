@@ -134,7 +134,7 @@ pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(
     }
 }
 
-// TODO: Metering: covered by components.
+// Metering: covered by components.
 pub(crate) fn spend_balance_no_authorization_check(
     e: &Host,
     addr: Address,
@@ -261,7 +261,7 @@ pub(crate) fn write_authorization(
     }
 }
 
-// TODO: Metering: covered by components.
+// Metering: covered by components.
 pub(crate) fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
     let validate_trustline =
         |asset: TrustLineAsset, issuer: AccountId, account: AccountId| -> Result<(), HostError> {
@@ -360,7 +360,7 @@ pub(crate) fn transfer_classic_balance(
     }
 }
 
-// TODO: Metering: covered by components.
+// Metering: covered by components.
 fn get_classic_balance(e: &Host, acct: AccountId) -> Result<i64, HostError> {
     let get_trustline_balance_or_max_if_issuer =
         |asset: TrustLineAsset, issuer: AccountId, acct: AccountId| -> Result<i64, HostError> {
@@ -567,7 +567,7 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
     })
 }
 
-// TODO: Metering: covered by components.
+// Metering: covered by components.
 fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64), HostError> {
     if ae.balance < 0 {
         return Err(e.error(
@@ -634,7 +634,7 @@ fn get_trustline_balance(
     })
 }
 
-// TODO: Metering: covered by components.
+// Metering: covered by components.
 fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, i64), HostError> {
     if tl.balance < 0 {
         return Err(e.error(
@@ -662,7 +662,7 @@ fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, 
     }
 }
 
-// TODO: Metering: covered by components.
+// Metering: covered by components.
 fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostError> {
     let is_trustline_authorized_or_issuer =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<bool, HostError> {
@@ -687,7 +687,7 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
     }
 }
 
-// TODO: Metering: covered by components.
+// Metering: covered by components.
 fn get_trustline_flags(
     host: &Host,
     account_id: AccountId,
