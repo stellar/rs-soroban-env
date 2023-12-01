@@ -1045,3 +1045,22 @@ fn test_lying_about_data_count() -> Result<(), HostError> {
     ));
     Ok(())
 }
+
+#[test]
+fn test_multi_value() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+
+    // lying about the count
+    let wasm_bad = wasm_util::wasm_module_with_multi_value();
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm_bad.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}

@@ -714,4 +714,12 @@ pub(crate) mod wasm {
         me.start(fid);
         me.finish_no_validate()
     }
+
+    pub(crate) fn wasm_module_with_multi_value() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func_with_arity_and_ret(Arity(0), Arity(2), 0);
+        fe.push(Symbol::try_from_small_str("pass1").unwrap());
+        fe.push(Symbol::try_from_small_str("pass2").unwrap());
+        fe.finish_and_export("test").finish()
+    }
 }
