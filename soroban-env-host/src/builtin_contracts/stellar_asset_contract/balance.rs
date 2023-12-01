@@ -774,19 +774,14 @@ fn set_trustline_authorization(
         }?;
 
         let is_authorized = tl.flags & (TrustLineFlags::AuthorizedFlag as u32) != 0;
+        if is_authorized == authorize {
+            return Ok(());
+        }
 
         if authorize {
-            if is_authorized {
-                return Ok(());
-            }
-
             tl.flags &= !(TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32);
             tl.flags |= TrustLineFlags::AuthorizedFlag as u32;
         } else {
-            if !is_authorized {
-                return Ok(());
-            }
-
             // Set AuthorizedToMaintainLiabilitiesFlag to indicate deauthorization so
             // offers don't need to get pulled and pool shares don't get redeemed.
             tl.flags &= !(TrustLineFlags::AuthorizedFlag as u32);
