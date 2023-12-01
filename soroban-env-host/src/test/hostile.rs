@@ -866,3 +866,20 @@ fn test_floating_point() -> Result<(), HostError> {
     ));
     Ok(())
 }
+
+#[test]
+fn test_multiple_memory() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_multiple_memories();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}

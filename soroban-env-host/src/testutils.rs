@@ -623,4 +623,11 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass").unwrap());
         fe.finish_and_export("test").finish()
     }
+
+    pub fn wasm_module_with_multiple_memories() -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        me.memory(1, None, false, false);
+        me.memory(1, None, false, false);
+        me.finish()
+    }
 }
