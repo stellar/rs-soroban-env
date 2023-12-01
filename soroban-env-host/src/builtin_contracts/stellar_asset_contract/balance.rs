@@ -804,11 +804,17 @@ fn set_trustline_authorization(
             )),
         }?;
 
+        let is_authorized = tl.flags & (TrustLineFlags::AuthorizedFlag as u32) != 0;
+
         if authorize {
+            if is_authorized {
+                return Ok(());
+            }
+
             tl.flags &= !(TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32);
             tl.flags |= TrustLineFlags::AuthorizedFlag as u32;
         } else {
-            if tl.flags & (TrustLineFlags::AuthorizedFlag as u32) == 0 {
+            if !is_authorized {
                 return Ok(());
             }
 
