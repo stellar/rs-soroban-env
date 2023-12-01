@@ -388,6 +388,27 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
+    pub(crate) fn wasm_module_with_n_funcs_no_export(n: usize) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for _i in 0..n {
+            let mut fe = me.func(Arity(0), 0);
+            fe.push(Symbol::try_from_small_str("pass").unwrap());
+            me = fe.finish().0;
+        }
+        me.finish()
+    }
+
+    pub(crate) fn wasm_module_with_repeated_exporting_the_same_func(n: usize) -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (mut me, fid) = fe.finish();
+        for i in 0..n {
+            me.export_func(fid, format!("test{}", i).as_str());
+        }
+        me.finish_no_validate()
+    }
+
     pub(crate) fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
         let mut fe = ModEmitter::default().func(Arity(0), 0);
         fe.push(Operand::Const32(n_pages as i32));
@@ -721,5 +742,22 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass1").unwrap());
         fe.push(Symbol::try_from_small_str("pass2").unwrap());
         fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_large_elements(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(1, n);
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+        // store in table, FuncRef(100) is invalid
+        me.define_elems(vec![f0; n as usize].as_slice());
+        me.finish()
+    }
+
+    pub(crate) fn wasm_module_large_globals(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for i in 0..n {
+            me.define_global_i64(i as i64, true, None);
+        }
+        me.finish()
     }
 }

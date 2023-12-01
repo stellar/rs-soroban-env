@@ -1064,3 +1064,88 @@ fn test_multi_value() -> Result<(), HostError> {
     ));
     Ok(())
 }
+
+#[test]
+fn test_large_wasm_code() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+
+    let wasm = wasm_util::wasm_module_with_4n_insns(100000);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_large_number_of_internal_funcs() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+
+    let wasm = wasm_util::wasm_module_with_n_funcs_no_export(100000);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_repeated_export_same_func() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+
+    // the export limit in wasmparser is 100000, although that doesn't appear in
+    // the WASM spec (or I couldn't find it), and wasmi doesn't have that limit either
+    let wasm = wasm_util::wasm_module_with_repeated_exporting_the_same_func(100001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_large_elements() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let wasm = wasm_util::wasm_module_large_elements(100001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_large_globals() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let wasm = wasm_util::wasm_module_large_globals(100001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
