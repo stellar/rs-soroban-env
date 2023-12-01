@@ -1,9 +1,7 @@
-use crate::builtin_contracts::base_types::Address;
-use crate::host::Host;
-use crate::HostError;
-use soroban_env_common::{Env, StorageType, TryIntoVal};
-
 use super::storage_types::InstanceDataKey;
+use crate::{
+    builtin_contracts::base_types::Address, host::Host, Env, HostError, StorageType, TryIntoVal,
+};
 
 // Metering: covered by components
 pub(crate) fn read_administrator(e: &Host) -> Result<Address, HostError> {

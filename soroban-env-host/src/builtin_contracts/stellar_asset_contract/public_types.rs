@@ -1,6 +1,8 @@
-use crate::builtin_contracts::base_types::{BytesN, String};
+use crate::{
+    builtin_contracts::base_types::{BytesN, String},
+    TryIntoVal,
+};
 use soroban_builtin_sdk_macros::contracttype;
-use soroban_env_common::TryIntoVal;
 
 #[derive(Clone)]
 #[contracttype]

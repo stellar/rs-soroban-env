@@ -1,6 +1,7 @@
-use crate::HostError;
-use crate::{builtin_contracts::base_types::Address, host::Host};
-use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
+use crate::{
+    builtin_contracts::base_types::Address, host::Host, Env, HostError, Symbol, TryFromVal,
+    TryIntoVal,
+};
 
 use super::metadata::read_name;
 
