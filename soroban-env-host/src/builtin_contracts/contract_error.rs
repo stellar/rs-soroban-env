@@ -1,11 +1,11 @@
 use num_derive::FromPrimitive;
 use soroban_env_common::Error;
 
-// Use the same error for all the built-in contract error.
+// Use the same error type for all the built-in contract errors.
 // In theory we could have a separate enum for each built-in contract, but it's
 // not clear how to distinguish them if multiple built-in contracts are involved.
 #[derive(Debug, FromPrimitive, PartialEq, Eq)]
-pub enum ContractError {
+pub(crate) enum ContractError {
     InternalError = 1,
     OperationNotSupportedError = 2,
     AlreadyInitializedError = 3,

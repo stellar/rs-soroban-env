@@ -214,12 +214,12 @@ impl StellarAssetContractTest {
             4 => {
                 let mut code = [0_u8; 4];
                 code.copy_from_slice(asset_code);
-                self.host.create_asset_4(code, issuer.clone())
+                self.host.create_tl_asset_4(code, issuer.clone())
             }
             12 => {
                 let mut code = [0_u8; 12];
                 code.copy_from_slice(asset_code);
-                self.host.create_asset_12(code, issuer.clone())
+                self.host.create_tl_asset_12(code, issuer.clone())
             }
             _ => unreachable!(),
         };

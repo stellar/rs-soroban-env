@@ -26,17 +26,17 @@ pub const ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME: &str = "__check_auth";
 
 #[derive(Clone)]
 #[contracttype]
-pub struct ContractAuthorizationContext {
-    pub contract: Address,
-    pub fn_name: Symbol,
-    pub args: HostVec,
+pub(crate) struct ContractAuthorizationContext {
+    pub(crate) contract: Address,
+    pub(crate) fn_name: Symbol,
+    pub(crate) args: HostVec,
 }
 
 #[derive(Clone)]
 #[contracttype]
-pub struct CreateContractHostFnContext {
-    pub executable: ContractExecutable,
-    pub salt: BytesN<32>,
+pub(crate) struct CreateContractHostFnContext {
+    pub(crate) executable: ContractExecutable,
+    pub(crate) salt: BytesN<32>,
 }
 
 #[derive(Clone)]
@@ -48,9 +48,9 @@ enum AuthorizationContext {
 
 #[derive(Clone)]
 #[contracttype]
-pub struct AccountEd25519Signature {
-    pub public_key: BytesN<32>,
-    pub signature: BytesN<64>,
+pub(crate) struct AccountEd25519Signature {
+    pub(crate) public_key: BytesN<32>,
+    pub(crate) signature: BytesN<64>,
 }
 
 impl AuthorizationContext {

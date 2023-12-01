@@ -1,17 +1,21 @@
-use crate::builtin_contracts::base_types::Address;
-use crate::builtin_contracts::contract_error::ContractError;
-use crate::builtin_contracts::stellar_asset_contract::storage_types::{AllowanceDataKey, DataKey};
-use crate::builtin_contracts::storage_utils::StorageUtils;
-use crate::host::{metered_clone::MeteredClone, Host};
-use crate::{err, HostError};
-use soroban_env_common::{Env, StorageType, TryIntoVal};
+use crate::{
+    builtin_contracts::{
+        base_types::Address,
+        contract_error::ContractError,
+        stellar_asset_contract::storage_types::{AllowanceDataKey, DataKey},
+    },
+    err,
+    host::{metered_clone::MeteredClone, Host},
+    Env, HostError, StorageType, TryIntoVal,
+};
 
 use super::storage_types::AllowanceValue;
 
 // Metering: covered by components
-pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
+pub(crate) fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
-    if let Some(allowance) = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Temporary)?
+    if let Some(allowance) =
+        e.try_get_contract_data(key.try_into_val(e)?, StorageType::Temporary)?
     {
         let val: AllowanceValue = allowance.try_into_val(e)?;
         if val.live_until_ledger < e.get_ledger_sequence()?.into() {
@@ -25,7 +29,7 @@ pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128,
 }
 
 // Metering: covered by components
-pub fn write_allowance(
+pub(crate) fn write_allowance(
     e: &Host,
     from: Address,
     spender: Address,
@@ -62,7 +66,7 @@ pub fn write_allowance(
     // If an allowance didn't exist, then the previous live_until ledger will be None.
     let allowance_with_live_until_option: Option<(AllowanceValue, Option<u32>)> =
         if let Some(allowance) =
-            StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Temporary)?
+            e.try_get_contract_data(key.try_into_val(e)?, StorageType::Temporary)?
         {
             let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
             updated_allowance.amount = amount;
@@ -93,7 +97,7 @@ pub fn write_allowance(
             if allowance_with_live_until.0.amount > 0
                 && allowance_with_live_until.1.unwrap_or(0) < live_until
             {
-                let live_for = live_until - ledger_seq + 1;
+                let live_for = live_until.saturating_sub(ledger_seq).saturating_add(1);
                 e.extend_contract_data_ttl(
                     key.try_into_val(e)?,
                     StorageType::Temporary,
@@ -127,7 +131,7 @@ fn write_allowance_amount(
 }
 
 // Metering: covered by components
-pub fn spend_allowance(
+pub(crate) fn spend_allowance(
     e: &Host,
     from: Address,
     spender: Address,
