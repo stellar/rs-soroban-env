@@ -5,7 +5,7 @@ use soroban_env_common::{
 };
 
 fn extract_string(host: &Host, s: StringObject) -> String {
-    host.visit_obj(s, |st: &ScString| Ok(st.0.to_string_lossy()))
+    host.visit_obj(s, |st: &ScString| Ok(st.0.to_string()))
         .unwrap()
 }
 
