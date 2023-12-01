@@ -602,4 +602,14 @@ pub(crate) mod wasm {
 
         fe.finish_and_export("test").finish()
     }
+
+    pub fn empty_wasm_module() -> Vec<u8> {
+        ModEmitter::new().finish()
+    }
+
+    pub fn wasm_module_with_custom_section(name: &str, data: &[u8]) -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        me.custom_section(name, data);
+        me.finish()
+    }
 }
