@@ -586,11 +586,18 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
             )),
         }?;
 
-        let min = get_min_max_account_balance(host, ae)?.0;
+        let (min, max) = get_min_max_account_balance(host, ae)?;
         if ae.balance < min {
             return Err(host.error(
                 ContractError::InternalError.into(),
                 "account has balance < minimum",
+                &[],
+            ));
+        }
+        if ae.balance > max {
+            return Err(host.error(
+                ContractError::InternalError.into(),
+                "account has balance > maximum",
                 &[],
             ));
         }
@@ -646,11 +653,18 @@ fn get_trustline_balance(
             )),
         }?;
 
-        let min = get_min_max_trustline_balance(host, &tl)?.0;
+        let (min, max) = get_min_max_trustline_balance(host, &tl)?;
         if tl.balance < min {
             return Err(host.error(
                 ContractError::InternalError.into(),
                 "trustline has balance < minimum",
+                &[],
+            ));
+        }
+        if tl.balance > max {
+            return Err(host.error(
+                ContractError::InternalError.into(),
+                "trustline has balance > maximum",
                 &[],
             ));
         }
