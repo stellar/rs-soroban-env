@@ -3,9 +3,10 @@ use std::{borrow::Cow, collections::BTreeMap};
 #[cfg(feature = "testutils")]
 use wasm_encoder::StartSection;
 use wasm_encoder::{
-    CodeSection, ConstExpr, CustomSection, DataSection, ElementSection, Elements, EntityType,
-    ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
-    MemorySection, MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
+    CodeSection, ConstExpr, CustomSection, DataCountSection, DataSection, ElementSection, Elements,
+    EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType,
+    ImportSection, MemorySection, MemoryType, Module, RefType, TableSection, TableType,
+    TypeSection, ValType,
 };
 
 /// Wrapper for a u32 that defines the arity of a function -- that is, the number of
@@ -56,6 +57,8 @@ pub struct ModEmitter {
     elements: ElementSection,
     codes: CodeSection,
     data: DataSection,
+    // The data count section is used to simplify single-pass validation. It is optional.
+    data_count: Option<DataCountSection>,
 
     // key is (args arity, return arity)
     type_refs: BTreeMap<(Arity, Arity), TypeRef>,
@@ -120,6 +123,7 @@ impl ModEmitter {
             elements,
             codes,
             data,
+            data_count: None,
             type_refs,
             import_refs,
         }
@@ -171,6 +175,19 @@ impl ModEmitter {
 
     pub fn export(&mut self, name: &str, kind: ExportKind, index: u32) -> &mut Self {
         self.exports.export(name, kind, index);
+        self
+    }
+
+    #[cfg(feature = "testutils")]
+    pub fn start(&mut self, fid: FuncRef) -> &mut Self {
+        self.start = Some(StartSection {
+            function_index: fid.0,
+        });
+        self
+    }
+
+    pub fn data_count(&mut self, count: u32) -> &mut Self {
+        self.data_count = Some(DataCountSection { count });
         self
     }
 
@@ -281,13 +298,6 @@ impl ModEmitter {
             .active(0, &ConstExpr::i32_const(mem_offset as i32), data);
     }
 
-    #[cfg(feature = "testutils")]
-    pub fn define_start_function(&mut self, fid: FuncRef) {
-        self.start = Some(StartSection {
-            function_index: fid.0,
-        });
-    }
-
     /// Finish emitting code, consuming the `self`, serializing a WASM binary
     /// blob, validating and returning it. Panics the resulting blob fails
     /// validation.
@@ -316,6 +326,9 @@ impl ModEmitter {
         }
         if !self.elements.is_empty() {
             self.module.section(&self.elements);
+        }
+        if let Some(data_count) = self.data_count {
+            self.module.section(&data_count);
         }
         if !self.codes.is_empty() {
             self.module.section(&self.codes);
@@ -359,6 +372,9 @@ impl ModEmitter {
         }
         if !self.elements.is_empty() {
             self.module.section(&self.elements);
+        }
+        if let Some(data_count) = self.data_count {
+            self.module.section(&data_count);
         }
         if !self.codes.is_empty() {
             self.module.section(&self.codes);

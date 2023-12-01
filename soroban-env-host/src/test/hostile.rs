@@ -982,9 +982,6 @@ fn test_nonexistent_func_element() -> Result<(), HostError> {
 #[test]
 fn test_no_start() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_start_function();
-    let printed = wasmprinter::print_bytes(wasm.clone()).unwrap();
-    println!("{}", printed);
-
     let host = Host::test_host_with_recording_footprint();
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
@@ -992,7 +989,56 @@ fn test_no_start() -> Result<(), HostError> {
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
-    println!("{:?}", res);
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_too_large_data_count() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.as_budget().reset_unlimited()?;
+    host.enable_debug()?;
+
+    // the segment limit in wasmparser is 100000, although that doesn't appear
+    // in the WASM spec (or I couldn't find it)
+    let wasm = wasm_util::wasm_module_with_data_count(100_001, 8, 100_001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn test_lying_about_data_count() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+
+    // sanity check: truthful data count passes validation
+    let wasm = wasm_util::wasm_module_with_data_count(10, 0x100, 10);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(res.is_ok());
+
+    // lying about the count
+    let wasm_bad = wasm_util::wasm_module_with_data_count(10, 0x100, 11);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm_bad.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::WasmVm, ScErrorCode::InvalidAction)

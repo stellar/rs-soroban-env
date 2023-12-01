@@ -496,6 +496,8 @@ pub(crate) mod wasm {
     ) -> Vec<u8> {
         let mut me = ModEmitter::from_configs(num_pages, 128);
         let mem_len = num_pages * 0x10_000;
+        // we just make sure the total memory can fit one segments the segments
+        // will just cycle through the space and possibly override earlier ones
         let max_segments = (mem_len / seg_size.max(1)).max(1);
         for _i in 0..num_sgmts % max_segments {
             me.define_data_segment(0, vec![0; seg_size as usize]);
@@ -578,6 +580,24 @@ pub(crate) mod wasm {
         fe.map_new_from_linear_memory(keys_pos, vals_pos, U32Val::from(num_vals));
 
         fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_data_count(
+        num_sgmts: u32,
+        seg_size: u32,
+        data_count: u32,
+    ) -> Vec<u8> {
+        // first calculate the number of memory pages needed to fit all the data
+        // segments non-overlapping
+        let pages = num_sgmts * seg_size / 0x10_000 + 1;
+        let mut me = ModEmitter::from_configs(pages, 128);
+        for i in 0..num_sgmts {
+            me.define_data_segment(i * seg_size, vec![7; seg_size as usize]);
+        }
+        // define the data count, if count != num_sgmts, then the validator is
+        // supposed to catch it
+        me.data_count(data_count);
+        me.finish_no_validate()
     }
 
     // Emit a wasm module that uses post-MVP WASM features. Specifically
@@ -691,7 +711,7 @@ pub(crate) mod wasm {
         let fe = me.func_with_arity_and_ret(Arity(0), Arity(0), 0);
         let (mut me, fid) = fe.finish();
         me.export_func(fid.clone(), "start");
-        me.define_start_function(fid);
+        me.start(fid);
         me.finish_no_validate()
     }
 }
