@@ -18,7 +18,7 @@ use crate::{err, HostError};
 
 use soroban_builtin_sdk_macros::contractimpl;
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{Compare, ConversionError, Env, EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{Compare, Env, EnvBase, TryFromVal, TryIntoVal};
 
 use super::admin::{read_administrator, write_administrator};
 use super::asset_info::read_asset_info;
@@ -112,10 +112,7 @@ impl StellarAssetContract {
                     AssetInfo::AlphaNum4(AlphaNum4AssetInfo {
                         asset_code: String::try_from_val(
                             e,
-                            &e.string_new_from_slice(
-                                core::str::from_utf8(&asset4.asset_code.0)
-                                    .map_err(|_| ConversionError)?,
-                            )?,
+                            &e.string_new_from_slice(&asset4.asset_code.0)?,
                         )?,
                         issuer: BytesN::<32>::try_from_val(
                             e,
@@ -131,10 +128,7 @@ impl StellarAssetContract {
                     AssetInfo::AlphaNum12(AlphaNum12AssetInfo {
                         asset_code: String::try_from_val(
                             e,
-                            &e.string_new_from_slice(
-                                core::str::from_utf8(&asset12.asset_code.0)
-                                    .map_err(|_| ConversionError)?,
-                            )?,
+                            &e.string_new_from_slice(&asset12.asset_code.0)?,
                         )?,
                         issuer: BytesN::<32>::try_from_val(
                             e,

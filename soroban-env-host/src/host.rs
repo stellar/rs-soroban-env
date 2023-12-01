@@ -779,11 +779,9 @@ impl EnvBase for Host {
         res
     }
 
-    fn string_new_from_slice(&self, s: &str) -> Result<StringObject, HostError> {
+    fn string_new_from_slice(&self, s: &[u8]) -> Result<StringObject, HostError> {
         call_env_call_hook!(self, s.len());
-        let res = self.add_host_object(ScString(
-            self.metered_slice_to_vec(s.as_bytes())?.try_into()?,
-        ));
+        let res = self.add_host_object(ScString(self.metered_slice_to_vec(s)?.try_into()?));
         call_env_ret_hook!(self, res);
         res
     }
