@@ -612,4 +612,15 @@ pub(crate) mod wasm {
         me.custom_section(name, data);
         me.finish()
     }
+
+    pub fn wasm_module_with_floating_point_ops() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func(Arity(0), 0);
+        fe.f64_const(1.1f64);
+        fe.f64_const(2.2f64);
+        fe.f64_add();
+        fe.drop();
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
 }
