@@ -590,7 +590,7 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
         if ae.balance < min {
             return Err(host.error(
                 ContractError::InternalError.into(),
-                "account has balance < spendable_balance",
+                "account has balance < minimum",
                 &[],
             ));
         }
@@ -650,7 +650,7 @@ fn get_trustline_balance(
         if tl.balance < min {
             return Err(host.error(
                 ContractError::InternalError.into(),
-                "trustline has balance < spendable_balance",
+                "trustline has balance < minimum",
                 &[],
             ));
         }
