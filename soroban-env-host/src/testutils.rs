@@ -371,7 +371,7 @@ impl Host {
 #[cfg(test)]
 pub(crate) mod wasm {
     use crate::{Symbol, Tag, U32Val, Val};
-    use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
+    use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         let mut fe = ModEmitter::default().func(Arity(1), 0);
@@ -651,5 +651,21 @@ pub(crate) mod wasm {
             me.import_func_no_check("t", "_", Arity(0));
         }
         me.finish()
+    }
+
+    pub fn wasm_module_with_nonexistent_function_export() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        me.import_func("t", "_", Arity(0));
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (mut me, fid) = fe.finish();
+        println!("{}", fid.0);
+        // exporting a function I defined is okay
+        me.export_func(fid, "test");
+        // exporting an imported function is also okay, although weird
+        me.export_func(FuncRef(0), "test0");
+        // importing an non-existent function will not pass validation
+        me.export_func(FuncRef(100), "test100");
+        me.finish_no_validate()
     }
 }

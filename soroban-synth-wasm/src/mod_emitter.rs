@@ -213,7 +213,6 @@ impl ModEmitter {
         }
     }
 
-
     #[cfg(feature = "testutils")]
     pub fn import_func_no_check(&mut self, module: &str, fname: &str, arity: Arity) -> FuncRef {
         let import_id = FuncRef(self.imports.len());
@@ -304,4 +303,40 @@ impl ModEmitter {
             Err(ty) => panic!("invalid WASM module: {:?}", ty.message()),
         }
     }
+
+    #[cfg(feature = "testutils")]
+    pub fn finish_no_validate(mut self) -> Vec<u8> {
+        // NB: these sections must be emitted in this order, by spec.
+        if !self.types.is_empty() {
+            self.module.section(&self.types);
+        }
+        if !self.imports.is_empty() {
+            self.module.section(&self.imports);
+        }
+        if !self.funcs.is_empty() {
+            self.module.section(&self.funcs);
+        }
+        if !self.tables.is_empty() {
+            self.module.section(&self.tables);
+        }
+        if !self.memories.is_empty() {
+            self.module.section(&self.memories);
+        }
+        if !self.globals.is_empty() {
+            self.module.section(&self.globals);
+        }
+        if !self.exports.is_empty() {
+            self.module.section(&self.exports);
+        }
+        if !self.elements.is_empty() {
+            self.module.section(&self.elements);
+        }
+        if !self.codes.is_empty() {
+            self.module.section(&self.codes);
+        }
+        if !self.data.is_empty() {
+            self.module.section(&self.data);
+        }
+        self.module.finish()
+    }    
 }
