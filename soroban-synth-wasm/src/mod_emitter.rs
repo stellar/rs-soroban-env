@@ -1,6 +1,6 @@
 use crate::FuncEmitter;
 use std::{borrow::Cow, collections::BTreeMap};
-#[cfg(feature = "testutils")]
+#[cfg(feature = "adversarial")]
 use wasm_encoder::StartSection;
 use wasm_encoder::{
     CodeSection, ConstExpr, CustomSection, DataCountSection, DataSection, ElementSection, Elements,
@@ -52,7 +52,7 @@ pub struct ModEmitter {
     memories: MemorySection,
     globals: GlobalSection,
     exports: ExportSection,
-    #[cfg(feature = "testutils")]
+    #[cfg(feature = "adversarial")]
     start: Option<StartSection>,
     elements: ElementSection,
     codes: CodeSection,
@@ -118,7 +118,7 @@ impl ModEmitter {
             memories,
             globals,
             exports,
-            #[cfg(feature = "testutils")]
+            #[cfg(feature = "adversarial")]
             start: None,
             elements,
             codes,
@@ -178,7 +178,7 @@ impl ModEmitter {
         self
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(feature = "adversarial")]
     pub fn start(&mut self, fid: FuncRef) -> &mut Self {
         self.start = Some(StartSection {
             function_index: fid.0,
@@ -198,7 +198,7 @@ impl ModEmitter {
         FuncEmitter::new(self, arity, Arity(1), n_locals)
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(feature = "adversarial")]
     pub fn func_with_arity_and_ret(self, arity: Arity, ret: Arity, n_locals: u32) -> FuncEmitter {
         FuncEmitter::new(self, arity, ret, n_locals)
     }
@@ -248,7 +248,7 @@ impl ModEmitter {
         }
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(feature = "adversarial")]
     pub fn import_func_no_check(&mut self, module: &str, fname: &str, arity: Arity) -> FuncRef {
         let import_id = FuncRef(self.imports.len());
         // import func must have return arity == 1
@@ -343,7 +343,7 @@ impl ModEmitter {
         }
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(feature = "adversarial")]
     pub fn finish_no_validate(mut self) -> Vec<u8> {
         // NB: these sections must be emitted in this order, by spec.
         if !self.types.is_empty() {

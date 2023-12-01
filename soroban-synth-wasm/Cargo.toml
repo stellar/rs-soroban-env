@@ -20,6 +20,7 @@ soroban-env-macros = { workspace = true }
 [features]
 next = ["soroban-env-common/next"]
 testutils = ["soroban-env-common/testutils"]
+adversarial = []
 
 [dev-dependencies]
 expect-test = "=1.4.1"
