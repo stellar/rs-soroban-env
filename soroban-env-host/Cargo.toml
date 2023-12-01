@@ -65,7 +65,7 @@ arbitrary = "=1.3.2"
 [dev-dependencies.stellar-xdr]
 version = "=20.0.0-rc1"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "d6f8ece2c89809d5e2800b9df64ae60787ee492b"
+rev = "889d433c6069c7cdd63a9e4f391de06f5d8018ac"
 default-features = false
 features = ["arbitrary"]
 
