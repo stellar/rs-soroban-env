@@ -1,9 +1,12 @@
 use crate::FuncEmitter;
 use std::{borrow::Cow, collections::BTreeMap};
+#[cfg(feature = "adversarial")]
+use wasm_encoder::StartSection;
 use wasm_encoder::{
-    CodeSection, ConstExpr, CustomSection, DataSection, ElementSection, Elements, EntityType,
-    ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
-    MemorySection, MemoryType, Module, RefType, TableSection, TableType, TypeSection, ValType,
+    CodeSection, ConstExpr, CustomSection, DataCountSection, DataSection, ElementSection, Elements,
+    EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType,
+    ImportSection, MemorySection, MemoryType, Module, RefType, TableSection, TableType,
+    TypeSection, ValType,
 };
 
 /// Wrapper for a u32 that defines the arity of a function -- that is, the number of
@@ -49,55 +52,63 @@ pub struct ModEmitter {
     memories: MemorySection,
     globals: GlobalSection,
     exports: ExportSection,
+    #[cfg(feature = "adversarial")]
+    start: Option<StartSection>,
     elements: ElementSection,
     codes: CodeSection,
     data: DataSection,
+    // The data count section is used to simplify single-pass validation. It is optional.
+    data_count: Option<DataCountSection>,
 
-    type_refs: BTreeMap<Arity, TypeRef>,
+    // key is (args arity, return arity)
+    type_refs: BTreeMap<(Arity, Arity), TypeRef>,
+    // import functions cannot have return arity != 1
     import_refs: BTreeMap<(String, String, Arity), FuncRef>,
+}
+
+impl Default for ModEmitter {
+    fn default() -> Self {
+        let mut me = Self::new();
+        me.custom_section(
+            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
+            &soroban_env_common::meta::XDR,
+        );
+        me.table(RefType::FUNCREF, 128, None);
+        me.memory(1, None, false, false);
+        me.global(ValType::I64, true, &ConstExpr::i64_const(42));
+        me.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        me
+    }
 }
 
 impl ModEmitter {
     pub fn from_configs(mem_pages: u32, elem_count: u32) -> Self {
-        let mut module = Module::new();
+        let mut me = Self::new();
+        me.custom_section(
+            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
+            &soroban_env_common::meta::XDR,
+        );
+        me.table(RefType::FUNCREF, elem_count, None);
+        me.memory(mem_pages as u64, None, false, false);
+        me.global(ValType::I64, true, &ConstExpr::i64_const(42));
+        me.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        me
+    }
 
-        let metasection = CustomSection {
-            name: Cow::Borrowed(soroban_env_common::meta::ENV_META_V0_SECTION_NAME),
-            data: Cow::Borrowed(&soroban_env_common::meta::XDR),
-        };
-        module.section(&metasection);
-
+    pub fn new() -> Self {
+        let module = Module::new();
         let types = TypeSection::new();
         let imports = ImportSection::new();
         let funcs = FunctionSection::new();
-        let mut tables = TableSection::new();
-        tables.table(TableType {
-            element_type: RefType::FUNCREF,
-            minimum: elem_count,
-            maximum: None,
-        });
-        let mut memories = MemorySection::new();
-        memories.memory(MemoryType {
-            minimum: mem_pages as u64,
-            maximum: None,
-            memory64: false,
-            shared: false,
-        });
-        let mut globals = GlobalSection::new();
-        globals.global(
-            GlobalType {
-                val_type: ValType::I64,
-                mutable: true,
-            },
-            &ConstExpr::i64_const(42),
-        );
-        let mut exports = ExportSection::new();
-        exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        let tables = TableSection::new();
+        let memories = MemorySection::new();
+        let globals = GlobalSection::new();
+        let exports = ExportSection::new();
         let elements = ElementSection::new();
         let codes = CodeSection::new();
         let data = DataSection::new();
-        let typerefs = BTreeMap::new();
-        let importrefs = BTreeMap::new();
+        let type_refs = BTreeMap::new();
+        let import_refs = BTreeMap::new();
         Self {
             module,
             types,
@@ -107,35 +118,109 @@ impl ModEmitter {
             memories,
             globals,
             exports,
+            #[cfg(feature = "adversarial")]
+            start: None,
             elements,
             codes,
             data,
-            type_refs: typerefs,
-            import_refs: importrefs,
+            data_count: None,
+            type_refs,
+            import_refs,
         }
+    }
+
+    pub fn custom_section(&mut self, name: &str, data: &[u8]) -> &mut Self {
+        self.module.section(&CustomSection {
+            name: Cow::Borrowed(name),
+            data: Cow::Borrowed(data),
+        });
+        self
+    }
+
+    pub fn table(
+        &mut self,
+        element_type: RefType,
+        minimum: u32,
+        maximum: Option<u32>,
+    ) -> &mut Self {
+        self.tables.table(TableType {
+            element_type,
+            minimum,
+            maximum,
+        });
+        self
+    }
+
+    pub fn memory(
+        &mut self,
+        minimum: u64,
+        maximum: Option<u64>,
+        memory64: bool,
+        shared: bool,
+    ) -> &mut Self {
+        self.memories.memory(MemoryType {
+            minimum,
+            maximum,
+            memory64,
+            shared,
+        });
+        self
+    }
+
+    pub fn global(&mut self, val_type: ValType, mutable: bool, init_expr: &ConstExpr) -> &mut Self {
+        self.globals
+            .global(GlobalType { val_type, mutable }, init_expr);
+        self
+    }
+
+    pub fn export(&mut self, name: &str, kind: ExportKind, index: u32) -> &mut Self {
+        self.exports.export(name, kind, index);
+        self
+    }
+
+    #[cfg(feature = "adversarial")]
+    pub fn start(&mut self, fid: FuncRef) -> &mut Self {
+        self.start = Some(StartSection {
+            function_index: fid.0,
+        });
+        self
+    }
+
+    pub fn data_count(&mut self, count: u32) -> &mut Self {
+        self.data_count = Some(DataCountSection { count });
+        self
     }
 
     /// Create a new [`FuncEmitter`] with the given [`Arity`] and locals count.
     /// Transfers ownership of `self` to the [`FuncEmitter`], which can be
     /// recovered by calling [`FuncEmitter::finish`].
     pub fn func(self, arity: Arity, n_locals: u32) -> FuncEmitter {
-        FuncEmitter::new(self, arity, n_locals)
+        FuncEmitter::new(self, arity, Arity(1), n_locals)
     }
 
-    /// Return the unique [`TypeRef`] for a function with a given [`Arity`],
-    /// creating such a type in the `type` section of the module if such a type
-    /// does not already exist.
+    #[cfg(feature = "adversarial")]
+    pub fn func_with_arity_and_ret(self, arity: Arity, ret: Arity, n_locals: u32) -> FuncEmitter {
+        FuncEmitter::new(self, arity, ret, n_locals)
+    }
+
+    /// Return the unique [`TypeRef`] for a function with a given args [`Arity`]
+    /// and return [`Arity`], creating such a type in the `type` section of the
+    /// module if such a type does not already exist.
     #[allow(clippy::map_entry)]
-    pub fn get_fn_type(&mut self, arity: Arity) -> TypeRef {
-        if self.type_refs.contains_key(&arity) {
-            self.type_refs[&arity]
+    pub fn get_fn_type(&mut self, arity: Arity, ret: Arity) -> TypeRef {
+        let key = (arity, ret);
+        if self.type_refs.contains_key(&key) {
+            self.type_refs[&key]
         } else {
             let params: Vec<_> = std::iter::repeat(ValType::I64)
-                .take(arity.0 as usize)
+                .take(key.0 .0 as usize)
+                .collect();
+            let rets: Vec<_> = std::iter::repeat(ValType::I64)
+                .take(key.1 .0 as usize)
                 .collect();
             let ty_id = TypeRef(self.types.len());
-            self.types.function(params, vec![ValType::I64]);
-            self.type_refs.insert(arity, ty_id);
+            self.types.function(params, rets);
+            self.type_refs.insert(key, ty_id);
             ty_id
         }
     }
@@ -154,7 +239,8 @@ impl ModEmitter {
             self.import_refs[&key]
         } else {
             let import_id = FuncRef(self.imports.len());
-            let ty_id = self.get_fn_type(arity);
+            // import func must have return arity == 1
+            let ty_id = self.get_fn_type(arity, Arity(1));
             self.imports
                 .import(module, fname, EntityType::Function(ty_id.0));
             self.import_refs.insert(key, import_id);
@@ -162,11 +248,21 @@ impl ModEmitter {
         }
     }
 
+    #[cfg(feature = "adversarial")]
+    pub fn import_func_no_check(&mut self, module: &str, fname: &str, arity: Arity) -> FuncRef {
+        let import_id = FuncRef(self.imports.len());
+        // import func must have return arity == 1
+        let ty_id = self.get_fn_type(arity, Arity(1));
+        self.imports
+            .import(module, fname, EntityType::Function(ty_id.0));
+        import_id
+    }
+
     /// Define a function in the module with a given arity, adding its code to
     /// the `code` section of the module and declaring it in the `function`
     /// section of the module, and returning a new [`FuncRef`] denoting it.
-    pub fn define_func(&mut self, arity: Arity, func: &Function) -> FuncRef {
-        let ty = self.get_fn_type(arity);
+    pub fn define_func(&mut self, arity: Arity, ret: Arity, func: &Function) -> FuncRef {
+        let ty = self.get_fn_type(arity, ret);
         assert!(self.funcs.len() == self.codes.len());
         let fid = self.imports.len() + self.funcs.len();
         self.funcs.function(ty.0);
@@ -191,13 +287,7 @@ impl ModEmitter {
 
     pub fn define_global_i64(&mut self, val: i64, mutable: bool, export: Option<&str>) {
         let idx = self.globals.len();
-        self.globals.global(
-            GlobalType {
-                val_type: ValType::I64,
-                mutable,
-            },
-            &ConstExpr::i64_const(val),
-        );
+        self.global(ValType::I64, mutable, &ConstExpr::i64_const(val));
         if let Some(name) = export {
             self.exports.export(name, ExportKind::Global, idx);
         }
@@ -237,6 +327,9 @@ impl ModEmitter {
         if !self.elements.is_empty() {
             self.module.section(&self.elements);
         }
+        if let Some(data_count) = self.data_count {
+            self.module.section(&data_count);
+        }
         if !self.codes.is_empty() {
             self.module.section(&self.codes);
         }
@@ -249,63 +342,47 @@ impl ModEmitter {
             Err(ty) => panic!("invalid WASM module: {:?}", ty.message()),
         }
     }
-}
 
-impl Default for ModEmitter {
-    fn default() -> Self {
-        let mut module = Module::new();
-
-        let metasection = CustomSection {
-            name: Cow::Borrowed(soroban_env_common::meta::ENV_META_V0_SECTION_NAME),
-            data: Cow::Borrowed(&soroban_env_common::meta::XDR),
-        };
-        module.section(&metasection);
-
-        let types = TypeSection::new();
-        let imports = ImportSection::new();
-        let funcs = FunctionSection::new();
-        let mut tables = TableSection::new();
-        tables.table(TableType {
-            element_type: RefType::FUNCREF,
-            minimum: 128,
-            maximum: None,
-        });
-        let mut memories = MemorySection::new();
-        memories.memory(MemoryType {
-            minimum: 1,
-            maximum: None,
-            memory64: false,
-            shared: false,
-        });
-        let mut globals = GlobalSection::new();
-        globals.global(
-            GlobalType {
-                val_type: ValType::I64,
-                mutable: true,
-            },
-            &ConstExpr::i64_const(42),
-        );
-        let mut exports = ExportSection::new();
-        exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
-        let elements = ElementSection::new();
-        let codes = CodeSection::new();
-        let data = DataSection::new();
-        let typerefs = BTreeMap::new();
-        let importrefs = BTreeMap::new();
-        Self {
-            module,
-            types,
-            imports,
-            funcs,
-            tables,
-            memories,
-            globals,
-            exports,
-            elements,
-            codes,
-            data,
-            type_refs: typerefs,
-            import_refs: importrefs,
+    #[cfg(feature = "adversarial")]
+    pub fn finish_no_validate(mut self) -> Vec<u8> {
+        // NB: these sections must be emitted in this order, by spec.
+        if !self.types.is_empty() {
+            self.module.section(&self.types);
         }
+        if !self.imports.is_empty() {
+            self.module.section(&self.imports);
+        }
+        if !self.funcs.is_empty() {
+            self.module.section(&self.funcs);
+        }
+        if !self.tables.is_empty() {
+            self.module.section(&self.tables);
+        }
+        if !self.memories.is_empty() {
+            self.module.section(&self.memories);
+        }
+        if !self.globals.is_empty() {
+            self.module.section(&self.globals);
+        }
+        if !self.exports.is_empty() {
+            self.module.section(&self.exports);
+        }
+        if let Some(start) = self.start {
+            self.module.section(&start);
+        }
+        if !self.elements.is_empty() {
+            self.module.section(&self.elements);
+        }
+        if let Some(data_count) = self.data_count {
+            self.module.section(&data_count);
+        }
+        if !self.codes.is_empty() {
+            self.module.section(&self.codes);
+        }
+        if !self.data.is_empty() {
+            self.module.section(&self.data);
+        }
+
+        self.module.finish()
     }
 }

@@ -4,9 +4,13 @@ use soroban_test_wasms::HOSTILE;
 use crate::{
     budget::{AsBudget, Budget},
     host_object::HostVec,
+    meta,
     storage::Storage,
-    testutils::wasm as wasm_util,
-    xdr::{AccountId, ContractCostType, PublicKey, ScErrorCode, ScErrorType, Uint256},
+    testutils::{generate_account_id, generate_bytes_array, wasm as wasm_util},
+    xdr::{
+        AccountId, ContractCostType, Limited, Limits, PublicKey, ScEnvMetaEntry, ScErrorCode,
+        ScErrorType, Uint256, WriteXdr,
+    },
     DiagnosticLevel, Env, EnvBase, Error, Host, HostError, Symbol, SymbolSmall, Tag, Val,
     VecObject,
 };
@@ -736,6 +740,412 @@ fn test_integer_overflow() -> Result<(), HostError> {
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::WasmVm, ScErrorCode::ArithDomain)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_corrupt_custom_section() -> Result<(), HostError> {
+    // let wasm = wasm_util::wasm_module_with_custom_section("custom", vec![24; 7].as_slice());
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    host.as_budget().reset_unlimited()?;
+
+    // empty custom section
+    let res = host.register_test_contract_wasm_from_source_account(
+        &wasm_util::empty_wasm_module().as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidInput)
+    ));
+
+    // some random custom section
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm_util::wasm_module_with_custom_section("custom", vec![24; 7].as_slice()).as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidInput)
+    ));
+
+    // invalid section name
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm_util::wasm_module_with_custom_section(
+            "contractenvmetav1",
+            &soroban_env_common::meta::XDR,
+        )
+        .as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidInput)
+    ));
+
+    let ledger_protocol = meta::get_ledger_protocol_version(meta::INTERFACE_VERSION);
+    let ledger_pre = meta::get_ledger_protocol_version(meta::INTERFACE_VERSION);
+
+    let interface_meta = |proto: u32, pre: u32| -> Vec<u8> {
+        let iv = (proto as u64) << 32 | pre as u64;
+        let entry = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(iv);
+        let bytes = Vec::<u8>::new();
+        let mut w = Limited::new(bytes, Limits::none());
+        entry.write_xdr(&mut w).unwrap();
+        w.inner
+    };
+
+    // invalid: protocol is future
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm_util::wasm_module_with_custom_section(
+            "contractenvmetav0",
+            interface_meta(ledger_protocol + 1, ledger_pre).as_slice(),
+        )
+        .as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidInput)
+    ));
+
+    if cfg!(not(feature = "next")) {
+        // invalid: protocol is old but pre-release version is non-zero
+        let res = host.register_test_contract_wasm_from_source_account(
+            wasm_util::wasm_module_with_custom_section(
+                "contractenvmetav0",
+                interface_meta(ledger_protocol - 1, 1).as_slice(),
+            )
+            .as_slice(),
+            generate_account_id(&host),
+            generate_bytes_array(&host),
+        );
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::WasmVm, ScErrorCode::InvalidInput)
+        ));
+
+        // invalid: protocol is current but pre-release version doesn't match env's
+        let res = host.register_test_contract_wasm_from_source_account(
+            wasm_util::wasm_module_with_custom_section(
+                "contractenvmetav0",
+                interface_meta(ledger_protocol, ledger_pre + 1).as_slice(),
+            )
+            .as_slice(),
+            generate_account_id(&host),
+            generate_bytes_array(&host),
+        );
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::WasmVm, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_floating_point() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_floating_point_ops();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_multiple_memory() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_multiple_memories();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_function_import_with_wrong_type() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_lying_about_import_function_type();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_import_nonexistent_function() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_importing_nonexistent_function();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_duplicate_function_import() -> Result<(), HostError> {
+    // repeating importing the same function is actually okay
+    let wasm = wasm_util::wasm_module_with_duplicate_function_import(5);
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(res.is_ok());
+
+    // excessive importing leads to large wasm and eventually runs out of budget
+    let wasm2 = wasm_util::wasm_module_with_duplicate_function_import(50000);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm2.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_export_nonexistent_function() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_nonexistent_function_export();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_nonexistent_func_element() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_nonexistent_func_element();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_no_start() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_start_function();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_too_large_data_count() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.as_budget().reset_unlimited()?;
+    host.enable_debug()?;
+
+    // the segment limit in wasmparser is 100000, although that doesn't appear
+    // in the WASM spec (or I couldn't find it)
+    let wasm = wasm_util::wasm_module_with_data_count(100_001, 8, 100_001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn test_lying_about_data_count() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+
+    // sanity check: truthful data count passes validation
+    let wasm = wasm_util::wasm_module_with_data_count(10, 0x100, 10);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(res.is_ok());
+
+    // lying about the count
+    let wasm_bad = wasm_util::wasm_module_with_data_count(10, 0x100, 11);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm_bad.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_multi_value() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+
+    // lying about the count
+    let wasm_bad = wasm_util::wasm_module_with_multi_value();
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm_bad.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_large_wasm_code() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+
+    let wasm = wasm_util::wasm_module_with_4n_insns(100000);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_large_number_of_internal_funcs() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+
+    let wasm = wasm_util::wasm_module_with_n_funcs_no_export(100000);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_repeated_export_same_func() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+
+    // the export limit in wasmparser is 100000, although that doesn't appear in
+    // the WASM spec (or I couldn't find it), and wasmi doesn't have that limit either
+    let wasm = wasm_util::wasm_module_with_repeated_exporting_the_same_func(100001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_large_elements() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let wasm = wasm_util::wasm_module_large_elements(100001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_large_globals() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let wasm = wasm_util::wasm_module_large_globals(100001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
     Ok(())
 }

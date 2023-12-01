@@ -1,11 +1,6 @@
-use std::cell::Cell;
-use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
-use std::sync::Once;
-
-use crate::{StorageType, SymbolSmall};
-use std::{collections::BTreeMap, rc::Rc};
-
 use rand::RngCore;
+use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
+use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
 
 use crate::{
     budget::Budget,
@@ -14,7 +9,8 @@ use crate::{
         AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScErrorCode,
         ScErrorType, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, StorageType,
+    SymbolSmall, Val, VecObject,
 };
 
 /// Catch panics while suppressing the default panic hook that prints to the
@@ -374,8 +370,8 @@ impl Host {
 
 #[cfg(test)]
 pub(crate) mod wasm {
-    use crate::{Symbol, U32Val, Val};
-    use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
+    use crate::{Symbol, Tag, U32Val, Val};
+    use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         let mut fe = ModEmitter::default().func(Arity(1), 0);
@@ -390,6 +386,27 @@ pub(crate) mod wasm {
         fe.drop();
         fe.push(Symbol::try_from_small_str("pass").unwrap());
         fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_n_funcs_no_export(n: usize) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for _i in 0..n {
+            let mut fe = me.func(Arity(0), 0);
+            fe.push(Symbol::try_from_small_str("pass").unwrap());
+            me = fe.finish().0;
+        }
+        me.finish()
+    }
+
+    pub(crate) fn wasm_module_with_repeated_exporting_the_same_func(n: usize) -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (mut me, fid) = fe.finish();
+        for i in 0..n {
+            me.export_func(fid, format!("test{}", i).as_str());
+        }
+        me.finish_no_validate()
     }
 
     pub(crate) fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
@@ -438,7 +455,7 @@ pub(crate) mod wasm {
         let (mut me, f2) = fe.finish();
         // store in table
         me.define_elems(&[f0, f1, f2]);
-        let ty = me.get_fn_type(Arity(0));
+        let ty = me.get_fn_type(Arity(0), Arity(1));
         // the caller
         fe = me.func(Arity(1), 0);
         fe.local_get(LocalRef(0));
@@ -500,6 +517,8 @@ pub(crate) mod wasm {
     ) -> Vec<u8> {
         let mut me = ModEmitter::from_configs(num_pages, 128);
         let mem_len = num_pages * 0x10_000;
+        // we just make sure the total memory can fit one segments the segments
+        // will just cycle through the space and possibly override earlier ones
         let max_segments = (mem_len / seg_size.max(1)).max(1);
         for _i in 0..num_sgmts % max_segments {
             me.define_data_segment(0, vec![0; seg_size as usize]);
@@ -580,6 +599,165 @@ pub(crate) mod wasm {
         let vals_pos = U32Val::from(num_vals * 8);
         let keys_pos = U32Val::from(num_vals * 16);
         fe.map_new_from_linear_memory(keys_pos, vals_pos, U32Val::from(num_vals));
+
         fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_data_count(
+        num_sgmts: u32,
+        seg_size: u32,
+        data_count: u32,
+    ) -> Vec<u8> {
+        // first calculate the number of memory pages needed to fit all the data
+        // segments non-overlapping
+        let pages = num_sgmts * seg_size / 0x10_000 + 1;
+        let mut me = ModEmitter::from_configs(pages, 128);
+        for i in 0..num_sgmts {
+            me.define_data_segment(i * seg_size, vec![7; seg_size as usize]);
+        }
+        // define the data count, if count != num_sgmts, then the validator is
+        // supposed to catch it
+        me.data_count(data_count);
+        me.finish_no_validate()
+    }
+
+    // Emit a wasm module that uses post-MVP WASM features. Specifically
+    // mutable-globals and sign-ext.
+    pub fn post_mvp_wasm_module() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+
+        // Emit an exported mutable global
+        me.define_global_i64(-100, true, Some("global"));
+
+        let mut fe = me.func(Arity(0), 0);
+        fe.i64_const(0x0000_0000_ffff_abcd_u64 as i64);
+
+        // Emit an op from the new sign-ext repertoire
+        fe.i64_extend32s();
+
+        // Turn this into a I64Small
+        fe.i64_const(8);
+        fe.i64_shl();
+        fe.i64_const(Tag::I64Small as i64);
+        fe.i64_or();
+
+        fe.finish_and_export("test").finish()
+    }
+
+    pub fn empty_wasm_module() -> Vec<u8> {
+        ModEmitter::new().finish()
+    }
+
+    pub fn wasm_module_with_custom_section(name: &str, data: &[u8]) -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        me.custom_section(name, data);
+        me.finish()
+    }
+
+    pub fn wasm_module_with_floating_point_ops() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func(Arity(0), 0);
+        fe.f64_const(1.1f64);
+        fe.f64_const(2.2f64);
+        fe.f64_add();
+        fe.drop();
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub fn wasm_module_with_multiple_memories() -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        me.memory(1, None, false, false);
+        me.memory(1, None, false, false);
+        me.finish()
+    }
+
+    pub fn wasm_module_lying_about_import_function_type() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // function {"t", "_"} is "dummy0", taking 0 arguments
+        // this will not pass the wasmi linker
+        me.import_func("t", "_", Arity(1));
+        me.finish()
+    }
+
+    pub fn wasm_module_importing_nonexistent_function() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        me.import_func("t", "z", Arity(1));
+        me.finish()
+    }
+
+    pub fn wasm_module_with_duplicate_function_import(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for _ in 0..n {
+            me.import_func_no_check("t", "_", Arity(0));
+        }
+        me.finish()
+    }
+
+    pub fn wasm_module_with_nonexistent_function_export() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        me.import_func("t", "_", Arity(0));
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (mut me, fid) = fe.finish();
+        println!("{}", fid.0);
+        // exporting a function I defined is okay
+        me.export_func(fid, "test");
+        // exporting an imported function is also okay, although weird
+        me.export_func(FuncRef(0), "test0");
+        // importing an non-existent function will not pass validation
+        me.export_func(FuncRef(100), "test100");
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_nonexistent_func_element() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+        // a local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (me, f1) = fe.finish();
+        // another local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass2").unwrap());
+        let (mut me, f2) = fe.finish();
+        // store in table, FuncRef(100) is invalid
+        me.define_elems(&[f0, f1, f2, FuncRef(100)]);
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_start_function() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let fe = me.func_with_arity_and_ret(Arity(0), Arity(0), 0);
+        let (mut me, fid) = fe.finish();
+        me.export_func(fid.clone(), "start");
+        me.start(fid);
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_multi_value() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func_with_arity_and_ret(Arity(0), Arity(2), 0);
+        fe.push(Symbol::try_from_small_str("pass1").unwrap());
+        fe.push(Symbol::try_from_small_str("pass2").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_large_elements(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(1, n);
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+        // store in table, FuncRef(100) is invalid
+        me.define_elems(vec![f0; n as usize].as_slice());
+        me.finish()
+    }
+
+    pub(crate) fn wasm_module_large_globals(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for i in 0..n {
+            me.define_global_i64(i as i64, true, None);
+        }
+        me.finish()
     }
 }

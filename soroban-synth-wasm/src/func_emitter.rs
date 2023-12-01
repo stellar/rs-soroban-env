@@ -108,6 +108,7 @@ impl From<ScError> for Operand {
 pub struct FuncEmitter {
     pub(crate) mod_emit: ModEmitter,
     pub(crate) arity: Arity,
+    pub(crate) ret: Arity,
     pub(crate) func: Function,
 
     /// A vector of [`LocalRef`]s that cover the arguments to the function. If
@@ -143,7 +144,7 @@ impl FuncEmitter {
     /// [`FuncEmitter::args`] and [`FuncEmitter::locals`] of [`LocalRef`]s, each
     /// indexing into the arguments and locals. Access these member vectors
     /// directly to get the corresponding [`LocalRef`]s.
-    pub fn new(mod_emit: ModEmitter, arity: Arity, n_locals: u32) -> Self {
+    pub fn new(mod_emit: ModEmitter, arity: Arity, ret: Arity, n_locals: u32) -> Self {
         let func = Function::new([(n_locals, ValType::I64)]);
         let args = (0..arity.0).map(|n| (LocalRef(n), None)).collect();
         let locals = (arity.0..arity.0 + n_locals)
@@ -152,6 +153,7 @@ impl FuncEmitter {
         Self {
             mod_emit,
             arity,
+            ret,
             func,
             args,
             locals,
@@ -250,15 +252,6 @@ impl FuncEmitter {
         self.insn(&insn)
     }
 
-    /// Emit an [`Instruction::I64Const`]
-    pub fn i64_const(&mut self, i: i64) -> &mut Self {
-        self.insn(&Instruction::I64Const(i))
-    }
-    /// Emit an [`Instruction::I32Const`]
-    pub fn i32_const(&mut self, i: i32) -> &mut Self {
-        self.insn(&Instruction::I32Const(i))
-    }
-
     /// Emit an [`Instruction::If`], call `t(self)`, then emit
     /// an [`Instruction::End`].
     pub fn if_then<THEN>(&mut self, t: THEN) -> &mut Self
@@ -335,7 +328,7 @@ impl FuncEmitter {
     /// function.
     pub fn finish(mut self) -> (ModEmitter, FuncRef) {
         self.insn(&Instruction::End);
-        let fid = self.mod_emit.define_func(self.arity, &self.func);
+        let fid = self.mod_emit.define_func(self.arity, self.ret, &self.func);
         (self.mod_emit, fid)
     }
 
@@ -389,7 +382,28 @@ variable_insn!(
     (global_set, GlobalSet, GlobalRef)
 );
 
-macro_rules! i64_mem_insn {
+macro_rules! consts {
+    ( $(($func_name: ident, $insn: ident, $ty: ty)),* )
+    =>
+    {
+        impl FuncEmitter {
+        $(
+            pub fn $func_name(&mut self, i: $ty,
+            ) -> &mut Self {
+                self.insn(&Instruction::$insn(i))
+            }
+        )*
+        }
+    }
+}
+consts!(
+    (i64_const, I64Const, i64),
+    (i32_const, I32Const, i32),
+    // forbidden instructions
+    (f64_const, F64Const, f64)
+);
+
+macro_rules! store_load {
     ( $(($func_name: ident, $insn: ident)),* )
     =>
     {
@@ -408,7 +422,7 @@ macro_rules! i64_mem_insn {
         }
     }
 }
-i64_mem_insn!(
+store_load!(
     (i64_store, I64Store),
     (i64_load, I64Load),
     (i64_load8_s, I64Load8S),
@@ -416,7 +430,10 @@ i64_mem_insn!(
     (i64_load32_s, I64Load32S),
     (i64_store8, I64Store8),
     (i64_store16, I64Store16),
-    (i64_store32, I64Store32)
+    (i64_store32, I64Store32),
+    (f64_load, F64Load),
+    // forbidden instructions
+    (f64_store, F64Store)
 );
 
 macro_rules! numeric_insn {
@@ -464,5 +481,10 @@ numeric_insn!(
     (i64_rotl, I64Rotl),
     (i64_rotr, I64Rotr),
     // post-MVP instructions
-    (i64_extend32s, I64Extend32S)
+    (i64_extend32s, I64Extend32S),
+    // forbidden instructions
+    (f64_add, F64Add),
+    (f64_sub, F64Sub),
+    (f64_mul, F64Mul),
+    (f64_div, F64Div)
 );

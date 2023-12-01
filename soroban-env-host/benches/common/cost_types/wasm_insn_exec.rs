@@ -235,7 +235,7 @@ fn call_indirect(n: u64, _rng: &mut StdRng) -> WasmModule {
     let (mut me, f2) = fe.finish();
     // store in table
     me.define_elems(&[f0, f1, f2]);
-    let ty = me.get_fn_type(Arity(0));
+    let ty = me.get_fn_type(Arity(0), Arity(1));
     // the caller
     fe = me.func(Arity(0), 0);
     for i in 0..n {
