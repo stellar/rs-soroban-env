@@ -24,7 +24,7 @@ use dimension::{BudgetDimension, IsCpu, IsShadowMode};
 use model::ScaledU64;
 use wasmi_helper::FuelConfig;
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CostTracker {
     pub iterations: u64,
     pub inputs: Option<u64>,
