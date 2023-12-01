@@ -1,7 +1,11 @@
-use crate::builtin_contracts::stellar_asset_contract::public_types::AssetInfo;
-use crate::builtin_contracts::stellar_asset_contract::storage_types::InstanceDataKey;
-use crate::xdr::{Asset, ScErrorCode, ScErrorType};
-use crate::{host::Host, Env, HostError, StorageType, TryIntoVal, U32Val};
+use crate::{
+    builtin_contracts::stellar_asset_contract::{
+        public_types::AssetInfo, storage_types::InstanceDataKey,
+    },
+    host::Host,
+    xdr::{Asset, ScErrorCode, ScErrorType},
+    Env, HostError, StorageType, TryIntoVal, U32Val,
+};
 
 pub(crate) fn write_asset_info(e: &Host, asset_info: AssetInfo) -> Result<(), HostError> {
     let key = InstanceDataKey::AssetInfo;
@@ -17,6 +21,10 @@ pub(crate) fn read_asset_info(e: &Host) -> Result<AssetInfo, HostError> {
     let key = InstanceDataKey::AssetInfo;
     let rv = e.get_contract_data(key.try_into_val(e)?, StorageType::Instance)?;
     rv.try_into_val(e)
+}
+
+pub(crate) fn read_asset(e: &Host) -> Result<Asset, HostError> {
+    read_asset_info(e)?.try_into_val(e)
 }
 
 pub(crate) fn has_asset_info(e: &Host) -> Result<bool, HostError> {

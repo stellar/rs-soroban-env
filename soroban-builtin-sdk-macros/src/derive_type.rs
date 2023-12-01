@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use proc_macro2::{Literal, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use syn::{spanned::Spanned, DataEnum, DataStruct, Error, Fields, Ident, Visibility};
+use syn::{spanned::Spanned, DataEnum, DataStruct, Error, Fields, Ident};
 
 pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
     let len = Literal::usize_unsuffixed(data.fields.len());
@@ -11,7 +11,6 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
             data.fields
                 .iter()
                 .sorted_by_key(|field| field.ident.as_ref().unwrap().to_string())
-                .filter(|f| matches!(f.vis, Visibility::Public(_)))
                 .enumerate()
                 .map(|(i, f)| {
                     let ident = f.ident.as_ref().unwrap().clone();
@@ -23,7 +22,6 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
         } else {
             data.fields
                 .iter()
-                .filter(|f| matches!(f.vis, Visibility::Public(_)))
                 .enumerate()
                 .map(|(i, _)| {
                     let ident = format_ident!("{}", i);

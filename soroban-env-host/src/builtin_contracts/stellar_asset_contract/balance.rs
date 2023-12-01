@@ -1,22 +1,26 @@
 use std::rc::Rc;
 
-use crate::budget::AsBudget;
-use crate::builtin_contracts::base_types::{Address, BytesN};
-use crate::builtin_contracts::contract_error::ContractError;
-use crate::builtin_contracts::stellar_asset_contract::asset_info::read_asset_info;
-use crate::builtin_contracts::stellar_asset_contract::public_types::AssetInfo;
-use crate::builtin_contracts::stellar_asset_contract::storage_types::DataKey;
-use crate::builtin_contracts::storage_utils::StorageUtils;
-use crate::host::metered_clone::MeteredClone;
-use crate::host::Host;
-use crate::storage::Storage;
-use crate::{err, HostError};
-use soroban_env_common::xdr::{
-    AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountFlags, AccountId,
-    LedgerEntry, LedgerEntryData, LedgerKey, ScAddress, TrustLineAsset, TrustLineEntry,
-    TrustLineEntryExt, TrustLineFlags,
+use crate::{
+    budget::AsBudget,
+    builtin_contracts::{
+        base_types::{Address, BytesN},
+        contract_error::ContractError,
+        stellar_asset_contract::{
+            asset_info::{read_asset, read_asset_info},
+            public_types::AssetInfo,
+            storage_types::DataKey,
+        },
+    },
+    err,
+    host::metered_clone::MeteredClone,
+    storage::Storage,
+    xdr::{
+        AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountFlags, AccountId, Asset,
+        LedgerEntry, LedgerEntryData, LedgerKey, ScAddress, TrustLineAsset, TrustLineEntry,
+        TrustLineEntryExt, TrustLineFlags,
+    },
+    Env, Host, HostError, StorageType, TryIntoVal,
 };
-use soroban_env_common::{Env, StorageType, TryIntoVal};
 
 use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRESHOLD};
 
@@ -30,14 +34,14 @@ use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRE
 /// the AUTH_REQUIRED flag set, then the non-account identifier must first be authorized
 /// by the issuer/admin before it's allowed to hold a balance.
 
-// Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
+// Metering: covered by components.
+pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.into()),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
             if let Some(raw_balance) =
-                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 e.extend_contract_data_ttl(
                     key.try_into_val(e)?,
@@ -54,8 +58,16 @@ pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
     }
 }
 
-// Metering: *mostly* covered by components.
-fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), HostError> {
+// Metering: covered by components.
+fn write_contract_balance(
+    e: &Host,
+    addr: Address,
+    balance: BalanceValue,
+    // We take an unused reference to a "witness" contract-id Hash here, to help
+    // ensure this function is only called from a context where `addr` has been
+    // matched as an ScAddress::Contract(hash) rather than ScAddress::Account(_)
+    _witness_addr_contract_id: &crate::xdr::Hash,
+) -> Result<(), HostError> {
     let key = DataKey::Balance(addr);
     e.put_contract_data(
         key.try_into_val(e)?,
@@ -73,7 +85,7 @@ fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), H
 }
 
 // Metering: covered by components.
-pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
+pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
     if !is_authorized(e, addr.metered_clone(e)?)? {
         return Err(e.error(
             ContractError::BalanceDeauthorizedError.into(),
@@ -93,10 +105,10 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
             })?;
             Ok(transfer_classic_balance(e, acc_id, i64_amount)?)
         }
-        ScAddress::Contract(_) => {
+        ScAddress::Contract(id) => {
             let key = DataKey::Balance(addr.metered_clone(e)?);
             let mut balance = if let Some(raw_balance) =
-                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 raw_balance.try_into_val(e)?
             } else {
@@ -117,13 +129,13 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
             })?;
 
             balance.amount = new_balance;
-            write_balance(e, addr, balance)
+            write_contract_balance(e, addr, balance, &id)
         }
     }
 }
 
-// TODO: Metering analysis
-pub fn spend_balance_no_authorization_check(
+// Metering: covered by components.
+pub(crate) fn spend_balance_no_authorization_check(
     e: &Host,
     addr: Address,
     amount: i128,
@@ -139,12 +151,12 @@ pub fn spend_balance_no_authorization_check(
             })?;
             transfer_classic_balance(e, acc_id, -i64_amount)
         }
-        ScAddress::Contract(_) => {
+        ScAddress::Contract(id) => {
             // If a balance exists, calculate new amount and write the existing authorized state as is because
             // this can be used to clawback when deauthorized.
             let key = DataKey::Balance(addr.metered_clone(e)?);
             if let Some(raw_balance) =
-                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if balance.amount < amount {
@@ -165,7 +177,7 @@ pub fn spend_balance_no_authorization_check(
                     })?;
                     balance.amount = new_balance;
 
-                    write_balance(e, addr, balance)?
+                    write_contract_balance(e, addr, balance, &id)?
                 }
             } else if amount > 0 {
                 return Err(err!(
@@ -181,7 +193,7 @@ pub fn spend_balance_no_authorization_check(
 }
 
 // Metering: covered by components.
-pub fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
+pub(crate) fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
     if !is_authorized(e, addr.metered_clone(e)?)? {
         return Err(e.error(
             ContractError::BalanceDeauthorizedError.into(),
@@ -193,14 +205,14 @@ pub fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostEr
     spend_balance_no_authorization_check(e, addr, amount)
 }
 
-// Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
+// Metering: covered by components.
+pub(crate) fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => is_account_authorized(e, acc_id),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
             if let Some(raw_balance) =
-                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 Ok(balance.authorized)
@@ -211,8 +223,12 @@ pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
     }
 }
 
-// Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+// Metering: covered by components.
+pub(crate) fn write_authorization(
+    e: &Host,
+    addr: Address,
+    authorize: bool,
+) -> Result<(), HostError> {
     if !authorize && !is_asset_auth_revocable(e)? {
         return Err(e.error(
             ContractError::OperationNotSupportedError.into(),
@@ -223,14 +239,14 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
 
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => set_authorization(e, acc_id, authorize),
-        ScAddress::Contract(_) => {
+        ScAddress::Contract(id) => {
             let key = DataKey::Balance(addr.metered_clone(e)?);
             if let Some(raw_balance) =
-                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 balance.authorized = authorize;
-                write_balance(e, addr, balance)
+                write_contract_balance(e, addr, balance, &id)
             } else {
                 // Balance does not exist, so write a 0 amount along with the authorization flag.
                 // No need to check auth_required because this function can only be called by the admin.
@@ -239,14 +255,14 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
                     authorized: authorize,
                     clawback: is_asset_clawback_enabled(e)?,
                 };
-                write_balance(e, addr, balance)
+                write_contract_balance(e, addr, balance, &id)
             }
         }
     }
 }
 
-// TODO: Metering analysis
-pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
+// Metering: covered by components.
+pub(crate) fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
     let validate_trustline =
         |asset: TrustLineAsset, issuer: AccountId, account: AccountId| -> Result<(), HostError> {
             if issuer == account {
@@ -268,39 +284,27 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
         };
 
     match addr.to_sc_address()? {
-        ScAddress::Account(acc_id) => match read_asset_info(e)? {
-            AssetInfo::Native => Err(e.error(
+        ScAddress::Account(acc_id) => match read_asset(e)? {
+            Asset::Native => Err(e.error(
                 ContractError::OperationNotSupportedError.into(),
                 "cannot clawback native asset",
                 &[],
             )),
-            AssetInfo::AlphaNum4(asset) => {
-                let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-                validate_trustline(
-                    e.create_asset_4(
-                        asset.asset_code.to_array()?,
-                        issuer_account_id.metered_clone(e)?,
-                    ),
-                    issuer_account_id,
-                    acc_id,
-                )
+            Asset::CreditAlphanum4(asset) => {
+                let issuer = asset.issuer.metered_clone(e)?;
+                let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+                validate_trustline(tlasset, issuer, acc_id)
             }
-            AssetInfo::AlphaNum12(asset) => {
-                let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-                validate_trustline(
-                    e.create_asset_12(
-                        asset.asset_code.to_array()?,
-                        issuer_account_id.metered_clone(e)?,
-                    ),
-                    issuer_account_id,
-                    acc_id,
-                )
+            Asset::CreditAlphanum12(asset) => {
+                let issuer = asset.issuer.metered_clone(e)?;
+                let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+                validate_trustline(tlasset, issuer, acc_id)
             }
         },
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
             if let Some(raw_balance) =
-                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if !balance.clawback {
@@ -327,8 +331,12 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
 }
 
 // Metering: covered by components
-pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Result<(), HostError> {
-    let transfer_trustline_balance_safe =
+pub(crate) fn transfer_classic_balance(
+    e: &Host,
+    to_key: AccountId,
+    amount: i64,
+) -> Result<(), HostError> {
+    let transfer_trustline_balance_unless_issuer =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
             if issuer == to {
                 return Ok(());
@@ -337,75 +345,48 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
             transfer_trustline_balance(e, to, asset, amount)
         };
 
-    match read_asset_info(e)? {
-        AssetInfo::Native => transfer_account_balance(e, to_key, amount)?,
-        AssetInfo::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            transfer_trustline_balance_safe(
-                e.create_asset_4(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )?
+    match read_asset(e)? {
+        Asset::Native => transfer_account_balance(e, to_key, amount),
+        Asset::CreditAlphanum4(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+            transfer_trustline_balance_unless_issuer(tlasset, issuer, to_key)
         }
-        AssetInfo::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            transfer_trustline_balance_safe(
-                e.create_asset_12(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )?
-        }
-    };
-    Ok(())
-}
-
-// TODO: Metering analysis
-//returns (total balance, spendable balance)
-fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<i64, HostError> {
-    let get_trustline_balance_safe =
-        |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<i64, HostError> {
-            if issuer == to {
-                return Ok(i64::MAX);
-            }
-
-            get_trustline_balance(e, to, asset)
-        };
-
-    match read_asset_info(e)? {
-        AssetInfo::Native => get_account_balance(e, to_key),
-        AssetInfo::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            get_trustline_balance_safe(
-                e.create_asset_4(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )
-        }
-
-        AssetInfo::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            get_trustline_balance_safe(
-                e.create_asset_12(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )
+        Asset::CreditAlphanum12(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+            transfer_trustline_balance_unless_issuer(tlasset, issuer, to_key)
         }
     }
 }
 
-// Metering: *mostly* covered by components. The arithmetics are free.
+// Metering: covered by components.
+fn get_classic_balance(e: &Host, acct: AccountId) -> Result<i64, HostError> {
+    let get_trustline_balance_or_max_if_issuer =
+        |asset: TrustLineAsset, issuer: AccountId, acct: AccountId| -> Result<i64, HostError> {
+            if issuer == acct {
+                return Ok(i64::MAX);
+            }
+
+            get_trustline_balance(e, acct, asset)
+        };
+
+    match read_asset(e)? {
+        Asset::Native => get_account_balance(e, acct),
+        Asset::CreditAlphanum4(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+            get_trustline_balance_or_max_if_issuer(tlasset, issuer, acct)
+        }
+        Asset::CreditAlphanum12(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+            get_trustline_balance_or_max_if_issuer(tlasset, issuer, acct)
+        }
+    }
+}
+
+// Metering: covered by components.
 fn transfer_account_balance(
     host: &Host,
     account_id: AccountId,
@@ -505,7 +486,7 @@ fn read_trustline_entry(
         })
 }
 
-// Metering: *mostly* covered by components. The arithmatics are free.
+// Metering: covered by components.
 fn transfer_trustline_balance(
     host: &Host,
     account_id: AccountId,
@@ -552,7 +533,6 @@ fn transfer_trustline_balance(
 }
 
 // Metering: covered by components
-//returns (total balance, spendable balance)
 fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostError> {
     let lk = host.to_account_key(account_id)?;
 
@@ -568,11 +548,18 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
             )),
         }?;
 
-        let min = get_min_max_account_balance(host, ae)?.0;
+        let (min, max) = get_min_max_account_balance(host, ae)?;
         if ae.balance < min {
             return Err(host.error(
                 ContractError::InternalError.into(),
-                "account has balance < spendable_balance",
+                "account has balance < minimum",
+                &[],
+            ));
+        }
+        if ae.balance > max {
+            return Err(host.error(
+                ContractError::InternalError.into(),
+                "account has balance > maximum",
                 &[],
             ));
         }
@@ -580,7 +567,7 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
     })
 }
 
-// TODO: Metering analysis
+// Metering: covered by components.
 fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64), HostError> {
     if ae.balance < 0 {
         return Err(e.error(
@@ -609,8 +596,7 @@ fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64)
     }
 }
 
-// Metering: *mostly* covered by components. The arithmatics are free.
-// returns (total balance, spendable balance)
+// Metering: covered by components.
 fn get_trustline_balance(
     host: &Host,
     account_id: AccountId,
@@ -629,11 +615,18 @@ fn get_trustline_balance(
             )),
         }?;
 
-        let min = get_min_max_trustline_balance(host, &tl)?.0;
+        let (min, max) = get_min_max_trustline_balance(host, &tl)?;
         if tl.balance < min {
             return Err(host.error(
                 ContractError::InternalError.into(),
-                "trustline has balance < spendable_balance",
+                "trustline has balance < minimum",
+                &[],
+            ));
+        }
+        if tl.balance > max {
+            return Err(host.error(
+                ContractError::InternalError.into(),
+                "trustline has balance > maximum",
                 &[],
             ));
         }
@@ -641,7 +634,7 @@ fn get_trustline_balance(
     })
 }
 
-// TODO: Metering analysis
+// Metering: covered by components.
 fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, i64), HostError> {
     if tl.balance < 0 {
         return Err(e.error(
@@ -669,9 +662,9 @@ fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, 
     }
 }
 
-// TODO: Metering analysis
+// Metering: covered by components.
 fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostError> {
-    let is_trustline_authorized_safe =
+    let is_trustline_authorized_or_issuer =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<bool, HostError> {
             if issuer == to {
                 return Ok(true);
@@ -679,34 +672,22 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
             is_trustline_authorized(e, to, asset)
         };
 
-    match read_asset_info(e)? {
-        AssetInfo::Native => Ok(true),
-        AssetInfo::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            is_trustline_authorized_safe(
-                e.create_asset_4(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                account_id,
-            )
+    match read_asset(e)? {
+        Asset::Native => Ok(true),
+        Asset::CreditAlphanum4(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+            is_trustline_authorized_or_issuer(tlasset, issuer, account_id)
         }
-        AssetInfo::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            is_trustline_authorized_safe(
-                e.create_asset_12(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                account_id,
-            )
+        Asset::CreditAlphanum12(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+            is_trustline_authorized_or_issuer(tlasset, issuer, account_id)
         }
     }
 }
 
-// TODO: Metering analysis
+// Metering: covered by components.
 fn get_trustline_flags(
     host: &Host,
     account_id: AccountId,
@@ -729,7 +710,7 @@ fn get_trustline_flags(
     })
 }
 
-// Metering: *mostly* covered by components. The arithmatics are free.
+// Metering: covered by components.
 fn is_trustline_authorized(
     e: &Host,
     account_id: AccountId,
@@ -739,10 +720,10 @@ fn is_trustline_authorized(
     Ok(tl_flags & (TrustLineFlags::AuthorizedFlag as u32) != 0)
 }
 
-fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(), HostError> {
-    let set_trustline_authorization_safe =
-        |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
-            if issuer == to {
+fn set_authorization(e: &Host, acct: AccountId, authorize: bool) -> Result<(), HostError> {
+    let set_trustline_authorization_unless_issuer =
+        |asset: TrustLineAsset, issuer: AccountId, acct: AccountId| -> Result<(), HostError> {
+            if issuer == acct {
                 return Err(e.error(
                     ContractError::OperationNotSupportedError.into(),
                     "issuer doesn't have a trustline",
@@ -750,36 +731,24 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
                 ));
             }
 
-            set_trustline_authorization(e, to, asset, authorize)
+            set_trustline_authorization(e, acct, asset, authorize)
         };
 
-    match read_asset_info(e)? {
-        AssetInfo::Native => Err(e.error(
+    match read_asset(e)? {
+        Asset::Native => Err(e.error(
             ContractError::OperationNotSupportedError.into(),
             "expected trustline asset",
             &[],
         )),
-        AssetInfo::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            set_trustline_authorization_safe(
-                e.create_asset_4(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )
+        Asset::CreditAlphanum4(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum4(asset);
+            set_trustline_authorization_unless_issuer(tlasset, issuer, acct)
         }
-        AssetInfo::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
-            set_trustline_authorization_safe(
-                e.create_asset_12(
-                    asset.asset_code.to_array()?,
-                    issuer_account_id.metered_clone(e)?,
-                ),
-                issuer_account_id,
-                to_key,
-            )
+        Asset::CreditAlphanum12(asset) => {
+            let issuer = asset.issuer.metered_clone(e)?;
+            let tlasset = TrustLineAsset::CreditAlphanum12(asset);
+            set_trustline_authorization_unless_issuer(tlasset, issuer, acct)
         }
     }
 }

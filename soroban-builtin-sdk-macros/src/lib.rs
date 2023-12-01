@@ -9,7 +9,6 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
     parse_macro_input, spanned::Spanned, DeriveInput, Error, ImplItem, ImplItemFn, ItemImpl,
-    Visibility,
 };
 
 #[proc_macro_attribute]
@@ -49,13 +48,10 @@ fn get_methods(imp: &ItemImpl) -> impl Iterator<Item = &ImplItemFn> {
 #[proc_macro_attribute]
 pub fn contractimpl(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     let imp = parse_macro_input!(input as ItemImpl);
-    let is_trait = imp.trait_.is_some();
     let ty = &imp.self_ty;
-    let pub_methods: Vec<_> = get_methods(&imp)
-        .filter(|m| is_trait || matches!(m.vis, Visibility::Public(_)))
-        .collect();
+    let all_methods: Vec<_> = get_methods(&imp).collect();
 
-    let cfs = derive_contract_function_set(ty, pub_methods.into_iter());
+    let cfs = derive_contract_function_set(ty, all_methods.into_iter());
     quote! {
         #imp
         #cfs

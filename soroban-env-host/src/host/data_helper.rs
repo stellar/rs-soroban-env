@@ -11,10 +11,10 @@ use soroban_env_common::{AddressObject, Env, StorageType, U32Val, Val};
 use crate::budget::AsBudget;
 use crate::storage::{InstanceStorageMap, Storage};
 use crate::xdr::{
-    AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, LedgerEntry, LedgerEntryData,
-    LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
-    LedgerKeyTrustLine, PublicKey, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset,
-    Uint256,
+    AccountEntry, AccountId, Asset, ContractDataEntry, Hash, HashIdPreimage, LedgerEntry,
+    LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
+    LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScVal, Signer, SignerKey,
+    ThresholdIndexes, TrustLineAsset, Uint256,
 };
 use crate::{err, Host, HostError};
 
@@ -303,21 +303,17 @@ impl Host {
         Rc::metered_new(LedgerKey::Account(LedgerKeyAccount { account_id }), self)
     }
 
-    pub(crate) fn create_asset_4(&self, asset_code: [u8; 4], issuer: AccountId) -> TrustLineAsset {
+    pub(crate) fn create_asset_4(&self, asset_code: [u8; 4], issuer: AccountId) -> Asset {
         use crate::xdr::{AlphaNum4, AssetCode4};
-        TrustLineAsset::CreditAlphanum4(AlphaNum4 {
+        Asset::CreditAlphanum4(AlphaNum4 {
             asset_code: AssetCode4(asset_code),
             issuer,
         })
     }
 
-    pub(crate) fn create_asset_12(
-        &self,
-        asset_code: [u8; 12],
-        issuer: AccountId,
-    ) -> TrustLineAsset {
+    pub(crate) fn create_asset_12(&self, asset_code: [u8; 12], issuer: AccountId) -> Asset {
         use crate::xdr::{AlphaNum12, AssetCode12};
-        TrustLineAsset::CreditAlphanum12(AlphaNum12 {
+        Asset::CreditAlphanum12(AlphaNum12 {
             asset_code: AssetCode12(asset_code),
             issuer,
         })
@@ -575,5 +571,31 @@ impl Host {
                 })?,
         );
         Ok(test_contract_executable == instance.executable)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn create_tl_asset_4(
+        &self,
+        asset_code: [u8; 4],
+        issuer: AccountId,
+    ) -> TrustLineAsset {
+        use crate::xdr::{AlphaNum4, AssetCode4};
+        TrustLineAsset::CreditAlphanum4(AlphaNum4 {
+            asset_code: AssetCode4(asset_code),
+            issuer,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn create_tl_asset_12(
+        &self,
+        asset_code: [u8; 12],
+        issuer: AccountId,
+    ) -> TrustLineAsset {
+        use crate::xdr::{AlphaNum12, AssetCode12};
+        TrustLineAsset::CreditAlphanum12(AlphaNum12 {
+            asset_code: AssetCode12(asset_code),
+            issuer,
+        })
     }
 }

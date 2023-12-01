@@ -1,6 +1,6 @@
 use core::cmp::Ordering;
 
-use crate::builtin_contracts::base_types::{Address, Bytes, BytesN, String};
+use crate::builtin_contracts::base_types::{Address, BytesN, String};
 use crate::builtin_contracts::contract_error::ContractError;
 use crate::builtin_contracts::stellar_asset_contract::allowance::{
     read_allowance, spend_allowance, write_allowance,
@@ -14,7 +14,7 @@ use crate::builtin_contracts::stellar_asset_contract::balance::{
 use crate::builtin_contracts::stellar_asset_contract::event;
 use crate::builtin_contracts::stellar_asset_contract::public_types::AssetInfo;
 use crate::host::{metered_clone::MeteredClone, Host};
-use crate::{err, HostError};
+use crate::{err, BytesObject, HostError};
 
 use soroban_builtin_sdk_macros::contractimpl;
 use soroban_env_common::xdr::Asset;
@@ -27,7 +27,7 @@ use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
 use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
 use super::storage_types::{INSTANCE_EXTEND_AMOUNT, INSTANCE_TTL_THRESHOLD};
 
-pub struct StellarAssetContract;
+pub(crate) struct StellarAssetContract;
 
 fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
     if amount < 0 {
@@ -78,7 +78,7 @@ fn check_not_issuer(e: &Host, addr: &Address) -> Result<(), HostError> {
 #[contractimpl]
 // Metering: *mostly* covered by components.
 impl StellarAssetContract {
-    pub fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
+    pub(crate) fn init_asset(e: &Host, asset_bytes: BytesObject) -> Result<(), HostError> {
         let _span = tracy_span!("stellar asset contract init_asset");
         if has_asset_info(e)? {
             return Err(e.error(
@@ -88,7 +88,7 @@ impl StellarAssetContract {
             ));
         }
 
-        let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
+        let asset: Asset = e.metered_from_xdr_obj(asset_bytes)?;
         validate_asset(e, &asset)?;
 
         let curr_contract_id = e.get_current_contract_id_internal()?;
@@ -144,7 +144,7 @@ impl StellarAssetContract {
         Ok(())
     }
 
-    pub fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
+    pub(crate) fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("stellar asset contract allowance");
         e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
@@ -154,7 +154,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn approve(
+    pub(crate) fn approve(
         e: &Host,
         from: Address,
         spender: Address,
@@ -182,7 +182,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
+    pub(crate) fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("stellar asset contract balance");
         e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
@@ -192,7 +192,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
+    pub(crate) fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
         let _span = tracy_span!("stellar asset contract authorized");
         e.extend_current_contract_instance_and_code_ttl(
             INSTANCE_TTL_THRESHOLD.into(),
@@ -202,7 +202,12 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
+    pub(crate) fn transfer(
+        e: &Host,
+        from: Address,
+        to: Address,
+        amount: i128,
+    ) -> Result<(), HostError> {
         let _span = tracy_span!("stellar asset contract transfer");
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
@@ -219,7 +224,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn transfer_from(
+    pub(crate) fn transfer_from(
         e: &Host,
         spender: Address,
         from: Address,
@@ -243,7 +248,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn burn(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
+    pub(crate) fn burn(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
         let _span = tracy_span!("stellar asset contract burn");
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
@@ -262,7 +267,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn burn_from(
+    pub(crate) fn burn_from(
         e: &Host,
         spender: Address,
         from: Address,
@@ -287,7 +292,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
+    pub(crate) fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
         let _span = tracy_span!("stellar asset contract clawback");
         check_nonnegative_amount(e, amount)?;
         check_clawbackable(e, from.metered_clone(e)?)?;
@@ -307,7 +312,11 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+    pub(crate) fn set_authorized(
+        e: &Host,
+        addr: Address,
+        authorize: bool,
+    ) -> Result<(), HostError> {
         let _span = tracy_span!("stellar asset contract set_authorized");
         let admin = read_administrator(e)?;
         admin.require_auth()?;
@@ -323,7 +332,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
+    pub(crate) fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
         let _span = tracy_span!("stellar asset contract mint");
         check_nonnegative_amount(e, amount)?;
         check_not_issuer(e, &to)?;
@@ -342,7 +351,7 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError> {
+    pub(crate) fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError> {
         let _span = tracy_span!("stellar asset contract set_admin");
         let admin = read_administrator(e)?;
         admin.require_auth()?;
@@ -357,23 +366,23 @@ impl StellarAssetContract {
         Ok(())
     }
 
-    pub fn admin(e: &Host) -> Result<Address, HostError> {
+    pub(crate) fn admin(e: &Host) -> Result<Address, HostError> {
         let _span = tracy_span!("stellar asset contract admin");
         read_administrator(e)
     }
 
-    pub fn decimals(_e: &Host) -> Result<u32, HostError> {
+    pub(crate) fn decimals(_e: &Host) -> Result<u32, HostError> {
         let _span = tracy_span!("stellar asset contract decimals");
         // no need to load metadata since this is fixed for all SAC tokens
         Ok(DECIMAL)
     }
 
-    pub fn name(e: &Host) -> Result<String, HostError> {
+    pub(crate) fn name(e: &Host) -> Result<String, HostError> {
         let _span = tracy_span!("stellar asset contract name");
         read_name(e)
     }
 
-    pub fn symbol(e: &Host) -> Result<String, HostError> {
+    pub(crate) fn symbol(e: &Host) -> Result<String, HostError> {
         let _span = tracy_span!("stellar asset contract symbol");
         read_symbol(e)
     }
