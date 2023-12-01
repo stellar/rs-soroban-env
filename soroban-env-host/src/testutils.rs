@@ -630,4 +630,26 @@ pub(crate) mod wasm {
         me.memory(1, None, false, false);
         me.finish()
     }
+
+    pub fn wasm_module_lying_about_import_function_type() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // function {"t", "_"} is "dummy0", taking 0 arguments
+        // this will not pass the wasmi linker
+        me.import_func("t", "_", Arity(1));
+        me.finish()
+    }
+
+    pub fn wasm_module_importing_nonexistent_function() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        me.import_func("t", "z", Arity(1));
+        me.finish()
+    }
+
+    pub fn wasm_module_with_duplicate_function_import(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for _ in 0..n {
+            me.import_func_no_check("t", "_", Arity(0));
+        }
+        me.finish()
+    }
 }

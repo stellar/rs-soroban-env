@@ -213,6 +213,16 @@ impl ModEmitter {
         }
     }
 
+
+    #[cfg(feature = "testutils")]
+    pub fn import_func_no_check(&mut self, module: &str, fname: &str, arity: Arity) -> FuncRef {
+        let import_id = FuncRef(self.imports.len());
+        let ty_id = self.get_fn_type(arity);
+        self.imports
+            .import(module, fname, EntityType::Function(ty_id.0));
+        import_id
+    }
+
     /// Define a function in the module with a given arity, adding its code to
     /// the `code` section of the module and declaring it in the `function`
     /// section of the module, and returning a new [`FuncRef`] denoting it.

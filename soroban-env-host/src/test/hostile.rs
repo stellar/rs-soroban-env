@@ -883,3 +883,64 @@ fn test_multiple_memory() -> Result<(), HostError> {
     ));
     Ok(())
 }
+
+#[test]
+fn test_function_import_with_wrong_type() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_lying_about_import_function_type();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_import_nonexistent_function() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_importing_nonexistent_function();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_duplicate_function_import() -> Result<(), HostError> {
+    // repeating importing the same function is actually okay
+    let wasm = wasm_util::wasm_module_with_duplicate_function_import(5);
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(res.is_ok());
+
+    // excessive importing leads to large wasm and eventually runs out of budget
+    let wasm2 = wasm_util::wasm_module_with_duplicate_function_import(50000);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm2.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
