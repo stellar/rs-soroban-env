@@ -12,7 +12,7 @@ fn str_conversions() -> Result<(), HostError> {
         obj = host.bytes_push(obj, (c as u32).into())?;
     }
     let ss = "abcdefghijklmnopqrstuvwxyz";
-    let so = host.string_new_from_slice(ss)?;
+    let so = host.string_new_from_slice(ss.as_bytes())?;
     let val = so.to_val();
     let s: String = val.try_into_val(&*host)?;
     assert_eq!(s, ss);

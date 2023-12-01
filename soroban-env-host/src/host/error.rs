@@ -501,7 +501,7 @@ impl DebugArg for xdr::Hash {
 
 impl DebugArg for str {
     fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
-        host.string_new_from_slice(arg).map(|s| s.into())
+        host.string_new_from_slice(arg.as_bytes()).map(|s| s.into())
     }
 }
 

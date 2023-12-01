@@ -148,7 +148,7 @@ fn render_sep0011_asset<const N: usize>(
     s.push(':');
     s.push_str(&ed25519::PublicKey(issuer.to_array()?).to_string());
     Ok((
-        String::try_from_val(e, &e.string_new_from_slice(s.as_str())?)?,
+        String::try_from_val(e, &e.string_new_from_slice(s.as_bytes())?)?,
         symbol,
     ))
 }
@@ -156,7 +156,7 @@ fn render_sep0011_asset<const N: usize>(
 pub fn set_metadata(e: &Host) -> Result<(), HostError> {
     let name_and_symbol: (String, String) = match read_asset_info(e)? {
         AssetInfo::Native => {
-            let n = String::try_from_val(e, &e.string_new_from_slice("native")?)?;
+            let n = String::try_from_val(e, &e.string_new_from_slice(b"native")?)?;
             (n.clone(), n)
         }
         AssetInfo::AlphaNum4(asset) => {

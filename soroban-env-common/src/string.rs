@@ -39,7 +39,8 @@ impl<E: Env> TryFromVal<E, &str> for StringObject {
     type Error = crate::Error;
     #[inline(always)]
     fn try_from_val(env: &E, val: &&str) -> Result<StringObject, Self::Error> {
-        env.string_new_from_slice(val).map_err(Into::into)
+        env.string_new_from_slice(val.as_bytes())
+            .map_err(Into::into)
     }
 }
 

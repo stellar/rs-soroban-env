@@ -165,7 +165,7 @@ pub trait EnvBase: Sized + Clone {
     fn bytes_new_from_slice(&self, slice: &[u8]) -> Result<BytesObject, Self::Error>;
 
     /// Form a new `String` host object from a slice of client memory.
-    fn string_new_from_slice(&self, slice: &str) -> Result<StringObject, Self::Error>;
+    fn string_new_from_slice(&self, slice: &[u8]) -> Result<StringObject, Self::Error>;
 
     /// Form a new `Symbol` host object from a slice of client memory.
     fn symbol_new_from_slice(&self, slice: &str) -> Result<SymbolObject, Self::Error>;
