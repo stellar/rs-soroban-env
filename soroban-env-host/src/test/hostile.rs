@@ -961,3 +961,41 @@ fn test_export_nonexistent_function() -> Result<(), HostError> {
     ));
     Ok(())
 }
+
+#[test]
+fn test_nonexistent_func_element() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_nonexistent_func_element();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_no_start() -> Result<(), HostError> {
+    let wasm = wasm_util::wasm_module_with_start_function();
+    let printed = wasmprinter::print_bytes(wasm.clone()).unwrap();
+    println!("{}", printed);
+
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    println!("{:?}", res);
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}

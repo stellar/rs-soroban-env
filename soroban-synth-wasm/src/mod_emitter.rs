@@ -1,5 +1,7 @@
 use crate::FuncEmitter;
 use std::{borrow::Cow, collections::BTreeMap};
+#[cfg(feature = "testutils")]
+use wasm_encoder::StartSection;
 use wasm_encoder::{
     CodeSection, ConstExpr, CustomSection, DataSection, ElementSection, Elements, EntityType,
     ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
@@ -49,11 +51,15 @@ pub struct ModEmitter {
     memories: MemorySection,
     globals: GlobalSection,
     exports: ExportSection,
+    #[cfg(feature = "testutils")]
+    start: Option<StartSection>,
     elements: ElementSection,
     codes: CodeSection,
     data: DataSection,
 
-    type_refs: BTreeMap<Arity, TypeRef>,
+    // key is (args arity, return arity)
+    type_refs: BTreeMap<(Arity, Arity), TypeRef>,
+    // import functions cannot have return arity != 1
     import_refs: BTreeMap<(String, String, Arity), FuncRef>,
 }
 
@@ -109,6 +115,8 @@ impl ModEmitter {
             memories,
             globals,
             exports,
+            #[cfg(feature = "testutils")]
+            start: None,
             elements,
             codes,
             data,
@@ -170,23 +178,32 @@ impl ModEmitter {
     /// Transfers ownership of `self` to the [`FuncEmitter`], which can be
     /// recovered by calling [`FuncEmitter::finish`].
     pub fn func(self, arity: Arity, n_locals: u32) -> FuncEmitter {
-        FuncEmitter::new(self, arity, n_locals)
+        FuncEmitter::new(self, arity, Arity(1), n_locals)
     }
 
-    /// Return the unique [`TypeRef`] for a function with a given [`Arity`],
-    /// creating such a type in the `type` section of the module if such a type
-    /// does not already exist.
+    #[cfg(feature = "testutils")]
+    pub fn func_with_arity_and_ret(self, arity: Arity, ret: Arity, n_locals: u32) -> FuncEmitter {
+        FuncEmitter::new(self, arity, ret, n_locals)
+    }
+
+    /// Return the unique [`TypeRef`] for a function with a given args [`Arity`]
+    /// and return [`Arity`], creating such a type in the `type` section of the
+    /// module if such a type does not already exist.
     #[allow(clippy::map_entry)]
-    pub fn get_fn_type(&mut self, arity: Arity) -> TypeRef {
-        if self.type_refs.contains_key(&arity) {
-            self.type_refs[&arity]
+    pub fn get_fn_type(&mut self, arity: Arity, ret: Arity) -> TypeRef {
+        let key = (arity, ret);
+        if self.type_refs.contains_key(&key) {
+            self.type_refs[&key]
         } else {
             let params: Vec<_> = std::iter::repeat(ValType::I64)
-                .take(arity.0 as usize)
+                .take(key.0 .0 as usize)
+                .collect();
+            let rets: Vec<_> = std::iter::repeat(ValType::I64)
+                .take(key.1 .0 as usize)
                 .collect();
             let ty_id = TypeRef(self.types.len());
-            self.types.function(params, vec![ValType::I64]);
-            self.type_refs.insert(arity, ty_id);
+            self.types.function(params, rets);
+            self.type_refs.insert(key, ty_id);
             ty_id
         }
     }
@@ -205,7 +222,8 @@ impl ModEmitter {
             self.import_refs[&key]
         } else {
             let import_id = FuncRef(self.imports.len());
-            let ty_id = self.get_fn_type(arity);
+            // import func must have return arity == 1
+            let ty_id = self.get_fn_type(arity, Arity(1));
             self.imports
                 .import(module, fname, EntityType::Function(ty_id.0));
             self.import_refs.insert(key, import_id);
@@ -216,7 +234,8 @@ impl ModEmitter {
     #[cfg(feature = "testutils")]
     pub fn import_func_no_check(&mut self, module: &str, fname: &str, arity: Arity) -> FuncRef {
         let import_id = FuncRef(self.imports.len());
-        let ty_id = self.get_fn_type(arity);
+        // import func must have return arity == 1
+        let ty_id = self.get_fn_type(arity, Arity(1));
         self.imports
             .import(module, fname, EntityType::Function(ty_id.0));
         import_id
@@ -225,8 +244,8 @@ impl ModEmitter {
     /// Define a function in the module with a given arity, adding its code to
     /// the `code` section of the module and declaring it in the `function`
     /// section of the module, and returning a new [`FuncRef`] denoting it.
-    pub fn define_func(&mut self, arity: Arity, func: &Function) -> FuncRef {
-        let ty = self.get_fn_type(arity);
+    pub fn define_func(&mut self, arity: Arity, ret: Arity, func: &Function) -> FuncRef {
+        let ty = self.get_fn_type(arity, ret);
         assert!(self.funcs.len() == self.codes.len());
         let fid = self.imports.len() + self.funcs.len();
         self.funcs.function(ty.0);
@@ -260,6 +279,13 @@ impl ModEmitter {
     pub fn define_data_segment(&mut self, mem_offset: u32, data: Vec<u8>) {
         self.data
             .active(0, &ConstExpr::i32_const(mem_offset as i32), data);
+    }
+
+    #[cfg(feature = "testutils")]
+    pub fn define_start_function(&mut self, fid: FuncRef) {
+        self.start = Some(StartSection {
+            function_index: fid.0,
+        });
     }
 
     /// Finish emitting code, consuming the `self`, serializing a WASM binary
@@ -328,6 +354,9 @@ impl ModEmitter {
         if !self.exports.is_empty() {
             self.module.section(&self.exports);
         }
+        if let Some(start) = self.start {
+            self.module.section(&start);
+        }
         if !self.elements.is_empty() {
             self.module.section(&self.elements);
         }
@@ -337,6 +366,7 @@ impl ModEmitter {
         if !self.data.is_empty() {
             self.module.section(&self.data);
         }
+
         self.module.finish()
-    }    
+    }
 }

@@ -136,7 +136,7 @@ fn call_indirect() {
     let (mut me, f2) = fe.finish();
     // store in table
     me.define_elems(&[f0, f1, f2]);
-    let ty = me.get_fn_type(Arity(0));
+    let ty = me.get_fn_type(Arity(0), Arity(1));
     // the caller
     fe = me.func(Arity(1), 0);
     fe.push(Operand::Const32(1));

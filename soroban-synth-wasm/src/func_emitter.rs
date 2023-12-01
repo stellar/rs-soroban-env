@@ -108,6 +108,7 @@ impl From<ScError> for Operand {
 pub struct FuncEmitter {
     pub(crate) mod_emit: ModEmitter,
     pub(crate) arity: Arity,
+    pub(crate) ret: Arity,
     pub(crate) func: Function,
 
     /// A vector of [`LocalRef`]s that cover the arguments to the function. If
@@ -143,7 +144,7 @@ impl FuncEmitter {
     /// [`FuncEmitter::args`] and [`FuncEmitter::locals`] of [`LocalRef`]s, each
     /// indexing into the arguments and locals. Access these member vectors
     /// directly to get the corresponding [`LocalRef`]s.
-    pub fn new(mod_emit: ModEmitter, arity: Arity, n_locals: u32) -> Self {
+    pub fn new(mod_emit: ModEmitter, arity: Arity, ret: Arity, n_locals: u32) -> Self {
         let func = Function::new([(n_locals, ValType::I64)]);
         let args = (0..arity.0).map(|n| (LocalRef(n), None)).collect();
         let locals = (arity.0..arity.0 + n_locals)
@@ -152,6 +153,7 @@ impl FuncEmitter {
         Self {
             mod_emit,
             arity,
+            ret,
             func,
             args,
             locals,
@@ -326,7 +328,7 @@ impl FuncEmitter {
     /// function.
     pub fn finish(mut self) -> (ModEmitter, FuncRef) {
         self.insn(&Instruction::End);
-        let fid = self.mod_emit.define_func(self.arity, &self.func);
+        let fid = self.mod_emit.define_func(self.arity, self.ret, &self.func);
         (self.mod_emit, fid)
     }
 

@@ -434,7 +434,7 @@ pub(crate) mod wasm {
         let (mut me, f2) = fe.finish();
         // store in table
         me.define_elems(&[f0, f1, f2]);
-        let ty = me.get_fn_type(Arity(0));
+        let ty = me.get_fn_type(Arity(0), Arity(1));
         // the caller
         fe = me.func(Arity(1), 0);
         fe.local_get(LocalRef(0));
@@ -666,6 +666,32 @@ pub(crate) mod wasm {
         me.export_func(FuncRef(0), "test0");
         // importing an non-existent function will not pass validation
         me.export_func(FuncRef(100), "test100");
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_nonexistent_func_element() -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+        // a local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (me, f1) = fe.finish();
+        // another local wasm function
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass2").unwrap());
+        let (mut me, f2) = fe.finish();
+        // store in table, FuncRef(100) is invalid
+        me.define_elems(&[f0, f1, f2, FuncRef(100)]);
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_start_function() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let fe = me.func_with_arity_and_ret(Arity(0), Arity(0), 0);
+        let (mut me, fid) = fe.finish();
+        me.export_func(fid.clone(), "start");
+        me.define_start_function(fid);
         me.finish_no_validate()
     }
 }
