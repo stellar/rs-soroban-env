@@ -1,21 +1,26 @@
 use std::rc::Rc;
 
-use crate::budget::AsBudget;
-use crate::builtin_contracts::base_types::{Address, BytesN};
-use crate::builtin_contracts::contract_error::ContractError;
-use crate::builtin_contracts::stellar_asset_contract::asset_info::read_asset_info;
-use crate::builtin_contracts::stellar_asset_contract::public_types::AssetInfo;
-use crate::builtin_contracts::stellar_asset_contract::storage_types::DataKey;
-use crate::host::metered_clone::MeteredClone;
-use crate::host::Host;
-use crate::storage::Storage;
-use crate::{err, HostError};
-use soroban_env_common::xdr::{
-    AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountFlags, AccountId,
-    LedgerEntry, LedgerEntryData, LedgerKey, ScAddress, TrustLineAsset, TrustLineEntry,
-    TrustLineEntryExt, TrustLineFlags,
+use crate::{
+    budget::AsBudget,
+    builtin_contracts::{
+        base_types::{Address, BytesN},
+        contract_error::ContractError,
+        stellar_asset_contract::{
+            asset_info::{read_asset, read_asset_info},
+            public_types::AssetInfo,
+            storage_types::DataKey,
+        },
+    },
+    err,
+    host::metered_clone::MeteredClone,
+    storage::Storage,
+    xdr::{
+        AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountFlags, AccountId, Asset,
+        LedgerEntry, LedgerEntryData, LedgerKey, ScAddress, TrustLineAsset, TrustLineEntry,
+        TrustLineEntryExt, TrustLineFlags,
+    },
+    Env, Host, HostError, StorageType, TryIntoVal,
 };
-use soroban_env_common::{Env, StorageType, TryIntoVal};
 
 use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRESHOLD};
 
