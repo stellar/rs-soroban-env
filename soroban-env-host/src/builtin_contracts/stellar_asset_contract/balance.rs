@@ -29,7 +29,7 @@ use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRE
 /// the AUTH_REQUIRED flag set, then the non-account identifier must first be authorized
 /// by the issuer/admin before it's allowed to hold a balance.
 
-// Metering: *mostly* covered by components. Not sure about `try_into_val`.
+// Metering: covered by components.
 pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.into()),
@@ -53,7 +53,7 @@ pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
     }
 }
 
-// Metering: *mostly* covered by components.
+// Metering: covered by components.
 fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), HostError> {
     let key = DataKey::Balance(addr);
     e.put_contract_data(
@@ -121,7 +121,7 @@ pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(
     }
 }
 
-// TODO: Metering analysis
+// TODO: Metering: covered by components.
 pub(crate) fn spend_balance_no_authorization_check(
     e: &Host,
     addr: Address,
@@ -192,7 +192,7 @@ pub(crate) fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(),
     spend_balance_no_authorization_check(e, addr, amount)
 }
 
-// Metering: *mostly* covered by components. Not sure about `try_into_val`.
+// Metering: covered by components.
 pub(crate) fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => is_account_authorized(e, acc_id),
@@ -210,7 +210,7 @@ pub(crate) fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> 
     }
 }
 
-// Metering: *mostly* covered by components. Not sure about `try_into_val`.
+// Metering: covered by components.
 pub(crate) fn write_authorization(
     e: &Host,
     addr: Address,
@@ -248,7 +248,7 @@ pub(crate) fn write_authorization(
     }
 }
 
-// TODO: Metering analysis
+// TODO: Metering: covered by components.
 pub(crate) fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
     let validate_trustline =
         |asset: TrustLineAsset, issuer: AccountId, account: AccountId| -> Result<(), HostError> {
@@ -372,8 +372,7 @@ pub(crate) fn transfer_classic_balance(
     Ok(())
 }
 
-// TODO: Metering analysis
-//returns (total balance, spendable balance)
+// TODO: Metering: covered by components.
 fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<i64, HostError> {
     let get_trustline_balance_safe =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<i64, HostError> {
@@ -412,7 +411,7 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<i64, HostError> {
     }
 }
 
-// Metering: *mostly* covered by components. The arithmetics are free.
+// Metering: covered by components.
 fn transfer_account_balance(
     host: &Host,
     account_id: AccountId,
@@ -512,7 +511,7 @@ fn read_trustline_entry(
         })
 }
 
-// Metering: *mostly* covered by components. The arithmatics are free.
+// Metering: covered by components.
 fn transfer_trustline_balance(
     host: &Host,
     account_id: AccountId,
@@ -559,7 +558,6 @@ fn transfer_trustline_balance(
 }
 
 // Metering: covered by components
-//returns (total balance, spendable balance)
 fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostError> {
     let lk = host.to_account_key(account_id)?;
 
@@ -587,7 +585,7 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
     })
 }
 
-// TODO: Metering analysis
+// TODO: Metering: covered by components.
 fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64), HostError> {
     if ae.balance < 0 {
         return Err(e.error(
@@ -616,8 +614,7 @@ fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64)
     }
 }
 
-// Metering: *mostly* covered by components. The arithmatics are free.
-// returns (total balance, spendable balance)
+// Metering: covered by components.
 fn get_trustline_balance(
     host: &Host,
     account_id: AccountId,
@@ -648,7 +645,7 @@ fn get_trustline_balance(
     })
 }
 
-// TODO: Metering analysis
+// TODO: Metering: covered by components.
 fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, i64), HostError> {
     if tl.balance < 0 {
         return Err(e.error(
@@ -676,7 +673,7 @@ fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, 
     }
 }
 
-// TODO: Metering analysis
+// TODO: Metering: covered by components.
 fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostError> {
     let is_trustline_authorized_safe =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<bool, HostError> {
@@ -713,7 +710,7 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
     }
 }
 
-// TODO: Metering analysis
+// TODO: Metering: covered by components.
 fn get_trustline_flags(
     host: &Host,
     account_id: AccountId,
@@ -736,7 +733,7 @@ fn get_trustline_flags(
     })
 }
 
-// Metering: *mostly* covered by components. The arithmatics are free.
+// Metering: covered by components.
 fn is_trustline_authorized(
     e: &Host,
     account_id: AccountId,
