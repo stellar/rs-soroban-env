@@ -63,9 +63,9 @@ serde_json = "=1.0.108"
 arbitrary = "=1.3.2"
 
 [dev-dependencies.stellar-xdr]
-version = "=20.0.0-rc1"
+version = "20.0.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "97e52f17501fb058ee28bbca3da0ae7897492746"
+rev = "24dd3c1b9fada6e2b28e8456a915adc212d6c47e"
 default-features = false
 features = ["arbitrary"]
 
