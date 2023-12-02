@@ -27,7 +27,7 @@ soroban-builtin-sdk-macros = { version = "=20.0.0-rc2", path = "soroban-builtin-
 
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]
-version = "20.0.0"
+version = "=20.0.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
 rev = "24dd3c1b9fada6e2b28e8456a915adc212d6c47e"
 default-features = false
