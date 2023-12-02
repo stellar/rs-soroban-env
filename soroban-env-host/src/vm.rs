@@ -51,7 +51,6 @@ const MAX_VM_ARGS: usize = 32;
 /// WASM module. Any other lookups on any tables other than import functions
 /// will fail.
 pub struct Vm {
-    #[allow(dead_code)]
     pub(crate) contract_id: Hash,
     // TODO: consider moving store and possibly module to Host so they can be
     // recycled across calls. Or possibly beyond, to be recycled across txs.
@@ -66,14 +65,6 @@ impl std::hash::Hash for Vm {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.contract_id.hash(state);
     }
-}
-
-/// Minimal description of a single function defined in a WASM module.
-#[derive(Clone, Eq, PartialEq)]
-pub struct VmFunction {
-    pub name: String,
-    pub param_count: usize,
-    pub result_count: usize,
 }
 
 impl Vm {
