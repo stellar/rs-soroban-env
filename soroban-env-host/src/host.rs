@@ -18,8 +18,8 @@ use crate::{
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
     I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall,
-    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, Vm, VmCaller, VmCallerEnv,
-    Void, I256, U256,
+    TimepointVal, TryFromVal, U128Object, U256Object, U32Val, Val, VecObject, Vm, VmCaller,
+    VmCallerEnv, Void, I256, U256,
 };
 
 mod comparison;
@@ -1052,8 +1052,11 @@ impl VmCallerEnv for Host {
         self.with_ledger_info(|li| Ok(li.sequence_number.into()))
     }
 
-    fn get_ledger_timestamp(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U64Val, Self::Error> {
-        self.with_ledger_info(|li| Ok(U64Val::try_from_val(self, &li.timestamp)?))
+    fn get_ledger_timestamp(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<TimepointVal, Self::Error> {
+        self.with_ledger_info(|li| Ok(TimepointVal::try_from_val(self, &li.timestamp)?))
     }
 
     fn fail_with_error(

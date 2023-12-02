@@ -6,7 +6,7 @@ use crate::{
 use crate::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
     I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
-    U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
+    TimepointVal, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
 use wasmi::{
@@ -61,6 +61,7 @@ impl_relative_object_conversion!(BytesObject);
 impl_relative_object_conversion!(DurationObject);
 
 impl_relative_object_conversion!(TimepointObject);
+impl_relative_object_conversion!(TimepointVal);
 impl_relative_object_conversion!(SymbolObject);
 impl_relative_object_conversion!(StringObject);
 
