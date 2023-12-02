@@ -1,26 +1,27 @@
-use crate::auth::{AuthorizedFunction, AuthorizedInvocation};
 // This is a built-in account 'contract'. This is not actually a contract, as
 // it doesn't need to be directly invoked. But semantically this is analagous
 // to a generic smart wallet contract that supports authentication and blanket
 // context authorization.
-use crate::builtin_contracts::{base_types::BytesN, contract_error::ContractError};
-use crate::host::{frame::ContractReentryMode, Host};
-use crate::{err, HostError};
-use core::cmp::Ordering;
-use soroban_env_common::xdr::{
-    self, ContractIdPreimage, Hash, ScErrorCode, ScErrorType, ThresholdIndexes, Uint256,
+use crate::{
+    auth::{AuthorizedFunction, AuthorizedInvocation},
+    builtin_contracts::{
+        base_types::{Address, BytesN, Vec as HostVec},
+        common_types::ContractExecutable,
+        contract_error::ContractError,
+    },
+    err,
+    host::{frame::ContractReentryMode, Host},
+    xdr::{
+        self, AccountId, ContractIdPreimage, Hash, ScErrorCode, ScErrorType, ThresholdIndexes,
+        Uint256,
+    },
+    Env, EnvBase, HostError, Symbol, TryFromVal, TryIntoVal, Val,
 };
-use soroban_env_common::{Env, EnvBase, Symbol, TryFromVal, TryIntoVal, Val};
-
-use crate::builtin_contracts::base_types::Vec as HostVec;
+use core::cmp::Ordering;
 
 const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
 use soroban_builtin_sdk_macros::contracttype;
-use soroban_env_common::xdr::AccountId;
-
-use super::base_types::Address;
-use super::common_types::ContractExecutable;
 
 pub const ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME: &str = "__check_auth";
 
