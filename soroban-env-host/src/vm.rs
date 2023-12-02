@@ -24,7 +24,7 @@ use crate::{
     ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
     DEFAULT_XDR_RW_LIMITS,
 };
-use std::{cell::RefCell, io::Cursor, rc::Rc};
+use std::{cell::RefCell, io::Cursor, rc::Rc, time::Instant};
 
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
@@ -231,6 +231,7 @@ impl Vm {
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
+        let now = Instant::now();
 
         host.charge_budget(
             ContractCostType::VmInstantiation,
@@ -297,13 +298,19 @@ impl Vm {
         // Here we do _not_ supply the store with any fuel. Fuel is supplied
         // right before the VM is being run, i.e., before crossing the host->VM
         // boundary.
-        Ok(Rc::new(Self {
+        let vm = Rc::new(Self {
             contract_id,
             module,
             store: RefCell::new(store),
             instance,
             memory,
-        }))
+        });
+
+        host.as_budget().track_time(
+            ContractCostType::VmInstantiation,
+            now.elapsed().as_nanos() as u64,
+        )?;
+        Ok(vm)
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {
