@@ -1,16 +1,13 @@
-use std::fmt::Write;
-
-use soroban_builtin_sdk_macros::contracttype;
-use stellar_strkey::ed25519;
-
-use crate::{builtin_contracts::base_types::BytesN, host::Host, HostError};
-use soroban_env_common::{
-    ConversionError, Env, EnvBase, StorageType, SymbolSmall, TryFromVal, TryIntoVal,
-};
-
-use crate::builtin_contracts::base_types::String;
-
 use super::{asset_info::read_asset_info, public_types::AssetInfo};
+use crate::{
+    builtin_contracts::base_types::{BytesN, String},
+    host::Host,
+    xdr::{ScErrorCode, ScErrorType},
+    Env, EnvBase, HostError, StorageType, SymbolSmall, TryFromVal, TryIntoVal,
+};
+use soroban_builtin_sdk_macros::contracttype;
+use std::fmt::Write;
+use stellar_strkey::ed25519;
 
 const METADATA_KEY: &str = "METADATA";
 
@@ -26,12 +23,9 @@ pub const DECIMAL: u32 = 7;
 
 // This does a specific and fairly unique escaping transformation as defined
 // in TxRep / SEP-0011.
-fn render_sep0011_asset_code(
-    buf: &[u8],
-    out: &mut std::string::String,
-) -> Result<(), ConversionError> {
+fn render_sep0011_asset_code(buf: &[u8], out: &mut std::string::String) -> Result<(), HostError> {
     if buf.len() != 4 && buf.len() != 12 {
-        return Err(ConversionError);
+        return Err((ScErrorType::Value, ScErrorCode::InvalidInput).into());
     }
     for (i, x) in buf.iter().enumerate() {
         match *x {
@@ -41,9 +35,8 @@ fn render_sep0011_asset_code(
             // as \x00 until past the 5th byte, so that the result is
             // unambiguously different than a 4-byte code.
             0 if buf.len() == 12 && i > 4 => break,
-            b':' | b'\\' | 0..=0x20 | 0x7f..=0xff => {
-                write!(out, r"\x{:02x}", x).map_err(|_| ConversionError)?
-            }
+            b':' | b'\\' | 0..=0x20 | 0x7f..=0xff => write!(out, r"\x{:02x}", x)
+                .map_err(|_| HostError::from((ScErrorType::Value, ScErrorCode::InvalidInput)))?,
             _ => out.push(*x as char),
         }
     }
@@ -136,11 +129,15 @@ fn render_sep0011_asset<const N: usize>(
     let strkey_len = 56;
 
     // Biggest resulting string has each byte escaped to 4 bytes.
-    let capacity = symbuf.len() * 4 + 1 + strkey_len;
+    let capacity = symbuf
+        .len()
+        .saturating_mul(4)
+        .saturating_add(1)
+        .saturating_add(strkey_len);
 
     // We also have to charge for strkey_len again since PublicKey::to_string does
     // a std::string::String allocation of its own.
-    let charge = capacity + strkey_len;
+    let charge = capacity.saturating_add(strkey_len);
     e.charge_budget(crate::xdr::ContractCostType::MemAlloc, Some(charge as u64))?;
 
     let mut s: std::string::String = std::string::String::with_capacity(capacity);
