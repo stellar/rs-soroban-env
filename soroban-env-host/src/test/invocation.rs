@@ -33,6 +33,13 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
         host.test_vec_obj(&[a, c])?,
     );
     let code = (ScErrorType::WasmVm, ScErrorCode::InvalidAction);
+
+    eprintln!(
+        "time ellapsed in nano-seconds for VmInstantiation: {}",
+        host.as_budget()
+            .get_time(ContractCostType::VmInstantiation)?
+    );
+
     assert!(HostError::result_matches_err(res, code));
     Ok(())
 }

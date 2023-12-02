@@ -17,7 +17,7 @@ use std::{
 use crate::{
     host::error::TryBorrowOrErr,
     xdr::{ContractCostParams, ContractCostType, ScErrorCode, ScErrorType},
-    Host, HostError,
+    Error, Host, HostError,
 };
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
@@ -40,6 +40,8 @@ struct BudgetTracker {
     meter_count: u32,
     #[cfg(any(test, feature = "testutils", feature = "bench"))]
     wasm_memory: u64,
+    // Tracks the real time (in nsecs) spent on various `CostType`
+    time_tracker: [u64; ContractCostType::variants().len()],
 }
 
 impl Default for BudgetTracker {
@@ -49,6 +51,7 @@ impl Default for BudgetTracker {
             meter_count: Default::default(),
             #[cfg(any(test, feature = "testutils", feature = "bench"))]
             wasm_memory: Default::default(),
+            time_tracker: Default::default(),
         };
         for (ct, tracker) in ContractCostType::variants()
             .iter()
@@ -107,6 +110,24 @@ impl BudgetTracker {
             tracker.mem = 0;
         }
         self.wasm_memory = 0;
+    }
+
+    fn track_time(&mut self, ty: ContractCostType, duration: u64) -> Result<(), HostError> {
+        let t = self.time_tracker.get_mut(ty as usize).ok_or_else(|| {
+            HostError::from(Error::from_type_and_code(
+                ScErrorType::Budget,
+                ScErrorCode::InternalError,
+            ))
+        })?;
+        *t += duration;
+        Ok(())
+    }
+
+    fn get_time(&self, ty: ContractCostType) -> Result<u64, HostError> {
+        self.time_tracker
+            .get(ty as usize)
+            .map(|t| *t)
+            .ok_or_else(|| (ScErrorType::Budget, ScErrorCode::InternalError).into())
     }
 }
 
@@ -715,6 +736,17 @@ impl Budget {
             .get(ty as usize)
             .map(|x| x.clone())
             .ok_or_else(|| (ScErrorType::Budget, ScErrorCode::InternalError).into())
+    }
+
+    pub fn get_time(&self, ty: ContractCostType) -> Result<u64, HostError> {
+        self.0.try_borrow_or_err()?.tracker.get_time(ty)
+    }
+
+    pub fn track_time(&self, ty: ContractCostType, duration: u64) -> Result<(), HostError> {
+        self.0
+            .try_borrow_mut_or_err()?
+            .tracker
+            .track_time(ty, duration)
     }
 
     pub fn get_cpu_insns_consumed(&self) -> Result<u64, HostError> {
