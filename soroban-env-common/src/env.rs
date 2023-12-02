@@ -5,8 +5,8 @@ use crate::Object;
 use super::Symbol;
 use super::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
-    I64Object, MapObject, StorageType, StringObject, SymbolObject, TimepointObject, U128Object,
-    U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
+    I64Object, MapObject, StorageType, StringObject, SymbolObject, TimepointObject, TimepointVal,
+    U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use crate::xdr::{ScErrorCode, ScErrorType};
 
@@ -235,6 +235,7 @@ impl_checkedenvarg_for_val_or_wrapper!(BytesObject);
 impl_checkedenvarg_for_val_or_wrapper!(DurationObject);
 
 impl_checkedenvarg_for_val_or_wrapper!(TimepointObject);
+impl_checkedenvarg_for_val_or_wrapper!(TimepointVal);
 impl_checkedenvarg_for_val_or_wrapper!(SymbolObject);
 impl_checkedenvarg_for_val_or_wrapper!(StringObject);
 
