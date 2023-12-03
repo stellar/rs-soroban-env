@@ -13,7 +13,7 @@ use crate::{
     },
     Error, Host, HostError, Val, VecObject,
 };
-pub use internal::{InternalContractEvent, InternalEvent};
+pub(crate) use internal::{InternalContractEvent, InternalEvent};
 
 /// The external representation of a host event.
 #[derive(Clone, Debug)]

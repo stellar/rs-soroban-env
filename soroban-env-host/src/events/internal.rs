@@ -12,7 +12,7 @@ use crate::{
 /// events buffer and designed to be cheap to clone.
 // This is exposed as a pub type for benches.
 #[derive(Clone, Debug)]
-pub struct InternalContractEvent {
+pub(crate) struct InternalContractEvent {
     pub type_: xdr::ContractEventType,
     pub contract_id: Option<BytesObject>,
     pub topics: VecObject,
@@ -54,7 +54,7 @@ impl InternalContractEvent {
 ///      (eg. validating a host function call's input arguments).
 
 #[derive(Clone, Debug)]
-pub struct InternalDiagnosticEvent {
+pub(crate) struct InternalDiagnosticEvent {
     pub contract_id: Option<crate::xdr::Hash>,
     pub topics: Vec<InternalDiagnosticArg>,
     pub args: Vec<InternalDiagnosticArg>,
@@ -98,7 +98,7 @@ impl std::hash::Hash for EventError {
 // an ScVal to avoid wasting CPU in the standard case where nobody is going to
 // observe the event anyway.
 #[derive(Clone, Debug)]
-pub enum InternalDiagnosticArg {
+pub(crate) enum InternalDiagnosticArg {
     HostVal(Val),
     XdrVal(ScVal),
 }
@@ -153,7 +153,7 @@ impl InternalDiagnosticEvent {
 /// The internal representation of an `Event` that is stored in the events buffer
 /// and designed to be cheap to clone.
 #[derive(Clone, Debug)]
-pub enum InternalEvent {
+pub(crate) enum InternalEvent {
     Contract(InternalContractEvent),
     Diagnostic(Rc<InternalDiagnosticEvent>),
 }
@@ -172,7 +172,7 @@ pub(crate) struct InternalEventsBuffer {
 
 impl InternalEventsBuffer {
     // Records an InternalEvent
-    pub fn record(&mut self, e: InternalEvent, host: &Host) -> Result<(), HostError> {
+    pub(crate) fn record(&mut self, e: InternalEvent, host: &Host) -> Result<(), HostError> {
         let mut metered_internal_event_push = |e: InternalEvent| -> Result<(), HostError> {
             // Metering: we use the cost of instantiating a size=1 `Vec` as an
             // estimate for the cost `Vec.push(event)`.  Because the buffer length
@@ -194,7 +194,7 @@ impl InternalEventsBuffer {
 
     /// "Rolls back" the event buffer starting at `events` by marking all
     /// subsequent events as failed calls.
-    pub fn rollback(&mut self, events: usize) -> Result<(), HostError> {
+    pub(crate) fn rollback(&mut self, events: usize) -> Result<(), HostError> {
         // note that we first skip the events that are not being rolled back
         // Metering: free (or conceptually: paid for when pushing the event)
         for e in self.vec.iter_mut().skip(events) {
@@ -207,7 +207,7 @@ impl InternalEventsBuffer {
     /// Converts the internal events into their external representation. This
     /// should only be called either when the host is finished (via
     /// `try_finish`), or when an error occurs.
-    pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
+    pub(crate) fn externalize(&self, host: &Host) -> Result<Events, HostError> {
         // This line is intentionally unmetered. We want to separate out
         // charging the main budget for `Contract` events (with "observable"
         // costs) from charging the debug budget for `Diagnostic` events (with

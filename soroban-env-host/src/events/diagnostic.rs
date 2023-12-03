@@ -43,7 +43,7 @@ impl Host {
         Ok(())
     }
 
-    pub fn log_diagnostics(&self, msg: &str, args: &[Val]) {
+    pub(crate) fn log_diagnostics(&self, msg: &str, args: &[Val]) {
         self.with_debug_mode(|| {
             let calling_contract = self.get_current_contract_id_opt_internal()?;
             let log_sym = SymbolSmall::try_from_str("log")?;
@@ -100,7 +100,12 @@ impl Host {
     // Emits an event with topic = ["fn_call", called_contract_id, function_name] and
     // data = [arg1, args2, ...]
     // Should called prior to opening a frame for the next call so the calling contract can be inferred correctly
-    pub fn fn_call_diagnostics(&self, called_contract_id: &Hash, func: &Symbol, args: &[Val]) {
+    pub(crate) fn fn_call_diagnostics(
+        &self,
+        called_contract_id: &Hash,
+        func: &Symbol,
+        args: &[Val],
+    ) {
         self.with_debug_mode(|| {
             let calling_contract = self.get_current_contract_id_opt_internal()?;
             Vec::<InternalDiagnosticArg>::charge_bulk_init_cpy(3, self)?;
@@ -121,7 +126,7 @@ impl Host {
 
     // Emits an event with topic = ["fn_return", function_name] and
     // data = [return_val]
-    pub fn fn_return_diagnostics(&self, contract_id: &Hash, func: &Symbol, res: &Val) {
+    pub(crate) fn fn_return_diagnostics(&self, contract_id: &Hash, func: &Symbol, res: &Val) {
         self.with_debug_mode(|| {
             Vec::<InternalDiagnosticArg>::charge_bulk_init_cpy(2, self)?;
             let topics = vec![

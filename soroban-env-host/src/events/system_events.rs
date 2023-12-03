@@ -4,7 +4,7 @@ use soroban_env_common::{xdr, EnvBase, Symbol, TryFromVal, TryIntoVal, Val, VecO
 const CONTRACT_EXECUTABLE_UPDATE_TOPIC: &str = "executable_update";
 
 impl Host {
-    pub fn system_event(&self, topics: VecObject, data: Val) -> Result<(), HostError> {
+    pub(crate) fn system_event(&self, topics: VecObject, data: Val) -> Result<(), HostError> {
         self.record_contract_event(xdr::ContractEventType::System, topics, data)?;
         Ok(())
     }
