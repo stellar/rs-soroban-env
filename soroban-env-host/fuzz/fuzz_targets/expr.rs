@@ -3,8 +3,8 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use soroban_env_host::{
-    xdr::{HostFunction, InvokeContractArgs, ScErrorCode, ScErrorType, ScSymbol, ScVal, Validate},
-    Host, StorageType, Val,
+    xdr::{HostFunction, InvokeContractArgs, ScErrorCode, ScErrorType, ScSymbol, ScVal},
+    Host, StorageType,
 };
 use soroban_synth_wasm::{Emit, Expr};
 
