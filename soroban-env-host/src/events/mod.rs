@@ -1,22 +1,19 @@
 pub(crate) mod diagnostic;
 mod internal;
 pub(crate) mod system_events;
-
 pub(crate) use internal::{
     EventError, InternalDiagnosticArg, InternalDiagnosticEvent, InternalEventsBuffer,
 };
 // expose them as pub use for benches
-pub use internal::{InternalContractEvent, InternalEvent};
-use soroban_env_common::{
+use crate::{
     num::{i256_from_pieces, u256_from_pieces},
     xdr::{
         ContractEventBody, ContractEventType, ContractExecutable, PublicKey::PublicKeyTypeEd25519,
         ScAddress, ScContractInstance, ScVal,
     },
-    Error, Val, VecObject,
+    Error, Host, HostError, Val, VecObject,
 };
-
-use crate::{Host, HostError};
+pub use internal::{InternalContractEvent, InternalEvent};
 
 /// The external representation of a host event.
 #[derive(Clone, Debug)]
