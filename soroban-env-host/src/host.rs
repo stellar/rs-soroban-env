@@ -5,7 +5,7 @@ use crate::{
     auth::AuthorizationManager,
     budget::{AsBudget, Budget},
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
-    host_object::{HostMap, HostObject, HostObjectType, HostVec},
+    host_object::{HostMap, HostObject, HostVec},
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num,
     impl_wrapping_obj_to_num,
     num::*,
@@ -1101,14 +1101,14 @@ impl VmCallerEnv for Host {
 
     // region: "int" module functions
 
-    impl_wrapping_obj_from_num!(obj_from_u64, u64, u64);
-    impl_wrapping_obj_to_num!(obj_to_u64, u64, u64);
-    impl_wrapping_obj_from_num!(obj_from_i64, i64, i64);
-    impl_wrapping_obj_to_num!(obj_to_i64, i64, i64);
-    impl_wrapping_obj_from_num!(timepoint_obj_from_u64, TimePoint, u64);
-    impl_wrapping_obj_to_num!(timepoint_obj_to_u64, TimePoint, u64);
-    impl_wrapping_obj_from_num!(duration_obj_from_u64, Duration, u64);
-    impl_wrapping_obj_to_num!(duration_obj_to_u64, Duration, u64);
+    impl_wrapping_obj_from_num!(obj_from_u64, u64, U64Object, u64);
+    impl_wrapping_obj_to_num!(obj_to_u64, u64, U64Object, u64);
+    impl_wrapping_obj_from_num!(obj_from_i64, i64, I64Object, i64);
+    impl_wrapping_obj_to_num!(obj_to_i64, i64, I64Object, i64);
+    impl_wrapping_obj_from_num!(timepoint_obj_from_u64, TimePoint, TimepointObject, u64);
+    impl_wrapping_obj_to_num!(timepoint_obj_to_u64, TimePoint, TimepointObject, u64);
+    impl_wrapping_obj_from_num!(duration_obj_from_u64, Duration, DurationObject, u64);
+    impl_wrapping_obj_to_num!(duration_obj_to_u64, Duration, DurationObject, u64);
 
     fn obj_from_u128_pieces(
         &self,

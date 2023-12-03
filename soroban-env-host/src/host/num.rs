@@ -1,11 +1,7 @@
 #[macro_export]
 macro_rules! impl_wrapping_obj_from_num {
-    ($host_fn: ident, $hot: ty, $num: ty) => {
-        fn $host_fn(
-            &self,
-            _vmcaller: &mut VmCaller<Host>,
-            u: $num,
-        ) -> Result<<$hot as HostObjectType>::Wrapper, HostError> {
+    ($host_fn: ident, $hot: ty, $obj: ty, $num: ty) => {
+        fn $host_fn(&self, _vmcaller: &mut VmCaller<Host>, u: $num) -> Result<$obj, HostError> {
             self.add_host_object(<$hot>::from(u))
         }
     };
@@ -13,12 +9,8 @@ macro_rules! impl_wrapping_obj_from_num {
 
 #[macro_export]
 macro_rules! impl_wrapping_obj_to_num {
-    ($host_fn: ident, $data: ty, $num: ty) => {
-        fn $host_fn(
-            &self,
-            _vmcaller: &mut VmCaller<Host>,
-            obj: <$data as HostObjectType>::Wrapper,
-        ) -> Result<$num, HostError> {
+    ($host_fn: ident, $data: ty, $obj: ty, $num: ty) => {
+        fn $host_fn(&self, _vmcaller: &mut VmCaller<Host>, obj: $obj) -> Result<$num, HostError> {
             self.visit_obj(obj, |t: &$data| Ok(t.metered_clone(self)?.into()))
         }
     };
