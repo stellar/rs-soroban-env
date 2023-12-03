@@ -1,18 +1,13 @@
 use std::rc::Rc;
 
-use soroban_env_common::{
-    xdr::{Hash, ScBytes, ScString, ScVal, StringM},
-    Error, Symbol, SymbolSmall,
-};
-
 use crate::{
+    events::{
+        internal::{InternalDiagnosticArg, InternalDiagnosticEvent},
+        InternalEvent, InternalEventsBuffer,
+    },
     host::metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
-    Host, HostError, Val,
-};
-
-use super::{
-    internal::{InternalDiagnosticArg, InternalDiagnosticEvent},
-    InternalEvent, InternalEventsBuffer,
+    xdr::{Hash, ScBytes, ScString, ScVal, StringM},
+    Error, Host, HostError, Symbol, SymbolSmall, Val,
 };
 
 #[derive(Clone, Default)]
@@ -97,9 +92,10 @@ impl Host {
         })
     }
 
-    // Emits an event with topic = ["fn_call", called_contract_id, function_name] and
-    // data = [arg1, args2, ...]
-    // Should called prior to opening a frame for the next call so the calling contract can be inferred correctly
+    // Emits an event with topic = ["fn_call", called_contract_id,
+    // function_name] and data = [arg1, args2, ...]. Should called prior to
+    // opening a frame for the next call so the calling contract can be inferred
+    // correctly
     pub(crate) fn fn_call_diagnostics(
         &self,
         called_contract_id: &Hash,
