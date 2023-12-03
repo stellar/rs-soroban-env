@@ -1,18 +1,15 @@
 use std::rc::Rc;
 
-use soroban_env_common::{BytesObject, VecObject};
-
-use super::{Events, HostEvent};
 use crate::{
     budget::AsBudget,
+    events::{Events, HostEvent},
     host::metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
-    xdr,
-    xdr::ScVal,
-    Host, HostError, Val,
+    xdr::{self, ScVal},
+    BytesObject, Host, HostError, Val, VecObject,
 };
 
-/// The internal representation of a `ContractEvent` that is stored in the events buffer
-/// and designed to be cheap to clone.
+/// The internal representation of a `ContractEvent` that is stored in the
+/// events buffer and designed to be cheap to clone.
 // This is exposed as a pub type for benches.
 #[derive(Clone, Debug)]
 pub struct InternalContractEvent {
@@ -76,6 +73,9 @@ impl std::hash::Hash for InternalEvent {
                 c.data.get_payload().hash(state);
                 c.topics.to_val().get_payload().hash(state);
             }
+            // These are not included in the hash because they not supposed to
+            // be observable, and we only have hashing to support
+            // test-observation.
             InternalEvent::Diagnostic(_) => (),
         }
     }
@@ -167,7 +167,6 @@ pub(crate) enum EventError {
 /// The events buffer. Stores `InternalEvent`s in the chronological order.
 #[derive(Clone, Default)]
 pub(crate) struct InternalEventsBuffer {
-    //the bool keeps track of if the call this event was emitted in failed
     pub(crate) vec: Vec<(InternalEvent, EventError)>,
 }
 
@@ -193,10 +192,11 @@ impl InternalEventsBuffer {
         Ok(())
     }
 
-    /// Rolls back the event buffer starting at `events`.
+    /// "Rolls back" the event buffer starting at `events` by marking all
+    /// subsequent events as failed calls.
     pub fn rollback(&mut self, events: usize) -> Result<(), HostError> {
         // note that we first skip the events that are not being rolled back
-        // Metering: free
+        // Metering: free (or conceptually: paid for when pushing the event)
         for e in self.vec.iter_mut().skip(events) {
             e.1 = EventError::FromFailedCall;
         }
@@ -204,24 +204,27 @@ impl InternalEventsBuffer {
         Ok(())
     }
 
-    /// Converts the internal events into their external representation. This should only be called
-    /// either when the host is finished (via `try_finish`), or when an error occurs.
+    /// Converts the internal events into their external representation. This
+    /// should only be called either when the host is finished (via
+    /// `try_finish`), or when an error occurs.
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
-        // This line is intentionally unmetered. We want to separate out charging
-        // the main budget for `Contract` events (with "observable" costs) from
-        // charging the debug budget for `Diagnostic` events (with "non-observable"
-        // costs). Both event types are stored in the same input vector so we must
-        // not do a bulk charge based on its length, but rather walk through it
-        // charging to one budget or the other on an event-by-event basis.
+        // This line is intentionally unmetered. We want to separate out
+        // charging the main budget for `Contract` events (with "observable"
+        // costs) from charging the debug budget for `Diagnostic` events (with
+        // "non-observable" costs). Both event types are stored in the same
+        // input vector so we must not do a bulk charge based on its length, but
+        // rather walk through it charging to one budget or the other on an
+        // event-by-event basis.
         let mut vec = Vec::with_capacity(self.vec.len());
 
         let mut metered_external_event_push =
             |event: xdr::ContractEvent, status: &EventError| -> Result<(), HostError> {
-                // Metering: we use the cost of instantiating a size=1 `Vec` as an estimate
-                // for the cost collecting 1 `HostEvent` into the events buffer. Because
-                // the resulting buffer length may be different on different instances
-                // (due to diagnostic events) and we need a deterministic cost across all
-                // instances, the cost needs to be amortized and buffer size-independent.
+                // Metering: we use the cost of instantiating a size=1 `Vec` as
+                // an estimate for the cost collecting 1 `HostEvent` into the
+                // events buffer. Because the resulting buffer length may be
+                // different on different instances (due to diagnostic events)
+                // and we need a deterministic cost across all instances, the
+                // cost needs to be amortized and buffer size-independent.
                 Vec::<HostEvent>::charge_bulk_init_cpy(1, host)?;
                 vec.push(HostEvent {
                     event,
