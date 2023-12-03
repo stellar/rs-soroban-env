@@ -4,16 +4,6 @@
 /// host functions.
 use std::{cmp::max, rc::Rc};
 
-use soroban_env_common::{
-    xdr::{
-        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
-        LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
-        SorobanAuthorizationEntry, SorobanResources, TtlEntry,
-    },
-    Error,
-};
-
 use crate::{
     budget::{AsBudget, Budget},
     events::Events,
@@ -25,7 +15,13 @@ use crate::{
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
     },
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
-    DiagnosticLevel, Host, HostError, LedgerInfo, MeteredOrdMap,
+    xdr::{
+        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
+        LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
+        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
+        SorobanAuthorizationEntry, SorobanResources, TtlEntry,
+    },
+    DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
 
 pub type TtlEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<TtlEntry>, Budget>;
@@ -101,8 +97,12 @@ pub fn get_ledger_changes<T: SnapshotSource>(
     // We return any invariant errors here as internal errors, as they would
     // typically mean inconsistency between storage and snapshot that shouldn't
     // happen in embedder environments, or simply fundamental invariant bugs.
-    let internal_error: HostError =
-        Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into();
+    let internal_error = || {
+        HostError::from(Error::from_type_and_code(
+            ScErrorType::Storage,
+            ScErrorCode::InternalError,
+        ))
+    };
     for (key, entry_with_live_until_ledger) in storage.map.iter(budget)? {
         let mut entry_change = LedgerEntryChange::default();
         metered_write_xdr(budget, key.as_ref(), &mut entry_change.encoded_key)?;
@@ -129,14 +129,14 @@ pub fn get_ledger_changes<T: SnapshotSource>(
 
             if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
                 ttl_change.old_live_until_ledger =
-                    old_live_until_ledger.ok_or_else(|| internal_error.clone())?;
+                    old_live_until_ledger.ok_or_else(internal_error)?;
             }
         }
         if let Some((_, new_live_until_ledger)) = entry_with_live_until_ledger {
             if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
                 // Never reduce the final live until ledger.
                 ttl_change.new_live_until_ledger = max(
-                    new_live_until_ledger.ok_or_else(|| internal_error.clone())?,
+                    new_live_until_ledger.ok_or_else(internal_error)?,
                     ttl_change.old_live_until_ledger,
                 );
             }
@@ -155,7 +155,7 @@ pub fn get_ledger_changes<T: SnapshotSource>(
                 }
             }
             None => {
-                return Err(internal_error);
+                return Err(internal_error());
             }
         }
         changes.push(entry_change);
