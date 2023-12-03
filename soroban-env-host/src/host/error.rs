@@ -140,9 +140,6 @@ impl HostError {
     }
 
     /// Identifies whether the error can be meaningfully recovered from.
-    ///
-    /// We consider errors that occur due to broken execution preconditions (
-    /// such as incorrect footprint) non-recoverable.
     pub fn is_recoverable(&self) -> bool {
         // All internal errors that originate from the host can be considered
         // non-recoverable (they should only appear if there is some bug in the
@@ -152,11 +149,11 @@ impl HostError {
         {
             return false;
         }
-        // Exceeding the budget or storage limit is non-recoverable. Exceeding
-        // storage 'limit' is basically accessing entries outside of the
-        // supplied footprint.
-        if self.error.is_code(ScErrorCode::ExceededLimit)
-            && (self.error.is_type(ScErrorType::Storage) || self.error.is_type(ScErrorType::Budget))
+        // Exceeding the budget is non-recoverable since the budget values are
+        // monotonically increasing and cover the whole transaction, so if a
+        // callee exceeds the budget, the caller can't get any more budget to
+        // continue execution with. We just want to exit as quickly as possible.
+        if self.error.is_code(ScErrorCode::ExceededLimit) && self.error.is_type(ScErrorType::Budget)
         {
             return false;
         }
@@ -427,12 +424,11 @@ impl Host {
                 ScErrorType::Storage,
                 ScErrorCode::ExceededLimit,
                 "trying to access contract instance key outside of the footprint",
-                // No need for metered clone here as we are on the unrecoverable
-                // error path.
-                &[self
-                    .add_host_object(ScAddress::Contract(contract_id.clone()))
-                    .map(|a| a.into())
-                    .unwrap_or(Val::VOID.into())],
+                &[contract_id
+                    .metered_clone(self)
+                    .and_then(|cid| self.add_host_object(ScAddress::Contract(cid)))
+                    .map(|a| a.to_val())
+                    .unwrap_or_else(|_| Val::VOID.into())],
             );
         }
         err
@@ -449,12 +445,11 @@ impl Host {
                 ScErrorType::Storage,
                 ScErrorCode::ExceededLimit,
                 "trying to access contract code key outside of the footprint",
-                // No need for metered clone here as we are on the unrecoverable
-                // error path.
                 &[self
-                    .add_host_object(self.scbytes_from_hash(wasm_hash).unwrap_or_default())
-                    .map(|a| a.into())
-                    .unwrap_or(Val::VOID.into())],
+                    .scbytes_from_hash(wasm_hash)
+                    .and_then(|wasm_hash| self.add_host_object(wasm_hash))
+                    .map(|a| a.to_val())
+                    .unwrap_or_else(|_| Val::VOID.into())],
             );
         }
         err
