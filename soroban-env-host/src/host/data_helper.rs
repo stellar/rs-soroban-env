@@ -1,24 +1,21 @@
 use core::cmp::min;
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{
-    BytesM, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractIdPreimage,
-    ExtensionPoint, HashIdPreimageContractId, ScAddress, ScContractInstance, ScErrorCode,
-    ScErrorType, ScMap,
+use crate::{
+    budget::AsBudget,
+    err,
+    host::metered_clone::{MeteredAlloc, MeteredClone},
+    storage::{InstanceStorageMap, Storage},
+    xdr::{
+        AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
+        ContractDataEntry, ContractExecutable, ContractIdPreimage, ExtensionPoint, Hash,
+        HashIdPreimage, HashIdPreimageContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt,
+        LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+        LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
+        ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
+    },
+    AddressObject, Env, Host, HostError, StorageType, U32Val, Val,
 };
-use soroban_env_common::{AddressObject, Env, StorageType, U32Val, Val};
-
-use crate::budget::AsBudget;
-use crate::storage::{InstanceStorageMap, Storage};
-use crate::xdr::{
-    AccountEntry, AccountId, Asset, ContractDataEntry, Hash, HashIdPreimage, LedgerEntry,
-    LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
-    LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScVal, Signer, SignerKey,
-    ThresholdIndexes, TrustLineAsset, Uint256,
-};
-use crate::{err, Host, HostError};
-
-use super::metered_clone::{MeteredAlloc, MeteredClone};
 
 impl Host {
     pub fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -74,7 +71,7 @@ impl Host {
         })
     }
 
-    pub fn contract_instance_ledger_key(
+    pub(crate) fn contract_instance_ledger_key(
         &self,
         contract_id: &Hash,
     ) -> Result<Rc<LedgerKey>, HostError> {
@@ -214,7 +211,7 @@ impl Host {
                     executable: executable.ok_or_else(|| {
                         self.err(
                             ScErrorType::Context,
-                            ScErrorCode::MissingValue,
+                            ScErrorCode::InternalError,
                             "can't initialize contract without executable",
                             &[],
                         )
@@ -262,7 +259,7 @@ impl Host {
     }
 
     // metering: covered by components
-    pub fn get_full_contract_id_preimage(
+    pub(crate) fn get_full_contract_id_preimage(
         &self,
         init_preimage: ContractIdPreimage,
     ) -> Result<HashIdPreimage, HostError> {
@@ -274,7 +271,7 @@ impl Host {
     }
 
     // notes on metering: `get` from storage is covered. Rest are free.
-    pub fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
+    pub(crate) fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id)?;
         self.with_mut_storage(|storage| {
             match &storage
@@ -341,8 +338,18 @@ impl Host {
             ))
         {
             // Target signer is the master key, so return the master weight
-            let threshold = account.thresholds.0[ThresholdIndexes::MasterWeight as usize];
-            Ok(threshold)
+            let Some(threshold) = account
+                .thresholds
+                .0
+                .get(ThresholdIndexes::MasterWeight as usize)
+            else {
+                return Err(self.error(
+                    (ScErrorType::Value, ScErrorCode::InternalError).into(),
+                    "unexpected thresholds-array size",
+                    &[],
+                ));
+            };
+            Ok(*threshold)
         } else {
             // Target signer is not the master key, so search the account signers
             let signers: &Vec<Signer> = account.signers.as_ref();

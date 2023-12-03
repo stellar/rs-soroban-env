@@ -1,24 +1,18 @@
 #![allow(dead_code)]
 
-use soroban_env_common::{
-    xdr::{ContractCostType, ScErrorCode, ScErrorType},
-    Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, TimepointSmall,
-    TryFromVal, U128Small, U256Small, U64Small,
-};
-
 use crate::{
     budget::Budget,
-    host::metered_clone::{self, MeteredClone},
-    HostError,
-};
-
-use super::{
-    host::metered_map::MeteredOrdMap,
-    host::metered_vector::MeteredVector,
+    host::{
+        metered_clone::{self, MeteredClone},
+        metered_map::MeteredOrdMap,
+        metered_vector::MeteredVector,
+    },
     num::{I256, U256},
-    xdr, AddressObject, BytesObject, DurationObject, Host, I128Object, I256Object, I64Object,
-    MapObject, Object, StringObject, SymbolObject, TimepointObject, U128Object, U256Object,
-    U64Object, Val, VecObject,
+    xdr::{self, ContractCostType, ScErrorCode, ScErrorType},
+    AddressObject, BytesObject, Compare, DurationObject, DurationSmall, Host, HostError,
+    I128Object, I128Small, I256Object, I256Small, I64Object, I64Small, MapObject, Object,
+    StringObject, SymbolObject, SymbolSmall, SymbolStr, TimepointObject, TimepointSmall,
+    TryFromVal, U128Object, U128Small, U256Object, U256Small, U64Object, U64Small, Val, VecObject,
 };
 
 pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
@@ -47,7 +41,7 @@ impl std::hash::Hash for HostMap {
 
 #[derive(Clone)]
 #[cfg_attr(feature = "testutils", derive(Hash))]
-pub enum HostObject {
+pub(crate) enum HostObject {
     Vec(HostVec),
     Map(HostMap),
     U64(u64),
@@ -149,7 +143,7 @@ impl HostObject {
     }
 }
 
-pub trait HostObjectType: MeteredClone {
+pub(crate) trait HostObjectType: MeteredClone {
     type Wrapper: Into<Object>;
     fn new_from_handle(handle: u32) -> Self::Wrapper;
     fn inject(self) -> HostObject;
@@ -239,9 +233,10 @@ declare_host_object_type!(xdr::ScAddress, AddressObject, Address);
 // when running native contracts, either builtin or in local-testing mode, so
 // you will not get identical object numbers in those cases. Since there is no
 // real isolation between native contracts -- they can even dereference unsafe
-// pointers if they want -- there's no point bothering with the translation (and
-// there's no really obvious place to perform it systematically, like in the
-// wasm marshalling path).
+// pointers if they want -- the lack of translation is not exactly making the
+// security of native testing worse than it already is. But it does reduce the
+// fidelity of VM-mode simulation in native testing mode. See
+// https://github.com/stellar/rs-soroban-env/issues/1286 for a planned fix.
 
 pub fn is_relative_object_handle(handle: u32) -> bool {
     handle & 1 == 0
@@ -346,9 +341,9 @@ impl Host {
         Ok(val)
     }
 
-    /// Moves a value of some type implementing [`HostObjectType`] into the host's
-    /// object array, returning a [`HostObj`] containing the new object's array
-    /// index, tagged with the [`xdr::ScObjectType`].
+    /// Moves a value of some type implementing [`HostObjectType`] into the
+    /// host's object array, returning the associated [`Object`] wrapper type
+    /// containing the new object's handle.
     pub(crate) fn add_host_object<HOT: HostObjectType>(
         &self,
         hot: HOT,
@@ -356,8 +351,8 @@ impl Host {
         let _span = tracy_span!("add host object");
         let index = self.try_borrow_objects()?.len();
         let handle = index_to_handle(self, index, false)?;
-        // charge for the new host object, which is just the amortized cost of a single
-        // `HostObject` allocation
+        // charge for the new host object, which is just the amortized cost of a
+        // single `HostObject` allocation
         metered_clone::charge_heap_alloc::<HostObject>(1, self)?;
         self.try_borrow_objects_mut()?.push(HOT::inject(hot));
         Ok(HOT::new_from_handle(handle))
@@ -374,9 +369,10 @@ impl Host {
         let _span = tracy_span!("visit host object");
         // `VisitObject` covers the cost of visiting an object. The actual cost
         // of the closure needs to be covered by the caller. Although each visit
-        // does small amount of work: getting the object handling and indexing
-        // into the host object buffer, it is ubiquitous and therefore we charge
-        // budget here for safety / future proofing.
+        // does small amount of work -- getting the object handling and indexing
+        // into the host object buffer, almost too little to bother charging for
+        // -- it is ubiquitous and therefore we charge budget here for safety /
+        // future proofing.
         self.charge_budget(ContractCostType::VisitObject, None)?;
         let r = self.try_borrow_objects()?;
         let obj: Object = obj.into();
@@ -409,8 +405,8 @@ impl Host {
         }
     }
 
-    // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function
-    // needs to be metered separately.
+    // Notes on metering: object visiting part is covered by
+    // [`Host::visit_obj_untyped`]. Closure needs to be metered separately.
     pub(crate) fn visit_obj<HOT: HostObjectType, F, U>(
         &self,
         obj: HOT::Wrapper,

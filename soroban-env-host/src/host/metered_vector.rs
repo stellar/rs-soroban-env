@@ -1,14 +1,10 @@
-use soroban_env_common::{
-    xdr::{ScErrorCode, ScErrorType},
-    Compare, Error,
-};
-
-use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget},
-    xdr::ContractCostType,
-    Host, HostError,
+    host::{declared_size::DeclaredSizeForMetering, MeteredClone},
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
+    Compare, Error, Host, HostError,
 };
+
 use std::{cmp::Ordering, ops::Range};
 
 const VEC_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -47,7 +43,7 @@ where
     // Charge binary search includes accessing number of entries expected for
     // finding an entry. Cost of comparison is charged separately and not covered here.
     fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
-        let mag = 64 - (self.vec.len() as u64).leading_zeros();
+        let mag = 64u32.saturating_sub((self.vec.len() as u64).leading_zeros());
         budget.charge(
             ContractCostType::MemCpy,
             Some(A::DECLARED_SIZE.saturating_mul((1 + mag) as u64)),
@@ -72,17 +68,6 @@ where
     pub fn with_capacity(capacity: usize, budget: &Budget) -> Result<Self, HostError> {
         super::metered_clone::charge_heap_alloc::<A>(capacity as u64, budget)?;
         Self::from_vec(Vec::with_capacity(capacity))
-    }
-
-    pub fn from_array(buf: &[A], budget: &Budget) -> Result<Self, HostError> {
-        if u32::try_from(buf.len()).is_err() {
-            Err(VEC_OOB.into())
-        } else {
-            // we may temporarily go over budget here.
-            let vec: Vec<A> = buf.into();
-            vec.charge_deep_clone(budget)?;
-            Self::from_vec(vec)
-        }
     }
 
     // No meter charge, assuming allocation cost has been covered by the caller from the outside.
@@ -315,10 +300,6 @@ where
 
     pub fn iter(&self) -> std::slice::Iter<'_, A> {
         self.vec.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, A> {
-        self.vec.iter_mut()
     }
 
     pub fn to_vec(&self, budget: &Budget) -> Result<Vec<A>, HostError> {

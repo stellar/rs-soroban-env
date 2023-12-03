@@ -40,6 +40,7 @@ impl Into<Error> for HostError {
 impl DebugInfo {
     fn write_events(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO: maybe make this something users can adjust?
+        // https://github.com/stellar/rs-soroban-env/issues/1288
         const MAX_EVENTS: usize = 25;
         let mut wrote_heading = false;
         for (i, e) in self.events.0.iter().rev().take(MAX_EVENTS).enumerate() {
@@ -227,17 +228,23 @@ impl<T> TryBorrowOrErr<T> for RefCell<T> {
 
 impl Host {
     /// Convenience function to construct an [Error] and pass to [Host::error].
-    pub fn err(&self, type_: ScErrorType, code: ScErrorCode, msg: &str, args: &[Val]) -> HostError {
+    pub(crate) fn err(
+        &self,
+        type_: ScErrorType,
+        code: ScErrorCode,
+        msg: &str,
+        args: &[Val],
+    ) -> HostError {
         let error = Error::from_type_and_code(type_, code);
         self.error(error, msg, args)
     }
 
-    /// At minimum constructs and returns a [HostError] build from the provided
+    /// At minimum constructs and returns a [HostError] built from the provided
     /// [Error], and when running in [DiagnosticMode::Debug] additionally
     /// records a diagnostic event with the provided `msg` and `args` and then
     /// enriches the returned [Error] with [DebugInfo] in the form of a
     /// [Backtrace] and snapshot of the [Events] buffer.
-    pub fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
+    pub(crate) fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
         let mut he = HostError::from(error);
         self.with_debug_mode(|| {
             // We _try_ to take a mutable borrow of the events buffer refcell
@@ -327,7 +334,7 @@ impl Host {
     /// will wind up writing `host.map_err(...)?` a bunch in code that you used
     /// to be able to get away with just writing `...?`, there's no way around
     /// this if we want to record the diagnostic information.
-    pub fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
+    pub(crate) fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
     where
         Error: From<E>,
         E: Debug,
@@ -463,8 +470,9 @@ impl Host {
 
 pub(crate) trait DebugArg {
     fn debug_arg(host: &Host, arg: &Self) -> Val {
-        // We similarly guard against double-faulting here by try-acquiring the event buffer,
-        // which will fail if we're re-entering error reporting _while_ forming a debug argument.
+        // We similarly guard against double-faulting here by try-acquiring the
+        // event buffer, which will fail if we're re-entering error reporting
+        // _while_ forming a debug argument.
         let mut val: Option<Val> = None;
         if let Ok(_guard) = host.0.events.try_borrow_mut() {
             host.with_debug_mode(|| {
@@ -531,8 +539,9 @@ macro_rules! err {
             }
             // The stringify and voidarg calls here exist just to cause the
             // macro to stack-allocate a fixed-size local array with one VOID
-            // initializer per argument. The arguments themselves are not
-            // actually used at this point.
+            // initializer per argument. The stringified-arguments themselves
+            // are not actually used at this point, they exist to have a macro
+            // expression that corresponds to the number of arguments.
             let mut buf = [$(voidarg(stringify!($args))),*];
             let mut i = 0;
             $host.with_debug_mode(||{

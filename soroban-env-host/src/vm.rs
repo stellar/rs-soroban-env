@@ -51,10 +51,10 @@ const MAX_VM_ARGS: usize = 32;
 /// WASM module. Any other lookups on any tables other than import functions
 /// will fail.
 pub struct Vm {
-    #[allow(dead_code)]
     pub(crate) contract_id: Hash,
     // TODO: consider moving store and possibly module to Host so they can be
     // recycled across calls. Or possibly beyond, to be recycled across txs.
+    // https://github.com/stellar/rs-soroban-env/issues/827
     module: Module,
     store: RefCell<Store<Host>>,
     instance: Instance,
@@ -66,14 +66,6 @@ impl std::hash::Hash for Vm {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.contract_id.hash(state);
     }
-}
-
-/// Minimal description of a single function defined in a WASM module.
-#[derive(Clone, Eq, PartialEq)]
-pub struct VmFunction {
-    pub name: String,
-    pub param_count: usize,
-    pub result_count: usize,
 }
 
 impl Vm {
@@ -159,9 +151,6 @@ impl Vm {
     }
 
     fn check_meta_section(host: &Host, m: &Module) -> Result<(), HostError> {
-        // We check that the interface version number has the same pre-release number as
-        // us as well as a protocol that's less than or equal to our protocol.
-
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut limits = DEFAULT_XDR_RW_LIMITS;
             limits.len = env_meta.len();
@@ -241,7 +230,8 @@ impl Vm {
         let mut config = wasmi::Config::default();
         let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
 
-        // Turn off all optional wasm features.
+        // Turn off most optional wasm features, leaving on some
+        // post-MVP features commonly enabled by Rust and Clang.
         config
             .wasm_multi_value(false)
             .wasm_mutable_global(true)
@@ -421,7 +411,7 @@ impl Vm {
                     return Err(host.err(
                         ScErrorType::WasmVm,
                         ScErrorCode::InternalError,
-                        "VM trapped with HostError but propagation failed",
+                        "VM trapped but propagation failed",
                         &[],
                     ));
                 }

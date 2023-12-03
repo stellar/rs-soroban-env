@@ -5,7 +5,7 @@ use crate::{
     auth::AuthorizationManager,
     budget::{AsBudget, Budget},
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
-    host_object::{HostMap, HostObject, HostObjectType, HostVec},
+    host_object::{HostMap, HostObject, HostVec},
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num,
     impl_wrapping_obj_to_num,
     num::*,
@@ -18,7 +18,7 @@ use crate::{
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
     I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall,
-    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, Vm, VmCaller, VmCallerEnv,
+    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv,
     Void, I256, U256,
 };
 
@@ -45,6 +45,7 @@ pub use prng::{Seed, SEED_BYTES};
 
 use self::{
     frame::{Context, ContractReentryMode},
+    mem_helper::MemFnArgs,
     metered_clone::{MeteredClone, MeteredContainer},
     metered_xdr::metered_write_xdr,
     prng::Prng,
@@ -55,14 +56,6 @@ pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_auth"))]
 use rand_chacha::ChaCha20Rng;
-
-/// Temporary helper for denoting a slice of guest memory, as formed by
-/// various bytes operations.
-pub(crate) struct VmSlice {
-    vm: Rc<Vm>,
-    pos: u32,
-    len: u32,
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct LedgerInfo {
@@ -900,12 +893,11 @@ impl EnvBase for Host {
     fn symbol_index_in_strs(&self, sym: Symbol, slices: &[&str]) -> Result<U32Val, Self::Error> {
         call_env_call_hook!(self, sym, slices.len());
         let mut found = None;
-        self.scan_slice_of_slices(slices, |i, slice| {
+        for (i, slice) in slices.iter().enumerate() {
             if self.symbol_matches(slice.as_bytes(), sym)? && found.is_none() {
                 found = Some(i)
             }
-            Ok(())
-        })?;
+        }
         let res = match found {
             None => Err(self.err(
                 ScErrorType::Value,
@@ -943,7 +935,7 @@ impl VmCallerEnv for Host {
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
         self.with_debug_mode(|| {
-            let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
+            let MemFnArgs { vm, pos, len } = self.get_mem_fn_args(msg_pos, msg_len)?;
             Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
             let mut msg: Vec<u8> = vec![0u8; len as usize];
             self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
@@ -951,7 +943,7 @@ impl VmCallerEnv for Host {
             Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
             let msg = String::from_utf8_lossy(&msg);
 
-            let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
+            let MemFnArgs { vm, pos, len } = self.get_mem_fn_args(vals_pos, vals_len)?;
             Vec::<Val>::charge_bulk_init_cpy((len as u64).saturating_add(1), self)?;
             let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
             // charge for conversion from bytes to `Val`s
@@ -1109,14 +1101,14 @@ impl VmCallerEnv for Host {
 
     // region: "int" module functions
 
-    impl_wrapping_obj_from_num!(obj_from_u64, u64, u64);
-    impl_wrapping_obj_to_num!(obj_to_u64, u64, u64);
-    impl_wrapping_obj_from_num!(obj_from_i64, i64, i64);
-    impl_wrapping_obj_to_num!(obj_to_i64, i64, i64);
-    impl_wrapping_obj_from_num!(timepoint_obj_from_u64, TimePoint, u64);
-    impl_wrapping_obj_to_num!(timepoint_obj_to_u64, TimePoint, u64);
-    impl_wrapping_obj_from_num!(duration_obj_from_u64, Duration, u64);
-    impl_wrapping_obj_to_num!(duration_obj_to_u64, Duration, u64);
+    impl_wrapping_obj_from_num!(obj_from_u64, u64, U64Object, u64);
+    impl_wrapping_obj_to_num!(obj_to_u64, u64, U64Object, u64);
+    impl_wrapping_obj_from_num!(obj_from_i64, i64, I64Object, i64);
+    impl_wrapping_obj_to_num!(obj_to_i64, i64, I64Object, i64);
+    impl_wrapping_obj_from_num!(timepoint_obj_from_u64, TimePoint, TimepointObject, u64);
+    impl_wrapping_obj_to_num!(timepoint_obj_to_u64, TimePoint, TimepointObject, u64);
+    impl_wrapping_obj_from_num!(duration_obj_from_u64, Duration, DurationObject, u64);
+    impl_wrapping_obj_to_num!(duration_obj_to_u64, Duration, DurationObject, u64);
 
     fn obj_from_u128_pieces(
         &self,
@@ -1485,11 +1477,11 @@ impl VmCallerEnv for Host {
         len: U32Val,
     ) -> Result<MapObject, HostError> {
         // Step 1: extract all key symbols.
-        let VmSlice {
+        let MemFnArgs {
             vm,
             pos: keys_pos,
             len,
-        } = self.decode_vmslice(keys_pos, len)?;
+        } = self.get_mem_fn_args(keys_pos, len)?;
         Vec::<Symbol>::charge_bulk_init_cpy(len as u64, self)?;
         let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
         self.metered_vm_scan_slices_in_linear_memory(
@@ -1543,11 +1535,11 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        let VmSlice {
+        let MemFnArgs {
             vm,
             pos: keys_pos,
             len,
-        } = self.decode_vmslice(keys_pos, len)?;
+        } = self.get_mem_fn_args(keys_pos, len)?;
         self.visit_obj(map, |mapobj: &HostMap| {
             if mapobj.len() != len as usize {
                 return Err(self.err(
@@ -1806,7 +1798,7 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<VecObject, HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
+        let MemFnArgs { vm, pos, len } = self.get_mem_fn_args(vals_pos, len)?;
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
         // charge for conversion from bytes to `Val`s
@@ -1834,7 +1826,7 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
+        let MemFnArgs { vm, pos, len } = self.get_mem_fn_args(vals_pos, len)?;
         self.visit_obj(vec, |vecobj: &HostVec| {
             if vecobj.len() != len as usize {
                 return Err(self.err(
@@ -2331,7 +2323,7 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<U32Val, HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        let MemFnArgs { vm, pos, len } = self.get_mem_fn_args(lm_pos, len)?;
         let mut found = None;
         self.metered_vm_scan_slices_in_linear_memory(
             vmcaller,

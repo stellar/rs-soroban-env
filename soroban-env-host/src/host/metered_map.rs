@@ -1,11 +1,10 @@
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-
-use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget},
-    xdr::ContractCostType,
+    host::{declared_size::DeclaredSizeForMetering, MeteredClone},
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
     Compare, Error, Host, HostError,
 };
+
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
 const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -15,8 +14,8 @@ pub struct MeteredOrdMap<K, V, Ctx> {
     ctx: PhantomData<Ctx>,
 }
 
-/// `Clone` should not be used directly, used `MeteredClone` instead if possible. It is defined to
-/// satisfy trait requirements.
+/// `Clone` should not be used directly, used `MeteredClone` instead if
+/// possible. `Clone` is defined here to satisfy trait requirements.
 impl<K, V, Ctx> Clone for MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
@@ -47,19 +46,17 @@ where
     }
 
     fn charge_scan<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
-        b.as_budget().charge(
-            ContractCostType::MemCpy,
-            Some(Self::ENTRY_SIZE.saturating_mul(self.map.len() as u64)),
-        )
+        Self::charge_access(self, self.map.len(), b)
     }
 
     // Charge binary search includes accessing number of entries expected for
-    // finding an entry. Cost of comparison is charged separately and not covered here.
+    // finding an entry. Cost of comparison is charged separately and not
+    // covered here.
     fn charge_binsearch<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
-        let mag = 64 - (self.map.len() as u64).leading_zeros();
+        let mag: u32 = 64u32.saturating_sub((self.map.len() as u64).leading_zeros());
         b.as_budget().charge(
             ContractCostType::MemCpy,
-            Some(Self::ENTRY_SIZE.saturating_mul((1 + mag) as u64)),
+            Some(Self::ENTRY_SIZE.saturating_mul(mag.saturating_add(1u32) as u64)),
         )
     }
 }
@@ -107,7 +104,10 @@ where
         };
         m.charge_scan(ctx)?;
         for w in m.map.as_slice().windows(2) {
-            match <Ctx as Compare<K>>::compare(ctx, &w[0].0, &w[1].0)? {
+            let [a, b] = w else {
+                return Err((ScErrorType::Object, ScErrorCode::InternalError).into());
+            };
+            match <Ctx as Compare<K>>::compare(ctx, &a.0, &b.0)? {
                 Ordering::Less => (),
                 _ => return Err((ScErrorType::Object, ScErrorCode::InvalidInput).into()),
             }
@@ -182,7 +182,7 @@ where
                     return Err(MAP_OOB.into());
                 }
                 let init = self.map.iter().take(replace_pos).cloned();
-                let fini = self.map.iter().skip(replace_pos + 1).cloned();
+                let fini = self.map.iter().skip(replace_pos.saturating_add(1)).cloned();
                 let iter = init.chain([(key, value)]).chain(fini);
                 Self::from_exact_iter(iter, ctx)
             }
@@ -210,7 +210,10 @@ where
         match self.find(key, ctx)? {
             Ok(found) => {
                 self.charge_access(1, ctx)?;
-                Ok(Some(&self.map[found].1))
+                let Some((_, v)) = self.map.get(found) else {
+                    return Err((ScErrorType::Object, ScErrorCode::InternalError).into());
+                };
+                Ok(Some(v))
             }
             _ => Ok(None),
         }
@@ -240,19 +243,23 @@ where
                 // `found` cannot be > `usize::MAX` - 1, since that means the map contains more than
                 // `usize::MAX` elements. Therefore `found + 1` is guaranteed to not overflow.
                 let init = self.map.iter().take(found).cloned();
-                let fini = self.map.iter().skip(found + 1).cloned();
+                let fini = self.map.iter().skip(found.saturating_add(1)).cloned();
                 let iter = init.chain(fini);
                 let new = Self::from_exact_iter(iter, ctx)?;
-                let res = self.map[found].1.metered_clone(ctx.as_budget())?;
-                Ok(Some((new, res)))
+                let Some((_, res)) = self.map.get(found) else {
+                    return Err((ScErrorType::Object, ScErrorCode::InternalError).into());
+                };
+                Ok(Some((new, res.metered_clone(ctx.as_budget())?)))
             }
             Ok(found) => {
                 // No prefix, removing at position 0.
                 // If the suffix is empty it's harmless.
                 let iter = self.map.iter().skip(1).cloned();
                 let new = Self::from_exact_iter(iter, ctx)?;
-                let res = self.map[found].1.metered_clone(ctx.as_budget())?;
-                Ok(Some((new, res)))
+                let Some((_, res)) = self.map.get(found) else {
+                    return Err((ScErrorType::Object, ScErrorCode::InternalError).into());
+                };
+                Ok(Some((new, res.metered_clone(ctx.as_budget())?)))
             }
             _ => Ok(None),
         }
