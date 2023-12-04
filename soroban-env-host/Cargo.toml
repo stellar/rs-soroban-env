@@ -71,7 +71,7 @@ features = ["arbitrary"]
 
 [features]
 testutils = ["soroban-env-common/testutils", "soroban-synth-wasm/testutils", "recording_auth", "dep:backtrace"]
-next = ["soroban-env-common/next", "soroban-synth-wasm/next", "soroban-bench-utils/next"]
+next = ["soroban-env-common/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_auth = []
 bench = []
