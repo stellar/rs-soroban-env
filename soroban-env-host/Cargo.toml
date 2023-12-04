@@ -64,14 +64,14 @@ arbitrary = "=1.3.2"
 
 [dev-dependencies.stellar-xdr]
 version = "=20.0.0"
-git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "24dd3c1b9fada6e2b28e8456a915adc212d6c47e"
+# git = "https://github.com/stellar/rs-stellar-xdr"
+# rev = "24dd3c1b9fada6e2b28e8456a915adc212d6c47e"
 default-features = false
 features = ["arbitrary"]
 
 [features]
-testutils = ["soroban-env-common/testutils", "soroban-synth-wasm/testutils", "recording_auth", "dep:backtrace"]
-next = ["soroban-env-common/next", "soroban-synth-wasm/next", "soroban-bench-utils/next"]
+testutils = ["soroban-env-common/testutils", "recording_auth", "dep:backtrace"]
+next = ["soroban-env-common/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_auth = []
 bench = []

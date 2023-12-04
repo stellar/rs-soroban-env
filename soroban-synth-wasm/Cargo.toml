@@ -18,7 +18,6 @@ arbitrary = { version = "=1.3.2", features = ["derive"] }
 soroban-env-macros = { workspace = true }
 
 [features]
-next = ["soroban-env-common/next"]
 testutils = ["soroban-env-common/testutils"]
 adversarial = []
 
