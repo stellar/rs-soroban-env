@@ -1121,7 +1121,7 @@ fn test_repeated_export_same_func() -> Result<(), HostError> {
 #[test]
 fn test_large_elements() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
-    let wasm = wasm_util::wasm_module_large_elements(100001);
+    let wasm = wasm_util::wasm_module_large_elements(100001, 100001);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         generate_account_id(&host),
@@ -1130,6 +1130,22 @@ fn test_large_elements() -> Result<(), HostError> {
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_oob_elements() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let wasm = wasm_util::wasm_module_large_elements(128, 129);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
     ));
     Ok(())
 }
@@ -1178,6 +1194,23 @@ fn test_large_number_of_func_types() -> Result<(), HostError> {
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_simd() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let wasm = wasm_util::wasm_module_with_simd_add_i32x4();
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
     ));
     Ok(())
 }

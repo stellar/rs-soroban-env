@@ -744,11 +744,11 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
-    pub(crate) fn wasm_module_large_elements(n: u32) -> Vec<u8> {
-        let mut me = ModEmitter::from_configs(1, n);
+    // if n > m, we have oob elements
+    pub(crate) fn wasm_module_large_elements(m: u32, n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(1, m);
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
-        // store in table, FuncRef(100) is invalid
         me.define_elems(vec![f0; n as usize].as_slice());
         me.finish()
     }
@@ -784,5 +784,20 @@ pub(crate) mod wasm {
             me.add_fn_type_no_check(Arity(0), Arity(0));
         }
         me.finish()
+    }
+
+    pub(crate) fn wasm_module_with_simd_add_i32x4() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func(Arity(0), 0);
+        // we load [u32, u32, u32, u32] x 2, add them and store back
+        fe.i32_const(32); // ptr for storing the result
+        fe.i32_const(0); // ptr for the first 4xi32
+        fe.v128_load(0, 0);
+        fe.i32_const(16); // ptr for the second 4xi32
+        fe.v128_load(0, 0);
+        fe.i32x4_add();
+        fe.v128_store(0, 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
     }
 }
