@@ -111,20 +111,24 @@ pub(crate) fn load_calibrated_fuel_costs() -> FuelCosts {
 }
 
 pub(crate) fn get_wasmi_config(host: &Host) -> Result<wasmi::Config, HostError> {
-    let _protocol = host.get_ledger_protocol_version();
-
     let mut config = wasmi::Config::default();
     let fuel_costs = host.as_budget().0.try_borrow_or_err()?.fuel_costs;
 
-    // Turn off most optional wasm features, leaving on some
-    // post-MVP features commonly enabled by Rust and Clang.
+    // Turn off most optional wasm features, leaving on some post-MVP features
+    // commonly enabled by Rust and Clang. Make sure all unused features are
+    // explicited turned off, so that we don't get "opted in" by a future wasmi
+    // version.
     config
-        .wasm_multi_value(false)
-        .wasm_mutable_global(true)
-        .wasm_saturating_float_to_int(false)
-        .wasm_sign_extension(true)
-        .floats(false)
         .consume_fuel(true)
+        .wasm_bulk_memory(true)
+        .wasm_mutable_global(true)
+        .wasm_sign_extension(true)
+        .wasm_saturating_float_to_int(false)
+        .wasm_multi_value(false)
+        .wasm_reference_types(false)
+        .wasm_tail_call(false)
+        .wasm_extended_const(false)
+        .floats(false)
         .fuel_consumption_mode(FuelConsumptionMode::Eager)
         .set_fuel_costs(fuel_costs);
 
