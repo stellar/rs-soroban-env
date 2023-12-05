@@ -225,6 +225,19 @@ impl ModEmitter {
         }
     }
 
+    #[cfg(feature = "adversarial")]
+    pub fn add_fn_type_no_check(&mut self, arity: Arity, ret: Arity) -> TypeRef {
+        let params: Vec<_> = std::iter::repeat(ValType::I64)
+            .take(arity.0 as usize)
+            .collect();
+        let rets: Vec<_> = std::iter::repeat(ValType::I64)
+            .take(ret.0 as usize)
+            .collect();
+        let ty_id = TypeRef(self.types.len());
+        self.types.function(params, rets);
+        ty_id
+    }
+
     /// Return the unique [`FuncRef`] for a function import with a given module
     /// name, function name, and arity, creating such an import in the `import`
     /// section of the module if it does not already exist.

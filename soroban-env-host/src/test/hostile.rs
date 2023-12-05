@@ -1149,3 +1149,35 @@ fn test_large_globals() -> Result<(), HostError> {
     ));
     Ok(())
 }
+
+#[test]
+fn test_large_number_of_tables() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let wasm = wasm_util::wasm_module_with_many_tables(100001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_large_number_of_func_types() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let wasm = wasm_util::wasm_module_with_many_func_types(100001);
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}

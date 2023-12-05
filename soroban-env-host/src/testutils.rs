@@ -1,7 +1,3 @@
-use rand::RngCore;
-use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
-use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
-
 use crate::{
     budget::Budget,
     storage::{SnapshotSource, Storage},
@@ -12,6 +8,9 @@ use crate::{
     AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, StorageType,
     SymbolSmall, Val, VecObject,
 };
+use rand::RngCore;
+use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
+use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
 
 /// Catch panics while suppressing the default panic hook that prints to the
 /// console.
@@ -372,6 +371,7 @@ impl Host {
 pub(crate) mod wasm {
     use crate::{Symbol, Tag, U32Val, Val};
     use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
+    use wasm_encoder::RefType;
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         let mut fe = ModEmitter::default().func(Arity(1), 0);
@@ -757,6 +757,31 @@ pub(crate) mod wasm {
         let mut me = ModEmitter::default();
         for i in 0..n {
             me.define_global_i64(i as i64, true, None);
+        }
+        me.finish()
+    }
+
+    pub(crate) fn wasm_module_with_many_tables(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for i in 0..n {
+            let rt = match i % 2 == 0 {
+                true => RefType::FUNCREF,
+                false => RefType::EXTERNREF,
+            };
+            me.table(rt, 2, None);
+        }
+        // wasmparser has an limit of 100 tables. wasmi does not have such a limit
+        me.finish_no_validate()
+    }
+
+    // The only type allowed in the MVP is the function type. There are more
+    // composite types defined by the GC proposal, which should not be allowed
+    // and we will verify that in another test.
+    pub(crate) fn wasm_module_with_many_func_types(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for _i in 0..n {
+            // it is allowed to define the same types over and over
+            me.add_fn_type_no_check(Arity(0), Arity(0));
         }
         me.finish()
     }
