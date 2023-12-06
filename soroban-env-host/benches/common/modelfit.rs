@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
+use num_traits::Pow;
 
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
 pub struct FPCostModel {
@@ -57,6 +58,15 @@ fn fit_linear_regression(x: Vec<f64>, y: Vec<f64>) -> FPCostModel {
     FPCostModel::new(model.parameters(), r2)
 }
 
+fn compute_rsquared(x: Vec<f64>, y: Vec<f64>, const_param: f64, lin_param: f64) -> f64 {
+    assert_eq!(x.len(), y.len());
+    let pred_y: Vec<f64> = x.iter().map(|x| const_param + lin_param * x).collect();
+    let y_mean = y.iter().sum::<f64>() / y.len() as f64;
+    let ss_res = y.iter().zip(pred_y.iter()).map(|(y, y_pred)| (y - y_pred).pow(2i32)).sum::<f64>();
+    let ss_tot = y.iter().map(|y| (y - y_mean).pow(2)).sum::<f64>();
+    1f64 - ss_res / ss_tot
+}
+
 pub fn fit_model(x: Vec<u64>, y: Vec<u64>) -> FPCostModel {
     assert_eq!(x.len(), y.len());
     let const_model = x.iter().collect::<HashSet<_>>().len() == 1;
@@ -71,5 +81,12 @@ pub fn fit_model(x: Vec<u64>, y: Vec<u64>) -> FPCostModel {
 
     let x = x.iter().map(|i| *i as f64).collect::<Vec<_>>();
     let y = y.iter().map(|i| *i as f64).collect::<Vec<_>>();
-    fit_linear_regression(x, y)
+    let mut res = fit_linear_regression(x.clone(), y.clone());
+    assert!(res.lin_param > 0f64, "negative slope detected, examine your data, or choose a constant model");
+    if res.const_param < 0f64 {
+        println!("negative intercept detected, will constrain it to 0 and recompte the r-squared");
+        res.const_param = 0f64;
+        res.r_squared = compute_rsquared(x, y, 0f64, res.lin_param);
+    }
+    res
 }

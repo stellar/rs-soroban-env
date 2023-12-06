@@ -35,7 +35,7 @@ pub trait HostCostModel {
 /// been scaled by this factor during parameter fitting to retain more significant
 /// digits. Thus to get the cost from the raw input, we need to scale the result
 /// back by the same factor.
-pub const COST_MODEL_LIN_TERM_SCALE_BITS: u32 = 7;
+pub const COST_MODEL_LIN_TERM_SCALE_BITS: u32 = 0;
 
 /// A helper type that wraps an u64 to signify the wrapped value have been scaled.
 #[derive(Clone, Default)]

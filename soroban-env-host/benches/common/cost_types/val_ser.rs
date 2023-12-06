@@ -10,7 +10,7 @@ pub(crate) struct ValSerMeasure;
 // This measures the costs of converting an ScVal into bytes.
 impl HostCostMeasurement for ValSerMeasure {
     type Runner = ValSerRun;
-    const STEP_SIZE: u64 = 256;
+    const STEP_SIZE: u64 = 1;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> (ScVal, Vec<u8>) {
         let len = 1 + input * Self::STEP_SIZE;
