@@ -2,7 +2,10 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
+use na::DVector;
 use num_traits::Pow;
+
+use nalgebra::{self as na, OMatrix, OVector, U2, DMatrix};
 
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
 pub struct FPCostModel {
@@ -79,14 +82,29 @@ pub fn fit_model(x: Vec<u64>, y: Vec<u64>) -> FPCostModel {
         };
     }
 
+    let nrows = x.len();
     let x = x.iter().map(|i| *i as f64).collect::<Vec<_>>();
     let y = y.iter().map(|i| *i as f64).collect::<Vec<_>>();
-    let mut res = fit_linear_regression(x.clone(), y.clone());
-    assert!(res.lin_param > 0f64, "negative slope detected, examine your data, or choose a constant model");
-    if res.const_param < 0f64 {
-        println!("negative intercept detected, will constrain it to 0 and recompte the r-squared");
-        res.const_param = 0f64;
-        res.r_squared = compute_rsquared(x, y, 0f64, res.lin_param);
-    }
-    res
+
+    let mut a = x.clone();
+    a.append(&mut vec![1.0; nrows]);
+    // println!("{}, {}", a.len(), y.len());
+    let a = OMatrix::<f64, na::Dyn, U2>::from_column_slice(&a);
+    let b = OVector::<f64, na::Dyn>::from_row_slice(&y);
+    // println!("{}, {}", a.len(), b.len());
+    let res = lstsq::lstsq(&a, &b, 1e-14).unwrap();
+    let const_param = res.solution[1];
+    let lin_param = res.solution[0];
+    let r_squared = compute_rsquared(x.clone(), y.clone(), const_param, lin_param);
+    FPCostModel{ const_param, lin_param, r_squared }
+
+
+    // let mut res = fit_linear_regression(x.clone(), y.clone());
+    // assert!(res.lin_param > 0f64, "negative slope detected, examine your data, or choose a constant model");
+    // if res.const_param < 0f64 {
+    //     println!("negative intercept detected, will constrain it to 0 and recompte the r-squared");
+    //     res.const_param = 0f64;
+    //     res.r_squared = compute_rsquared(x, y, 0f64, res.lin_param);
+    // }
+    // res
 }

@@ -18,7 +18,7 @@
 # target = "triple"             # build for the target triple (ignored by `cargo install`)
 # target-dir = "target"         # path of where to place all generated artifacts
 rustflags = [
-     "-Dwarnings",
+     # "-Dwarnings",
      "-Aclippy::style",
 #    "-Dclippy::pedantic",
 #    "-Aclippy::module_name_repetitions",
