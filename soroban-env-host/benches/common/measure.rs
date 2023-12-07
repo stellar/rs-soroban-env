@@ -181,14 +181,7 @@ impl Measurements {
         let (x, y): (Vec<_>, Vec<_>) = self
             .averaged_net_measurements
             .iter()
-            .map(|m| {
-                (
-                    // we've made sure the raw inputs have been conflated before via HCM::STEP_SIZE,
-                    // here we can safely scale it back
-                    m.inputs.unwrap_or(0) >> COST_MODEL_LIN_TERM_SCALE_BITS,
-                    m.cpu_insns,
-                )
-            })
+            .map(|m| (m.inputs.unwrap_or(0), m.cpu_insns))
             .unzip();
 
         fit_model(x, y)
@@ -204,14 +197,7 @@ impl Measurements {
         let (x, y): (Vec<_>, Vec<_>) = self
             .averaged_net_measurements
             .iter()
-            .map(|m| {
-                (
-                    // we've made sure the raw inputs have been conflated before via HCM::STEP_SIZE,
-                    // here we can safely scale it back
-                    m.inputs.unwrap_or(0) >> COST_MODEL_LIN_TERM_SCALE_BITS,
-                    m.mem_bytes,
-                )
-            })
+            .map(|m| (m.inputs.unwrap_or(0), m.mem_bytes))
             .unzip();
 
         fit_model(x, y)
@@ -261,6 +247,11 @@ pub trait HostCostMeasurement: Sized {
     /// actual input size. Thus `STEP_SIZE` must be `>= factor` to account for
     /// the input downscaling.
     const STEP_SIZE: u64 = 1024;
+
+    /// Base size of the HCM input, which does not necessary have the same unit
+    /// as the input to the budget. By default, this has the minimal bits
+    /// required in the `ScaledU64`. Only relevant if the cost model is linear.
+    const INPUT_BASE_SIZE: u64 = 1 << COST_MODEL_LIN_TERM_SCALE_BITS;
 
     /// Initialize a new instance of a HostMeasurement at a given input _hint_, for
     /// the run; the HostMeasurement can choose a precise input for a given hint
@@ -348,7 +339,6 @@ where
         &mut Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::RecycledType>,
     ),
 {
-    assert!(HCM::STEP_SIZE >= (1 << COST_MODEL_LIN_TERM_SCALE_BITS));
     let mut recycled_samples = Vec::with_capacity(samples.len());
     host.as_budget().reset_unlimited().unwrap();
 

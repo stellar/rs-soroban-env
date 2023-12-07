@@ -10,6 +10,7 @@ pub(crate) struct ValDeserMeasure;
 impl HostCostMeasurement for ValDeserMeasure {
     type Runner = ValDeserRun;
     const STEP_SIZE: u64 = 128;
+    const INPUT_BASE_SIZE: u64 = 1;
 
     fn new_random_case(
         host: &soroban_env_host::Host,
@@ -48,7 +49,7 @@ impl HostCostMeasurement for ValDeserMeasure {
         _rng: &mut rand::prelude::StdRng,
         input: u64,
     ) -> Vec<u8> {
-        let input = 1 + input * Self::STEP_SIZE;
+        let input = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         let elem_per_level = (input + MAX_DEPTH) / MAX_DEPTH;
         let mut v = ScVal::U64(0);
         let mut rem = input;

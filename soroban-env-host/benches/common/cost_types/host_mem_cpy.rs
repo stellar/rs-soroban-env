@@ -19,7 +19,7 @@ impl HostCostMeasurement for MemCpyMeasure {
     const STEP_SIZE: u64 = 1 << COST_MODEL_LIN_TERM_SCALE_BITS;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> (Vec<u8>, Vec<u8>) {
-        let len = 1 + input * Self::STEP_SIZE;
+        let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         let mut a = vec![0; len as usize];
         let mut b = vec![0; len as usize];
         rng.fill_bytes(a.as_mut_slice());

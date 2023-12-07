@@ -27,7 +27,7 @@ impl HostCostMeasurement for RecoverEcdsaSecp256k1KeyMeasure {
         // here, from the package k256 wants (and re-exports).
         let mut rng = k256::elliptic_curve::rand_core::OsRng;
 
-        let size = 1 + input * Self::STEP_SIZE;
+        let size = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         let sec: SecretKey = SecretKey::random(&mut rng);
         let msg: Vec<u8> = (0..size).map(|x| x as u8).collect();
         let hash: Hash = Hash(Keccak256::digest(msg).into());

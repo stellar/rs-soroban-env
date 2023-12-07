@@ -69,8 +69,8 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
     call_bench::<B, VmInstantiationMeasure>(&mut params)?;
     call_bench::<B, VisitObjectMeasure>(&mut params)?;
-    call_bench::<B, ValSerMeasure>(&mut params)?;
     call_bench::<B, ValDeserMeasure>(&mut params)?;
+    call_bench::<B, ValSerMeasure>(&mut params)?;
     call_bench::<B, InvokeVmFunctionMeasure>(&mut params)?;
     call_bench::<B, InvokeHostFunctionMeasure>(&mut params)?;
     call_bench::<B, Int256AddSubMeasure>(&mut params)?;

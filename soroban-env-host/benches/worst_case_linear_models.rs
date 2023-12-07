@@ -19,7 +19,7 @@ impl Benchmark for WorstCaseLinearModels {
             .ok()
             .map(|v| v.parse::<u64>().ok())
             .flatten()
-            .unwrap_or(1);
+            .unwrap_or(0);
         let range = std::env::var("RANGE")
             .ok()
             .map(|v| v.parse::<u64>().ok())

@@ -13,7 +13,7 @@ impl HostCostMeasurement for MemCmpMeasure {
         rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
-        let len = 1 + input * Self::STEP_SIZE;
+        let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         let a = randvec(rng, len);
         let b = randvec(rng, len);
         (a, b)
@@ -24,7 +24,7 @@ impl HostCostMeasurement for MemCmpMeasure {
         rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
-        let len = 1 + input * Self::STEP_SIZE;
+        let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         let a = randvec(rng, len);
         (a.clone(), a)
     }

@@ -1,5 +1,6 @@
 use nalgebra::{self as na, OMatrix, OVector, U1};
 use num_traits::Pow;
+use soroban_env_host::budget::COST_MODEL_LIN_TERM_SCALE_BITS;
 use std::collections::HashSet;
 use std::str::FromStr;
 
@@ -57,11 +58,32 @@ fn compute_rsquared(x: Vec<f64>, y: Vec<f64>, const_param: f64, lin_param: f64) 
     1f64 - ss_res / ss_tot
 }
 
-pub fn fit_model(x: Vec<u64>, y: Vec<u64>) -> FPCostModel {
-    assert_eq!(x.len(), y.len());
-    let const_model = x.iter().collect::<HashSet<_>>().len() == 1;
+fn check_inputs_for_fitting(x: &Vec<u64>) {
+    assert!(
+        *x.get(0).unwrap() >= 1 << COST_MODEL_LIN_TERM_SCALE_BITS,
+        "{}",
+        format!("The first point in the input data is too small: {:?}", x)
+    );
+    for w in x.as_slice().windows(2) {
+        let [lo, hi] = w else {
+            panic!("inputs do not contain enough elements");
+        };
+        assert!(
+            hi.saturating_sub(*lo) >= 1 << COST_MODEL_LIN_TERM_SCALE_BITS,
+            "{}",
+            format!(
+                "inputs do not have large enough gap to fit the model. lo: {}, hi: {}",
+                lo, hi
+            )
+        );
+    }
+}
+
+pub fn fit_model(raw_inputs: Vec<u64>, outputs: Vec<u64>) -> FPCostModel {
+    assert_eq!(raw_inputs.len(), outputs.len());
+    let const_model = raw_inputs.iter().collect::<HashSet<_>>().len() == 1;
     if const_model {
-        let const_param = y.iter().sum::<u64>() as f64 / y.len() as f64;
+        let const_param = outputs.iter().sum::<u64>() as f64 / outputs.len() as f64;
         return FPCostModel {
             const_param,
             lin_param: 0.0,
@@ -69,8 +91,15 @@ pub fn fit_model(x: Vec<u64>, y: Vec<u64>) -> FPCostModel {
         };
     }
 
-    let x: Vec<f64> = x.iter().map(|i| *i as f64).collect();
-    let y: Vec<f64> = y.iter().map(|i| *i as f64).collect();
+    check_inputs_for_fitting(&raw_inputs);
+    // we've already made sure all the inputs contain enough bits, so we can
+    // safely scale them back. This will produce the linear coefficinet with
+    // higher precision.
+    let x: Vec<f64> = raw_inputs
+        .iter()
+        .map(|i| (*i >> COST_MODEL_LIN_TERM_SCALE_BITS) as f64)
+        .collect();
+    let y: Vec<f64> = outputs.iter().map(|i| *i as f64).collect();
 
     // First pass: try to pin the solution to (x0, y(x=x0)), where x0 is the
     // smallest input in the input range X, assuming X is monotonic increasing.

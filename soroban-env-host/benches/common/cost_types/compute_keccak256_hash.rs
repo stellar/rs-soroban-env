@@ -11,7 +11,7 @@ impl HostCostMeasurement for ComputeKeccak256HashMeasure {
     type Runner = ComputeKeccak256HashRun;
 
     fn new_random_case(_host: &Host, _rng: &mut StdRng, input: u64) -> Vec<u8> {
-        let size = 1 + input * Self::STEP_SIZE;
+        let size = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         (0..size).map(|n| n as u8).collect()
     }
 }
