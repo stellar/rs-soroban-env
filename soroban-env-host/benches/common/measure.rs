@@ -1,7 +1,7 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
 use soroban_env_host::{
-    budget::{AsBudget, CostTracker, COST_MODEL_LIN_TERM_SCALE_BITS},
+    budget::{AsBudget, CostTracker},
     cost_runner::{CostRunner, CostType},
     Host,
 };
@@ -238,20 +238,16 @@ pub trait HostCostMeasurement: Sized {
     /// The type of host runner we're using. Uniquely identifies a `CostType`.
     type Runner: CostRunner;
 
-    /// The `input: u64` will be multiplied by the `STEP_SIZE` for two reasons:
-    /// 1. for fast-running linear components, setting the step size larger can
-    /// ensure each sample runs for longer (compared to measurement fluctuation),
-    /// thus helps extrapolating the linear coefficient.
-    /// 2. when fitting the linear model, the linear coefficient will be scaled
-    /// up by `factor = 2^COST_MODEL_LIN_TERM_SCALE_BITS`, by scaling down the
-    /// actual input size. Thus `STEP_SIZE` must be `>= factor` to account for
-    /// the input downscaling.
+    /// The `input: u64` will be multiplied by the `STEP_SIZE`. It exist mainly
+    /// numerical reasons, for fast-running linear components, setting the step
+    /// size larger can ensure each sample runs for longer (compared to
+    /// measurement fluctuation), thus helps deriving a more accurate linear
+    /// coefficient (slope). This is not relevant for const models.
     const STEP_SIZE: u64 = 1024;
 
     /// Base size of the HCM input, which does not necessary have the same unit
-    /// as the input to the budget. By default, this has the minimal bits
-    /// required in the `ScaledU64`. Only relevant if the cost model is linear.
-    const INPUT_BASE_SIZE: u64 = 1 << COST_MODEL_LIN_TERM_SCALE_BITS;
+    /// as the input to the budget.
+    const INPUT_BASE_SIZE: u64 = 1;
 
     /// Initialize a new instance of a HostMeasurement at a given input _hint_, for
     /// the run; the HostMeasurement can choose a precise input for a given hint

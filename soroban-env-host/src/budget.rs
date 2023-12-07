@@ -587,14 +587,6 @@ impl Display for BudgetImpl {
 #[allow(unused)]
 #[cfg(test)]
 impl BudgetImpl {
-    fn retrieve_unscaled_param(param: ScaledU64, is_protocol20: bool) -> u64 {
-        const PROTOCOL_20_LIN_TERM_SCALE_BITS: u32 = 7;
-        match is_protocol20 {
-            true => param.unscale() << PROTOCOL_20_LIN_TERM_SCALE_BITS,
-            false => param.0,
-        }
-    }
-
     // Utility function for printing default budget cost parameters in cpp format
     // so that it can be ported into stellar-core.
     // When needing it, copy and run the following test
@@ -602,11 +594,11 @@ impl BudgetImpl {
     // #[test]
     // fn test() {
     //     let bi = BudgetImpl::default();
-    //     bi.print_default_params_in_cpp(true);
+    //     bi.print_default_params_in_cpp();
     // }
     // ```
     // and copy the screen output.
-    fn print_default_params_in_cpp(&self, is_protocol20: bool) {
+    fn print_default_params_in_cpp(&self) {
         // cpu
         println!();
         println!();
@@ -618,8 +610,7 @@ impl BudgetImpl {
             println!("case {}:", ct.name());
             println!(
                 "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
-                cpu.const_term,
-                Self::retrieve_unscaled_param(cpu.lin_term.clone(), is_protocol20)
+                cpu.const_term, cpu.lin_term.0
             );
             println!("break;");
         }
@@ -634,8 +625,7 @@ impl BudgetImpl {
             println!("case {}:", ct.name());
             println!(
                 "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
-                mem.const_term,
-                Self::retrieve_unscaled_param(mem.lin_term.clone(), is_protocol20)
+                mem.const_term, mem.lin_term.0
             );
             println!("break;");
         }

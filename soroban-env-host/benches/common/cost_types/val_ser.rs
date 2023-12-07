@@ -11,7 +11,6 @@ pub(crate) struct ValSerMeasure;
 impl HostCostMeasurement for ValSerMeasure {
     type Runner = ValSerRun;
     const STEP_SIZE: u64 = 256;
-    const INPUT_BASE_SIZE: u64 = 100;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> (ScVal, Vec<u8>) {
         let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;

@@ -58,27 +58,6 @@ fn compute_rsquared(x: Vec<f64>, y: Vec<f64>, const_param: f64, lin_param: f64) 
     1f64 - ss_res / ss_tot
 }
 
-fn check_inputs_for_fitting(x: &Vec<u64>) {
-    assert!(
-        *x.get(0).unwrap() >= 1 << COST_MODEL_LIN_TERM_SCALE_BITS,
-        "{}",
-        format!("The first point in the input data is too small: {:?}", x)
-    );
-    for w in x.as_slice().windows(2) {
-        let [lo, hi] = w else {
-            panic!("inputs do not contain enough elements");
-        };
-        assert!(
-            hi.saturating_sub(*lo) >= 1 << COST_MODEL_LIN_TERM_SCALE_BITS,
-            "{}",
-            format!(
-                "inputs do not have large enough gap to fit the model. lo: {}, hi: {}",
-                lo, hi
-            )
-        );
-    }
-}
-
 pub fn fit_model(raw_inputs: Vec<u64>, outputs: Vec<u64>) -> FPCostModel {
     assert_eq!(raw_inputs.len(), outputs.len());
     let const_model = raw_inputs.iter().collect::<HashSet<_>>().len() == 1;
@@ -90,8 +69,6 @@ pub fn fit_model(raw_inputs: Vec<u64>, outputs: Vec<u64>) -> FPCostModel {
             r_squared: 0.0, // we are always predicting the mean
         };
     }
-
-    check_inputs_for_fitting(&raw_inputs);
 
     // We shrink the raw_inputs by the predefined scale, before passing them
     // into model fitting. This will produce the linear coefficients at a
