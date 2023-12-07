@@ -93,8 +93,12 @@ pub fn fit_model(x: Vec<u64>, y: Vec<u64>) -> FPCostModel {
 
     let lin_param = *lsq_res.solution.get(0).unwrap();
     assert!(
-        lin_param > 0.0,
-        "negative slope detected, examine your data, or choose a constant model"
+        lin_param >= 0.0,
+        "{}",
+        format!(
+            "negative slope {} detected, examine your data, or choose a constant model",
+            lin_param
+        )
     );
     let const_param = y0 - lin_param * x0;
     if const_param >= 0.0 {

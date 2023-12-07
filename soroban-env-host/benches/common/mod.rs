@@ -71,17 +71,20 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, VisitObjectMeasure>(&mut params)?;
     call_bench::<B, ValSerMeasure>(&mut params)?;
     call_bench::<B, ValDeserMeasure>(&mut params)?;
-    call_bench::<B, MemCmpMeasure>(&mut params)?;
     call_bench::<B, InvokeVmFunctionMeasure>(&mut params)?;
     call_bench::<B, InvokeHostFunctionMeasure>(&mut params)?;
-    call_bench::<B, MemAllocMeasure>(&mut params)?;
-    call_bench::<B, MemCpyMeasure>(&mut params)?;
     call_bench::<B, Int256AddSubMeasure>(&mut params)?;
     call_bench::<B, Int256MulMeasure>(&mut params)?;
     call_bench::<B, Int256DivMeasure>(&mut params)?;
     call_bench::<B, Int256PowMeasure>(&mut params)?;
     call_bench::<B, Int256ShiftMeasure>(&mut params)?;
     call_bench::<B, ChaCha20DrawBytesMeasure>(&mut params)?;
+    // These three mem ones are derived analytically, we do not calibrate them typically
+    if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {
+        call_bench::<B, MemAllocMeasure>(&mut params)?;
+        call_bench::<B, MemCpyMeasure>(&mut params)?;
+        call_bench::<B, MemCmpMeasure>(&mut params)?;
+    }
 
     if get_explicit_bench_names().is_none() {
         for cost in ContractCostType::variants() {

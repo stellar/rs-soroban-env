@@ -43,12 +43,24 @@ fn write_cost_params_table<T: Display>(
 ) -> std::io::Result<()> {
     writeln!(tw, "").unwrap();
     writeln!(tw, "").unwrap();
-    writeln!(tw, "cost_type\tcpu_model_const_param\tcpu_model_lin_param\tmem_model_const_param\tmem_model_lin_param").unwrap();
-    for (ty, (cpu, mem)) in params
-        .iter()
-        .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
-    {
-        writeln!(tw, "{}\t{}\t{}\t{}\t{}", ty, cpu.0, cpu.1, mem.0, mem.1).unwrap();
+    writeln!(tw, "cost_type\tcpu_model_const_param\tcpu_model_lin_param\tcpu_model_rsquared\tmem_model_const_param\tmem_model_lin_param\tmem_model_rsquared").unwrap();
+    for (ty, (cpu, cpu_rs, mem, mem_rs)) in params.iter().map(|(ty, (cpu, mem))| {
+        (
+            ty,
+            (
+                cpu.params_as_u64(),
+                cpu.r_squared,
+                mem.params_as_u64(),
+                mem.r_squared,
+            ),
+        )
+    }) {
+        writeln!(
+            tw,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            ty, cpu.0, cpu.1, cpu_rs, mem.0, mem.1, mem_rs
+        )
+        .unwrap();
     }
     tw.flush()
 }
@@ -82,10 +94,22 @@ fn write_budget_params_code(
         .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
     {
         if let CostType::Contract(ty) = ty {
-            println!(
-                "ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
-                ty, cpu.0, cpu.1
-            );
+            // we skip the analytical ones
+            if ty.name() == "MemAlloc" || ty.name() == "MemCmp" || ty.name() == "MemCpy" {
+                println!("ContractCostType::{:?} => {{ !todo() }}", ty);
+            } else {
+                println!(
+                    "ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
+                    ty, cpu.0, cpu.1
+                );
+            }
+            // we duplicate the VmInstantitation entry to VmCachedInstantiation
+            if ty.name() == "VmInstantiation" {
+                println!(
+                    "ContractCostType::VmCachedInstantiation => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
+                    cpu.0, cpu.1
+                );
+            }
         }
     }
     println!("");
@@ -105,10 +129,27 @@ fn write_budget_params_code(
         .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
     {
         if let CostType::Contract(ty) = ty {
-            println!(
-                "ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
-                ty, mem.0, mem.1
-            );
+            // we skip the analytical ones
+            if ty.name() == "MemAlloc"
+                || ty.name() == "MemCmp"
+                || ty.name() == "MemCpy"
+                || ty.name() == "ValSer"
+                || ty.name() == "ValDeser"
+            {
+                println!("ContractCostType::{:?} => {{ !todo() }}", ty);
+            } else {
+                println!(
+                    "ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
+                    ty, mem.0, mem.1
+                );
+            }
+            // we duplicate the VmInstantitation entry to VmCachedInstantiation
+            if ty.name() == "VmInstantiation" {
+                println!(
+                    "ContractCostType::VmCachedInstantiation => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
+                    mem.0, mem.1
+                );
+            }
         }
     }
 
