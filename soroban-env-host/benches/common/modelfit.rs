@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
-use na::DVector;
+use na::U1;
 use num_traits::Pow;
 
-use nalgebra::{self as na, OMatrix, OVector, U2, DMatrix};
+use nalgebra::{self as na, OMatrix, OVector};
 
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
 pub struct FPCostModel {
@@ -86,25 +86,50 @@ pub fn fit_model(x: Vec<u64>, y: Vec<u64>) -> FPCostModel {
     let x = x.iter().map(|i| *i as f64).collect::<Vec<_>>();
     let y = y.iter().map(|i| *i as f64).collect::<Vec<_>>();
 
-    let mut a = x.clone();
-    a.append(&mut vec![1.0; nrows]);
-    // println!("{}, {}", a.len(), y.len());
-    let a = OMatrix::<f64, na::Dyn, U2>::from_column_slice(&a);
-    let b = OVector::<f64, na::Dyn>::from_row_slice(&y);
+    // This is the solution that does not pin the x axis. Equivalent to previous solution (with wild intercepts)
+    // let mut a = x.clone();
+    // a.append(&mut vec![1.0; nrows]);
+    // // println!("{}, {}", a.len(), y.len());
+    // let a = OMatrix::<f64, na::Dyn, U2>::from_column_slice(&a);
+    // let b = OVector::<f64, na::Dyn>::from_row_slice(&y);
+    // // println!("{}, {}", a.len(), b.len());
+    // let res = lstsq::lstsq(&a, &b, 1e-14).unwrap();
+    // assert_eq!(res.solution.len(), 2);
+    // let const_param = res.solution[1];
+    // let lin_param = res.solution[0];
+    // let r_squared = compute_rsquared(x.clone(), y.clone(), const_param, lin_param);
+    // FPCostModel{ const_param, lin_param, r_squared }
+
+    // This is the solution that pins x axis to (x0, y0)
+    // x0 is not necessary at x=0, it is the first input point
+    // here we are just making sure the line produced will always pass through (x0, y0)
+    // assume X is mono-increasing
+    let x0 = x[0];
+    let y0 = y[0];
+    println!("{}, {}", x0, y0);
+    let a: Vec<f64> = x.iter().map(|x| x - x0).collect();
+    let a = OMatrix::<f64, na::Dyn, U1>::from_column_slice(&a);
+    let b: Vec<f64> = y.iter().map(|y| y - y0).collect();
+    let b = OVector::<f64, na::Dyn>::from_row_slice(&b);
     // println!("{}, {}", a.len(), b.len());
-    let res = lstsq::lstsq(&a, &b, 1e-14).unwrap();
-    let const_param = res.solution[1];
-    let lin_param = res.solution[0];
+    let lsq_res = lstsq::lstsq(&a, &b, 1e-14).unwrap();
+    assert_eq!(lsq_res.solution.len(), 1);
+    let lin_param = lsq_res.solution[0];    
+    let const_param = y0 - lin_param * x0;
     let r_squared = compute_rsquared(x.clone(), y.clone(), const_param, lin_param);
-    FPCostModel{ const_param, lin_param, r_squared }
+    let mut res = FPCostModel{ const_param, lin_param, r_squared };
 
-
-    // let mut res = fit_linear_regression(x.clone(), y.clone());
-    // assert!(res.lin_param > 0f64, "negative slope detected, examine your data, or choose a constant model");
-    // if res.const_param < 0f64 {
-    //     println!("negative intercept detected, will constrain it to 0 and recompte the r-squared");
-    //     res.const_param = 0f64;
-    //     res.r_squared = compute_rsquared(x, y, 0f64, res.lin_param);
-    // }
-    // res
+    // second pass: we make sure that the intercept y (x=0) >= 0
+    assert!(res.lin_param > 0.0, "negative slope detected, examine your data, or choose a constant model");
+    if res.const_param < 0.0 {
+        println!("negative intercept detected, will constrain it to 0 and rerun");
+        let a = OMatrix::<f64, na::Dyn, U1>::from_column_slice(&x);
+        let b = OVector::<f64, na::Dyn>::from_row_slice(&y);
+        let lsq_res = lstsq::lstsq(&a, &b, 1e-14).unwrap();
+        assert_eq!(lsq_res.solution.len(), 1);
+        let lin_param = lsq_res.solution[0];    
+        let r_squared = compute_rsquared(x.clone(), y.clone(), 0.0, lin_param);
+        res = FPCostModel{ const_param: 0.0, lin_param, r_squared };
+    }
+    res
 }
