@@ -9,7 +9,7 @@ pub(crate) struct ValDeserMeasure;
 
 impl HostCostMeasurement for ValDeserMeasure {
     type Runner = ValDeserRun;
-    const STEP_SIZE: u64 = 256;
+    const STEP_SIZE: u64 = 128;
 
     fn new_random_case(
         host: &soroban_env_host::Host,

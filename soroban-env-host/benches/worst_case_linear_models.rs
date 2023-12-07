@@ -15,8 +15,16 @@ use tabwriter::{Alignment, TabWriter};
 struct WorstCaseLinearModels;
 impl Benchmark for WorstCaseLinearModels {
     fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)> {
-        let floor = std::env::var("FLOOR").ok().map(|v| v.parse::<u64>().ok()).flatten().unwrap_or(1);
-        let range = std::env::var("RANGE").ok().map(|v| v.parse::<u64>().ok()).flatten().unwrap_or(20);
+        let floor = std::env::var("FLOOR")
+            .ok()
+            .map(|v| v.parse::<u64>().ok())
+            .flatten()
+            .unwrap_or(1);
+        let range = std::env::var("RANGE")
+            .ok()
+            .map(|v| v.parse::<u64>().ok())
+            .flatten()
+            .unwrap_or(20);
         let mut measurements = measure_worst_case_costs::<HCM>(floor..range)?;
         measurements.check_range_against_baseline(&HCM::Runner::COST_TYPE)?;
         measurements.preprocess();
