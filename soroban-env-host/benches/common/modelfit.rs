@@ -92,12 +92,16 @@ pub fn fit_model(raw_inputs: Vec<u64>, outputs: Vec<u64>) -> FPCostModel {
     }
 
     check_inputs_for_fitting(&raw_inputs);
-    // we've already made sure all the inputs contain enough bits, so we can
-    // safely scale them back. This will produce the linear coefficinet with
-    // higher precision.
+
+    // We shrink the raw_inputs by the predefined scale, before passing them
+    // into model fitting. This will produce the linear coefficients at a
+    // larger-than-normal scale, thus when converted back to u64, will retain
+    // more precision. In the actual budget charge, when the model is applied,
+    // the evaluated output will be scaled back to produce the corrrect cost
+    // output.
     let x: Vec<f64> = raw_inputs
         .iter()
-        .map(|i| (*i >> COST_MODEL_LIN_TERM_SCALE_BITS) as f64)
+        .map(|i| (*i as f64) / ((1u64 << COST_MODEL_LIN_TERM_SCALE_BITS) as f64))
         .collect();
     let y: Vec<f64> = outputs.iter().map(|i| *i as f64).collect();
 
