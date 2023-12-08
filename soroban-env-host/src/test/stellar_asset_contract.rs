@@ -752,6 +752,49 @@ fn test_transfer_with_allowance() {
         ),
         ContractError::AllowanceError
     );
+
+    let ledger_num: u32 = test.host.get_ledger_sequence().unwrap().into();
+    contract
+        .approve(&user, user_3.address(&test.host), 10, ledger_num)
+        .unwrap();
+
+    contract
+        .transfer_from(
+            &user_3,
+            user.address(&test.host),
+            user_3.address(&test.host),
+            5,
+        )
+        .unwrap();
+
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        89_999_995
+    );
+    assert_eq!(
+        contract.balance(user_3.address(&test.host)).unwrap(),
+        4_000_005
+    );
+
+    // Advance ledger num by one. Allowance should no longer be valid.
+    test.host
+        .with_mut_ledger_info(|li| li.sequence_number = ledger_num + 1)
+        .unwrap();
+
+    assert_eq!(
+        to_contract_err(
+            contract
+                .transfer_from(
+                    &user_3,
+                    user.address(&test.host),
+                    user_3.address(&test.host),
+                    1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::AllowanceError
+    );
 }
 
 #[test]
