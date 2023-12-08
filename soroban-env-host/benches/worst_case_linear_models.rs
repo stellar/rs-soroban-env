@@ -31,10 +31,20 @@ impl Benchmark for WorstCaseLinearModels {
         measurements.check_range_against_baseline(&HCM::Runner::COST_TYPE)?;
         measurements.preprocess();
         measurements.report_table();
-        let cpu_model = measurements.fit_model_to_cpu();
-        let mem_model = measurements.fit_model_to_mem();
-        println!("cpu model params: {:?}", cpu_model);
-        println!("mem model params: {:?}", mem_model);
+        let (cpu_model, cpu_r2) = measurements.fit_model_to_cpu();
+        let (mem_model, mem_r2) = measurements.fit_model_to_mem();
+        println!(
+            "{:?} cpu: {:?}, R2 score: {}",
+            HCM::Runner::COST_TYPE,
+            cpu_model,
+            cpu_r2
+        );
+        println!(
+            "{:?} mem: {:?}, R2 score: {}",
+            HCM::Runner::COST_TYPE,
+            mem_model,
+            mem_r2
+        );
         Ok((cpu_model, mem_model))
     }
 }

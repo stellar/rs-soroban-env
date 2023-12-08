@@ -171,7 +171,7 @@ impl Measurements {
         eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
     }
 
-    pub fn fit_model_to_cpu(&self) -> MeteredCostComponent {
+    pub fn fit_model_to_cpu(&self) -> (MeteredCostComponent, f64) {
         // data must be preprocessed
         assert_eq!(
             self.measurements.len(),
@@ -184,10 +184,12 @@ impl Measurements {
             .map(|m| (m.inputs.unwrap_or(0), m.cpu_insns))
             .unzip();
 
-        fit_model(x, y).into()
+        let model = fit_model(x, y);
+        let r2 = model.r_squared;
+        (model.into(), r2)
     }
 
-    pub fn fit_model_to_mem(&self) -> MeteredCostComponent {
+    pub fn fit_model_to_mem(&self) -> (MeteredCostComponent, f64) {
         // data must be preprocessed
         assert_eq!(
             self.measurements.len(),
@@ -200,7 +202,9 @@ impl Measurements {
             .map(|m| (m.inputs.unwrap_or(0), m.mem_bytes))
             .unzip();
 
-        fit_model(x, y).into()
+        let model = fit_model(x, y);
+        let r2 = model.r_squared;
+        (model.into(), r2)
     }
 }
 

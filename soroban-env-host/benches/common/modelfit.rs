@@ -8,7 +8,7 @@ use std::str::FromStr;
 pub(crate) struct FPCostModel {
     const_param: f64,
     lin_param: f64,
-    r_squared: f64,
+    pub(crate) r_squared: f64,
 }
 
 impl From<FPCostModel> for MeteredCostComponent {
