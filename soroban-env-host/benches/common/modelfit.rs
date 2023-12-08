@@ -2,7 +2,6 @@ use nalgebra::{self as na, OMatrix, OVector, U1};
 use num_traits::Pow;
 use soroban_env_host::budget::MeteredCostComponent;
 use std::collections::HashSet;
-use std::str::FromStr;
 
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
 pub(crate) struct FPCostModel {
@@ -47,8 +46,12 @@ impl FPCostModel {
     // retain enough precision to apply the scale factor to. This prevents
     // numerical noises from being rounded up as a non-zero linear term.
     fn truncate_noise_digits(&mut self) {
-        self.const_param = f64::from_str(format!("{:.6}", self.const_param).as_str()).unwrap();
-        self.lin_param = f64::from_str(format!("{:.6}", self.lin_param).as_str()).unwrap();
+        let round_to_decimal_places = |num: f64, decimal_places: u32| -> f64 {
+            let factor = 10f64.powi(decimal_places as i32);
+            (num * factor).ceil() / factor
+        };
+        self.const_param = round_to_decimal_places(self.const_param, 6);
+        self.lin_param = round_to_decimal_places(self.lin_param, 6);
     }
 }
 
