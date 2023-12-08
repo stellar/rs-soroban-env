@@ -1,6 +1,6 @@
 use nalgebra::{self as na, OMatrix, OVector, U1};
 use num_traits::Pow;
-use soroban_env_host::budget::{MeteredCostComponent, ScaledU64};
+use soroban_env_host::budget::MeteredCostComponent;
 use std::collections::HashSet;
 use std::str::FromStr;
 
@@ -12,11 +12,11 @@ pub(crate) struct FPCostModel {
 }
 
 impl From<FPCostModel> for MeteredCostComponent {
-    fn from(model: FPCostModel) -> Self {
-        let (const_term, unscaled_lin_term) = model.params_as_u64();
+    fn from(mut model: FPCostModel) -> Self {
+        model.truncate_noise_digits();
         MeteredCostComponent {
-            const_term,
-            lin_term: ScaledU64::from_unscaled_u64(unscaled_lin_term),
+            const_term: model.const_param.ceil() as u64,
+            lin_term: model.lin_param.into(),
         }
     }
 }
@@ -32,6 +32,7 @@ impl FPCostModel {
         fcm.r_squared = r2;
         fcm
     }
+
     // This is the same as the 'evaluate' function in the integral cost model,
     // just using f64 ops rather than saturating integer ops.
     pub fn evaluate(&self, input: f64) -> f64 {
@@ -41,17 +42,13 @@ impl FPCostModel {
         }
         res
     }
-    // Extract the parameters from FPs to integers
-    pub fn params_as_u64(&self) -> (u64, u64) {
-        let extract_param = |f: f64| -> u64 {
-            // clamp the float to 1 digit (to filter noise) then take the ceil
-            let f = f64::from_str(format!("{:.1}", f).as_str()).unwrap();
-            f.ceil() as u64
-        };
-        (
-            extract_param(self.const_param),
-            extract_param(self.lin_param),
-        )
+
+    // We truncate the floating point values to 6 decimal digits, which should
+    // retain enough precision to apply the scale factor to. This prevents
+    // numerical noises from being rounded up as a non-zero linear term.
+    fn truncate_noise_digits(&mut self) {
+        self.const_param = f64::from_str(format!("{:.6}", self.const_param).as_str()).unwrap();
+        self.lin_param = f64::from_str(format!("{:.6}", self.lin_param).as_str()).unwrap();
     }
 }
 

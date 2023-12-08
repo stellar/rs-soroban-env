@@ -72,6 +72,14 @@ impl Display for ScaledU64 {
     }
 }
 
+impl From<f64> for ScaledU64 {
+    fn from(unscaled: f64) -> Self {
+        let scaled = unscaled * ((1 << COST_MODEL_LIN_TERM_SCALE_BITS) as f64);
+        // We err on the side of overestimation by applying `ceil` to the input.
+        ScaledU64(scaled.ceil() as u64)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct MeteredCostComponent {
     pub const_term: u64,
