@@ -6,7 +6,7 @@ mod wasmi_helper;
 
 pub(crate) use limits::DepthLimiter;
 pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
-pub use model::COST_MODEL_LIN_TERM_SCALE_BITS;
+pub use model::{MeteredCostComponent, ScaledU64};
 
 use std::{
     cell::{RefCell, RefMut},
@@ -21,7 +21,6 @@ use crate::{
 };
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
-use model::ScaledU64;
 use wasmi_helper::FuelConfig;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]

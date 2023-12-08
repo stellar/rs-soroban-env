@@ -6,6 +6,7 @@
 mod common;
 use common::*;
 use soroban_env_host::{
+    budget::MeteredCostComponent,
     cost_runner::{CostRunner, CostType, WasmInsnType},
     xdr::ContractCostType,
 };
@@ -14,7 +15,8 @@ use tabwriter::{Alignment, TabWriter};
 
 struct WorstCaseLinearModels;
 impl Benchmark for WorstCaseLinearModels {
-    fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)> {
+    fn bench<HCM: HostCostMeasurement>(
+    ) -> std::io::Result<(MeteredCostComponent, MeteredCostComponent)> {
         let floor = std::env::var("FLOOR")
             .ok()
             .map(|v| v.parse::<u64>().ok())
@@ -39,26 +41,17 @@ impl Benchmark for WorstCaseLinearModels {
 
 fn write_cost_params_table<T: Display>(
     tw: &mut TabWriter<Vec<u8>>,
-    params: &BTreeMap<T, (FPCostModel, FPCostModel)>,
+    params: &BTreeMap<T, (MeteredCostComponent, MeteredCostComponent)>,
 ) -> std::io::Result<()> {
     writeln!(tw, "").unwrap();
     writeln!(tw, "").unwrap();
-    writeln!(tw, "cost_type\tcpu_model_const_param\tcpu_model_lin_param\tcpu_model_rsquared\tmem_model_const_param\tmem_model_lin_param\tmem_model_rsquared").unwrap();
-    for (ty, (cpu, cpu_rs, mem, mem_rs)) in params.iter().map(|(ty, (cpu, mem))| {
-        (
-            ty,
-            (
-                cpu.params_as_u64(),
-                cpu.r_squared,
-                mem.params_as_u64(),
-                mem.r_squared,
-            ),
-        )
-    }) {
+    writeln!(tw, "cost_type\tcpu_model_const_param\tcpu_model_lin_param\tmem_model_const_param\tmem_model_lin_param").unwrap();
+
+    for (ty, (cpu, mem)) in params.iter() {
         writeln!(
             tw,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
-            ty, cpu.0, cpu.1, cpu_rs, mem.0, mem.1, mem_rs
+            "{}\t{}\t{}\t{}\t{}",
+            ty, cpu.const_term, cpu.lin_term, mem.const_term, mem.lin_term
         )
         .unwrap();
     }
@@ -66,90 +59,172 @@ fn write_cost_params_table<T: Display>(
 }
 
 fn write_budget_params_code(
-    params: &BTreeMap<CostType, (FPCostModel, FPCostModel)>,
-    wasm_tier_cost: &BTreeMap<WasmInsnTier, f64>,
+    params: &BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
+    wasm_tier_cost: &BTreeMap<WasmInsnTier, u64>,
 ) {
     println!("");
     println!("");
 
-    let base_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::BASE] as u64;
-    let entity_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::ENTITY] as u64;
-    let load_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::LOAD] as u64;
-    let store_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::STORE] as u64;
-    let call_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::CALL] as u64;
-    println!(
-        "
-        // This is the host cpu insn cost per wasm \"fuel\". Every \"base\" wasm
-        // instruction costs 1 fuel (by default), and some particular types of
-        // instructions may cost additional amount of fuel based on
-        // wasmi's config setting. \n
-        ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
-        ContractCostType::WasmInsnExec,
-        base_cpu_per_fuel,
-        0
-    );
+    let base_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::BASE];
+    let entity_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::ENTITY];
+    let load_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::LOAD];
+    let store_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::STORE];
+    let call_cpu_per_fuel = wasm_tier_cost[&WasmInsnTier::CALL];
 
-    for (ty, (cpu, _)) in params
-        .iter()
-        .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
-    {
-        if let CostType::Contract(ty) = ty {
-            // we skip the analytical ones
-            if ty.name() == "MemAlloc" || ty.name() == "MemCmp" || ty.name() == "MemCpy" {
-                println!("ContractCostType::{:?} => {{ !todo() }}", ty);
-            } else {
+    // first print the cpu part
+
+    for ty in ContractCostType::VARIANTS.iter() {
+        match ty {
+            ContractCostType::WasmInsnExec => {
                 println!(
-                    "ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
-                    ty, cpu.0, cpu.1
+                    "
+                    // This is the host cpu insn cost per wasm \"fuel\". Every \"base\" wasm
+                    // instruction costs 1 fuel (by default), and some particular types of
+                    // instructions may cost additional amount of fuel based on
+                    // wasmi's config setting. \n
+                    ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
+                    ty,
+                    base_cpu_per_fuel,
+                    0
                 );
             }
-            // we duplicate the VmInstantitation entry to VmCachedInstantiation
-            if ty.name() == "VmInstantiation" {
+            ContractCostType::MemAlloc => {
                 println!(
-                    "ContractCostType::VmCachedInstantiation => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
-                    cpu.0, cpu.1
+                    "
+                    // We don't have a clear way of modeling the linear term of
+                    // memalloc cost thus we choose a reasonable upperbound which is
+                    // same as other mem ops.\n
+                    ContractCostType::{:?} => {{ cpu.const_term = 434; cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8); }}",
+                    ty,
                 );
             }
+            ContractCostType::MemCpy => {
+                println!(
+                    "
+                    // We don't use a calibrated number for this because sending a
+                    // large calibration-buffer to memcpy hits an optimized
+                    // large-memcpy path in the stdlib, which has both a large
+                    // overhead and a small per-byte cost. But large buffers aren't
+                    // really how byte-copies usually get used in metered code. Most
+                    // calls have to do with small copies of a few tens or hundreds
+                    // of bytes. So instead we just \"reason it out\": we can probably
+                    // copy 8 bytes per instruction on a 64-bit machine, and that
+                    // therefore a 1-byte copy is considered 1/8th of an
+                    // instruction. We also add in a nonzero constant overhead, to
+                    // avoid having anything that can be zero cost and approximate
+                    // whatever function call, arg-shuffling, spills, reloads or
+                    // other flotsam accumulates around a typical memory copy.\n
+                    ContractCostType::{:?} => {{ cpu.const_term = 42; cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8); }}",
+                    ty,
+                );
+            }
+            ContractCostType::MemCmp => {
+                println!(
+                    "
+                    // This is analytical.
+                    ContractCostType::{:?} => {{ cpu.const_term = 44; cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8); }}",
+                    ty,
+                );
+            }
+            ContractCostType::VmCachedInstantiation => {
+                println!(
+                    " 
+                    // `VmCachedInstantiation` has not been calibrated, it is copied
+                    // from `VmInstantiation`.\n
+                    "
+                );
+                match params.get(&CostType::Contract(ContractCostType::VmInstantiation)) {
+                    Some((cpu, _)) => println!(
+                        "ContractCostType::VmCachedInstantiation => {{ cpu.const_term = {}; cpu.lin_term = {:?}; }}",
+                        cpu.const_term, cpu.lin_term
+                    ),
+                    None => println!(
+                        "ContractCostType::VmCachedInstantiation => !todo()"
+                    ),
+                }
+            }
+            _ => match params.get(&CostType::Contract(*ty)) {
+                Some((cpu, _)) => println!(
+                    "ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = {:?}; }}",
+                    ty, cpu.const_term, cpu.lin_term
+                ),
+                None => println!("ContractCostType::VmCachedInstantiation => !todo()"),
+            },
         }
     }
+
     println!("");
     println!("");
 
-    println!(
-        "
-        // This type is designated to the cpu cost. By definition, the memory cost\n
-        // of a (cpu) fuel is zero.\n
-        ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
-        ContractCostType::WasmInsnExec,
-        0,
-        0
-    );
-    for (ty, (_, mem)) in params
-        .iter()
-        .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
-    {
-        if let CostType::Contract(ty) = ty {
-            // we skip the analytical ones
-            if ty.name() == "MemAlloc"
-                || ty.name() == "MemCmp"
-                || ty.name() == "MemCpy"
-                || ty.name() == "ValSer"
-                || ty.name() == "ValDeser"
-            {
-                println!("ContractCostType::{:?} => {{ !todo() }}", ty);
-            } else {
+    // next print the mem part
+
+    for ty in ContractCostType::VARIANTS.iter() {
+        match ty {
+            ContractCostType::WasmInsnExec => {
                 println!(
-                    "ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
-                    ty, mem.0, mem.1
-                );
+                    "
+                    // This type is designated to the cpu cost. By definition, the
+                    // memory cost of a (cpu) fuel is zero.\n
+                    ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
+                    ty, 0, 0
+                )
             }
-            // we duplicate the VmInstantitation entry to VmCachedInstantiation
-            if ty.name() == "VmInstantiation" {
+            ContractCostType::MemAlloc => {
                 println!(
-                    "ContractCostType::VmCachedInstantiation => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
-                    mem.0, mem.1
-                );
+                    "// This is analytical.\n
+                    ContractCostType::{:?} => {{ mem.const_term = 16; mem.lin_term = ScaledU64::from_unscaled_u64(1); }}",
+                    ty
+                )
             }
+            ContractCostType::MemCmp | ContractCostType::MemCpy => {
+                println!(
+                    "// This is analytical.\n
+                    ContractCostType::{:?} => {{ mem.const_term = 0; mem.lin_term = ScaledU64(0); }}",
+                    ty
+                )
+            }
+            ContractCostType::ValSer => {
+                println!(
+                    "
+                    // This is analytically derived from calibration on highly nested
+                    // xdr structures.\n
+                    ContractCostType::{:?} => {{ mem.const_term = 242; mem.lin_term = ScaledU64::from_unscaled_u64(3); }}",
+                    ty
+                )
+            }
+            ContractCostType::ValDeser => {
+                println!(
+                    "
+                    // This is analytically derived from calibration on highly nested
+                    // xdr structures.\n
+                    ContractCostType::{:?} => {{ mem.const_term = 0; mem.lin_term = ScaledU64::from_unscaled_u64(3); }}",
+                    ty
+                )
+            }
+            ContractCostType::VmCachedInstantiation => {
+                println!(
+                    " 
+                    // `VmCachedInstantiation` has not been calibrated, it is copied
+                    // from `VmInstantiation`.\n
+                    "
+                );
+                match params.get(&CostType::Contract(ContractCostType::VmInstantiation)) {
+                    Some((_, mem)) => println!(
+                        "ContractCostType::VmCachedInstantiation => {{ mem.const_term = {}; mem.lin_term = {:?}; }}",
+                        mem.const_term, mem.lin_term
+                    ),
+                    None => println!(
+                        "ContractCostType::VmCachedInstantiation => !todo()"
+                    ),
+                }
+            }
+            _ => match params.get(&CostType::Contract(*ty)) {
+                Some((_, mem)) => println!(
+                    "ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = {:?}; }}",
+                    ty, mem.const_term, mem.lin_term
+                ),
+                None => println!("ContractCostType::VmCachedInstantiation => !todo()"),
+            },
         }
     }
 
@@ -159,37 +234,57 @@ fn write_budget_params_code(
         "
         FuelConfig {{base: {}, entity: {}, load: {}, store: {}, call: {}}}",
         1,
-        (entity_cpu_per_fuel / base_cpu_per_fuel).max(1),
-        (load_cpu_per_fuel / base_cpu_per_fuel).max(1),
-        (store_cpu_per_fuel / base_cpu_per_fuel).max(1),
-        (call_cpu_per_fuel / base_cpu_per_fuel).max(1)
+        (entity_cpu_per_fuel
+            .checked_div(base_cpu_per_fuel)
+            .unwrap_or(0))
+        .max(1),
+        (load_cpu_per_fuel
+            .checked_div(base_cpu_per_fuel)
+            .unwrap_or(0))
+        .max(1),
+        (store_cpu_per_fuel
+            .checked_div(base_cpu_per_fuel)
+            .unwrap_or(0))
+        .max(1),
+        (call_cpu_per_fuel
+            .checked_div(base_cpu_per_fuel)
+            .unwrap_or(0))
+        .max(1)
     )
 }
 
 fn extract_tier(
-    params_wasm: &BTreeMap<CostType, (FPCostModel, FPCostModel)>,
+    params_wasm: &BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
     insn_tier: &[WasmInsnType],
-) -> (BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)>, f64) {
-    let mut params_tier: BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)> = BTreeMap::new();
+) -> (
+    BTreeMap<WasmInsnType, (MeteredCostComponent, MeteredCostComponent)>,
+    u64,
+) {
+    let mut params_tier: BTreeMap<WasmInsnType, (MeteredCostComponent, MeteredCostComponent)> =
+        BTreeMap::new();
     for ty in insn_tier {
         if let Some(res) = params_wasm.get(&CostType::Wasm(*ty)) {
             params_tier.insert(ty.clone(), res.clone());
         }
     }
 
-    let cpu_per_fuel: Vec<f64> = params_tier
+    let cpu_per_fuel: Vec<u64> = params_tier
         .iter()
-        .map(|(_, (cpu, _))| cpu.const_param)
+        .map(|(_, (cpu, _))| cpu.const_term)
         .collect();
-    let ave_cpu_per_fuel = cpu_per_fuel.iter().sum::<f64>() / cpu_per_fuel.len() as f64;
+    let ave_cpu_per_fuel = cpu_per_fuel
+        .iter()
+        .sum::<u64>()
+        .checked_div(cpu_per_fuel.len() as u64)
+        .unwrap_or(0);
     (params_tier, ave_cpu_per_fuel)
 }
 
 fn process_tier(
     tier: WasmInsnTier,
-    params_wasm: &BTreeMap<CostType, (FPCostModel, FPCostModel)>,
+    params_wasm: &BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
     insn_tier: &[WasmInsnType],
-) -> f64 {
+) -> u64 {
     println!("\n");
     println!("\n{:=<100}", "");
     println!("\"{:?}\" tier", tier);
@@ -210,14 +305,14 @@ fn process_tier(
 }
 
 fn extract_wasmi_fuel_costs(
-    params_wasm: &BTreeMap<CostType, (FPCostModel, FPCostModel)>,
-) -> BTreeMap<WasmInsnTier, f64> {
+    params_wasm: &BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
+) -> BTreeMap<WasmInsnTier, u64> {
     let base_cost = process_tier(WasmInsnTier::BASE, params_wasm, &WASM_INSN_BASE);
     let entity_cost = process_tier(WasmInsnTier::ENTITY, params_wasm, &WASM_INSN_ENTITY);
     let load_cost = process_tier(WasmInsnTier::LOAD, params_wasm, &WASM_INSN_LOAD);
     let store_cost = process_tier(WasmInsnTier::STORE, params_wasm, &WASM_INSN_STORE);
     let call_cost = process_tier(WasmInsnTier::CALL, params_wasm, &WASM_INSN_CALL);
-    let mut res: BTreeMap<WasmInsnTier, f64> = BTreeMap::new();
+    let mut res: BTreeMap<WasmInsnTier, u64> = BTreeMap::new();
     res.insert(WasmInsnTier::BASE, base_cost);
     res.insert(WasmInsnTier::ENTITY, entity_cost);
     res.insert(WasmInsnTier::LOAD, load_cost);

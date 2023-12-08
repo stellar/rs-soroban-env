@@ -1,14 +1,14 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
 use soroban_env_host::{
-    budget::{AsBudget, CostTracker},
+    budget::{AsBudget, CostTracker, MeteredCostComponent},
     cost_runner::{CostRunner, CostType},
     Host,
 };
 use std::{io, ops::Range};
 use tabwriter::{Alignment, TabWriter};
 
-use super::{fit_model, FPCostModel};
+use super::modelfit::fit_model;
 
 #[derive(Clone, Debug, Default)]
 pub struct Measurement {
@@ -171,7 +171,7 @@ impl Measurements {
         eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
     }
 
-    pub fn fit_model_to_cpu(&self) -> FPCostModel {
+    pub fn fit_model_to_cpu(&self) -> MeteredCostComponent {
         // data must be preprocessed
         assert_eq!(
             self.measurements.len(),
@@ -184,10 +184,10 @@ impl Measurements {
             .map(|m| (m.inputs.unwrap_or(0), m.cpu_insns))
             .unzip();
 
-        fit_model(x, y)
+        fit_model(x, y).into()
     }
 
-    pub fn fit_model_to_mem(&self) -> FPCostModel {
+    pub fn fit_model_to_mem(&self) -> MeteredCostComponent {
         // data must be preprocessed
         assert_eq!(
             self.measurements.len(),
@@ -200,7 +200,7 @@ impl Measurements {
             .map(|m| (m.inputs.unwrap_or(0), m.mem_bytes))
             .unzip();
 
-        fit_model(x, y)
+        fit_model(x, y).into()
     }
 }
 

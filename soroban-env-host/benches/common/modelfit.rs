@@ -1,14 +1,24 @@
 use nalgebra::{self as na, OMatrix, OVector, U1};
 use num_traits::Pow;
-use soroban_env_host::budget::COST_MODEL_LIN_TERM_SCALE_BITS;
+use soroban_env_host::budget::{MeteredCostComponent, ScaledU64};
 use std::collections::HashSet;
 use std::str::FromStr;
 
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd)]
-pub struct FPCostModel {
-    pub const_param: f64,
-    pub lin_param: f64,
-    pub r_squared: f64,
+pub(crate) struct FPCostModel {
+    const_param: f64,
+    lin_param: f64,
+    r_squared: f64,
+}
+
+impl From<FPCostModel> for MeteredCostComponent {
+    fn from(model: FPCostModel) -> Self {
+        let (const_term, unscaled_lin_term) = model.params_as_u64();
+        MeteredCostComponent {
+            const_term,
+            lin_term: ScaledU64::from_unscaled_u64(unscaled_lin_term),
+        }
+    }
 }
 
 // We have to use a floating-point cost model in order to interface with the
@@ -58,9 +68,9 @@ fn compute_rsquared(x: Vec<f64>, y: Vec<f64>, const_param: f64, lin_param: f64) 
     1f64 - ss_res / ss_tot
 }
 
-pub fn fit_model(raw_inputs: Vec<u64>, outputs: Vec<u64>) -> FPCostModel {
-    assert_eq!(raw_inputs.len(), outputs.len());
-    let const_model = raw_inputs.iter().collect::<HashSet<_>>().len() == 1;
+pub(crate) fn fit_model(inputs: Vec<u64>, outputs: Vec<u64>) -> FPCostModel {
+    assert_eq!(inputs.len(), outputs.len());
+    let const_model = inputs.iter().collect::<HashSet<_>>().len() == 1;
     if const_model {
         let const_param = outputs.iter().sum::<u64>() as f64 / outputs.len() as f64;
         return FPCostModel {
@@ -70,17 +80,11 @@ pub fn fit_model(raw_inputs: Vec<u64>, outputs: Vec<u64>) -> FPCostModel {
         };
     }
 
-    // We shrink the raw_inputs by the predefined scale, before passing them
-    // into model fitting. This will produce the linear coefficients at a
-    // larger-than-normal scale, thus when converted back to u64, will retain
-    // more precision. In the actual budget charge, when the model is applied,
-    // the evaluated output will be scaled back to produce the corrrect cost
-    // output.
-    let x: Vec<f64> = raw_inputs
-        .iter()
-        .map(|i| (*i as f64) / ((1u64 << COST_MODEL_LIN_TERM_SCALE_BITS) as f64))
-        .collect();
-    let y: Vec<f64> = outputs.iter().map(|i| *i as f64).collect();
+    let (x, y): (Vec<f64>, Vec<f64>) = inputs
+        .into_iter()
+        .zip(outputs)
+        .map(|(x, y)| (x as f64, y as f64))
+        .unzip();
 
     // First pass: try to pin the solution to (x0, y(x=x0)), where x0 is the
     // smallest input in the input range X, assuming X is monotonic increasing.
