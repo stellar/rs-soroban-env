@@ -48,8 +48,8 @@ impl HostCostMeasurement for ValDeserMeasure {
         _rng: &mut rand::prelude::StdRng,
         input: u64,
     ) -> Vec<u8> {
-        let input = 1 + input * Self::STEP_SIZE;
-        let elem_per_level = 1 + input / MAX_DEPTH;
+        let input = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
+        let elem_per_level = (input + MAX_DEPTH) / MAX_DEPTH;
         let mut v = ScVal::U64(0);
         let mut rem = input;
         for _i in 0..MAX_DEPTH {

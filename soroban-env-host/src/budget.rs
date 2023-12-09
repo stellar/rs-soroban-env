@@ -6,7 +6,7 @@ mod wasmi_helper;
 
 pub(crate) use limits::DepthLimiter;
 pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
-pub use model::COST_MODEL_LIN_TERM_SCALE_BITS;
+pub use model::{MeteredCostComponent, ScaledU64};
 
 use std::{
     cell::{RefCell, RefMut},
@@ -21,7 +21,6 @@ use crate::{
 };
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
-use model::ScaledU64;
 use wasmi_helper::FuelConfig;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -581,6 +580,57 @@ impl Display for BudgetImpl {
         }
         writeln!(f, "{:=<55}", "")?;
         Ok(())
+    }
+}
+
+#[allow(unused)]
+#[cfg(test)]
+impl BudgetImpl {
+    // Utility function for printing default budget cost parameters in cpp format
+    // so that it can be ported into stellar-core.
+    // When needing it, copy and run the following test
+    // ```
+    // #[test]
+    // fn test() {
+    //     let bi = BudgetImpl::default();
+    //     bi.print_default_params_in_cpp();
+    // }
+    // ```
+    // and copy the screen output.
+    fn print_default_params_in_cpp(&self) {
+        // cpu
+        println!();
+        println!();
+        println!();
+        for ct in ContractCostType::variants() {
+            let Some(cpu) = self.cpu_insns.get_cost_model(ct) else {
+                continue;
+            };
+            println!("case {}:", ct.name());
+            println!(
+                "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
+                cpu.const_term, cpu.lin_term.0
+            );
+            println!("break;");
+        }
+        // mem
+        println!();
+        println!();
+        println!();
+        for ct in ContractCostType::variants() {
+            let Some(mem) = self.mem_bytes.get_cost_model(ct) else {
+                continue;
+            };
+            println!("case {}:", ct.name());
+            println!(
+                "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
+                mem.const_term, mem.lin_term.0
+            );
+            println!("break;");
+        }
+        println!();
+        println!();
+        println!();
     }
 }
 

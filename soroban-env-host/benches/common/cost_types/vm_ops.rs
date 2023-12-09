@@ -26,7 +26,7 @@ impl HostCostMeasurement for VmInstantiationMeasure {
         let id: xdr::Hash = [0; 32].into();
         // generate a test wasm contract with many trivial internal functions,
         // which represents the worst case in terms of work needed for WASM parsing.
-        let n = (input * 30) as usize;
+        let n = (Self::INPUT_BASE_SIZE + input * 30) as usize;
         let wasm = wasm_module_with_n_internal_funcs(n);
         // replace the above two lines with these below to test with wasm contracts
         // with a single function of many instructions. In both tests the cpu grows

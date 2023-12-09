@@ -1,14 +1,14 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
 use soroban_env_host::{
-    budget::{AsBudget, CostTracker, COST_MODEL_LIN_TERM_SCALE_BITS},
+    budget::{AsBudget, CostTracker, MeteredCostComponent},
     cost_runner::{CostRunner, CostType},
     Host,
 };
 use std::{io, ops::Range};
 use tabwriter::{Alignment, TabWriter};
 
-use super::{fit_model, FPCostModel};
+use super::modelfit::fit_model;
 
 #[derive(Clone, Debug, Default)]
 pub struct Measurement {
@@ -171,7 +171,7 @@ impl Measurements {
         eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
     }
 
-    pub fn fit_model_to_cpu(&self) -> FPCostModel {
+    pub fn fit_model_to_cpu(&self) -> (MeteredCostComponent, f64) {
         // data must be preprocessed
         assert_eq!(
             self.measurements.len(),
@@ -181,20 +181,15 @@ impl Measurements {
         let (x, y): (Vec<_>, Vec<_>) = self
             .averaged_net_measurements
             .iter()
-            .map(|m| {
-                (
-                    // we've made sure the raw inputs have been conflated before via HCM::STEP_SIZE,
-                    // here we can safely scale it back
-                    m.inputs.unwrap_or(0) >> COST_MODEL_LIN_TERM_SCALE_BITS,
-                    m.cpu_insns,
-                )
-            })
+            .map(|m| (m.inputs.unwrap_or(0), m.cpu_insns))
             .unzip();
 
-        fit_model(x, y)
+        let model = fit_model(x, y);
+        let r2 = model.r_squared;
+        (model.into(), r2)
     }
 
-    pub fn fit_model_to_mem(&self) -> FPCostModel {
+    pub fn fit_model_to_mem(&self) -> (MeteredCostComponent, f64) {
         // data must be preprocessed
         assert_eq!(
             self.measurements.len(),
@@ -204,17 +199,12 @@ impl Measurements {
         let (x, y): (Vec<_>, Vec<_>) = self
             .averaged_net_measurements
             .iter()
-            .map(|m| {
-                (
-                    // we've made sure the raw inputs have been conflated before via HCM::STEP_SIZE,
-                    // here we can safely scale it back
-                    m.inputs.unwrap_or(0) >> COST_MODEL_LIN_TERM_SCALE_BITS,
-                    m.mem_bytes,
-                )
-            })
+            .map(|m| (m.inputs.unwrap_or(0), m.mem_bytes))
             .unzip();
 
-        fit_model(x, y)
+        let model = fit_model(x, y);
+        let r2 = model.r_squared;
+        (model.into(), r2)
     }
 }
 
@@ -252,15 +242,16 @@ pub trait HostCostMeasurement: Sized {
     /// The type of host runner we're using. Uniquely identifies a `CostType`.
     type Runner: CostRunner;
 
-    /// The `input: u64` will be multiplied by the `STEP_SIZE` for two reasons:
-    /// 1. for fast-running linear components, setting the step size larger can
-    /// ensure each sample runs for longer (compared to measurement fluctuation),
-    /// thus helps extrapolating the linear coefficient.
-    /// 2. when fitting the linear model, the linear coefficient will be scaled
-    /// up by `factor = 2^COST_MODEL_LIN_TERM_SCALE_BITS`, by scaling down the
-    /// actual input size. Thus `STEP_SIZE` must be `>= factor` to account for
-    /// the input downscaling.
+    /// The `input: u64` will be multiplied by the `STEP_SIZE`. It exist mainly
+    /// numerical reasons, for fast-running linear components, setting the step
+    /// size larger can ensure each sample runs for longer (compared to
+    /// measurement fluctuation), thus helps deriving a more accurate linear
+    /// coefficient (slope). This is not relevant for const models.
     const STEP_SIZE: u64 = 1024;
+
+    /// Base size of the HCM input, which does not necessary have the same unit
+    /// as the input to the budget.
+    const INPUT_BASE_SIZE: u64 = 1;
 
     /// Initialize a new instance of a HostMeasurement at a given input _hint_, for
     /// the run; the HostMeasurement can choose a precise input for a given hint
@@ -348,7 +339,6 @@ where
         &mut Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::RecycledType>,
     ),
 {
-    assert!(HCM::STEP_SIZE >= (1 << COST_MODEL_LIN_TERM_SCALE_BITS));
     let mut recycled_samples = Vec::with_capacity(samples.len());
     host.as_budget().reset_unlimited().unwrap();
 

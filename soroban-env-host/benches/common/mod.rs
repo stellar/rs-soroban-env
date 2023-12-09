@@ -9,17 +9,18 @@ mod util;
 use cost_types::*;
 use experimental::*;
 pub use measure::*;
-pub use modelfit::*;
 
 use soroban_env_common::xdr::Name;
 use soroban_env_host::{
+    budget::MeteredCostComponent,
     cost_runner::{CostRunner, CostType, WasmInsnType},
     xdr::ContractCostType,
 };
 use std::collections::BTreeMap;
 
 pub(crate) trait Benchmark {
-    fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)>;
+    fn bench<HCM: HostCostMeasurement>(
+    ) -> std::io::Result<(MeteredCostComponent, MeteredCostComponent)>;
 }
 
 fn get_explicit_bench_names() -> Option<Vec<String>> {
@@ -40,7 +41,7 @@ fn should_run<HCM: HostCostMeasurement>() -> bool {
 }
 
 fn call_bench<B: Benchmark, HCM: HostCostMeasurement>(
-    params: &mut BTreeMap<CostType, (FPCostModel, FPCostModel)>,
+    params: &mut BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
 ) -> std::io::Result<()> {
     if should_run::<HCM>() {
         params.insert(<HCM::Runner as CostRunner>::COST_TYPE, B::bench::<HCM>()?);
@@ -49,8 +50,9 @@ fn call_bench<B: Benchmark, HCM: HostCostMeasurement>(
 }
 
 pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
-) -> std::io::Result<BTreeMap<CostType, (FPCostModel, FPCostModel)>> {
-    let mut params: BTreeMap<CostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
+) -> std::io::Result<BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>> {
+    let mut params: BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)> =
+        BTreeMap::new();
     call_bench::<B, Ed25519ScalarMulMeasure>(&mut params)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
     call_bench::<B, ReadXdrByteArrayMeasure>(&mut params)?;
@@ -58,8 +60,9 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
 }
 
 pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
-) -> std::io::Result<BTreeMap<CostType, (FPCostModel, FPCostModel)>> {
-    let mut params: BTreeMap<CostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
+) -> std::io::Result<BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>> {
+    let mut params: BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)> =
+        BTreeMap::new();
 
     call_bench::<B, ComputeEcdsaSecp256k1SigMeasure>(&mut params)?;
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut params)?;
@@ -69,19 +72,22 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
     call_bench::<B, VmInstantiationMeasure>(&mut params)?;
     call_bench::<B, VisitObjectMeasure>(&mut params)?;
-    call_bench::<B, ValSerMeasure>(&mut params)?;
     call_bench::<B, ValDeserMeasure>(&mut params)?;
-    call_bench::<B, MemCmpMeasure>(&mut params)?;
+    call_bench::<B, ValSerMeasure>(&mut params)?;
     call_bench::<B, InvokeVmFunctionMeasure>(&mut params)?;
     call_bench::<B, InvokeHostFunctionMeasure>(&mut params)?;
-    call_bench::<B, MemAllocMeasure>(&mut params)?;
-    call_bench::<B, MemCpyMeasure>(&mut params)?;
     call_bench::<B, Int256AddSubMeasure>(&mut params)?;
     call_bench::<B, Int256MulMeasure>(&mut params)?;
     call_bench::<B, Int256DivMeasure>(&mut params)?;
     call_bench::<B, Int256PowMeasure>(&mut params)?;
     call_bench::<B, Int256ShiftMeasure>(&mut params)?;
     call_bench::<B, ChaCha20DrawBytesMeasure>(&mut params)?;
+    // These three mem ones are derived analytically, we do not calibrate them typically
+    if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {
+        call_bench::<B, MemAllocMeasure>(&mut params)?;
+        call_bench::<B, MemCpyMeasure>(&mut params)?;
+        call_bench::<B, MemCmpMeasure>(&mut params)?;
+    }
 
     if get_explicit_bench_names().is_none() {
         for cost in ContractCostType::variants() {
@@ -95,8 +101,8 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
 
 macro_rules! run_wasm_insn_measurement {
     ( $($HCM: ident),* ) => {
-        pub(crate) fn for_each_wasm_insn_measurement<B: Benchmark>() -> std::io::Result<BTreeMap<CostType, (FPCostModel, FPCostModel)>> {
-            let mut params: BTreeMap<CostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
+        pub(crate) fn for_each_wasm_insn_measurement<B: Benchmark>() -> std::io::Result<BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>> {
+            let mut params: BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)> = BTreeMap::new();
             $(
                 if should_run::<$HCM>() {
                     params.insert(<$HCM as HostCostMeasurement>::Runner::COST_TYPE, B::bench::<$HCM>()?);
