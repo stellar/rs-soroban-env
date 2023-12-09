@@ -72,6 +72,7 @@ impl Display for ScaledU64 {
     }
 }
 
+#[cfg(feature = "bench")]
 impl From<f64> for ScaledU64 {
     fn from(unscaled: f64) -> Self {
         let scaled = unscaled * ((1 << COST_MODEL_LIN_TERM_SCALE_BITS) as f64);
