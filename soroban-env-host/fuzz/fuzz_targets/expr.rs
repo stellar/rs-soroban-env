@@ -30,14 +30,20 @@ fuzz_target!(|test: TestCase| {
     // host functions correctly. Contract B takes exactly one argument so that
     // it's at least _plausible_ that contract A will figure out how to call it
     // correctly (passing 1 Val arg).
+    //
+    // There is a 32-argument limit to wasm functions imposed for safety in
+    // soroban, so we limit the number of keys we generate to 5 read keys and
+    // 5 write keys.
     let read_keys: Vec<(ScVal, StorageType)> = test
         .read_keys
         .iter()
+        .take(5)
         .map(|(k, ty)| (ScVal::U32(*k), *ty))
         .collect();
     let write_keys: Vec<(ScVal, StorageType)> = test
         .write_keys
         .iter()
+        .take(5)
         .map(|(k, ty)| (ScVal::U32(*k), *ty))
         .collect();
 
