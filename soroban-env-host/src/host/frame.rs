@@ -144,6 +144,10 @@ impl Frame {
             Frame::TestContract(tc) => Some(&tc.instance),
         }
     }
+
+    fn is_contract_vm(&self) -> bool {
+        matches!(self, Frame::ContractVM { .. })
+    }
 }
 
 impl Host {
@@ -384,6 +388,16 @@ impl Host {
                 ScErrorCode::ExceededLimit,
             )
             .into());
+        }
+        #[cfg(any(test, feature = "testutils"))]
+        {
+            if let Some(ctx) = self.try_borrow_context_stack()?.last() {
+                if frame.is_contract_vm() && ctx.frame.is_contract_vm() {
+                    if let Ok(mut scoreboard) = self.try_borrow_coverage_scoreboard_mut() {
+                        scoreboard.vm_to_vm_calls += 1;
+                    }
+                }
+            }
         }
         let ctx = Context {
             frame,
