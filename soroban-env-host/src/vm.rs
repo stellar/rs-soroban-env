@@ -16,7 +16,7 @@ mod func_info;
 pub(crate) use dispatch::dummy0;
 
 use crate::{
-    budget::{AsBudget, Budget},
+    budget::{get_wasmi_config, AsBudget, Budget},
     err,
     host::{
         error::TryBorrowOrErr,
@@ -33,7 +33,7 @@ use std::{cell::RefCell, io::Cursor, rc::Rc, time::Instant};
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 
-use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store, Value};
+use wasmi::{Engine, Instance, Linker, Memory, Module, Store, Value};
 
 use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
@@ -208,21 +208,7 @@ impl Vm {
             Some(module_wasm_code.len() as u64),
         )?;
 
-        let mut config = wasmi::Config::default();
-        let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
-
-        // Turn off most optional wasm features, leaving on some
-        // post-MVP features commonly enabled by Rust and Clang.
-        config
-            .wasm_multi_value(false)
-            .wasm_mutable_global(true)
-            .wasm_saturating_float_to_int(false)
-            .wasm_sign_extension(true)
-            .floats(false)
-            .consume_fuel(true)
-            .fuel_consumption_mode(FuelConsumptionMode::Eager)
-            .set_fuel_costs(fuel_costs);
-
+        let config = get_wasmi_config(host)?;
         let engine = Engine::new(&config);
         let module = {
             let _span0 = tracy_span!("parse module");

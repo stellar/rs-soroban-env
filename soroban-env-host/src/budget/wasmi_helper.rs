@@ -1,55 +1,7 @@
-use super::AsBudget;
-use crate::{xdr::ContractCostType, Host};
-use wasmi::{errors, ResourceLimiter};
-
-/// This is a subset of `wasmi::FuelCosts` which are configurable, because it
-/// doesn't derive all the traits we want. These fields (coarsely) define the
-/// relative costs of different wasm instruction types and are for wasmi internal
-/// fuel metering use only. Units are in "fuels".
-#[derive(Clone)]
-pub(crate) struct FuelConfig {
-    /// The base fuel costs for all instructions.
-    pub base: u64,
-    /// The fuel cost for instruction operating on Wasm entities.
-    ///
-    /// # Note
-    ///
-    /// A Wasm entitiy is one of `func`, `global`, `memory` or `table`.
-    /// Those instructions are usually a bit more costly since they need
-    /// multiplie indirect accesses through the Wasm instance and store.
-    pub entity: u64,
-    /// The fuel cost offset for `memory.load` instructions.
-    pub load: u64,
-    /// The fuel cost offset for `memory.store` instructions.
-    pub store: u64,
-    /// The fuel cost offset for `call` and `call_indirect` instructions.
-    pub call: u64,
-}
-
-// These values are calibrated and set by us.
-impl Default for FuelConfig {
-    fn default() -> Self {
-        FuelConfig {
-            base: 1,
-            entity: 3,
-            load: 2,
-            store: 1,
-            call: 67,
-        }
-    }
-}
-
-impl FuelConfig {
-    // These values are the "factory default" and used for calibration.
-    #[cfg(any(test, feature = "testutils", feature = "bench"))]
-    pub(crate) fn reset(&mut self) {
-        self.base = 1;
-        self.entity = 1;
-        self.load = 1;
-        self.store = 1;
-        self.call = 1;
-    }
-}
+use crate::{
+    budget::AsBudget, host::error::TryBorrowOrErr, xdr::ContractCostType, Host, HostError,
+};
+use wasmi::{errors, FuelConsumptionMode, FuelCosts, ResourceLimiter};
 
 pub(crate) struct WasmiLimits {
     pub table_elements: u32,
@@ -143,4 +95,38 @@ impl ResourceLimiter for Host {
     fn memories(&self) -> usize {
         WASMI_LIMITS_CONFIG.memories
     }
+}
+
+// These values are calibrated and set by us. Calibration is done with a given
+// wasmi version, and as long as the version is pinned, these values aren't
+// expected to change much.
+pub(crate) fn load_calibrated_fuel_costs() -> FuelCosts {
+    let mut fuel_costs = FuelCosts::default();
+    fuel_costs.base = 1;
+    fuel_costs.entity = 3;
+    fuel_costs.load = 2;
+    fuel_costs.store = 1;
+    fuel_costs.call = 67;
+    fuel_costs
+}
+
+pub(crate) fn get_wasmi_config(host: &Host) -> Result<wasmi::Config, HostError> {
+    let _protocol = host.get_ledger_protocol_version();
+
+    let mut config = wasmi::Config::default();
+    let fuel_costs = host.as_budget().0.try_borrow_or_err()?.fuel_costs;
+
+    // Turn off most optional wasm features, leaving on some
+    // post-MVP features commonly enabled by Rust and Clang.
+    config
+        .wasm_multi_value(false)
+        .wasm_mutable_global(true)
+        .wasm_saturating_float_to_int(false)
+        .wasm_sign_extension(true)
+        .floats(false)
+        .consume_fuel(true)
+        .fuel_consumption_mode(FuelConsumptionMode::Eager)
+        .set_fuel_costs(fuel_costs);
+
+    Ok(config)
 }
