@@ -93,9 +93,9 @@ pub enum ContractInvocationEvent {
 pub type ContractInvocationHook = Rc<dyn for<'a> Fn(&'a Host, ContractInvocationEvent) -> ()>;
 
 #[cfg(any(test, feature = "testutils"))]
-#[derive(Clone,Default)]
+#[derive(Clone, Default)]
 pub struct CoverageScoreboard {
-    vm_to_vm_calls: usize
+    vm_to_vm_calls: usize,
 }
 
 #[derive(Clone, Default)]
@@ -166,7 +166,7 @@ struct HostImpl {
     // covered.
     #[doc(hidden)]
     #[cfg(any(test, feature = "testutils"))]
-    coverage_scoreboard: RefCell<CoverageScoreboard>
+    coverage_scoreboard: RefCell<CoverageScoreboard>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -351,7 +351,7 @@ impl Host {
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
-            coverage_scoreboard: Default::default()
+            coverage_scoreboard: Default::default(),
         }))
     }
 
@@ -1973,7 +1973,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
-                let key = self.contract_data_key_from_val(k, t.try_into()?)?;
+                let key = self.storage_key_from_val(k, t.try_into()?)?;
                 self.try_borrow_storage_mut()?
                     .del(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
@@ -2008,7 +2008,7 @@ impl VmCallerEnv for Host {
                 &[],
             ))?;
         }
-        let key = self.contract_data_key_from_val(k, t.try_into()?)?;
+        let key = self.storage_key_from_val(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
             .extend_ttl(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;

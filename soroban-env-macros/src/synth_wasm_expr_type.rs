@@ -66,7 +66,6 @@ fn type_const_expr_type(ty: &str) -> Option<String> {
 }
 
 impl crate::Function {
-
     fn synthesize_existing_or_sub_expr_function(ty: &str) -> Self {
         let mut f = Function {
             name: EXISTING_OR_SUB_EXPR.to_string(),
@@ -156,7 +155,9 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     // function that returns a foo
     for ty in all_tys.iter() {
         let ty_fns = fns_by_type.entry(ty.clone()).or_default();
-        ty_fns.push(Function::synthesize_existing_or_sub_expr_function(ty.as_str()));
+        ty_fns.push(Function::synthesize_existing_or_sub_expr_function(
+            ty.as_str(),
+        ));
         if let Some(f) = Function::synthesize_const_expr_function(ty.as_str()) {
             ty_fns.push(f)
         } else if ty_fns.is_empty() {

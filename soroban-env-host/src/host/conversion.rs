@@ -124,17 +124,6 @@ impl Host {
         })
     }
 
-    /// Converts a [`Val`] to an [`ScVal`] and combines it with the currently-executing
-    /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
-    // Notes on metering: covered by components.
-    pub fn storage_key_from_val(
-        &self,
-        k: Val,
-        durability: ContractDataDurability,
-    ) -> Result<Rc<LedgerKey>, HostError> {
-        self.storage_key_from_scval(self.from_host_val(k)?, durability)
-    }
-
     pub(crate) fn storage_key_for_address(
         &self,
         contract: ScAddress,
@@ -160,8 +149,10 @@ impl Host {
         self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability)
     }
 
+    /// Converts a [`Val`] to an [`ScVal`] and combines it with the currently-executing
+    /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     // Notes on metering: covered by components.
-    pub(crate) fn contract_data_key_from_val(
+    pub(crate) fn storage_key_from_val(
         &self,
         k: Val,
         durability: ContractDataDurability,
