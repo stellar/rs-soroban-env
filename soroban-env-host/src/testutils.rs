@@ -5,8 +5,8 @@ use crate::{
         AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScErrorCode,
         ScErrorType, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, StorageType,
-    SymbolSmall, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
+    StorageType, SymbolSmall, Val, VecObject,
 };
 use rand::RngCore;
 use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
@@ -261,8 +261,7 @@ impl Host {
 
     pub fn test_host_with_wasms_and_enforcing_footprint(
         contract_wasms: &[&[u8]],
-        contract_zero_extra_read_keys: &[(ScVal, StorageType)],
-        contract_zero_extra_write_keys: &[(ScVal, StorageType)],
+        data_keys: &BTreeMap<ScVal, (StorageType, bool)>,
     ) -> (Host, Vec<AddressObject>) {
         let host = Self::test_host_with_recording_footprint();
         let mut contract_addresses = Vec::new();
@@ -274,24 +273,49 @@ impl Host {
         else {
             panic!()
         };
+
         let test = SymbolSmall::try_from_str("test").unwrap();
-        host.with_test_contract_frame(contract_hash, test.into(), || {
-            for (rv, rt) in contract_zero_extra_read_keys {
-                let val = host.to_host_val(rv).unwrap();
-                host.has_contract_data(val, *rt).unwrap();
-            }
-            for (wv, wt) in contract_zero_extra_write_keys {
-                let val = host.to_host_val(wv).unwrap();
-                host.del_contract_data(val, *wt).unwrap();
+
+        // First step: insert all the data values in question into the storage map.
+        host.with_test_contract_frame(contract_hash.clone(), test.into(), || {
+            for (k, (t, _)) in data_keys.iter() {
+                let v = host.to_host_val(k).unwrap();
+                host.put_contract_data(v, v, *t).unwrap();
             }
             Ok(Val::VOID.into())
         })
         .unwrap();
+
+        // Second step: modify footprint entries to read-only-ness as required,
+        // switch to enforcing mode.
         host.with_mut_storage(|storage| {
             storage.mode = crate::storage::FootprintMode::Enforcing;
+            storage.footprint.0 = MeteredOrdMap::from_exact_iter(
+                storage
+                    .footprint
+                    .0
+                    .iter(host.budget_ref())
+                    .unwrap()
+                    .map(|(k, accesstype)| {
+                        let mut accesstype = *accesstype;
+                        if let LedgerKey::ContractData(k) = k.as_ref() {
+                            if let Some((_, ro)) = data_keys.get(&k.key) {
+                                if *ro {
+                                    accesstype = crate::storage::AccessType::ReadOnly;
+                                } else {
+                                    accesstype = crate::storage::AccessType::ReadWrite;
+                                }
+                            }
+                        }
+                        (k.clone(), accesstype)
+                    }),
+                host.budget_ref(),
+            )
+            .unwrap();
             Ok(())
         })
         .unwrap();
+
         (host, contract_addresses)
     }
 

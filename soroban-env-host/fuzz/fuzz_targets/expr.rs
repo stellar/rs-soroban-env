@@ -1,5 +1,7 @@
 #![no_main]
 
+use std::collections::BTreeMap;
+
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use soroban_env_host::{
@@ -11,15 +13,11 @@ use soroban_synth_wasm::{Emit, Expr};
 // We augment the `Expr` we generate with other parameters we'd like the fuzzer to explore.
 #[derive(Arbitrary, Debug)]
 struct TestCase {
-    contract_a_expr: Expr,
-    contract_b_expr: Expr,
-    // we use u32 vals because they are always valid and we don't want to
-    // bother generating and rejecting complex values, we can generate them
-    // _inside_ the contract more constructively.
-    read_keys: Vec<(u32, StorageType)>,
-    write_keys: Vec<(u32, StorageType)>,
     cpu_budget: u32,
     mem_budget: u32,
+    contract_a_expr: Expr,
+    contract_b_expr: Expr,
+    data_keys: BTreeMap<u32, (StorageType, bool)>,
 }
 
 const TEST_FN_NAME: &'static str = "test";
@@ -34,24 +32,13 @@ fuzz_target!(|test: TestCase| {
     // There is a 32-argument limit to wasm functions imposed for safety in
     // soroban, so we limit the number of keys we generate to 5 read keys and
     // 5 write keys.
-    let read_keys: Vec<(ScVal, StorageType)> = test
-        .read_keys
+    let data_keys = test
+        .data_keys
         .iter()
+        .map(|(k, v)| (ScVal::U32(*k), v.clone()))
         .take(5)
-        .map(|(k, ty)| (ScVal::U32(*k), *ty))
-        .collect();
-    let write_keys: Vec<(ScVal, StorageType)> = test
-        .write_keys
-        .iter()
-        .take(5)
-        .map(|(k, ty)| (ScVal::U32(*k), *ty))
-        .collect();
-
-    let mut args_a: Vec<ScVal> = read_keys
-        .iter()
-        .chain(write_keys.iter())
-        .map(|(k, _)| k.clone())
-        .collect();
+        .collect::<BTreeMap<_, _>>();
+    let mut args_a: Vec<ScVal> = data_keys.keys().cloned().collect();
     let mut arg_tys_a: Vec<&'static str> = args_a.iter().map(|_| "U32Val").collect();
     arg_tys_a.push("AddressObject"); // contract B
     arg_tys_a.push("Symbol"); // test function name
@@ -68,8 +55,7 @@ fuzz_target!(|test: TestCase| {
         .as_single_function_wasm_module(TEST_FN_NAME, &arg_tys_b);
     let (host, contracts) = Host::test_host_with_wasms_and_enforcing_footprint(
         &[wasm_a.as_slice(), wasm_b.as_slice()],
-        &read_keys,
-        &write_keys,
+        &data_keys,
     );
 
     let contract_address_a = host.scaddress_from_address(contracts[0]).unwrap();
