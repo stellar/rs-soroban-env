@@ -145,6 +145,7 @@ impl Frame {
         }
     }
 
+    #[cfg(any(test, feature = "testutils"))]
     fn is_contract_vm(&self) -> bool {
         matches!(self, Frame::ContractVM { .. })
     }
