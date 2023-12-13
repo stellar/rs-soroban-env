@@ -95,7 +95,7 @@ pub type ContractInvocationHook = Rc<dyn for<'a> Fn(&'a Host, ContractInvocation
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Default)]
 pub struct CoverageScoreboard {
-    vm_to_vm_calls: usize,
+    pub vm_to_vm_calls: usize,
 }
 
 #[derive(Clone, Default)]

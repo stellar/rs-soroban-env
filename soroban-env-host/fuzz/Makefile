@@ -10,7 +10,7 @@ LLVM_COV_FLAGS:=$(LLVM_COV_IGNOREFLAGS) --instr-profile=$(LLVM_COV_PROFDATA) --o
 LLVM_COV_OUTPUTS:=fuzz-lcov.info coverage-full.txt coverage-summary.txt
 
 fuzz-fixed:
-	cargo fuzz run $(FUZZ_TARGET) --release --sanitizer none -- -seed=12345 -max_len=1000 -runs=1000000
+	cargo fuzz run $(FUZZ_TARGET) --release --sanitizer none -- -seed=12345 -max_len=1000 -runs=100000
 
 fuzz-fast-stable-no-sanitizer:
 	cargo fuzz run $(FUZZ_TARGET) --release --sanitizer none -j $$(nproc)

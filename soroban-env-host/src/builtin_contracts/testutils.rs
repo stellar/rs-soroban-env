@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::rc::Rc;
 
 use crate::{Host, LedgerInfo};
@@ -100,7 +102,7 @@ impl<'a> TestSigner<'a> {
         }
     }
 
-    fn sign(&self, host: &Host, payload: &[u8]) -> ScVal {
+    pub(crate) fn sign(&self, host: &Host, payload: &[u8]) -> ScVal {
         let signature: Val = match self {
             TestSigner::AccountInvoker(_) | TestSigner::ContractInvoker(_) => Val::VOID.into(),
             TestSigner::Account(account_signer) => {
