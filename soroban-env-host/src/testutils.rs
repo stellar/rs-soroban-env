@@ -374,6 +374,14 @@ impl Host {
                     map.insert(k.clone(), None);
                 }
             }
+            // Reset any nonces so they can be consumed.
+            for (k, v) in map.iter_mut() {
+                if let LedgerKey::ContractData(k) = k.as_ref() {
+                    if let ScVal::LedgerKeyNonce(_) = &k.key {
+                        *v = None;
+                    }
+                }
+            }
             storage.map = MeteredOrdMap::from_exact_iter(
                 map.iter().map(|(k, v)| (k.clone(), v.clone())),
                 self.budget_ref(),
