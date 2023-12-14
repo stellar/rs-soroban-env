@@ -1169,7 +1169,11 @@ fn test_large_globals() -> Result<(), HostError> {
 #[test]
 fn test_large_number_of_tables() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
-    let wasm = wasm_util::wasm_module_with_many_tables(100001);
+    host.enable_debug()?;
+    // even though we have enabled wasmi_reference_type, which makes multiple
+    // tables possible, we have explicitly set our table count limit to 1, in
+    // `WASMI_LIMITS_CONFIG`. Thus we essentially not allow multiple tables.
+    let wasm = wasm_util::wasm_module_with_many_tables(2);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         generate_account_id(&host),
@@ -1177,7 +1181,7 @@ fn test_large_number_of_tables() -> Result<(), HostError> {
     );
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
     ));
     Ok(())
 }
