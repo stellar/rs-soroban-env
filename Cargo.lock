@@ -1380,6 +1380,7 @@ dependencies = [
 name = "soroban-env-host"
 version = "20.0.0"
 dependencies = [
+ "anyhow",
  "arbitrary",
  "backtrace",
  "bytes-lit",
@@ -1416,6 +1417,7 @@ dependencies = [
  "stellar-xdr",
  "tabwriter",
  "textplots",
+ "thiserror",
  "thousands",
  "tracy-client",
  "wasmprinter",
