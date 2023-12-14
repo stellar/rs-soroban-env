@@ -59,4 +59,5 @@ pub mod testutils;
 #[cfg(test)]
 mod test;
 
+#[cfg(any(feature = "recording_auth"))]
 pub mod preflight;
