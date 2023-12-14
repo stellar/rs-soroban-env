@@ -405,7 +405,6 @@ impl Host {
                 };
                 let Some(nonce) = payload.nonce else { continue };
                 if *address == ScAddress::Account(signer.account_id()) {
-                    let nonce = nonce.clone();
                     let address = address.clone();
                     let signature_expiration_ledger =
                         u32::from(self.get_ledger_sequence().unwrap()) + 10000;

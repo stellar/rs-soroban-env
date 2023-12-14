@@ -83,7 +83,7 @@ impl<'a> TestSigner<'a> {
         account_id: &AccountId,
         mut signers: Vec<&'a SigningKey>,
     ) -> Self {
-        signers.sort_by_key(|k| k.verifying_key().as_bytes().clone());
+        signers.sort_by_key(|k| *k.verifying_key().as_bytes());
         TestSigner::Account(AccountSigner {
             account_id: account_id.clone(),
             signers,
