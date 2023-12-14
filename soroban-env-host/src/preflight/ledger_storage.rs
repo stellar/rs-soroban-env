@@ -1,3 +1,4 @@
+use super::state_ttl::{get_restored_ledger_sequence, TTLLedgerEntry};
 use crate::storage::SnapshotSource;
 use crate::xdr::ContractDataDurability::{Persistent, Temporary};
 use crate::xdr::{
@@ -5,7 +6,6 @@ use crate::xdr::{
     LedgerKey, LedgerKeyConfigSetting, Limits, ScError, ScErrorCode, WriteXdr,
 };
 use crate::HostError;
-use super::state_ttl::{get_restored_ledger_sequence, TTLLedgerEntry};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::convert::TryInto;
@@ -14,7 +14,7 @@ use std::rc::Rc;
 use std::str::Utf8Error;
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("not found")]
     NotFound,
     #[error("entry is not live")]
