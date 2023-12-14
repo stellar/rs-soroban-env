@@ -20,8 +20,8 @@ use std::iter::FromIterator;
 use std::rc::Rc;
 
 pub struct RestorePreamble {
-    pub(crate) transaction_data: SorobanTransactionData,
-    pub(crate) min_fee: i64,
+    pub transaction_data: SorobanTransactionData,
+    pub min_fee: i64,
 }
 
 #[derive(Default)]
