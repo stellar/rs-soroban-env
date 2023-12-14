@@ -54,7 +54,10 @@ impl FuelConfig {
 pub(crate) struct WasmiLimits {
     pub table_elements: u32,
     pub instances: usize,
+    // The `tables` limit is only relevant if `wasmi_reference_type` is enabled
     pub tables: usize,
+    // The `memories` limit is irrelevant. At the current version of WASM, at
+    // most one memory may be defined or imported in a single module
     pub memories: usize,
 }
 

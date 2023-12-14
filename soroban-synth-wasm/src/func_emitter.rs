@@ -396,12 +396,9 @@ macro_rules! consts {
         }
     }
 }
-consts!(
-    (i64_const, I64Const, i64),
-    (i32_const, I32Const, i32),
-    // forbidden instructions
-    (f64_const, F64Const, f64)
-);
+consts!((i64_const, I64Const, i64), (i32_const, I32Const, i32));
+#[cfg(feature = "adversarial")]
+consts!((f64_const, F64Const, f64));
 
 macro_rules! store_load {
     ( $(($func_name: ident, $insn: ident)),* )
@@ -431,9 +428,13 @@ store_load!(
     (i64_store8, I64Store8),
     (i64_store16, I64Store16),
     (i64_store32, I64Store32),
-    (f64_load, F64Load),
-    // forbidden instructions
-    (f64_store, F64Store)
+    (f64_load, F64Load)
+);
+#[cfg(feature = "adversarial")]
+store_load!(
+    (f64_store, F64Store),
+    (v128_load, V128Load),
+    (v128_store, V128Store)
 );
 
 macro_rules! numeric_insn {
@@ -481,10 +482,13 @@ numeric_insn!(
     (i64_rotl, I64Rotl),
     (i64_rotr, I64Rotr),
     // post-MVP instructions
-    (i64_extend32s, I64Extend32S),
-    // forbidden instructions
+    (i64_extend32s, I64Extend32S)
+);
+#[cfg(feature = "adversarial")]
+numeric_insn!(
     (f64_add, F64Add),
     (f64_sub, F64Sub),
     (f64_mul, F64Mul),
-    (f64_div, F64Div)
+    (f64_div, F64Div),
+    (i32x4_add, I32x4Add)
 );
