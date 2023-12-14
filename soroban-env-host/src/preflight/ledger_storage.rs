@@ -77,7 +77,7 @@ impl EntryRestoreTracker {
     }
 }
 
-pub(crate) trait LedgerGetter {
+pub trait LedgerGetter {
     fn get(
         &self,
         key: &LedgerKey,
@@ -85,14 +85,14 @@ pub(crate) trait LedgerGetter {
     ) -> anyhow::Result<(LedgerEntry, Option<u32>), Error>;
 }
 
-pub(crate) struct LedgerStorage {
+pub struct LedgerStorage {
     ledger_getter: Box<dyn LedgerGetter>,
     current_ledger_sequence: u32,
     restore_tracker: Option<EntryRestoreTracker>,
 }
 
 impl LedgerStorage {
-    pub(crate) fn new(ledger_getter: Box<dyn LedgerGetter>, current_ledger_sequence: u32) -> Self {
+    pub fn new(ledger_getter: Box<dyn LedgerGetter>, current_ledger_sequence: u32) -> Self {
         LedgerStorage {
             ledger_getter,
             current_ledger_sequence,
@@ -100,7 +100,7 @@ impl LedgerStorage {
         }
     }
 
-    pub(crate) fn with_restore_tracking(
+    pub fn with_restore_tracking(
         ledger_getter: Box<dyn LedgerGetter>,
         current_ledger_sequence: u32,
     ) -> Result<Self, Error> {
