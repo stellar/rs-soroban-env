@@ -1,7 +1,3 @@
-use rand::RngCore;
-use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
-use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
-
 use crate::{
     budget::Budget,
     storage::{SnapshotSource, Storage},
@@ -12,6 +8,9 @@ use crate::{
     AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, StorageType,
     SymbolSmall, Val, VecObject,
 };
+use rand::RngCore;
+use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
+use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
 
 /// Catch panics while suppressing the default panic hook that prints to the
 /// console.
@@ -372,6 +371,7 @@ impl Host {
 pub(crate) mod wasm {
     use crate::{Symbol, Tag, U32Val, Val};
     use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
+    use wasm_encoder::{ConstExpr, Elements, RefType};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         let mut fe = ModEmitter::default().func(Arity(1), 0);
@@ -454,7 +454,7 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass2").unwrap());
         let (mut me, f2) = fe.finish();
         // store in table
-        me.define_elems(&[f0, f1, f2]);
+        me.define_elem_funcs(&[f0, f1, f2]);
         let ty = me.get_fn_type(Arity(0), Arity(1));
         // the caller
         fe = me.func(Arity(1), 0);
@@ -723,7 +723,7 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass2").unwrap());
         let (mut me, f2) = fe.finish();
         // store in table, FuncRef(100) is invalid
-        me.define_elems(&[f0, f1, f2, FuncRef(100)]);
+        me.define_elem_funcs(&[f0, f1, f2, FuncRef(100)]);
         me.finish_no_validate()
     }
 
@@ -744,13 +744,51 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
-    pub(crate) fn wasm_module_large_elements(n: u32) -> Vec<u8> {
-        let mut me = ModEmitter::from_configs(1, n);
+    // if n > m, we have oob elements
+    pub(crate) fn wasm_module_large_elements(m: u32, n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(1, m);
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
-        // store in table, FuncRef(100) is invalid
-        me.define_elems(vec![f0; n as usize].as_slice());
+        me.define_elem_funcs(vec![f0; n as usize].as_slice());
         me.finish()
+    }
+
+    pub(crate) fn wasm_module_various_constexpr_in_elements(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+
+        match case {
+            0 =>
+            // err: wrong type, expect i32, passing i64
+            {
+                me.define_active_elements(
+                    None,
+                    &ConstExpr::i64_const(0),
+                    Elements::Functions(&[f0.0]),
+                )
+            }
+            // err: fp
+            1 => me.define_active_elements(
+                None,
+                &ConstExpr::f64_const(1.0),
+                Elements::Functions(&[f0.0]),
+            ),
+            // err: simd
+            2 => me.define_active_elements(
+                None,
+                &ConstExpr::v128_const(1),
+                Elements::Functions(&[f0.0]),
+            ),
+            // err: wrong type, expect i32, passing funcref
+            3 => me.define_active_elements(
+                None,
+                &ConstExpr::ref_func(f0.0),
+                Elements::Functions(&[f0.0]),
+            ),
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
     }
 
     pub(crate) fn wasm_module_large_globals(n: u32) -> Vec<u8> {
@@ -759,5 +797,106 @@ pub(crate) mod wasm {
             me.define_global_i64(i as i64, true, None);
         }
         me.finish()
+    }
+
+    pub(crate) fn wasm_module_various_constexr_in_global(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        match case {
+            0 =>
+            // err: mismatch
+            {
+                me.define_global(wasm_encoder::ValType::I32, true, &ConstExpr::i64_const(1))
+            }
+            1 =>
+            // err: fp
+            {
+                me.define_global(wasm_encoder::ValType::F32, true, &ConstExpr::f32_const(1.0))
+            }
+            2 =>
+            // err: simd
+            {
+                me.define_global(wasm_encoder::ValType::V128, true, &ConstExpr::v128_const(1))
+            }
+            3 =>
+            // okay: func
+            {
+                let fr = me.import_func("t", "_", Arity(0));
+                me.define_global(
+                    wasm_encoder::ValType::Ref(RefType::FUNCREF),
+                    true,
+                    &ConstExpr::ref_func(fr.0),
+                )
+            }
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_various_constexr_in_data_segment(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+
+        match case {
+            0 =>
+            // err: wrong type, expect i32, passing i64
+            {
+                me.define_active_data(0, &ConstExpr::i64_const(0), vec![0; 8]);
+            }
+            // err: fp
+            1 => {
+                me.define_active_data(0, &ConstExpr::f64_const(0.0), vec![0; 8]);
+            }
+            // err: simd
+            2 => {
+                me.define_active_data(0, &ConstExpr::v128_const(0), vec![0; 8]);
+            }
+            // err: wrong type, expect i32, passing funcref
+            3 => {
+                me.define_active_data(0, &ConstExpr::ref_func(f0.0), vec![0; 8]);
+            }
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_many_tables(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for i in 0..n {
+            let rt = match i % 2 == 0 {
+                true => RefType::FUNCREF,
+                false => RefType::EXTERNREF,
+            };
+            me.table(rt, 2, None);
+        }
+        // wasmparser has an limit of 100 tables. wasmi does not have such a limit
+        me.finish_no_validate()
+    }
+
+    // The only type allowed in the MVP is the function type. There are more
+    // composite types defined by the GC proposal, which should not be allowed
+    // and we will verify that in another test.
+    pub(crate) fn wasm_module_with_many_func_types(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for _i in 0..n {
+            // it is allowed to define the same types over and over
+            me.add_fn_type_no_check(Arity(0), Arity(0));
+        }
+        me.finish()
+    }
+
+    pub(crate) fn wasm_module_with_simd_add_i32x4() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func(Arity(0), 0);
+        // we load [u32, u32, u32, u32] x 2, add them and store back
+        fe.i32_const(32); // ptr for storing the result
+        fe.i32_const(0); // ptr for the first 4xi32
+        fe.v128_load(0, 0);
+        fe.i32_const(16); // ptr for the second 4xi32
+        fe.v128_load(0, 0);
+        fe.i32x4_add();
+        fe.v128_store(0, 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
     }
 }

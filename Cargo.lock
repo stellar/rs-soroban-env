@@ -1420,6 +1420,7 @@ dependencies = [
  "thiserror",
  "thousands",
  "tracy-client",
+ "wasm-encoder",
  "wasmprinter",
 ]
 
