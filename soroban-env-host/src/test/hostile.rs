@@ -1214,3 +1214,60 @@ fn test_simd() -> Result<(), HostError> {
     ));
     Ok(())
 }
+
+#[test]
+fn test_invalid_expr_in_global() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    for i in 0..3 {
+        let wasm = wasm_util::wasm_module_various_constexr_in_global(i);
+        let res = host.register_test_contract_wasm_from_source_account(
+            wasm.as_slice(),
+            generate_account_id(&host),
+            generate_bytes_array(&host),
+        );
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_invalid_expr_in_elements() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    for i in 0..4 {
+        let wasm = wasm_util::wasm_module_various_constexpr_in_elements(i);
+        let res = host.register_test_contract_wasm_from_source_account(
+            wasm.as_slice(),
+            generate_account_id(&host),
+            generate_bytes_array(&host),
+        );
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_invalid_expr_in_segments() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    for i in 0..4 {
+        let wasm = wasm_util::wasm_module_various_constexr_in_data_segment(i);
+        let res = host.register_test_contract_wasm_from_source_account(
+            wasm.as_slice(),
+            generate_account_id(&host),
+            generate_bytes_array(&host),
+        );
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        ));
+    }
+    Ok(())
+}

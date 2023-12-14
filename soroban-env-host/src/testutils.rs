@@ -371,7 +371,7 @@ impl Host {
 pub(crate) mod wasm {
     use crate::{Symbol, Tag, U32Val, Val};
     use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
-    use wasm_encoder::RefType;
+    use wasm_encoder::{ConstExpr, Elements, RefType};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         let mut fe = ModEmitter::default().func(Arity(1), 0);
@@ -454,7 +454,7 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass2").unwrap());
         let (mut me, f2) = fe.finish();
         // store in table
-        me.define_elems(&[f0, f1, f2]);
+        me.define_elem_funcs(&[f0, f1, f2]);
         let ty = me.get_fn_type(Arity(0), Arity(1));
         // the caller
         fe = me.func(Arity(1), 0);
@@ -723,7 +723,7 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass2").unwrap());
         let (mut me, f2) = fe.finish();
         // store in table, FuncRef(100) is invalid
-        me.define_elems(&[f0, f1, f2, FuncRef(100)]);
+        me.define_elem_funcs(&[f0, f1, f2, FuncRef(100)]);
         me.finish_no_validate()
     }
 
@@ -749,8 +749,46 @@ pub(crate) mod wasm {
         let mut me = ModEmitter::from_configs(1, m);
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
-        me.define_elems(vec![f0; n as usize].as_slice());
+        me.define_elem_funcs(vec![f0; n as usize].as_slice());
         me.finish()
+    }
+
+    pub(crate) fn wasm_module_various_constexpr_in_elements(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+
+        match case {
+            0 =>
+            // err: wrong type, expect i32, passing i64
+            {
+                me.define_active_elements(
+                    None,
+                    &ConstExpr::i64_const(0),
+                    Elements::Functions(&[f0.0]),
+                )
+            }
+            // err: fp
+            1 => me.define_active_elements(
+                None,
+                &ConstExpr::f64_const(1.0),
+                Elements::Functions(&[f0.0]),
+            ),
+            // err: simd
+            2 => me.define_active_elements(
+                None,
+                &ConstExpr::v128_const(1),
+                Elements::Functions(&[f0.0]),
+            ),
+            // err: wrong type, expect i32, passing funcref
+            3 => me.define_active_elements(
+                None,
+                &ConstExpr::ref_func(f0.0),
+                Elements::Functions(&[f0.0]),
+            ),
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
     }
 
     pub(crate) fn wasm_module_large_globals(n: u32) -> Vec<u8> {
@@ -759,6 +797,67 @@ pub(crate) mod wasm {
             me.define_global_i64(i as i64, true, None);
         }
         me.finish()
+    }
+
+    pub(crate) fn wasm_module_various_constexr_in_global(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        match case {
+            0 =>
+            // err: mismatch
+            {
+                me.define_global(wasm_encoder::ValType::I32, true, &ConstExpr::i64_const(1))
+            }
+            1 =>
+            // err: fp
+            {
+                me.define_global(wasm_encoder::ValType::F32, true, &ConstExpr::f32_const(1.0))
+            }
+            2 =>
+            // err: simd
+            {
+                me.define_global(wasm_encoder::ValType::V128, true, &ConstExpr::v128_const(1))
+            }
+            3 =>
+            // okay: func
+            {
+                let fr = me.import_func("t", "_", Arity(0));
+                me.define_global(
+                    wasm_encoder::ValType::Ref(RefType::FUNCREF),
+                    true,
+                    &ConstExpr::ref_func(fr.0),
+                )
+            }
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_various_constexr_in_data_segment(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+
+        match case {
+            0 =>
+            // err: wrong type, expect i32, passing i64
+            {
+                me.define_active_data(0, &ConstExpr::i64_const(0), vec![0; 8]);
+            }
+            // err: fp
+            1 => {
+                me.define_active_data(0, &ConstExpr::f64_const(0.0), vec![0; 8]);
+            }
+            // err: simd
+            2 => {
+                me.define_active_data(0, &ConstExpr::v128_const(0), vec![0; 8]);
+            }
+            // err: wrong type, expect i32, passing funcref
+            3 => {
+                me.define_active_data(0, &ConstExpr::ref_func(f0.0), vec![0; 8]);
+            }
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
     }
 
     pub(crate) fn wasm_module_with_many_tables(n: u32) -> Vec<u8> {
