@@ -48,7 +48,7 @@ fuzz-check: $(CUSTOM_GETRANDOM_LIB) fuzz-lcov-baseline.info Makefile
 	lcov-summary fuzz-lcov-baseline.info fuzz-lcov.info
 
 fuzz-fixed: $(CUSTOM_GETRANDOM_LIB) Makefile
-	$(DISABLE_ASLR) cargo fuzz run $(FUZZ_TARGET) --release --sanitizer none --no-trace-compares -- -seed=12345 -max_len=1000 -runs=100000
+	$(DISABLE_ASLR) cargo fuzz run $(FUZZ_TARGET) --release --sanitizer none --no-trace-compares -- -seed=12345 -max_len=1000 -runs=100000 >/dev/null 2>&1
 
 fuzz-fast-stable-no-sanitizer: $(CUSTOM_GETRANDOM_LIB) Makefile
 	$(DISABLE_ASLR) cargo fuzz run $(FUZZ_TARGET) --release --sanitizer none --no-trace-compares -j $$(nproc)
@@ -59,13 +59,13 @@ fuzz-debug-stable-no-sanitizer: $(CUSTOM_GETRANDOM_LIB) Makefile
 fuzz-slow-nightly-with-sanitizer: $(CUSTOM_GETRANDOM_LIB) Makefile
 	$(DISABLE_ASLR) cargo +nightly fuzz run $(FUZZ_TARGET) --release -j $$(nproc)
 
-fuzz-cov: $(LLVM_COV_PROFDATA) Makefile
+fuzz-cov: Makefile
 	rm -f $(LLVM_COV_OUTPUTS)
 	rm -rf coverage
 	$(MAKE) $(LLVM_COV_OUTPUTS)
 
 $(LLVM_COV_PROFDATA): $(CUSTOM_GETRANDOM_LIB) Makefile
-	$(DISABLE_ASLR) cargo fuzz coverage --sanitizer none $(FUZZ_TARGET)
+	$(DISABLE_ASLR) cargo fuzz coverage --sanitizer none $(FUZZ_TARGET) >/dev/null 2>&1
 
 fuzz-lcov.info: $(LLVM_COV_PROFDATA) $(CUSTOM_GETRANDOM_LIB) Makefile
 	$(LLVM_COV_PATH) export -format=lcov $(LLVM_COV_FLAGS) >$@
