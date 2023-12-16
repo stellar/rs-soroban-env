@@ -2,3 +2,6 @@ target
 corpus
 artifacts
 coverage
+*.so
+coverage*.txt
+fuzz-lcov.info

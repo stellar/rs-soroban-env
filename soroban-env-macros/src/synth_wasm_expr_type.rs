@@ -13,9 +13,7 @@ use crate::{Arg, Function};
 // cases to make it work well.
 
 const CONST_SUFFIX: &str = "_const";
-const NEW_SUFFIX: &str = "_new";
-const OR_EXISTING_SUFFIX: &str = "_or_existing";
-const NEW_OR_EXISTING_SUFFIX: &str = "new_or_existing";
+const EXISTING_OR_SUB_EXPR: &str = "existing_or_sub_expr";
 
 const SUBTYPES: &[(&str, &str)] = &[
     ("Val", "Bool"),
@@ -68,17 +66,20 @@ fn type_const_expr_type(ty: &str) -> Option<String> {
 }
 
 impl crate::Function {
-    fn specialize_unary_new_function(&mut self) -> bool {
-        if self.name.ends_with(NEW_SUFFIX) && self.args.is_empty() {
-            self.name.push_str(OR_EXISTING_SUFFIX);
-            self.args.push(Arg {
-                name: "index".to_string(),
-                r#type: "u8".to_string(),
-            });
-            true
-        } else {
-            false
-        }
+    fn synthesize_existing_or_sub_expr_function(ty: &str) -> Self {
+        let mut f = Function {
+            name: EXISTING_OR_SUB_EXPR.to_string(),
+            ..Default::default()
+        };
+        f.args.push(crate::Arg {
+            name: "index".to_string(),
+            r#type: "u8".to_string(),
+        });
+        f.args.push(crate::Arg {
+            name: "x".to_string(),
+            r#type: ty.to_string(),
+        });
+        f
     }
 
     fn synthesize_const_expr_function(ty: &str) -> Option<Self> {
@@ -102,8 +103,8 @@ impl crate::Function {
         self.name.ends_with(CONST_SUFFIX) && self.args.len() == 1
     }
 
-    fn is_new_or_existing_expr_fn(&self) -> bool {
-        self.name.ends_with(NEW_OR_EXISTING_SUFFIX) && self.args.len() == 1
+    fn is_existing_or_sub_fn(&self) -> bool {
+        self.name == EXISTING_OR_SUB_EXPR && self.args.len() == 2
     }
 }
 
@@ -150,14 +151,16 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     }
 
     // Next for each type foo used anywhere we either synthesize a
-    // foo_const(some_const_ty) function or specialize any existing unary
-    // foo_new() function to foo_new_or_existing(index:u8)
+    // foo_const(some_const_ty) function or require there be _some_
+    // function that returns a foo
     for ty in all_tys.iter() {
         let ty_fns = fns_by_type.entry(ty.clone()).or_default();
+        ty_fns.push(Function::synthesize_existing_or_sub_expr_function(
+            ty.as_str(),
+        ));
         if let Some(f) = Function::synthesize_const_expr_function(ty.as_str()) {
             ty_fns.push(f)
-        } else if !ty_fns.iter_mut().any(|f| f.specialize_unary_new_function()) && ty_fns.is_empty()
-        {
+        } else if ty_fns.is_empty() {
             panic!("no way to synthesize {}", ty)
         }
     }
@@ -171,9 +174,10 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
             let args: Vec<_> = f
                 .args
                 .iter()
-                .map(|a| {
-                    if f.is_const_expr_fn() || f.is_new_or_existing_expr_fn() {
-                        // The const and new-or-existing leaf nodes just contain
+                .enumerate()
+                .map(|(i, a)| {
+                    if f.is_const_expr_fn() || (f.is_existing_or_sub_fn() && i == 0) {
+                        // The const and existing-or-sub-fn index nodes just contain
                         // their constant or index args directly.
                         let arg = format_ident!("{}", a.r#type);
                         quote! { #arg }
@@ -213,22 +217,17 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
                         #ty2::from(#arg0.clone()).into()
                     }
                 }
-            } else if f.is_new_or_existing_expr_fn() {
-                // "New-or-existing-expression" nodes take a u8 index and pass
+            } else if f.is_existing_or_sub_fn() {
+                // "existing_or_sub_expr" nodes take a u8 index and pass
                 // it to a lookup function on the FuncEmitter, to find an
                 // existing Operand with the associated tag, falling back to
-                // calling _new when there is nothing found.
+                // calling their sub-expr node when there is nothing found.
                 let arg0 = arg_names[0].clone();
-                let ty2 = ty.clone();
-                let new_stem = format_ident!("{}", f.name.trim_end_matches(OR_EXISTING_SUFFIX));
+                let arg1 = arg_names[1].clone();
                 quote! {
                     #enum_name_2::#case_name(#(#arg_names),*) => {
-                        _func_emitter.maybe_choose_local(#ty, *#arg0)
-                        .unwrap_or_else(|| {
-                            _func_emitter.#new_stem();
-                            _func_emitter.alloc_and_store_local(#ty2)
-                        })
-                        .into()
+                        _func_emitter.maybe_choose_local(#ty, *#arg0).map(|x| x.into())
+                        .unwrap_or_else(|| #arg1.emit(_func_emitter))
                     }
 
                 }
@@ -261,15 +260,16 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
         });
         let num_locals_cases = fns.iter().map(|f| {
             let case_name = format_ident!("{}", f.name);
-            let arg_names: Vec<_> = if f.is_const_expr_fn() || f.is_new_or_existing_expr_fn() {
+            let arg_names: Vec<_> = if f.is_const_expr_fn() {
                 vec![format_ident!("_")]
             } else {
                 f.args.iter().map(|a| format_ident!("{}", a.name)).collect()
             };
             let subcalls: Vec<_> = if f.is_const_expr_fn() {
                 vec![quote! { 0 }]
-            } else if f.is_new_or_existing_expr_fn() {
-                vec![quote! { 1 }]
+            } else if f.is_existing_or_sub_fn() {
+                let arg1 = arg_names[1].clone();
+                vec![quote! { #arg1.num_locals() }]
             } else if all_subty_fns.contains(&f.name) {
                 // Subtype-wrapping "functions" (cases in the enum) just pass
                 // through to the inner type.

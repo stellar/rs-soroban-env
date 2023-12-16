@@ -2196,7 +2196,8 @@ impl Host {
         }
         #[cfg(any(test, feature = "testutils"))]
         {
-            self.try_borrow_previous_authorization_manager()?
+            let payloads = self
+                .try_borrow_previous_authorization_manager()?
                 .as_ref()
                 .ok_or_else(|| {
                     self.err(
@@ -2206,7 +2207,8 @@ impl Host {
                         &[],
                     )
                 })?
-                .get_recorded_auth_payloads(self)
+                .get_recorded_auth_payloads(self)?;
+            Ok(payloads)
         }
     }
 }

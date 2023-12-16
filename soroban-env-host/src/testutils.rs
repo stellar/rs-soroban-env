@@ -1,12 +1,13 @@
 use crate::{
     budget::Budget,
+    builtin_contracts::testutils::create_account,
     storage::{SnapshotSource, Storage},
     xdr::{
         AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScErrorCode,
         ScErrorType, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, StorageType,
-    SymbolSmall, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
+    StorageType, SymbolSmall, Val, VecObject,
 };
 use rand::RngCore;
 use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
@@ -259,12 +260,22 @@ impl Host {
         .unwrap()
     }
 
-    pub fn test_host_with_wasms_and_enforcing_footprint(
+    pub fn new_recording_fuzz_host(
         contract_wasms: &[&[u8]],
-        contract_zero_extra_read_keys: &[(ScVal, StorageType)],
-        contract_zero_extra_write_keys: &[(ScVal, StorageType)],
-    ) -> (Host, Vec<AddressObject>) {
+        data_keys: &BTreeMap<ScVal, (StorageType, bool)>,
+        n_signers: usize,
+    ) -> (Host, Vec<AddressObject>, Vec<ed25519_dalek::SigningKey>) {
+        use crate::builtin_contracts::testutils::{
+            generate_signing_key, signing_key_to_account_id,
+        };
+
         let host = Self::test_host_with_recording_footprint();
+        host.switch_to_recording_auth(false).unwrap();
+        host.with_budget(|budget| {
+            budget.reset_unlimited()?;
+            Ok(())
+        })
+        .unwrap();
         let mut contract_addresses = Vec::new();
         for contract_wasm in contract_wasms.iter() {
             contract_addresses.push(host.register_test_contract_wasm(contract_wasm));
@@ -274,25 +285,159 @@ impl Host {
         else {
             panic!()
         };
+
         let test = SymbolSmall::try_from_str("test").unwrap();
-        host.with_test_contract_frame(contract_hash, test.into(), || {
-            for (rv, rt) in contract_zero_extra_read_keys {
-                let val = host.to_host_val(rv).unwrap();
-                host.has_contract_data(val, *rt).unwrap();
-            }
-            for (wv, wt) in contract_zero_extra_write_keys {
-                let val = host.to_host_val(wv).unwrap();
-                host.del_contract_data(val, *wt).unwrap();
+
+        // First step: insert all the data values in question into the storage map.
+        host.with_test_contract_frame(contract_hash.clone(), test.into(), || {
+            for (k, (t, _)) in data_keys.iter() {
+                let v = host.to_host_val(k).unwrap();
+                host.put_contract_data(v, v, *t).unwrap();
             }
             Ok(Val::VOID.into())
         })
         .unwrap();
-        host.with_mut_storage(|storage| {
+
+        // Second step: generate some accounts to sign things with.
+        let signing_keys = (0..n_signers)
+            .map(|_| generate_signing_key(&host))
+            .collect();
+        for signing_key in &signing_keys {
+            create_account(
+                &host,
+                &signing_key_to_account_id(signing_key),
+                vec![(&signing_key, 1)],
+                100_000_000,
+                1,
+                [1, 0, 0, 0],
+                None,
+                None,
+                0,
+            )
+        }
+
+        (host, contract_addresses, signing_keys)
+    }
+
+    pub fn switch_fuzz_host_to_enforcing(
+        &self,
+        data_keys: &BTreeMap<ScVal, (StorageType, bool)>,
+        signing_keys: &[ed25519_dalek::SigningKey],
+    ) {
+        use crate::builtin_contracts::testutils::TestSigner;
+        use crate::xdr::{
+            HashIdPreimage, HashIdPreimageSorobanAuthorization, SorobanAddressCredentials,
+            SorobanAuthorizationEntry, SorobanCredentials,
+        };
+        self.with_budget(|budget| {
+            budget.reset_unlimited()?;
+            Ok(())
+        })
+        .unwrap();
+
+        // Modify footprint entries to read-only-ness as required, synthesize
+        // empty storage-map entries that were accessed by keys the contract made
+        // up, and switch to enforcing mode.
+        self.with_mut_storage(|storage| {
+            storage.footprint.0 = MeteredOrdMap::from_exact_iter(
+                storage
+                    .footprint
+                    .0
+                    .iter(self.budget_ref())
+                    .unwrap()
+                    .map(|(k, accesstype)| {
+                        let mut accesstype = *accesstype;
+                        if let LedgerKey::ContractData(k) = k.as_ref() {
+                            if let Some((_, ro)) = data_keys.get(&k.key) {
+                                if *ro {
+                                    accesstype = crate::storage::AccessType::ReadOnly;
+                                } else {
+                                    accesstype = crate::storage::AccessType::ReadWrite;
+                                }
+                            }
+                        }
+                        (k.clone(), accesstype)
+                    }),
+                self.budget_ref(),
+            )
+            .unwrap();
+
+            // Synthesize empty entries for anything the contract made up (these
+            // will be in the footprint but not yet in the map, which is an
+            // invariant violation we need to repair here).
+            let mut map = BTreeMap::new();
+            for (k, v) in storage.map.iter(self.budget_ref()).unwrap() {
+                map.insert(k.clone(), v.clone());
+            }
+            for (k, _) in storage.footprint.0.iter(self.budget_ref()).unwrap() {
+                if !map.contains_key(k) {
+                    map.insert(k.clone(), None);
+                }
+            }
+            // Reset any nonces so they can be consumed.
+            for (k, v) in map.iter_mut() {
+                if let LedgerKey::ContractData(k) = k.as_ref() {
+                    if let ScVal::LedgerKeyNonce(_) = &k.key {
+                        *v = None;
+                    }
+                }
+            }
+            storage.map = MeteredOrdMap::from_exact_iter(
+                map.iter().map(|(k, v)| (k.clone(), v.clone())),
+                self.budget_ref(),
+            )
+            .unwrap();
             storage.mode = crate::storage::FootprintMode::Enforcing;
             Ok(())
         })
         .unwrap();
-        (host, contract_addresses)
+
+        // Sign and install auth entries for all the recorded auth payloads.
+        let mut auth_entries = Vec::new();
+        let account_signers = signing_keys
+            .iter()
+            .map(TestSigner::account)
+            .collect::<Vec<_>>();
+        for payload in self.get_recorded_auth_payloads().unwrap().iter() {
+            for signer in account_signers.iter() {
+                let Some(address) = &payload.address else {
+                    continue;
+                };
+                let Some(nonce) = payload.nonce else { continue };
+                if *address == ScAddress::Account(signer.account_id()) {
+                    let address = address.clone();
+                    let signature_expiration_ledger =
+                        u32::from(self.get_ledger_sequence().unwrap()) + 10000;
+                    let network_id = self
+                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                        .unwrap()
+                        .try_into()
+                        .unwrap();
+                    let signature_payload_preimage =
+                        HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                            network_id,
+                            invocation: payload.invocation.clone(),
+                            nonce,
+                            signature_expiration_ledger,
+                        });
+                    let signature_payload =
+                        self.metered_hash_xdr(&signature_payload_preimage).unwrap();
+                    let signature = signer.sign(&self, &signature_payload);
+                    let credentials = SorobanCredentials::Address(SorobanAddressCredentials {
+                        address: address.clone(),
+                        nonce: nonce,
+                        signature_expiration_ledger,
+                        signature,
+                    });
+                    let entry = SorobanAuthorizationEntry {
+                        credentials,
+                        root_invocation: payload.invocation.clone(),
+                    };
+                    auth_entries.push(entry);
+                }
+            }
+        }
+        self.set_authorization_entries(auth_entries).unwrap();
     }
 
     #[cfg(all(test, feature = "testutils"))]

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::rc::Rc;
 
 use crate::{Host, LedgerInfo};
@@ -81,7 +83,7 @@ impl<'a> TestSigner<'a> {
         account_id: &AccountId,
         mut signers: Vec<&'a SigningKey>,
     ) -> Self {
-        signers.sort_by_key(|k| k.verifying_key().as_bytes().clone());
+        signers.sort_by_key(|k| *k.verifying_key().as_bytes());
         TestSigner::Account(AccountSigner {
             account_id: account_id.clone(),
             signers,
@@ -100,7 +102,7 @@ impl<'a> TestSigner<'a> {
         }
     }
 
-    fn sign(&self, host: &Host, payload: &[u8]) -> ScVal {
+    pub(crate) fn sign(&self, host: &Host, payload: &[u8]) -> ScVal {
         let signature: Val = match self {
             TestSigner::AccountInvoker(_) | TestSigner::ContractInvoker(_) => Val::VOID.into(),
             TestSigner::Account(account_signer) => {

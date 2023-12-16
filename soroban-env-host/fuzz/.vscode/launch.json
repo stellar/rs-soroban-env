@@ -11,7 +11,7 @@
             "program": "${workspaceFolder}/target/x86_64-unknown-linux-gnu/debug/expr",
             "args": [
                 "-artifact_prefix=${workspaceFolder}/artifacts/expr/",
-                "artifacts/expr/crash-7b18da95a61f3f9e45457852fd98c958d49fe603"
+                "artifacts/expr/crash-bd94c080408528fc51486a814866efb4f317ad64"
             ],
             "cwd": "${workspaceFolder}"
         }
