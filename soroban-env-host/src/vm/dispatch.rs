@@ -160,7 +160,6 @@ macro_rules! generate_dispatch_functions {
 
                     let host = caller.data().clone();
 
-                    #[cfg(feature = "testutils")]
                     {
                         host.env_call_hook(&core::stringify!($fn_id), &[$(
                             // Incoming args might or might-not be type-correct;
@@ -196,7 +195,6 @@ macro_rules! generate_dispatch_functions {
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::check_env_arg(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?, &host)?),*);
 
-                    #[cfg(feature = "testutils")]
                     {
                         let res_str: Result<String,&HostError> = match &res {
                             Ok(ok) => Ok(format!("{:?}", ok)),

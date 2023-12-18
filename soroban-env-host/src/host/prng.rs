@@ -2,6 +2,7 @@ use super::{
     crypto::{chacha20_fill_bytes, unbias_prng_seed},
     declared_size::DeclaredSizeForMetering,
     metered_clone::MeteredContainer,
+    metered_hash::MeteredHash,
 };
 use crate::{
     budget::Budget,
@@ -91,6 +92,18 @@ impl std::hash::Hash for Prng {
         self.0.get_seed().hash(state);
         self.0.get_stream().hash(state);
         self.0.get_word_pos().hash(state);
+    }
+}
+
+impl MeteredHash for Prng {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.0.get_seed().metered_hash(state, budget)?;
+        self.0.get_stream().metered_hash(state, budget)?;
+        self.0.get_word_pos().metered_hash(state, budget)
     }
 }
 

@@ -7,6 +7,8 @@ use crate::{
 
 use std::{cmp::Ordering, ops::Range};
 
+use super::metered_hash::MeteredHash;
+
 const VEC_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
 #[derive(Clone)]
@@ -19,6 +21,29 @@ impl<A> Default for MeteredVector<A> {
         Self {
             vec: Default::default(),
         }
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+impl<T> std::hash::Hash for MeteredVector<T>
+where
+    T: std::hash::Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.vec.hash(state);
+    }
+}
+
+impl<T> MeteredHash for MeteredVector<T>
+where
+    T: MeteredHash,
+{
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.vec.metered_hash(state, budget)
     }
 }
 

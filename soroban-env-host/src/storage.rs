@@ -11,7 +11,10 @@ use std::rc::Rc;
 
 use crate::{
     budget::Budget,
-    host::{ledger_info_helper::get_key_durability, metered_map::MeteredOrdMap},
+    host::{
+        ledger_info_helper::get_key_durability, metered_hash::MeteredHash,
+        metered_map::MeteredOrdMap,
+    },
     xdr::{ContractDataDurability, LedgerEntry, LedgerKey, ScErrorCode, ScErrorType},
     Env, Error, Host, HostError, Val,
 };
@@ -30,10 +33,14 @@ pub(crate) struct InstanceStorageMap {
     pub(crate) is_modified: bool,
 }
 
-#[cfg(feature = "testutils")]
-impl std::hash::Hash for StorageMap {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.map.hash(state);
+impl MeteredHash for InstanceStorageMap {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.map.metered_hash(state, budget)?;
+        self.is_modified.metered_hash(state, budget)
     }
 }
 
@@ -60,6 +67,16 @@ pub enum AccessType {
     ReadWrite,
 }
 
+impl MeteredHash for AccessType {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.hash_discriminant(state, budget)
+    }
+}
+
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
@@ -80,13 +97,6 @@ pub trait SnapshotSource {
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "testutils", derive(Hash))]
 pub struct Footprint(pub FootprintMap);
-
-#[cfg(feature = "testutils")]
-impl std::hash::Hash for FootprintMap {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.map.hash(state);
-    }
-}
 
 impl Footprint {
     pub fn record_access(

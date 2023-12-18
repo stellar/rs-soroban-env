@@ -162,6 +162,7 @@ use crate::builtin_contracts::account_contract::{
 };
 use crate::builtin_contracts::invoker_contract_auth::invoker_contract_auth_to_authorized_invocation;
 use crate::host::metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator};
+use crate::host::metered_hash::MeteredHash;
 use crate::host::Frame;
 use crate::host_object::HostVec;
 use crate::{Host, HostError};
@@ -298,6 +299,23 @@ enum AuthorizationMode {
     Recording(RecordingAuthInfo),
 }
 
+impl MeteredHash for AuthorizationMode {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.hash_discriminant(state, budget)?;
+        match self {
+            AuthorizationMode::Enforcing => Ok(()),
+            #[cfg(any(test, feature = "recording_auth"))]
+            AuthorizationMode::Recording(recording_auth_info) => {
+                recording_auth_info.metered_hash(state, budget)
+            }
+        }
+    }
+}
+
 // Additional AuthorizationManager fields needed only for the recording mode.
 #[cfg(any(test, feature = "recording_auth"))]
 #[derive(Clone)]
@@ -311,6 +329,20 @@ struct RecordingAuthInfo {
     // Whether to allow root authorized invocation to not match the root
     // contract invocation.
     disable_non_root_auth: bool,
+}
+
+#[cfg(any(test, feature = "recording_auth"))]
+impl MeteredHash for RecordingAuthInfo {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        if let Ok(tracker_by_address_handle) = self.tracker_by_address_handle.try_borrow() {
+            tracker_by_address_handle.metered_hash(state, budget)?;
+        }
+        self.disable_non_root_auth.metered_hash(state, budget)
+    }
 }
 
 #[cfg(feature = "testutils")]
@@ -356,6 +388,20 @@ enum MatchState {
 impl MatchState {
     fn is_matched(&self) -> bool {
         *self != MatchState::Unmatched
+    }
+}
+
+impl MeteredHash for MatchState {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.hash_discriminant(state, budget)?;
+        match self {
+            MatchState::Unmatched | MatchState::RootMatch => Ok(()),
+            MatchState::SubMatch { index_in_parent } => index_in_parent.metered_hash(state, budget),
+        }
     }
 }
 
@@ -431,6 +477,20 @@ struct InvocationTracker {
     is_fully_processed: bool,
 }
 
+impl MeteredHash for InvocationTracker {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.root_authorized_invocation
+            .metered_hash(state, budget)?;
+        self.match_stack.metered_hash(state, budget)?;
+        self.root_exhausted_frame.metered_hash(state, budget)?;
+        self.is_fully_processed.metered_hash(state, budget)
+    }
+}
+
 // Stores all the authorizations that are authorized by an address.
 // In the enforcing mode this performs authentication and makes sure that only
 // pre-authorized invocations can happen on behalf of the `address`.
@@ -462,6 +522,22 @@ pub(crate) struct AccountAuthorizationTracker {
     nonce: Option<(i64, u32)>,
 }
 
+impl MeteredHash for AccountAuthorizationTracker {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.address.metered_hash(state, budget)?;
+        self.invocation_tracker.metered_hash(state, budget)?;
+        self.signature.metered_hash(state, budget)?;
+        self.is_transaction_source_account
+            .metered_hash(state, budget)?;
+        self.verified.metered_hash(state, budget)?;
+        self.nonce.metered_hash(state, budget)
+    }
+}
+
 pub(crate) struct AccountAuthorizationTrackerSnapshot {
     invocation_tracker_root_snapshot: AuthorizedInvocationSnapshot,
     verified: bool,
@@ -475,6 +551,17 @@ pub(crate) struct InvokerContractAuthorizationTracker {
     invocation_tracker: InvocationTracker,
 }
 
+impl MeteredHash for InvokerContractAuthorizationTracker {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.contract_address.metered_hash(state, budget)?;
+        self.invocation_tracker.metered_hash(state, budget)
+    }
+}
+
 #[derive(Clone)]
 #[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) enum AuthStackFrame {
@@ -482,11 +569,40 @@ pub(crate) enum AuthStackFrame {
     CreateContractHostFn(CreateContractArgs),
 }
 
+impl MeteredHash for AuthStackFrame {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.hash_discriminant(state, budget)?;
+        match self {
+            AuthStackFrame::Contract(contract_invocation) => {
+                contract_invocation.metered_hash(state, budget)
+            }
+            AuthStackFrame::CreateContractHostFn(create_contract_args) => {
+                create_contract_args.metered_hash(state, budget)
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 #[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) struct ContractInvocation {
     pub(crate) contract_address: AddressObject,
     pub(crate) function_name: Symbol,
+}
+
+impl MeteredHash for ContractInvocation {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.contract_address.metered_hash(state, budget)?;
+        self.function_name.metered_hash(state, budget)
+    }
 }
 
 #[derive(Clone)]
@@ -497,11 +613,39 @@ pub(crate) struct ContractFunction {
     pub(crate) args: Vec<Val>,
 }
 
+impl MeteredHash for ContractFunction {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.contract_address.metered_hash(state, budget)?;
+        self.function_name.metered_hash(state, budget)?;
+        self.args.metered_hash(state, budget)
+    }
+}
+
 #[derive(Clone)]
 #[cfg_attr(feature = "testutils", derive(Hash))]
 pub(crate) enum AuthorizedFunction {
     ContractFn(ContractFunction),
     CreateContractHostFn(CreateContractArgs),
+}
+
+impl MeteredHash for AuthorizedFunction {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.hash_discriminant(state, budget)?;
+        match self {
+            AuthorizedFunction::ContractFn(contract_fn) => contract_fn.metered_hash(state, budget),
+            AuthorizedFunction::CreateContractHostFn(create_contract_args) => {
+                create_contract_args.metered_hash(state, budget)
+            }
+        }
+    }
 }
 
 // A single node in the authorized invocation tree.
@@ -516,6 +660,18 @@ pub(crate) struct AuthorizedInvocation {
     // In the recording mode this is immediately set to `true` (as the
     // authorizations are recorded when they actually happen).
     is_exhausted: bool,
+}
+
+impl MeteredHash for AuthorizedInvocation {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.function.metered_hash(state, budget)?;
+        self.sub_invocations.metered_hash(state, budget)?;
+        self.is_exhausted.metered_hash(state, budget)
+    }
 }
 
 // Snapshot of `AuthorizedInvocation` that contains only mutable fields.
@@ -1459,7 +1615,7 @@ impl AuthorizationManager {
 }
 
 // Some helper extensions to support test-observation.
-#[cfg(all(test, not(feature = "next"), feature = "testutils"))]
+#[allow(dead_code)]
 impl AuthorizationManager {
     pub(crate) fn stack_size(&self) -> usize {
         if let Ok(call_stack) = self.call_stack.try_borrow() {
@@ -1469,39 +1625,42 @@ impl AuthorizationManager {
         }
     }
 
-    pub(crate) fn stack_hash(&self) -> u64 {
+    pub(crate) fn stack_hash(&self, budget: &Budget) -> Result<u64, HostError> {
         use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hasher;
         if let Ok(call_stack) = self.call_stack.try_borrow() {
             let mut state = DefaultHasher::new();
-            call_stack.hash(&mut state);
-            state.finish()
+            call_stack.metered_hash(&mut state, budget)?;
+            Ok(state.finish())
         } else {
-            0
+            Ok(0)
         }
     }
 
-    pub(crate) fn trackers_hash_and_size(&self) -> (u64, usize) {
+    pub(crate) fn trackers_hash_and_size(
+        &self,
+        budget: &Budget,
+    ) -> Result<(u64, usize), HostError> {
         use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hasher;
         let mut size: usize = 0;
         let mut state = DefaultHasher::new();
-        self.mode.hash(&mut state);
+        self.mode.metered_hash(&mut state, budget)?;
         if let Ok(account_trackers) = self.account_trackers.try_borrow() {
             for tracker in account_trackers.iter() {
                 if let Ok(tracker) = tracker.try_borrow() {
                     size = size.saturating_add(1);
-                    tracker.hash(&mut state);
+                    tracker.metered_hash(&mut state, budget)?;
                 }
             }
         }
         if let Ok(invoker_contract_trackers) = self.invoker_contract_trackers.try_borrow() {
             for tracker in invoker_contract_trackers.iter() {
                 size = size.saturating_add(1);
-                tracker.hash(&mut state);
+                tracker.metered_hash(&mut state, budget)?;
             }
         }
-        (state.finish(), size)
+        Ok((state.finish(), size))
     }
 }
 

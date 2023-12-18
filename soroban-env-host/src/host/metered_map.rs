@@ -7,6 +7,8 @@ use crate::{
 
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
+use super::metered_hash::MeteredHash;
+
 const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
 pub struct MeteredOrdMap<K, V, Ctx> {
@@ -27,6 +29,31 @@ where
             map: self.map.clone(),
             ctx: Default::default(),
         }
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+impl<K, V, Ctx> std::hash::Hash for MeteredOrdMap<K, V, Ctx>
+where
+    K: std::hash::Hash,
+    V: std::hash::Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.map.hash(state);
+    }
+}
+
+impl<K, V, Ctx> MeteredHash for MeteredOrdMap<K, V, Ctx>
+where
+    K: MeteredHash,
+    V: MeteredHash,
+{
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        self.map.metered_hash(state, budget)
     }
 }
 

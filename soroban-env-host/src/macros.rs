@@ -40,7 +40,6 @@ macro_rules! function_name {
     }};
 }
 
-#[cfg(feature = "testutils")]
 macro_rules! function_short_name {
     () => {{
         fn f() {}

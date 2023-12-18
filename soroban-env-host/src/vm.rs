@@ -16,9 +16,9 @@ mod func_info;
 pub(crate) use dispatch::dummy0;
 
 use crate::{
-    budget::AsBudget,
+    budget::{AsBudget, Budget},
     err,
-    host::{error::TryBorrowOrErr, metered_clone::MeteredContainer},
+    host::{error::TryBorrowOrErr, metered_clone::MeteredContainer, metered_hash::MeteredHash},
     meta::{self, get_ledger_protocol_version},
     xdr::{ContractCostType, Hash, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
@@ -31,9 +31,7 @@ use func_info::HOST_FUNCTIONS;
 
 use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store, Value};
 
-#[cfg(any(test, feature = "testutils"))]
 use crate::VmCaller;
-#[cfg(any(test, feature = "testutils", feature = "bench"))]
 use wasmi::{Caller, StoreContextMut};
 impl wasmi::core::HostError for HostError {}
 
@@ -65,6 +63,16 @@ pub struct Vm {
 impl std::hash::Hash for Vm {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.contract_id.hash(state);
+    }
+}
+
+impl MeteredHash for Vm {
+    fn metered_hash<H: std::hash::Hasher>(
+        &self,
+        state: &mut H,
+        budget: &crate::budget::Budget,
+    ) -> Result<(), HostError> {
+        self.contract_id.metered_hash(state, budget)
     }
 }
 
@@ -478,8 +486,6 @@ impl Vm {
     /// Utility function that synthesizes a `VmCaller<Host>` configured to point
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
-    #[cfg(any(test, feature = "testutils"))]
-    #[allow(unused)]
     pub(crate) fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
@@ -502,38 +508,35 @@ impl Vm {
         f(caller)
     }
 
-    #[cfg(all(test, not(feature = "next"), feature = "testutils"))]
-    pub(crate) fn memory_hash_and_size(&self) -> (u64, usize) {
+    pub(crate) fn memory_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
         use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hasher;
         if let Some(mem) = self.memory {
-            if let Ok((hash, size)) = self.with_vmcaller(|vmcaller| {
+            self.with_vmcaller(|vmcaller| {
                 let mut state = DefaultHasher::default();
                 let data = mem.data(vmcaller.try_ref()?);
-                data.hash(&mut state);
+                u8::metered_hash_slice(data, &mut state, budget)?;
                 Ok((state.finish(), data.len()))
-            }) {
-                return (hash, size);
-            }
+            })
+        } else {
+            Ok((0, 0))
         }
-        (0, 0)
     }
 
-    #[cfg(all(test, not(feature = "next"), feature = "testutils"))]
     // This is pretty weak: we just observe the state that wasmi exposes through
     // wasm _exports_. There might be tables or globals a wasm doesn't export
     // but there's no obvious way to observe them.
-    pub(crate) fn exports_hash_and_size(&self) -> (u64, usize) {
+    pub(crate) fn exports_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
         use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hasher;
         use wasmi::{Extern, StoreContext};
-        if let Ok((hash, size)) = self.with_vmcaller(|vmcaller| {
+        self.with_vmcaller(|vmcaller| {
             let ctx: StoreContext<'_, _> = vmcaller.try_ref()?.into();
             let mut size: usize = 0;
             let mut state = DefaultHasher::default();
             for export in self.instance.exports(vmcaller.try_ref()?) {
                 size = size.saturating_add(1);
-                export.name().hash(&mut state);
+                export.name().metered_hash(&mut state, budget)?;
 
                 match export.into_extern() {
                     // Funcs are immutable, memory we hash separately above.
@@ -541,26 +544,30 @@ impl Vm {
 
                     Extern::Table(t) => {
                         let sz = t.size(&ctx);
-                        sz.hash(&mut state);
+                        sz.metered_hash(&mut state, budget)?;
                         size = size.saturating_add(sz as usize);
                         for i in 0..sz {
                             if let Some(elem) = t.get(&ctx, i) {
+                                // This is a slight fudge to avoid having to
+                                // define a ton of additional MeteredHash impls
+                                // for wasmi substructures, since there is a
+                                // bounded size on the string representation of
+                                // a value, we're comfortable going temporarily
+                                // over budget here.
                                 let s = format!("{:?}", elem);
-                                s.hash(&mut state);
+                                budget.charge(ContractCostType::MemAlloc, Some(s.len() as u64))?;
+                                s.metered_hash(&mut state, budget)?;
                             }
                         }
                     }
                     Extern::Global(g) => {
                         let s = format!("{:?}", g.get(&ctx));
-                        s.hash(&mut state);
+                        budget.charge(ContractCostType::MemAlloc, Some(s.len() as u64))?;
+                        s.metered_hash(&mut state, budget)?;
                     }
                 }
             }
             Ok((state.finish(), size))
-        }) {
-            (hash, size)
-        } else {
-            (0, 0)
-        }
+        })
     }
 }

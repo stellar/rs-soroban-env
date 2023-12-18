@@ -33,11 +33,13 @@ pub(crate) mod ledger_info_helper;
 mod lifecycle;
 mod mem_helper;
 pub(crate) mod metered_clone;
+pub(crate) mod metered_hash;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod num;
 mod prng;
+pub(crate) mod trace;
 mod validity;
 
 pub use error::HostError;
@@ -70,7 +72,6 @@ pub struct LedgerInfo {
     pub max_entry_ttl: u32,
 }
 
-#[cfg(any(test, feature = "testutils"))]
 #[allow(dead_code)]
 pub(crate) enum HostLifecycleEvent<'a> {
     PushCtx(&'a Context),
@@ -79,7 +80,6 @@ pub(crate) enum HostLifecycleEvent<'a> {
     EnvRet(&'static str, &'a Result<String, String>),
 }
 
-#[cfg(any(test, feature = "testutils"))]
 pub(crate) type HostLifecycleHook =
     Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
@@ -151,7 +151,6 @@ struct HostImpl {
     // the host's execution. No guarantees are made about the stability of this
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
-    #[cfg(any(test, feature = "testutils"))]
     lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
     // Store a simple contract invocation hook for public usage.
     // The hook triggers when the top-level contract invocation
@@ -283,7 +282,6 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager_mut
 );
 
-#[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
     lifecycle_event_hook,
     Option<HostLifecycleHook>,
@@ -347,7 +345,6 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
-            #[cfg(any(test, feature = "testutils"))]
             lifecycle_event_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
@@ -581,38 +578,22 @@ impl Host {
     }
 }
 
-#[cfg(feature = "testutils")]
 macro_rules! call_env_call_hook {
     ($self:expr, $($arg:expr),*) => {
-        #[cfg(feature="testutils")]
         {
             $self.env_call_hook(function_short_name!(), &[$(format!("{:?}", $arg)),*])?;
         }
     };
 }
 
-#[cfg(not(feature = "testutils"))]
-macro_rules! call_env_call_hook {
-    ($self:expr, $($arg:expr),*) => {};
-}
-
-#[cfg(feature = "testutils")]
 macro_rules! call_env_ret_hook {
-    ($self:expr, $arg:expr) => {
-        #[cfg(feature = "testutils")]
-        {
-            let res_str: Result<String, &HostError> = match &$arg {
-                Ok(ok) => Ok(format!("{:?}", ok)),
-                Err(err) => Err(err),
-            };
-            $self.env_ret_hook(function_short_name!(), &res_str)?;
-        }
-    };
-}
-
-#[cfg(not(feature = "testutils"))]
-macro_rules! call_env_ret_hook {
-    ($self:expr, $arg:expr) => {};
+    ($self:expr, $arg:expr) => {{
+        let res_str: Result<String, &HostError> = match &$arg {
+            Ok(ok) => Ok(format!("{:?}", ok)),
+            Err(err) => Err(err),
+        };
+        $self.env_ret_hook(function_short_name!(), &res_str)?;
+    }};
 }
 
 // Notes on metering: these are called from the guest and thus charged on the VM instructions.
@@ -712,12 +693,10 @@ impl EnvBase for Host {
         x
     }
 
-    #[cfg(feature = "testutils")]
     fn env_call_hook(&self, fname: &'static str, args: &[String]) -> Result<(), HostError> {
         self.call_any_lifecycle_hook(HostLifecycleEvent::EnvCall(fname, args))
     }
 
-    #[cfg(feature = "testutils")]
     fn env_ret_hook(
         &self,
         fname: &'static str,
@@ -2964,8 +2943,9 @@ impl Host {
     {
         f(self.0.budget.clone())
     }
+}
 
-    #[cfg(any(test, feature = "testutils"))]
+impl Host {
     #[allow(dead_code)]
     pub(crate) fn set_lifecycle_event_hook(
         &self,
@@ -2975,7 +2955,6 @@ impl Host {
         Ok(())
     }
 
-    #[cfg(feature = "testutils")]
     pub(crate) fn call_any_lifecycle_hook(
         &self,
         event: HostLifecycleEvent,
