@@ -21,6 +21,7 @@ struct TestCase {
     contract_a_expr: Expr,
     contract_b_expr: Expr,
     data_keys: BTreeMap<u8, (StorageType, bool)>,
+    byte_literals: Vec<Vec<u8>>,
     n_signers: u8,
 }
 
@@ -62,9 +63,13 @@ fuzz_target!(|test: TestCase| {
     let mut arg_tys_a: Vec<&'static str> = args_a.iter().map(|_| "U32Val").collect();
     arg_tys_a.push("AddressObject"); // contract B
     arg_tys_a.push("Symbol"); // test function name
-    let n_signers = 5 + (test.n_signers % 4) as usize;
-    for _ in 0..n_signers {        
+    let n_signers = 3 + (test.n_signers % 4) as usize;
+    for _ in 0..n_signers {
         arg_tys_a.push("AddressObject"); // every signer
+    }
+    let n_byte_literals = test.byte_literals.len().min(3);
+    for _ in 0..n_byte_literals {
+        arg_tys_a.push("BytesObject");
     }
 
     let arg_tys_b = vec!["Val"];
@@ -80,7 +85,7 @@ fuzz_target!(|test: TestCase| {
     let (host, contracts, signers) = Host::new_recording_fuzz_host(
         &[wasm_a.as_slice(), wasm_b.as_slice()],
         &data_keys,
-        n_signers
+        n_signers,
     );
 
     let contract_address_a = host.scaddress_from_address(contracts[0]).unwrap();
@@ -99,6 +104,11 @@ fuzz_target!(|test: TestCase| {
             signer.verifying_key().to_bytes(),
         )));
         args_a.push(ScVal::Address(ScAddress::Account(account)));
+    }
+    for i in 0..n_byte_literals {
+        args_a.push(ScVal::Bytes(
+            test.byte_literals[i].clone().try_into().unwrap(),
+        ));
     }
 
     let hf = HostFunction::InvokeContract(InvokeContractArgs {
