@@ -160,6 +160,13 @@ pub(crate) fn check_account_authentication(
             len
         ));
     }
+    if len == 0 {
+        return Err(host.error(
+            ContractError::AuthenticationError.into(),
+            "no account signatures found",
+            &[],
+        ));
+    }
     let payload_obj = host.bytes_new_from_slice(payload)?;
     let account = host.load_account(account_id)?;
     let mut prev_pk: Option<BytesN<32>> = None;
