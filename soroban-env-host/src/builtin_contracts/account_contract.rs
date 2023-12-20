@@ -161,10 +161,10 @@ pub(crate) fn check_account_authentication(
         ));
     }
     if len == 0 {
-        return Err(err!(
-            host,
-            ContractError::AuthenticationError,
+        return Err(host.error(
+            ContractError::AuthenticationError.into(),
             "no account signatures found",
+            &[],
         ));
     }
     let payload_obj = host.bytes_new_from_slice(payload)?;
