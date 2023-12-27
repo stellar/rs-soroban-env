@@ -1,4 +1,4 @@
-use blst::{blst_p2, blst_p1_add, blst_p1, blst_p1_affine, blst_p1_uncompress, BLST_ERROR, blst_p1_from_affine, blst_p2_deserialize, blst_p2_from_affine, blst_p2_affine, blst_p1_compress, blst_p1_mult, blst_p1_affine_in_g1, blst_p1_on_curve, blst_p2_affine_in_g2, blst_p2_on_curve, blst_p2_add, blst_p2_serialize, blst_p2_mult};
+use blst::{blst_p2, blst_p1_add, blst_p1, blst_p1_affine, blst_p1_uncompress, BLST_ERROR, blst_p1_from_affine, blst_p2_deserialize, blst_p2_from_affine, blst_p2_affine, blst_p1_serialize, blst_p1_mult, blst_p1_affine_in_g1, blst_p1_on_curve, blst_p2_affine_in_g2, blst_p2_on_curve, blst_p2_add, blst_p2_serialize, blst_p2_mult, blst_p1_serialize};
 use crate::host::prng::SEED_BYTES;
 use crate::{
     budget::AsBudget,
@@ -240,7 +240,7 @@ impl Host {
         unsafe { blst_p1_add(&mut res, &p0, &p1) };
 
         unsafe {
-            blst_p1_compress(out.as_mut_ptr(), &res);
+            blst_p1_serialize(out.as_mut_ptr(), &res);
         }
 
         Ok(out)
@@ -256,7 +256,7 @@ impl Host {
         unsafe { blst_p1_mult(&mut res, &p1, &scalar, BLST_SCALAR_SIZE) };
 
         unsafe {
-            blst_p1_compress(out.as_mut_ptr(), &res);
+            blst_p1_serialize(out.as_mut_ptr(), &res);
         }
 
         Ok(out)
@@ -280,7 +280,7 @@ impl Host {
         }
 
         unsafe {
-            blst_p1_compress(out.as_mut_ptr(), &res);
+            blst_p1_serialize(out.as_mut_ptr(), &res);
         }
 
         Ok(out)
