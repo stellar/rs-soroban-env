@@ -810,7 +810,7 @@ impl EnvBase for Host {
         self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
         let res = self.add_host_object(ScSymbol::try_from_bytes(
             self,
-            self.metered_slice_to_vec(s)?.try_into()?,
+            self.metered_slice_to_vec(s)?,
         )?);
         call_env_ret_hook!(self, res);
         res

@@ -331,7 +331,7 @@ impl Vm {
         let func_ss: SymbolStr = func_sym.try_into_val(host)?;
         let ext = match self
             .instance
-            .get_export(&*self.store.try_borrow_or_err()?, &func_ss.to_string())
+            .get_export(&*self.store.try_borrow_or_err()?, func_ss.as_ref())
         {
             None => {
                 return Err(host.err(
