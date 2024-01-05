@@ -558,7 +558,8 @@ mod test_without_string {
         let input = "stellar";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        assert_eq!(sym_str.to_string(), input);
+        let s: &[u8] = sym_str.as_ref();
+        assert_eq!(s, input.as_bytes());
     }
 
     #[test]
@@ -566,7 +567,8 @@ mod test_without_string {
         let input = "";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        assert_eq!(sym_str.to_string(), input);
+        let s: &[u8] = sym_str.as_ref();
+        assert_eq!(s, input.as_bytes());
     }
 
     #[test]
@@ -574,7 +576,8 @@ mod test_without_string {
         let input = "123456789";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        assert_eq!(sym_str.to_string(), input);
+        let s: &[u8] = sym_str.as_ref();
+        assert_eq!(s, input.as_bytes());
     }
 
     #[test]
