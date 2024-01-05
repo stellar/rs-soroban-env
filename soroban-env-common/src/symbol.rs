@@ -109,11 +109,11 @@ impl<E: Env> TryFromVal<E, &[u8]> for Symbol {
 
     fn try_from_val(env: &E, v: &&[u8]) -> Result<Self, Self::Error> {
         if v.len() <= MAX_SMALL_CHARS {
-            SymbolSmall::try_from_bytes(*v)
+            SymbolSmall::try_from_bytes(v)
                 .map(Into::into)
                 .map_err(Into::into)
         } else {
-            env.symbol_new_from_slice(*v)
+            env.symbol_new_from_slice(v)
                 .map(Into::into)
                 .map_err(Into::into)
         }
@@ -276,7 +276,7 @@ impl SymbolSmall {
     // This should not be generally available as it can easily panic.
     #[cfg(feature = "testutils")]
     pub const fn from_str(s: &str) -> SymbolSmall {
-        match Self::try_from_bytes(s.as_bytes()) {
+        match Self::try_from_str(s) {
             Ok(sym) => sym,
             Err(SymbolError::TooLong(_)) => panic!("symbol too long"),
             Err(SymbolError::BadChar(_)) => panic!("symbol bad char"),
