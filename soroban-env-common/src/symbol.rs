@@ -20,8 +20,8 @@
 //!      small maximum size for [`SymbolObject`]s, given by
 //!      [`SCSYMBOL_LIMIT`](crate::xdr::SCSYMBOL_LIMIT) (currently 32 bytes).
 //!      Having such a modest maximum size allows working with `Symbol`s
-//!      entirely in guest WASM code without a heap allocator, using only
-//!      fixed-size buffers on the WASM shadow stack. The [`SymbolStr`] type is
+//!      entirely in guest Wasm code without a heap allocator, using only
+//!      fixed-size buffers on the Wasm shadow stack. The [`SymbolStr`] type is
 //!      a convenience wrapper around such a buffer, that can be directly
 //!      created from a [`Symbol`], copying its bytes from the host if the
 //!      `Symbol` is a `SymbolObject` or unpacking its 6-bit codes if the
@@ -45,9 +45,10 @@
 //! `Val` word) with zero padding in the high-order bits rather than low-order
 //! bits. While this means that lexicographical ordering of `SymbolSmall` values
 //! does not coincide with simple integer ordering of `Val` bodies, it optimizes
-//! the space cost of `SymbolSmall` literals in WASM bytecode, where all integer
+//! the space cost of `SymbolSmall` literals in Wasm bytecode, where all integer
 //! literals are encoded as variable-length little-endian values, using ULEB128.
 
+use crate::xdr::SCSYMBOL_LIMIT;
 use crate::{
     declare_tag_based_small_and_object_wrappers, val::ValConvert, Compare, ConversionError, Env,
     Tag, TryFromVal, Val,
@@ -63,8 +64,8 @@ pub enum SymbolError {
     /// than 9 characters.
     TooLong(usize),
     /// Returned when attempting to form a [SymbolObject] or [SymbolSmall] from
-    /// a string with characters outside the range `[a-zA-Z0-9_]`.
-    BadChar(char),
+    /// a byte string with characters outside the range `[a-zA-Z0-9_]`.
+    BadChar(u8),
     /// Malformed small symbol (upper two bits were set).
     MalformedSmall,
 }
@@ -103,29 +104,27 @@ sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_SMALL_CHARS + 2 == BODY_BITS);
 sa::const_assert!(SMALL_MASK == 0x003f_ffff_ffff_ffff);
 
-impl<E: Env> TryFromVal<E, &str> for Symbol {
-    type Error = crate::Error;
-
-    fn try_from_val(env: &E, v: &&str) -> Result<Self, Self::Error> {
-        if let Ok(ss) = SymbolSmall::try_from_str(v) {
-            Ok(Self(ss.0))
-        } else {
-            let sobj = env.symbol_new_from_slice(v).map_err(Into::into)?;
-            Ok(Self(sobj.0))
-        }
-    }
-}
-
 impl<E: Env> TryFromVal<E, &[u8]> for Symbol {
     type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &&[u8]) -> Result<Self, Self::Error> {
-        // We don't know this byte-slice is actually utf-8 ...
-        let s: &str = unsafe { core::str::from_utf8_unchecked(v) };
-        // ... but this next conversion step will check that its
-        // _bytes_ are in the symbol-char range, which is a subset
-        // of utf-8, so we're only lying harmlessly.
-        Symbol::try_from_val(env, &s)
+        if v.len() <= MAX_SMALL_CHARS {
+            SymbolSmall::try_from_bytes(*v)
+                .map(Into::into)
+                .map_err(Into::into)
+        } else {
+            env.symbol_new_from_slice(*v)
+                .map(Into::into)
+                .map_err(Into::into)
+        }
+    }
+}
+
+impl<E: Env> TryFromVal<E, &str> for Symbol {
+    type Error = crate::Error;
+
+    fn try_from_val(env: &E, v: &&str) -> Result<Self, Self::Error> {
+        Symbol::try_from_val(env, &v.as_bytes())
     }
 }
 
@@ -167,19 +166,25 @@ impl SymbolSmall {
 
 impl Symbol {
     #[doc(hidden)]
-    pub const unsafe fn from_small_body(body: u64) -> Self {
-        // This is a helper that should only be used in macros where it's
-        // necessary to generate a Symbol constant with no possibility of error:
-        // it just forces the bits that might be set wrong (54 and 55) to zero.
-        let body = body & SMALL_MASK;
-        Symbol(SymbolSmall::from_body(body).0)
+    pub fn validate_bytes(bytes: &[u8]) -> Result<(), SymbolError> {
+        if bytes.len() as u64 > SCSYMBOL_LIMIT {
+            return Err(SymbolError::TooLong(bytes.len()));
+        }
+        for b in bytes {
+            SymbolSmall::validate_byte(*b)?;
+        }
+        Ok(())
+    }
+
+    pub const fn try_from_small_bytes(b: &[u8]) -> Result<Self, SymbolError> {
+        match SymbolSmall::try_from_bytes(b) {
+            Ok(sym) => Ok(Symbol(sym.0)),
+            Err(e) => Err(e),
+        }
     }
 
     pub const fn try_from_small_str(s: &str) -> Result<Self, SymbolError> {
-        match SymbolSmall::try_from_str(s) {
-            Ok(ss) => Ok(Symbol(ss.0)),
-            Err(e) => Err(e),
-        }
+        Self::try_from_small_bytes(s.as_bytes())
     }
 
     // This should not be generally available as it can easily panic.
@@ -205,7 +210,6 @@ impl TryFrom<&[u8]> for SymbolSmall {
 
 #[cfg(feature = "std")]
 use crate::xdr::StringM;
-use crate::xdr::SCSYMBOL_LIMIT;
 #[cfg(feature = "std")]
 impl<const N: u32> TryFrom<StringM<N>> for SymbolSmall {
     type Error = SymbolError;
@@ -224,40 +228,38 @@ impl<const N: u32> TryFrom<&StringM<N>> for SymbolSmall {
 }
 
 impl SymbolSmall {
-    #[doc(hidden)]
-    pub const fn validate_char(ch: char) -> Result<(), SymbolError> {
-        match SymbolSmall::encode_char(ch) {
+    const fn validate_byte(b: u8) -> Result<(), SymbolError> {
+        match Self::encode_byte(b) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
     }
 
-    const fn encode_char(ch: char) -> Result<u64, SymbolError> {
-        let v = match ch {
-            '_' => 1,
-            '0'..='9' => 2 + ((ch as u64) - ('0' as u64)),
-            'A'..='Z' => 12 + ((ch as u64) - ('A' as u64)),
-            'a'..='z' => 38 + ((ch as u64) - ('a' as u64)),
-            _ => return Err(SymbolError::BadChar(ch)),
+    const fn encode_byte(b: u8) -> Result<u8, SymbolError> {
+        let v = match b {
+            b'_' => 1,
+            b'0'..=b'9' => 2 + (b - b'0'),
+            b'A'..=b'Z' => 12 + (b - b'A'),
+            b'a'..=b'z' => 38 + (b - b'a'),
+            _ => return Err(SymbolError::BadChar(b)),
         };
         Ok(v)
     }
 
-    pub const fn try_from_bytes(b: &[u8]) -> Result<SymbolSmall, SymbolError> {
+    pub const fn try_from_bytes(bytes: &[u8]) -> Result<SymbolSmall, SymbolError> {
+        if bytes.len() > MAX_SMALL_CHARS {
+            return Err(SymbolError::TooLong(bytes.len()));
+        }
         let mut n = 0;
         let mut accum: u64 = 0;
-        while n < b.len() {
-            let ch = b[n] as char;
-            if n >= MAX_SMALL_CHARS {
-                return Err(SymbolError::TooLong(b.len()));
-            }
-            n += 1;
-            accum <<= CODE_BITS;
-            let v = match SymbolSmall::encode_char(ch) {
+        while n < bytes.len() {
+            let v = match Self::encode_byte(bytes[n]) {
                 Ok(v) => v,
                 Err(e) => return Err(e),
             };
-            accum |= v;
+            accum <<= CODE_BITS;
+            accum |= v as u64;
+            n += 1;
         }
         Ok(unsafe { Self::from_body(accum) })
     }
@@ -274,7 +276,7 @@ impl SymbolSmall {
     // This should not be generally available as it can easily panic.
     #[cfg(feature = "testutils")]
     pub const fn from_str(s: &str) -> SymbolSmall {
-        match Self::try_from_str(s) {
+        match Self::try_from_bytes(s.as_bytes()) {
             Ok(sym) => sym,
             Err(SymbolError::TooLong(_)) => panic!("symbol too long"),
             Err(SymbolError::BadChar(_)) => panic!("symbol bad char"),
@@ -470,7 +472,7 @@ impl TryFrom<ScVal> for SymbolSmall {
 impl TryFrom<&ScVal> for SymbolSmall {
     type Error = crate::Error;
     fn try_from(v: &ScVal) -> Result<Self, Self::Error> {
-        if let ScVal::Symbol(crate::xdr::ScSymbol(vec)) = v {
+        if let ScVal::Symbol(ScSymbol(vec)) = v {
             vec.try_into().map_err(Into::into)
         } else {
             Err(ConversionError.into())
@@ -565,8 +567,7 @@ mod test_without_string {
         let input = "stellar";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        let s: &str = sym_str.as_ref();
-        assert_eq!(s, input);
+        assert_eq!(sym_str.to_string(), input);
     }
 
     #[test]
@@ -574,8 +575,7 @@ mod test_without_string {
         let input = "";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        let s: &str = sym_str.as_ref();
-        assert_eq!(s, input);
+        assert_eq!(sym_str.to_string(), input);
     }
 
     #[test]
@@ -583,8 +583,7 @@ mod test_without_string {
         let input = "123456789";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        let s: &str = sym_str.as_ref();
-        assert_eq!(s, input);
+        assert_eq!(sym_str.to_string(), input);
     }
 
     #[test]

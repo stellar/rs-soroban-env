@@ -922,7 +922,12 @@ impl Host {
                 || Ok(vec![]),
                 |m| {
                     m.iter()
-                        .map(|i| Ok((self.to_host_val(&i.key)?, self.to_host_val(&i.val)?)))
+                        .map(|i| {
+                            Ok((
+                                self.to_valid_host_val(&i.key)?,
+                                self.to_valid_host_val(&i.val)?,
+                            ))
+                        })
                         .metered_collect::<Result<Vec<(Val, Val)>, HostError>>(self)?
                 },
             )?,

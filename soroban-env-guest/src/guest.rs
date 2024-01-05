@@ -115,7 +115,7 @@ impl EnvBase for Guest {
         self.string_new_from_linear_memory(lm_pos, len)
     }
 
-    fn symbol_new_from_slice(&self, slice: &str) -> Result<SymbolObject, Self::Error> {
+    fn symbol_new_from_slice(&self, slice: &[u8]) -> Result<SymbolObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: U32Val = Val::from_u32(slice.as_ptr() as u32);

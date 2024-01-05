@@ -17,9 +17,9 @@ use crate::{
         ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
-    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall,
-    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv,
-    Void, I256, U256,
+    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, TryFromVal,
+    U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv, Void, I256,
+    U256,
 };
 
 mod comparison;
@@ -51,6 +51,7 @@ use self::{
     prng::Prng,
 };
 
+use crate::host_object::MemHostObjectType;
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
@@ -804,15 +805,13 @@ impl EnvBase for Host {
         res
     }
 
-    fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
+    fn symbol_new_from_slice(&self, s: &[u8]) -> Result<SymbolObject, HostError> {
         call_env_call_hook!(self, s.len());
         self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
-        for ch in s.chars() {
-            SymbolSmall::validate_char(ch)?;
-        }
-        let res = self.add_host_object(ScSymbol(
-            self.metered_slice_to_vec(s.as_bytes())?.try_into()?,
-        ));
+        let res = self.add_host_object(ScSymbol::try_from_bytes(
+            self,
+            self.metered_slice_to_vec(s)?.try_into()?,
+        )?);
         call_env_ret_hook!(self, res);
         res
     }
@@ -1515,9 +1514,11 @@ impl VmCallerEnv for Host {
             keys_pos,
             len as usize,
             |_n, slice| {
+                // Optimization note: this does an unnecessary `ScVal` roundtrip.
+                // We should just use `Symbol::try_from_val` on the slice instead.
                 self.charge_budget(ContractCostType::MemCpy, Some(slice.len() as u64))?;
                 let scsym = ScSymbol(slice.try_into()?);
-                let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
+                let sym = Symbol::try_from(self.to_valid_host_val(&ScVal::Symbol(scsym))?)?;
                 key_syms.push(sym);
                 Ok(())
             },
@@ -1939,7 +1940,7 @@ impl VmCallerEnv for Host {
                     .get(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
                 match &entry.data {
-                    LedgerEntryData::ContractData(e) => Ok(self.to_host_val(&e.val)?),
+                    LedgerEntryData::ContractData(e) => Ok(self.to_valid_host_val(&e.val)?),
                     _ => Err(self.err(
                         ScErrorType::Storage,
                         ScErrorCode::InternalError,
@@ -2254,16 +2255,7 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        if Val::can_represent_scval(&scv) {
-            self.to_host_val(&scv)
-        } else {
-            Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::UnexpectedType,
-                "Deserialized ScVal type cannot be represented as Val",
-                &[(scv.discriminant() as i32).into()],
-            ))
-        }
+        self.to_host_val(&scv)
     }
 
     fn string_copy_to_linear_memory(

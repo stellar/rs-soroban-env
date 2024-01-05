@@ -155,6 +155,7 @@ pub(crate) trait HostObjectType: MeteredClone {
 pub(crate) trait MemHostObjectType:
     HostObjectType + TryFrom<Vec<u8>, Error = xdr::Error> + Into<Vec<u8>>
 {
+    fn try_from_bytes(host: &Host, bytes: Vec<u8>) -> Result<Self, HostError>;
     fn as_byte_slice(&self) -> &[u8];
 }
 
@@ -183,6 +184,10 @@ macro_rules! declare_mem_host_object_type {
     ($TY:ty, $TAG:ident, $CASE:ident) => {
         declare_host_object_type!($TY, $TAG, $CASE);
         impl MemHostObjectType for $TY {
+            fn try_from_bytes(_host: &Host, bytes: Vec<u8>) -> Result<Self, HostError> {
+                Self::try_from(bytes).map_err(Into::into)
+            }
+
             fn as_byte_slice(&self) -> &[u8] {
                 self.as_slice()
             }
@@ -203,8 +208,25 @@ declare_host_object_type!(U256, U256Object, U256);
 declare_host_object_type!(I256, I256Object, I256);
 declare_mem_host_object_type!(xdr::ScBytes, BytesObject, Bytes);
 declare_mem_host_object_type!(xdr::ScString, StringObject, String);
-declare_mem_host_object_type!(xdr::ScSymbol, SymbolObject, Symbol);
+declare_host_object_type!(xdr::ScSymbol, SymbolObject, Symbol);
 declare_host_object_type!(xdr::ScAddress, AddressObject, Address);
+
+impl MemHostObjectType for xdr::ScSymbol {
+    fn try_from_bytes(host: &Host, bytes: Vec<u8>) -> Result<Self, HostError> {
+        soroban_env_common::Symbol::validate_bytes(bytes.as_slice()).map_err(|_| {
+            host.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                concat!("byte array can not be represented by Symbol"),
+                &[],
+            )
+        })?;
+        Self::try_from(bytes).map_err(Into::into)
+    }
+    fn as_byte_slice(&self) -> &[u8] {
+        self.as_ref()
+    }
+}
 
 // Objects come in two flavors: relative and absolute. They are differentiated
 // by the low bit of the object handle: relative objects have 0, absolutes have

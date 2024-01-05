@@ -245,7 +245,7 @@ pub fn generate_wasm_module_with_preloaded_linear_memory(
                     // prefill the last 256 bytes with some values
                     // push in the following order: offset(d), val, length(n)
                     f3.i32_const(#DATA_SECTION_0_START as i32);
-                    f3.i32_const(7);
+                    f3.i32_const(68);
                     f3.i32_const(#DATA_SECTION_LEN as i32);
                     f3.memory_fill();
                     // call the target host function
