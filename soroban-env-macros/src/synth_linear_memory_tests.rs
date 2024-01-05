@@ -102,6 +102,7 @@ pub fn generate_wasm_module_with_preloaded_linear_memory(
             let fn_export = hf.export;
             let arity = hf.args.len() as u32;
             let wasm_module = format_ident!("wasm_module_calling_{}", hf.name);
+            let hf_name_str = hf.name;
             quote! {
                 // define the wasms
                 fn #wasm_module() -> Vec<u8> {
@@ -245,7 +246,12 @@ pub fn generate_wasm_module_with_preloaded_linear_memory(
                     // prefill the last 256 bytes with some values
                     // push in the following order: offset(d), val, length(n)
                     f3.i32_const(#DATA_SECTION_0_START as i32);
-                    f3.i32_const(68);
+                    if #hf_name_str == "symbol_new_from_linear_memory" {
+                        f3.i32_const(68);
+                    } else {
+                        f3.i32_const(7);
+                    }
+
                     f3.i32_const(#DATA_SECTION_LEN as i32);
                     f3.memory_fill();
                     // call the target host function

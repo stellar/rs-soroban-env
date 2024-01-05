@@ -108,10 +108,11 @@ impl<E: Env> TryFromVal<E, &[u8]> for Symbol {
     type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &&[u8]) -> Result<Self, Self::Error> {
-        if v.len() <= MAX_SMALL_CHARS {
-            SymbolSmall::try_from_bytes(v)
-                .map(Into::into)
-                .map_err(Into::into)
+        // Optimization note: this should only ever call one conversion
+        // function based on the input slice length, currently slices
+        // with invalid characters get re-validated.
+        if let Ok(s) = SymbolSmall::try_from_bytes(v) {
+            Ok(s.into())
         } else {
             env.symbol_new_from_slice(v)
                 .map(Into::into)
@@ -165,17 +166,6 @@ impl SymbolSmall {
 }
 
 impl Symbol {
-    #[doc(hidden)]
-    pub fn validate_bytes(bytes: &[u8]) -> Result<(), SymbolError> {
-        if bytes.len() as u64 > SCSYMBOL_LIMIT {
-            return Err(SymbolError::TooLong(bytes.len()));
-        }
-        for b in bytes {
-            SymbolSmall::validate_byte(*b)?;
-        }
-        Ok(())
-    }
-
     pub const fn try_from_small_bytes(b: &[u8]) -> Result<Self, SymbolError> {
         match SymbolSmall::try_from_bytes(b) {
             Ok(sym) => Ok(Symbol(sym.0)),
@@ -228,7 +218,8 @@ impl<const N: u32> TryFrom<&StringM<N>> for SymbolSmall {
 }
 
 impl SymbolSmall {
-    const fn validate_byte(b: u8) -> Result<(), SymbolError> {
+    #[doc(hidden)]
+    pub const fn validate_byte(b: u8) -> Result<(), SymbolError> {
         match Self::encode_byte(b) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),

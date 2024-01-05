@@ -8,7 +8,7 @@ use crate::{
         metered_vector::MeteredVector,
     },
     num::{I256, U256},
-    xdr::{self, ContractCostType, ScErrorCode, ScErrorType},
+    xdr::{self, ContractCostType, ScErrorCode, ScErrorType, SCSYMBOL_LIMIT},
     AddressObject, BytesObject, Compare, DurationObject, DurationSmall, Host, HostError,
     I128Object, I128Small, I256Object, I256Small, I64Object, I64Small, MapObject, Object,
     StringObject, SymbolObject, SymbolSmall, SymbolStr, TimepointObject, TimepointSmall,
@@ -213,14 +213,24 @@ declare_host_object_type!(xdr::ScAddress, AddressObject, Address);
 
 impl MemHostObjectType for xdr::ScSymbol {
     fn try_from_bytes(host: &Host, bytes: Vec<u8>) -> Result<Self, HostError> {
-        soroban_env_common::Symbol::validate_bytes(bytes.as_slice()).map_err(|_| {
-            host.err(
+        if bytes.len() as u64 > SCSYMBOL_LIMIT {
+            return Err(host.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
-                concat!("byte array can not be represented by Symbol"),
-                &[],
-            )
-        })?;
+                "slice is too long to be represented as Symbol",
+                &[(bytes.len() as u32).into()],
+            ));
+        }
+        for b in &bytes {
+            SymbolSmall::validate_byte(*b).map_err(|_| {
+                host.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "byte is not allowed in Symbol",
+                    &[(*b as u32).into()],
+                )
+            })?;
+        }
         Self::try_from(bytes).map_err(Into::into)
     }
     fn as_byte_slice(&self) -> &[u8] {

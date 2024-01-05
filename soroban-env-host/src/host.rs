@@ -51,12 +51,12 @@ use self::{
     prng::Prng,
 };
 
-use crate::host_object::MemHostObjectType;
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_auth"))]
 use rand_chacha::ChaCha20Rng;
+use soroban_env_common::SymbolSmall;
 
 #[derive(Debug, Clone, Default)]
 pub struct LedgerInfo {
@@ -807,11 +807,21 @@ impl EnvBase for Host {
 
     fn symbol_new_from_slice(&self, s: &[u8]) -> Result<SymbolObject, HostError> {
         call_env_call_hook!(self, s.len());
+        // Note: this whole function could be replaced by `ScSymbol::try_from_bytes`
+        // in order to avoid duplication. It is duplicated in order to support
+        // a slightly different check order for the sake of observation consistency.
         self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
-        let res = self.add_host_object(ScSymbol::try_from_bytes(
-            self,
-            self.metered_slice_to_vec(s)?,
-        )?);
+        for b in s {
+            SymbolSmall::validate_byte(*b).map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "byte is not allowed in Symbol",
+                    &[(*b as u32).into()],
+                )
+            })?;
+        }
+        let res = self.add_host_object(ScSymbol(self.metered_slice_to_vec(s)?.try_into()?));
         call_env_ret_hook!(self, res);
         res
     }
@@ -2255,7 +2265,21 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        self.to_host_val(&scv)
+        // Metering bug: the representation check is not metered,
+        // so if the value is not valid, we won't charge anything for
+        // walking the `ScVal`. Since `to_host_val` performs validation
+        // and has proper metering, next protocol version should just
+        // call `to_host_val` directly.
+        if Val::can_represent_scval_recursive(&scv) {
+            self.to_host_val(&scv)
+        } else {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "Deserialized ScVal type cannot be represented as Val",
+                &[(scv.discriminant() as i32).into()],
+            ))
+        }
     }
 
     fn string_copy_to_linear_memory(

@@ -622,6 +622,26 @@ impl Val {
         }
     }
 
+    /// *Recursively* checks whether `ScVal` can be represented as `Val`.
+    /// This should only be used once per top-level `ScVal`.
+    pub fn can_represent_scval_recursive(scv: &ScVal) -> bool {
+        match scv {
+            // Handle recursive types first
+            ScVal::Vec(None) => return false,
+            ScVal::Map(None) => return false,
+            ScVal::Vec(Some(v)) => {
+                return v.0.iter().all(|x| Val::can_represent_scval_recursive(x))
+            }
+            ScVal::Map(Some(m)) => {
+                return m.0.iter().all(|e| {
+                    Val::can_represent_scval_recursive(&e.key)
+                        && Val::can_represent_scval_recursive(&e.val)
+                })
+            }
+            _ => Self::can_represent_scval_type(scv.discriminant()),
+        }
+    }
+
     /// We define a "good" Val as one that has one of the allowed tag values,
     /// all the defined body-bits for its case set to valid values, and all the
     /// undefined body-bits set to zero.
