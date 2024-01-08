@@ -841,7 +841,7 @@ impl Debug for Val {
                 // `Val`, this is still safe thanks to `SymbolSmall` iteration implementation that
                 // only returns valid symbol characters or `\0` even for invalid bit
                 // representations.
-                let converted_str = unsafe { str::from_utf8_unchecked(ss.as_ref()) };
+                let s: &str = ss.as_ref();
                 write!(f, "Symbol({})", converted_str)
             }
 

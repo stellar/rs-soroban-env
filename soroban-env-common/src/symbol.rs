@@ -321,6 +321,9 @@ impl AsRef<[u8]> for SymbolStr {
     }
 }
 
+// This conversion relies on `SymbolStr` representing a well-formed `Symbol`,
+// which in turn relies on `EnvBase` implementation to only produce valid
+// `Symbol`s.
 impl AsRef<str> for SymbolStr {
     fn as_ref(&self) -> &str {
         let s: &[u8] = self.as_ref();
@@ -558,8 +561,8 @@ mod test_without_string {
         let input = "stellar";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        let s: &[u8] = sym_str.as_ref();
-        assert_eq!(s, input.as_bytes());
+        let s: &str = sym_str.as_ref();
+        assert_eq!(s, input);
     }
 
     #[test]
@@ -567,8 +570,8 @@ mod test_without_string {
         let input = "";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        let s: &[u8] = sym_str.as_ref();
-        assert_eq!(s, input.as_bytes());
+        let s: &str = sym_str.as_ref();
+        assert_eq!(s, input);
     }
 
     #[test]
@@ -576,8 +579,8 @@ mod test_without_string {
         let input = "123456789";
         let sym = SymbolSmall::try_from_str(input).unwrap();
         let sym_str = SymbolStr::from(sym);
-        let s: &[u8] = sym_str.as_ref();
-        assert_eq!(s, input.as_bytes());
+        let s: &str = sym_str.as_ref();
+        assert_eq!(s, input);
     }
 
     #[test]
