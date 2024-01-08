@@ -79,6 +79,7 @@ next = ["soroban-env-common/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_auth = []
 bench = []
+time = []
 
 [[bench]]
 required-features = ["bench"]
