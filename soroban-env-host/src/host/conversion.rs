@@ -501,6 +501,8 @@ impl Host {
             }
             ScVal::Bytes(b) => Ok(self.add_host_object(b.metered_clone(self)?)?.into()),
             ScVal::String(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
+            // Similarly to `ScMap`, not every `SCSymbol` XDR is valid. Thus it has to be
+            // created with the respective fallible conversion method.
             ScVal::Symbol(s) => Ok(self
                 .add_host_object(ScSymbol::try_from_bytes(
                     self,
