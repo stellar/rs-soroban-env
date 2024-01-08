@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{Env, Error, TryFromVal};
-use core::{cmp::Ordering, convert::Infallible, fmt::Debug};
+use core::{cmp::Ordering, convert::Infallible, fmt::Debug, str};
 
 extern crate static_assertions as sa;
 
@@ -609,17 +609,34 @@ impl Val {
         }
     }
 
-    pub fn can_represent_scval(scv: &crate::xdr::ScVal) -> bool {
+    /// *Non-recursively* checks whether `ScVal` can be represented as `Val`.
+    /// Since conversions from `ScVal` are recursive themselves, this should
+    /// be called at every recursion level during conversion.
+    pub fn can_represent_scval(scv: &ScVal) -> bool {
+        match scv {
+            // Map/vec can't be validated just based on the discriminant,
+            // as their contents can't be `None`.
+            ScVal::Vec(None) => return false,
+            ScVal::Map(None) => return false,
+            _ => Self::can_represent_scval_type(scv.discriminant()),
+        }
+    }
+
+    /// *Recursively* checks whether `ScVal` can be represented as `Val`.
+    /// This should only be used once per top-level `ScVal`.
+    pub fn can_represent_scval_recursive(scv: &ScVal) -> bool {
         match scv {
             // Handle recursive types first
             ScVal::Vec(None) => return false,
             ScVal::Map(None) => return false,
-            ScVal::Vec(Some(v)) => return v.0.iter().all(|x| Val::can_represent_scval(x)),
+            ScVal::Vec(Some(v)) => {
+                return v.0.iter().all(|x| Val::can_represent_scval_recursive(x))
+            }
             ScVal::Map(Some(m)) => {
-                return m
-                    .0
-                    .iter()
-                    .all(|e| Val::can_represent_scval(&e.key) && Val::can_represent_scval(&e.val))
+                return m.0.iter().all(|e| {
+                    Val::can_represent_scval_recursive(&e.key)
+                        && Val::can_represent_scval_recursive(&e.val)
+                })
             }
             _ => Self::can_represent_scval_type(scv.discriminant()),
         }
@@ -820,8 +837,12 @@ impl Debug for Val {
             Tag::SymbolSmall => {
                 let ss: SymbolStr =
                     unsafe { <SymbolSmall as ValConvert>::unchecked_from_val(*self) }.into();
+                // Even though this may be called for an arbitrary, not necessarily well-formed
+                // `Val`, this is still safe thanks to `SymbolSmall` iteration implementation that
+                // only returns valid symbol characters or `\0` even for invalid bit
+                // representations.
                 let s: &str = ss.as_ref();
-                write!(f, "Symbol({s})")
+                write!(f, "Symbol({})", s)
             }
 
             Tag::U64Object => fmt_obj("U64", self, f),
