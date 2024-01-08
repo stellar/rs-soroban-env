@@ -842,7 +842,7 @@ impl Debug for Val {
                 // only returns valid symbol characters or `\0` even for invalid bit
                 // representations.
                 let s: &str = ss.as_ref();
-                write!(f, "Symbol({})", converted_str)
+                write!(f, "Symbol({})", s)
             }
 
             Tag::U64Object => fmt_obj("U64", self, f),
