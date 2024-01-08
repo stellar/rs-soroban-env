@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use crate::host_object::MemHostObjectType;
 use crate::{
     budget::{AsBudget, DepthLimiter},
     err,
@@ -500,7 +501,13 @@ impl Host {
             }
             ScVal::Bytes(b) => Ok(self.add_host_object(b.metered_clone(self)?)?.into()),
             ScVal::String(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
-            ScVal::Symbol(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
+            ScVal::Symbol(s) => Ok(self
+                .add_host_object(ScSymbol::try_from_bytes(
+                    self,
+                    s.0.metered_clone(self.as_budget())?.into(),
+                )?)?
+                .into()),
+
             ScVal::Address(addr) => Ok(self.add_host_object(addr.metered_clone(self)?)?.into()),
 
             // None of the following cases should have made it into this function, they
