@@ -101,6 +101,7 @@ jobs:
     #   run: echo RUSTFLAGS='-Dwarnings' >> $GITHUB_ENV
     - run: rustup update
     - run: rustup target add ${{ matrix.sys.target }}
+    - run: cargo version
     - uses: stellar/binaries@v12
       with:
         name: cargo-hack
