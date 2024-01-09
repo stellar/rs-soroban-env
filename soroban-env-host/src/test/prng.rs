@@ -12,8 +12,8 @@ use crate::{
 /// prng tests
 
 // Copy of SymbolSmall::from_str, but not protected by feature="testutils".
-// We know our uses here are test-only.
-pub const fn ss_from_str(s: &str) -> SymbolSmall {
+#[cfg(test)]
+const fn ss_from_str(s: &str) -> SymbolSmall {
     match SymbolSmall::try_from_str(s) {
         Ok(sym) => sym,
         _ => panic!("bad symbol"),

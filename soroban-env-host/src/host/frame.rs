@@ -144,6 +144,11 @@ impl Frame {
             Frame::TestContract(tc) => Some(&tc.instance),
         }
     }
+
+    #[cfg(any(test, feature = "testutils"))]
+    fn is_contract_vm(&self) -> bool {
+        matches!(self, Frame::ContractVM { .. })
+    }
 }
 
 impl Host {
@@ -384,6 +389,16 @@ impl Host {
                 ScErrorCode::ExceededLimit,
             )
             .into());
+        }
+        #[cfg(any(test, feature = "testutils"))]
+        {
+            if let Some(ctx) = self.try_borrow_context_stack()?.last() {
+                if frame.is_contract_vm() && ctx.frame.is_contract_vm() {
+                    if let Ok(mut scoreboard) = self.try_borrow_coverage_scoreboard_mut() {
+                        scoreboard.vm_to_vm_calls += 1;
+                    }
+                }
+            }
         }
         let ctx = Context {
             frame,
@@ -907,7 +922,12 @@ impl Host {
                 || Ok(vec![]),
                 |m| {
                     m.iter()
-                        .map(|i| Ok((self.to_host_val(&i.key)?, self.to_host_val(&i.val)?)))
+                        .map(|i| {
+                            Ok((
+                                self.to_valid_host_val(&i.key)?,
+                                self.to_valid_host_val(&i.val)?,
+                            ))
+                        })
                         .metered_collect::<Result<Vec<(Val, Val)>, HostError>>(self)?
                 },
             )?,

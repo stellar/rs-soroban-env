@@ -17,9 +17,9 @@ use crate::{
         ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
-    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall,
-    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv,
-    Void, I256, U256,
+    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, TryFromVal,
+    U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv, Void, I256,
+    U256,
 };
 
 mod comparison;
@@ -56,6 +56,7 @@ pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_auth"))]
 use rand_chacha::ChaCha20Rng;
+use soroban_env_common::SymbolSmall;
 
 #[derive(Debug, Clone, Default)]
 pub struct LedgerInfo {
@@ -91,6 +92,12 @@ pub enum ContractInvocationEvent {
 
 #[cfg(any(test, feature = "testutils"))]
 pub type ContractInvocationHook = Rc<dyn for<'a> Fn(&'a Host, ContractInvocationEvent) -> ()>;
+
+#[cfg(any(test, feature = "testutils"))]
+#[derive(Clone, Default)]
+pub struct CoverageScoreboard {
+    pub vm_to_vm_calls: usize,
+}
 
 #[derive(Clone, Default)]
 struct HostImpl {
@@ -152,6 +159,15 @@ struct HostImpl {
     #[doc(hidden)]
     #[cfg(any(test, feature = "testutils"))]
     top_contract_invocation_hook: RefCell<Option<ContractInvocationHook>>,
+
+    // A utility to help us measure certain key events we're interested
+    // in observing the coverage of. Only written-to, never read, it
+    // exists only so that we can observe in aggregated code-coverage
+    // measurements whether the lines of code that write to its fields are
+    // covered.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "testutils"))]
+    coverage_scoreboard: RefCell<CoverageScoreboard>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -283,6 +299,14 @@ impl_checked_borrow_helpers!(
     try_borrow_top_contract_invocation_hook_mut
 );
 
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
+    coverage_scoreboard,
+    CoverageScoreboard,
+    try_borrow_coverage_scoreboard,
+    try_borrow_coverage_scoreboard_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -327,6 +351,8 @@ impl Host {
             lifecycle_event_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
+            #[cfg(any(test, feature = "testutils"))]
+            coverage_scoreboard: Default::default(),
         }))
     }
 
@@ -779,15 +805,23 @@ impl EnvBase for Host {
         res
     }
 
-    fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
+    fn symbol_new_from_slice(&self, s: &[u8]) -> Result<SymbolObject, HostError> {
         call_env_call_hook!(self, s.len());
+        // Note: this whole function could be replaced by `ScSymbol::try_from_bytes`
+        // in order to avoid duplication. It is duplicated in order to support
+        // a slightly different check order for the sake of observation consistency.
         self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
-        for ch in s.chars() {
-            SymbolSmall::validate_char(ch)?;
+        for b in s {
+            SymbolSmall::validate_byte(*b).map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "byte is not allowed in Symbol",
+                    &[(*b as u32).into()],
+                )
+            })?;
         }
-        let res = self.add_host_object(ScSymbol(
-            self.metered_slice_to_vec(s.as_bytes())?.try_into()?,
-        ));
+        let res = self.add_host_object(ScSymbol(self.metered_slice_to_vec(s)?.try_into()?));
         call_env_ret_hook!(self, res);
         res
     }
@@ -1490,9 +1524,11 @@ impl VmCallerEnv for Host {
             keys_pos,
             len as usize,
             |_n, slice| {
+                // Optimization note: this does an unnecessary `ScVal` roundtrip.
+                // We should just use `Symbol::try_from_val` on the slice instead.
                 self.charge_budget(ContractCostType::MemCpy, Some(slice.len() as u64))?;
                 let scsym = ScSymbol(slice.try_into()?);
-                let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
+                let sym = Symbol::try_from(self.to_valid_host_val(&ScVal::Symbol(scsym))?)?;
                 key_syms.push(sym);
                 Ok(())
             },
@@ -1914,7 +1950,7 @@ impl VmCallerEnv for Host {
                     .get(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
                 match &entry.data {
-                    LedgerEntryData::ContractData(e) => Ok(self.to_host_val(&e.val)?),
+                    LedgerEntryData::ContractData(e) => Ok(self.to_valid_host_val(&e.val)?),
                     _ => Err(self.err(
                         ScErrorType::Storage,
                         ScErrorCode::InternalError,
@@ -1948,7 +1984,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
-                let key = self.contract_data_key_from_val(k, t.try_into()?)?;
+                let key = self.storage_key_from_val(k, t.try_into()?)?;
                 self.try_borrow_storage_mut()?
                     .del(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
@@ -1983,7 +2019,7 @@ impl VmCallerEnv for Host {
                 &[],
             ))?;
         }
-        let key = self.contract_data_key_from_val(k, t.try_into()?)?;
+        let key = self.storage_key_from_val(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
             .extend_ttl(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
@@ -2229,7 +2265,12 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        if Val::can_represent_scval(&scv) {
+        // Metering bug: the representation check is not metered,
+        // so if the value is not valid, we won't charge anything for
+        // walking the `ScVal`. Since `to_host_val` performs validation
+        // and has proper metering, next protocol version should just
+        // call `to_host_val` directly.
+        if Val::can_represent_scval_recursive(&scv) {
             self.to_host_val(&scv)
         } else {
             Err(self.err(

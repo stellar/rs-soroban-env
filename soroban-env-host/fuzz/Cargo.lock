@@ -752,7 +752,7 @@ checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
 
 [[package]]
 name = "soroban-builtin-sdk-macros"
-version = "20.0.0-rc2"
+version = "20.0.0"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -762,7 +762,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-common"
-version = "20.0.0-rc2"
+version = "20.0.0"
 dependencies = [
  "arbitrary",
  "crate-git-revision",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-host"
-version = "20.0.0-rc2"
+version = "20.0.0"
 dependencies = [
  "backtrace",
  "curve25519-dalek",
@@ -814,7 +814,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-macros"
-version = "20.0.0-rc2"
+version = "20.0.0"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -827,7 +827,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-synth-wasm"
-version = "20.0.0-rc2"
+version = "20.0.0"
 dependencies = [
  "arbitrary",
  "soroban-env-common",
@@ -897,7 +897,8 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "20.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=24dd3c1b9fada6e2b28e8456a915adc212d6c47e#24dd3c1b9fada6e2b28e8456a915adc212d6c47e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9595b775539e475da4179fa46212b11e4575f526d57b13308989a8c1dd59238c"
 dependencies = [
  "arbitrary",
  "base64",

@@ -237,7 +237,7 @@ pub fn generate_hostfn_call_with_wrong_types(file_lit: LitStr) -> Result<TokenSt
         .map(|entry| {
             let target_type = entry.0;
             // we just always pick the first function, instead of a random one
-            let (target_fn, target_arg_pos) = entry.1.get(0).unwrap();
+            let (target_fn, target_arg_pos) = entry.1.first().unwrap();
             let wasm_module = format_ident!("wasm_module_calling_{}", &target_fn.name);
             let test_wrong_arg_type =
                 format_ident!("dispatch_with_wrong_arg_type_{}", &target_fn.name);
