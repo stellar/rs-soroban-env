@@ -95,8 +95,8 @@ jobs:
         rustup override set $msrv
         rustup component add clippy --toolchain $msrv
     - run: rustup update
-    - run: rustup target add ${{ matrix.sys.target }}
     - run: cargo version
+    - run: rustup target add ${{ matrix.sys.target }}
     - uses: stellar/binaries@v12
       with:
         name: cargo-hack
