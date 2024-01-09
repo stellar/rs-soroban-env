@@ -1,16 +1,16 @@
 use super::ledger_storage::{LedgerGetter, LedgerStorage};
 use super::state_ttl::{get_restored_ledger_sequence, TTLLedgerEntry};
-use crate::budget::Budget;
-use crate::e2e_invoke::{extract_rent_changes, get_ledger_changes, LedgerEntryChange, TtlEntryMap};
-use crate::fees::{
+use soroban_env_host::budget::Budget;
+use soroban_env_host::e2e_invoke::{extract_rent_changes, get_ledger_changes, LedgerEntryChange, TtlEntryMap};
+use soroban_env_host::fees::{
     compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
     FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
     WriteFeeConfiguration,
 };
-use crate::storage::{AccessType, Footprint, Storage};
-use crate::xdr;
-use crate::xdr::ContractDataDurability::Persistent;
-use crate::xdr::{
+use soroban_env_host::storage::{AccessType, Footprint, Storage};
+use soroban_env_host::xdr;
+use soroban_env_host::xdr::ContractDataDurability::Persistent;
+use soroban_env_host::xdr::{
     ConfigSettingEntry, ConfigSettingId, ContractEventType, DecoratedSignature, DiagnosticEvent,
     ExtendFootprintTtlOp, ExtensionPoint, InvokeHostFunctionOp, LedgerFootprint, LedgerKey, Limits,
     Memo, MuxedAccount, MuxedAccountMed25519, Operation, OperationBody, Preconditions,

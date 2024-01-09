@@ -14,10 +14,6 @@ build = "build.rs"
 exclude = ["observations/"]
 
 [dependencies]
-# To be removed
-anyhow = { version = "1.0.75", features = [] }
-thiserror = "1.0.46"
-
 soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi"] }
 wasmi = { workspace = true }

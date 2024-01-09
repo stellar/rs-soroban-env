@@ -1380,7 +1380,6 @@ dependencies = [
 name = "soroban-env-host"
 version = "20.1.0"
 dependencies = [
- "anyhow",
  "arbitrary",
  "backtrace",
  "bytes-lit",
@@ -1417,7 +1416,6 @@ dependencies = [
  "stellar-xdr",
  "tabwriter",
  "textplots",
- "thiserror",
  "thousands",
  "tracy-client",
  "wasm-encoder",
@@ -1435,6 +1433,17 @@ dependencies = [
  "serde_json",
  "stellar-xdr",
  "syn",
+]
+
+[[package]]
+name = "soroban-preflight"
+version = "20.1.0"
+dependencies = [
+ "anyhow",
+ "rand",
+ "soroban-env-host",
+ "static_assertions",
+ "thiserror",
 ]
 
 [[package]]

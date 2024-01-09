@@ -1,5 +1,5 @@
-use crate::xdr::ContractDataDurability::Persistent;
-use crate::xdr::{
+use soroban_env_host::xdr::ContractDataDurability::Persistent;
+use soroban_env_host::xdr::{
     ContractCodeEntry, ContractDataDurability, ContractDataEntry, LedgerEntry, LedgerEntryData,
 };
 use std::convert::TryInto;

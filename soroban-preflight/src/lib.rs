@@ -2,16 +2,16 @@ mod fees;
 mod ledger_storage;
 mod state_ttl;
 
-use crate::auth::RecordedAuthPayload;
-use crate::budget::Budget;
-use crate::events::Events;
-use crate::storage::Storage;
-use crate::xdr::{
+use soroban_env_host::auth::RecordedAuthPayload;
+use soroban_env_host::budget::Budget;
+use soroban_env_host::events::Events;
+use soroban_env_host::storage::Storage;
+use soroban_env_host::xdr::{
     AccountId, ConfigSettingEntry, ConfigSettingId, DiagnosticEvent, InvokeHostFunctionOp,
     LedgerFootprint, LedgerKey, OperationBody, ScVal, SorobanAddressCredentials,
     SorobanAuthorizationEntry, SorobanCredentials, SorobanTransactionData, VecM,
 };
-use crate::{DiagnosticLevel, Host, LedgerInfo};
+use soroban_env_host::{DiagnosticLevel, Host, LedgerInfo};
 use anyhow::{anyhow, bail, Context, Result};
 use ledger_storage::LedgerStorage;
 use std::collections::HashSet;

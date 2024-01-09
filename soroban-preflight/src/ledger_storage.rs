@@ -1,11 +1,11 @@
 use super::state_ttl::{get_restored_ledger_sequence, TTLLedgerEntry};
-use crate::storage::SnapshotSource;
-use crate::xdr::ContractDataDurability::{Persistent, Temporary};
-use crate::xdr::{
+use soroban_env_host::storage::SnapshotSource;
+use soroban_env_host::xdr::ContractDataDurability::{Persistent, Temporary};
+use soroban_env_host::xdr::{
     ConfigSettingEntry, ConfigSettingId, Error as XdrError, LedgerEntry, LedgerEntryData,
     LedgerKey, LedgerKeyConfigSetting, Limits, ScError, ScErrorCode, WriteXdr,
 };
-use crate::HostError;
+use soroban_env_host::HostError;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::convert::TryInto;
