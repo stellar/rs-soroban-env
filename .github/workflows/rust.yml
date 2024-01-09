@@ -97,10 +97,10 @@ jobs:
     - run: rustup update
     - run: cargo version
     - run: rustup target add ${{ matrix.sys.target }}
-    - uses: stellar/binaries@v12
+    - uses: stellar/binaries@v18
       with:
         name: cargo-hack
-        version: 0.5.16
+        version: 0.5.28
     - run: cargo hack --each-feature clippy --locked --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
       run: cargo hack --each-feature test --profile test-opt --locked --target ${{ matrix.sys.target }}
