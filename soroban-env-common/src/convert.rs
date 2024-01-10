@@ -525,11 +525,11 @@ where
                 unsafe { Val::from_body_and_tag(i.lo_lo, Tag::I256Small) }
             }
             ScVal::Symbol(bytes) => {
-                let ss = match std::str::from_utf8(bytes.as_slice()) {
-                    Ok(ss) => ss,
-                    Err(_) => return Err(ConversionError),
-                };
-                SymbolSmall::try_from_str(ss)?.into()
+                // NB: Long symbols are objects and should have been
+                // handled before reaching this point.
+                SymbolSmall::try_from_bytes(bytes.as_slice())
+                    .map_err(|_| ConversionError {})?
+                    .into()
             }
 
             // These should all have been classified as ScValObjRef above, or are
