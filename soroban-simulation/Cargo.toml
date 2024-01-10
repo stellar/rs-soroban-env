@@ -1,6 +1,6 @@
 [package]
 name = "soroban-preflight"
-description = "Soroban transaction preflight computations."
+description = "Soroban host invocation simulations."
 homepage = "https://github.com/stellar/rs-soroban-env"
 repository = "https://github.com/stellar/rs-soroban-env"
 authors = ["Stellar Development Foundation <info@stellar.org>"]
@@ -8,7 +8,7 @@ license = "Apache-2.0"
 version.workspace = true
 readme = "../README.md"
 edition = "2021"
-rust-version = "1.74"
+rust-version.workspace = true
 
 [dependencies]
 # To be removed
