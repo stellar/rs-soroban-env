@@ -124,6 +124,8 @@ allow_unsafe = true
 allow_unsafe = true
 build.allow_apis = [
     "env",
+    "thread",
+    "rand"
 ]
 allow_apis = [
     "time",
@@ -401,3 +403,11 @@ allow_unsafe = true
 
 [pkg.itertools]
 allow_unsafe = true
+
+[pkg.anyhow]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
