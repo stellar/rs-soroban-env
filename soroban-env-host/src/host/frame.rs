@@ -476,7 +476,7 @@ impl Host {
             // We do this _after_ the context is pushed, in order to let the
             // observation code assume a context exists
             if let Some(ctx) = self.try_borrow_context_stack()?.last() {
-                self.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::PushCtx(ctx))?;
+                self.call_any_lifecycle_hook(crate::host::TraceEvent::PushCtx(ctx))?;
             }
         }
         #[cfg(any(test, feature = "testutils"))]
@@ -579,7 +579,7 @@ impl Host {
                     Ok(v) => Ok(*v),
                     Err(ref e) => Err(e),
                 };
-                self.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::PopCtx(&ctx, &res))?;
+                self.call_any_lifecycle_hook(crate::host::TraceEvent::PopCtx(&ctx, &res))?;
             }
         }
         if res.is_err() {

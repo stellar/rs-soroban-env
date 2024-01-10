@@ -447,7 +447,7 @@ impl Host {
         func: crate::Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
-        use crate::{budget::AsBudget, host::HostLifecycleEvent};
+        use crate::{budget::AsBudget, host::TraceEvent};
         use soroban_bench_utils::HostTracker;
         use std::cell::RefCell;
 
@@ -460,7 +460,7 @@ impl Host {
             let ht2 = ht.clone();
             let budget2 = budget.clone();
             self.set_lifecycle_event_hook(Some(Rc::new(move |_, evt| {
-                if let HostLifecycleEvent::PushCtx(_) = evt {
+                if let TraceEvent::PushCtx(_) = evt {
                     budget2.reset_unlimited()?;
                     ht2.borrow_mut().start(None);
                 }

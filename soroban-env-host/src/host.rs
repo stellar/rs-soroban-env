@@ -44,6 +44,7 @@ mod validity;
 
 pub use error::HostError;
 pub use prng::{Seed, SEED_BYTES};
+pub use trace::{TraceEvent, TraceHook};
 
 use self::{
     frame::{Context, ContractReentryMode},
@@ -71,17 +72,6 @@ pub struct LedgerInfo {
     pub min_persistent_entry_ttl: u32,
     pub max_entry_ttl: u32,
 }
-
-#[allow(dead_code)]
-pub(crate) enum HostLifecycleEvent<'a> {
-    PushCtx(&'a Context),
-    PopCtx(&'a Context, &'a Result<Val, &'a HostError>),
-    EnvCall(&'static str, &'a [&'a dyn Debug]),
-    EnvRet(&'static str, &'a Result<&'a dyn Debug, &'a HostError>),
-}
-
-pub(crate) type HostLifecycleHook =
-    Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]
@@ -151,7 +141,7 @@ struct HostImpl {
     // the host's execution. No guarantees are made about the stability of this
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
-    lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
+    lifecycle_event_hook: RefCell<Option<TraceHook>>,
     // Store a simple contract invocation hook for public usage.
     // The hook triggers when the top-level contract invocation
     // starts and when it ends.
@@ -284,7 +274,7 @@ impl_checked_borrow_helpers!(
 
 impl_checked_borrow_helpers!(
     lifecycle_event_hook,
-    Option<HostLifecycleHook>,
+    Option<TraceHook>,
     try_borrow_lifecycle_event_hook,
     try_borrow_lifecycle_event_hook_mut
 );
@@ -694,7 +684,7 @@ impl EnvBase for Host {
     }
 
     fn env_call_hook(&self, fname: &'static str, args: &[&dyn Debug]) -> Result<(), HostError> {
-        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvCall(fname, args))
+        self.call_any_lifecycle_hook(TraceEvent::EnvCall(fname, args))
     }
 
     fn env_ret_hook(
@@ -702,7 +692,7 @@ impl EnvBase for Host {
         fname: &'static str,
         res: &Result<&dyn Debug, &HostError>,
     ) -> Result<(), HostError> {
-        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvRet(fname, res))
+        self.call_any_lifecycle_hook(TraceEvent::EnvRet(fname, res))
     }
 
     fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
@@ -2945,16 +2935,13 @@ impl Host {
     #[allow(dead_code)]
     pub(crate) fn set_lifecycle_event_hook(
         &self,
-        hook: Option<HostLifecycleHook>,
+        hook: Option<TraceHook>,
     ) -> Result<(), HostError> {
         *self.try_borrow_lifecycle_event_hook_mut()? = hook;
         Ok(())
     }
 
-    pub(crate) fn call_any_lifecycle_hook(
-        &self,
-        event: HostLifecycleEvent,
-    ) -> Result<(), HostError> {
+    pub(crate) fn call_any_lifecycle_hook(&self, event: TraceEvent) -> Result<(), HostError> {
         match &*self.try_borrow_lifecycle_event_hook()? {
             Some(hook) => hook(self, event),
             None => Ok(()),

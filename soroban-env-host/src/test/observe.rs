@@ -15,8 +15,7 @@
 use crate::{
     host::{
         error::HostError,
-        trace::{Observation, Step},
-        HostLifecycleEvent,
+        trace::{TraceEvent, TraceRecord},
     },
     Host,
 };
@@ -85,10 +84,10 @@ impl Observations {
     // _not_ in update_observations mode (i.e. it's enforcing) it also calls
     // assert_eq! on the observations at this point, which will cause an
     // observed test to fail if there were differences from the old recording.
-    fn check(old: &Observations, new: &mut Observations, name: &'static str, ob: Observation) {
+    fn check(old: &Observations, new: &mut Observations, name: &'static str, ob: TraceRecord) {
         let mut disagreement: Option<(usize, String, String)> = None;
 
-        if ob.step == Step::Begin {
+        if ob.event.is_begin() {
             new.0.clear();
         }
 
@@ -99,14 +98,14 @@ impl Observations {
         let prev = new.0.remove(PREV_FULL).unwrap_or_default();
         let (id, full) = ob.render(new.0.len());
         new.0.insert(PREV_FULL.to_string(), full.clone());
-        if ob.step == Step::Begin || ob.step == Step::End {
+        if ob.event.is_begin() || ob.event.is_end() {
             new.0.insert(id.clone(), full);
         } else {
             let diff = diff_line(&prev, &full);
             new.0.insert(id.clone(), diff);
         }
 
-        if ob.step == Step::End {
+        if ob.event.is_end() {
             new.0.remove(PREV_FULL);
             if old.0.len() != new.0.len() {
                 println!("old and new observations of {name} have different lengths");
@@ -179,7 +178,7 @@ impl ObservedHost {
             testname,
             host,
         };
-        oh.observe_and_check(Step::Begin);
+        oh.observe_and_check(TraceEvent::Begin);
         oh.host
             .set_lifecycle_event_hook(Some(oh.make_obs_hook()))
             .expect("installing host lifecycle hook");
@@ -189,21 +188,20 @@ impl ObservedHost {
     #[cfg(all(not(feature = "next"), feature = "testutils"))]
     fn make_obs_hook(
         &self,
-    ) -> Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>> {
+    ) -> Rc<dyn for<'a> Fn(&'a Host, TraceEvent<'a>) -> Result<(), HostError>> {
         let old_obs = self.old_obs.clone();
         let new_obs = self.new_obs.clone();
         let testname = self.testname;
         Rc::new(move |host, evt| {
-            let step = Step::from_host_lifecycle_event(evt);
-            let ob = Observation::observe(host, step).expect("observing host");
+            let ob = TraceRecord::new(host, evt).expect("observing host");
             Observations::check(&old_obs.borrow(), &mut new_obs.borrow_mut(), testname, ob);
             Ok(())
         })
     }
 
     #[cfg(all(not(feature = "next"), feature = "testutils"))]
-    fn observe_and_check(&self, step: Step) {
-        let ob = Observation::observe(&self.host, step).expect("observing host");
+    fn observe_and_check(&self, evt: TraceEvent) {
+        let ob = TraceRecord::new(&self.host, evt).expect("observing host");
         Observations::check(
             &self.old_obs.borrow(),
             &mut self.new_obs.borrow_mut(),
@@ -227,6 +225,6 @@ impl Drop for ObservedHost {
         self.host
             .set_lifecycle_event_hook(None)
             .expect("resetting host lifecycle hook");
-        self.observe_and_check(Step::End)
+        self.observe_and_check(TraceEvent::End)
     }
 }

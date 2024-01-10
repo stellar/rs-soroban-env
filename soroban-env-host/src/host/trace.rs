@@ -1,104 +1,134 @@
 #![allow(dead_code)]
 
 use crate::{
-    budget::AsBudget, events::InternalEvent, host::Frame, host::HostLifecycleEvent,
-    xdr::ContractExecutable, Host, Symbol, SymbolObject, SymbolSmall,
+    budget::AsBudget, events::InternalEvent, host::Context, host::Frame, xdr::ContractExecutable,
+    Host, HostError, Symbol, SymbolObject, SymbolSmall, Val,
 };
-use std::{collections::hash_map::DefaultHasher, fmt::Display, hash::Hasher};
+use std::{
+    collections::hash_map::DefaultHasher,
+    fmt::{Debug, Display},
+    hash::Hasher,
+    rc::Rc,
+};
 
 use super::metered_hash::MeteredHash;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Step {
+pub type TraceHook = Rc<dyn for<'a> Fn(&'a Host, TraceEvent<'a>) -> Result<(), HostError>>;
+
+pub enum TraceEvent<'a> {
     Begin,
-    Push {
-        contract: String,
-        func: String,
-        args: Vec<String>,
-    },
-    Pop {
-        contract: String,
-        func: String,
-        result: String,
-    },
-    Call(String, Vec<String>),
-    Ret(String, Result<String, String>),
+    PushCtx(&'a Context),
+    PopCtx(&'a Context, &'a Result<Val, &'a HostError>),
+    EnvCall(&'static str, &'a [&'a dyn Debug]),
+    EnvRet(&'static str, &'a Result<&'a dyn Debug, &'a HostError>),
     End,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Observation {
-    pub(crate) step: Step,
-    cpu_insns: u64,
-    mem_bytes: u64,
-    local_prng_hash: u64,
-    base_prng_hash: u64,
-    local_objs_size: usize,
-    local_objs_hash: u64,
-    global_objs_size: usize,
-    global_objs_hash: u64,
-    vm_mem_size: usize,
-    vm_mem_hash: u64,
-    vm_exports_size: usize,
-    vm_exports_hash: u64,
-    events_size: usize,
-    events_hash: u64,
-    instance_storage_size: usize,
-    instance_storage_hash: u64,
-    ledger_storage_size: usize,
-    ledger_storage_hash: u64,
-    storage_footprint_size: usize,
-    storage_footprint_hash: u64,
-    auth_stack_size: usize,
-    auth_stack_hash: u64,
-    auth_trackers_size: usize,
-    auth_trackers_hash: u64,
-    context_stack_size: usize,
-    context_stack_hash: u64,
+impl<'a> TraceEvent<'a> {
+    pub fn is_begin(&self) -> bool {
+        match self {
+            TraceEvent::Begin => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_end(&self) -> bool {
+        match self {
+            TraceEvent::End => true,
+            _ => false,
+        }
+    }
+
+    fn short_hash(hash: &crate::xdr::Hash) -> String {
+        let Ok(word) = <[u8; 4]>::try_from(&hash.0[0..4]) else {
+            return String::new();
+        };
+        format!("{:4.4x}", u32::from_be_bytes(word))
+    }
+    fn exec(exec: &ContractExecutable) -> String {
+        match exec {
+            ContractExecutable::Wasm(hash) => Self::short_hash(hash),
+            ContractExecutable::StellarAsset => "SAC".to_string(),
+        }
+    }
+    fn sym(s: &Symbol) -> String {
+        if let Ok(small) = SymbolSmall::try_from(*s) {
+            small.to_string()
+        } else if let Ok(obj) = SymbolObject::try_from(*s) {
+            format!("sym#{}", obj.get_handle())
+        } else {
+            format!("{:?}", s)
+        }
+    }
+    fn frame_contract_func_and_args(frame: &Frame) -> (String, String, &[Val]) {
+        match frame {
+            Frame::ContractVM {
+                fn_name,
+                args,
+                instance,
+                ..
+            } => (
+                format!("VM:{}", Self::exec(&instance.executable)),
+                Self::sym(fn_name).to_string(),
+                &args,
+            ),
+            // TODO: this isn't ideal, we should capture the args in Frame::HostFunction
+            Frame::HostFunction(ty) => (format!("{:?}", ty), "".to_string(), &[]),
+            Frame::StellarAssetContract(id, fn_name, args, _) => (
+                format!("SAC:{}", Self::short_hash(id)),
+                Self::sym(fn_name).to_string(),
+                &args,
+            ),
+            #[cfg(any(test, feature = "testutils"))]
+            Frame::TestContract(tc) => (
+                format!("TEST:{}", Self::short_hash(&tc.id)),
+                Self::sym(&tc.func).to_string(),
+                &tc.args,
+            ),
+        }
+    }
 }
 
-impl Display for Step {
+impl<'a> Display for TraceEvent<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Step::Push {
-                contract,
-                func,
-                args,
-            } => {
+            TraceEvent::PushCtx(ctx) => {
+                let (contract, func, args) = Self::frame_contract_func_and_args(&ctx.frame);
                 write!(f, "push {contract}:{func}(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", arg)?;
+                    write!(f, "{arg:?}")?;
                 }
                 write!(f, ")")
             }
-            Step::Pop {
-                contract,
-                func,
-                result,
-            } => {
-                write!(f, "pop {contract}:{func} -> {result}")
+            TraceEvent::PopCtx(ctx, Ok(ok)) => {
+                let (contract, func, _) = Self::frame_contract_func_and_args(&ctx.frame);
+                write!(f, "pop {contract}:{func} -> Ok({ok:?})")
             }
-            Step::Call(hostfn, args) => {
-                write!(f, "call {}(", hostfn)?;
+            TraceEvent::PopCtx(ctx, Err(err)) => {
+                let (contract, func, _) = Self::frame_contract_func_and_args(&ctx.frame);
+                write!(f, "pop {contract}:{func} -> Err({:?})", err.error)
+            }
+            TraceEvent::EnvCall(hostfn, args) => {
+                write!(f, "call {hostfn}(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", arg)?;
+                    write!(f, "{arg:?}")?;
                 }
                 write!(f, ")")
             }
-            Step::Ret(hostfn, Ok(ok)) => {
-                write!(f, "ret {} -> Ok({})", hostfn, ok)
+            TraceEvent::EnvRet(hostfn, Ok(ok)) => {
+                write!(f, "ret {hostfn} -> Ok({ok:?})")
             }
-            Step::Ret(hostfn, Err(err)) => {
-                write!(f, "ret {} -> Err({})", hostfn, err)
+            TraceEvent::EnvRet(hostfn, Err(err)) => {
+                write!(f, "ret {hostfn} -> Err({:?})", err.error)
             }
-            Step::Begin => write!(f, "begin"),
-            Step::End => write!(f, "end"),
+            TraceEvent::Begin => write!(f, "begin"),
+            TraceEvent::End => write!(f, "end"),
         }
     }
 }
@@ -322,89 +352,37 @@ impl Host {
     }
 }
 
-impl Step {
-    pub(crate) fn from_host_lifecycle_event(evt: HostLifecycleEvent<'_>) -> Self {
-        match evt {
-            HostLifecycleEvent::PushCtx(context) => {
-                let (contract, func, args) = Self::frame_contract_func_and_args(&context.frame);
-                Step::Push {
-                    contract,
-                    func,
-                    args,
-                }
-            }
-            HostLifecycleEvent::PopCtx(context, result) => {
-                let (contract, func, _) = Self::frame_contract_func_and_args(&context.frame);
-                // We only want to see the error code here, not debuginfo.
-                let result = format!("{:?}", result.clone().map_err(|he| he.error));
-                Step::Pop {
-                    contract,
-                    func,
-                    result,
-                }
-            }
-            HostLifecycleEvent::EnvCall(fname, args) => Step::Call(
-                fname.to_string(),
-                args.iter().map(|arg| format!("{:?}", *arg)).collect(),
-            ),
-            HostLifecycleEvent::EnvRet(fname, res) => Step::Ret(
-                fname.to_string(),
-                res.map(|x| format!("{:?}", x))
-                    .map_err(|x| format!("{:?}", x.error)),
-            ),
-        }
-    }
-    fn short_hash(hash: &crate::xdr::Hash) -> String {
-        let Ok(word) = <[u8; 4]>::try_from(&hash.0[0..4]) else {
-            return String::new();
-        };
-        format!("{:4.4x}", u32::from_be_bytes(word))
-    }
-    fn exec(exec: &ContractExecutable) -> String {
-        match exec {
-            ContractExecutable::Wasm(hash) => Self::short_hash(hash),
-            ContractExecutable::StellarAsset => "SAC".to_string(),
-        }
-    }
-    fn sym(s: &Symbol) -> String {
-        if let Ok(small) = SymbolSmall::try_from(*s) {
-            small.to_string()
-        } else if let Ok(obj) = SymbolObject::try_from(*s) {
-            format!("sym#{}", obj.get_handle())
-        } else {
-            format!("{:?}", s)
-        }
-    }
-    fn frame_contract_func_and_args(frame: &Frame) -> (String, String, Vec<String>) {
-        match frame {
-            Frame::ContractVM {
-                fn_name,
-                args,
-                instance,
-                ..
-            } => (
-                format!("VM:{}", Self::exec(&instance.executable)),
-                Self::sym(fn_name).to_string(),
-                args.iter().map(|arg| format!("{:?}", arg)).collect(),
-            ),
-            // TODO: this isn't ideal, we should capture the args in Frame::HostFunction
-            Frame::HostFunction(ty) => (format!("{:?}", ty), "".to_string(), vec![]),
-            Frame::StellarAssetContract(id, fn_name, args, _) => (
-                format!("SAC:{}", Self::short_hash(id)),
-                Self::sym(fn_name).to_string(),
-                args.iter().map(|arg| format!("{:?}", arg)).collect(),
-            ),
-            #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(tc) => (
-                format!("TEST:{}", Self::short_hash(&tc.id)),
-                Self::sym(&tc.func).to_string(),
-                tc.args.iter().map(|arg| format!("{:?}", arg)).collect(),
-            ),
-        }
-    }
+pub(crate) struct TraceRecord<'a> {
+    pub(crate) event: TraceEvent<'a>,
+    cpu_insns: u64,
+    mem_bytes: u64,
+    local_prng_hash: u64,
+    base_prng_hash: u64,
+    local_objs_size: usize,
+    local_objs_hash: u64,
+    global_objs_size: usize,
+    global_objs_hash: u64,
+    vm_mem_size: usize,
+    vm_mem_hash: u64,
+    vm_exports_size: usize,
+    vm_exports_hash: u64,
+    events_size: usize,
+    events_hash: u64,
+    instance_storage_size: usize,
+    instance_storage_hash: u64,
+    ledger_storage_size: usize,
+    ledger_storage_hash: u64,
+    storage_footprint_size: usize,
+    storage_footprint_hash: u64,
+    auth_stack_size: usize,
+    auth_stack_hash: u64,
+    auth_trackers_size: usize,
+    auth_trackers_hash: u64,
+    context_stack_size: usize,
+    context_stack_hash: u64,
 }
 
-impl Observation {
+impl<'a> TraceRecord<'a> {
     fn render_hash(hash: u64) -> String {
         // Truncate the hash to u32, to fit on a line.
         if hash == 0 {
@@ -427,7 +405,7 @@ impl Observation {
     // a rendering of the number `n`.
     pub(crate) fn render(&self, n: usize) -> (String, String) {
         (
-            format!("{:4.4} {}", n, self.step),
+            format!("{:4.4} {}", n, self.event),
             format!(
                 "cpu:{}, mem:{}, prngs:{}/{}, objs:{}/{}, vm:{}/{}, evt:{}, store:{}/{}, foot:{}, stk:{}, auth:{}/{}",
                 self.cpu_insns,
@@ -448,7 +426,7 @@ impl Observation {
             ),
         )
     }
-    pub(crate) fn observe(host: &Host, step: Step) -> Option<Self> {
+    pub(crate) fn new(host: &Host, event: TraceEvent<'a>) -> Option<Self> {
         let budget = host.budget_ref();
         if budget.ensure_shadow_cpu_limit_factor(100).is_err() {
             return None;
@@ -459,8 +437,8 @@ impl Observation {
             let (vm_exports_hash, vm_exports_size) = host.vm_exports_hash_and_size();
             let (auth_trackers_hash, auth_trackers_size) = host.auth_trackers_hash_and_size();
 
-            obs = Some(Observation {
-                step,
+            obs = Some(TraceRecord {
+                event,
                 cpu_insns: host.as_budget().get_cpu_insns_consumed()?,
                 mem_bytes: host.as_budget().get_mem_bytes_consumed()?,
                 local_prng_hash: host.local_prng_hash(),
