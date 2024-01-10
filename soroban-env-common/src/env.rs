@@ -79,7 +79,11 @@ pub trait EnvBase: Sized + Clone {
     /// A general interface for tracing all env-method calls, intended to
     /// be called from macros that do dispatch on all such methods.
     #[cfg(feature = "std")]
-    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
+    fn env_call_hook(
+        &self,
+        _fname: &'static str,
+        _args: &[&dyn core::fmt::Debug],
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -89,7 +93,7 @@ pub trait EnvBase: Sized + Clone {
     fn env_ret_hook(
         &self,
         _fname: &'static str,
-        _res: &Result<String, &Self::Error>,
+        _res: &Result<&dyn core::fmt::Debug, &Self::Error>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

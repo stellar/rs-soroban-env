@@ -75,9 +75,9 @@ pub struct LedgerInfo {
 #[allow(dead_code)]
 pub(crate) enum HostLifecycleEvent<'a> {
     PushCtx(&'a Context),
-    PopCtx(&'a Context, &'a Result<Val, HostError>),
-    EnvCall(&'static str, &'a [String]),
-    EnvRet(&'static str, &'a Result<String, String>),
+    PopCtx(&'a Context, &'a Result<Val, &'a HostError>),
+    EnvCall(&'static str, &'a [&'a dyn Debug]),
+    EnvRet(&'static str, &'a Result<&'a dyn Debug, &'a HostError>),
 }
 
 pub(crate) type HostLifecycleHook =
@@ -581,18 +581,18 @@ impl Host {
 macro_rules! call_env_call_hook {
     ($self:expr, $($arg:expr),*) => {
         {
-            $self.env_call_hook(function_short_name!(), &[$(format!("{:?}", $arg)),*])?;
+            $self.env_call_hook(function_short_name!(), &[$(&$arg),*])?;
         }
     };
 }
 
 macro_rules! call_env_ret_hook {
     ($self:expr, $arg:expr) => {{
-        let res_str: Result<String, &HostError> = match &$arg {
-            Ok(ok) => Ok(format!("{:?}", ok)),
+        let dyn_res: Result<&dyn core::fmt::Debug, &HostError> = match &$arg {
+            Ok(ref ok) => Ok(ok),
             Err(err) => Err(err),
         };
-        $self.env_ret_hook(function_short_name!(), &res_str)?;
+        $self.env_ret_hook(function_short_name!(), &dyn_res)?;
     }};
 }
 
@@ -693,20 +693,16 @@ impl EnvBase for Host {
         x
     }
 
-    fn env_call_hook(&self, fname: &'static str, args: &[String]) -> Result<(), HostError> {
+    fn env_call_hook(&self, fname: &'static str, args: &[&dyn Debug]) -> Result<(), HostError> {
         self.call_any_lifecycle_hook(HostLifecycleEvent::EnvCall(fname, args))
     }
 
     fn env_ret_hook(
         &self,
         fname: &'static str,
-        res: &Result<String, &HostError>,
+        res: &Result<&dyn Debug, &HostError>,
     ) -> Result<(), HostError> {
-        // We have to defer error formatting to here because the Env type does
-        // not know enough about the structure of errors (in particular that we
-        // do _not_ want to format debuginfo into the lifecycle-hook string).
-        let res = res.clone().map_err(|he| format!("{:?}", he.error));
-        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvRet(fname, &res))
+        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvRet(fname, res))
     }
 
     fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {

@@ -571,11 +571,14 @@ impl Host {
                 res = Err(e)
             }
         }
-        #[cfg(feature = "testutils")]
         {
             // We do this _before_ the context is popped, in order to let the
             // observation code assume a context exists
             if let Some(ctx) = self.try_borrow_context_stack()?.last() {
+                let res = match &res {
+                    Ok(v) => Ok(*v),
+                    Err(ref e) => Err(e),
+                };
                 self.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::PopCtx(&ctx, &res))?;
             }
         }

@@ -343,10 +343,15 @@ impl Step {
                     result,
                 }
             }
-            HostLifecycleEvent::EnvCall(fname, args) => {
-                Step::Call(fname.to_string(), args.iter().cloned().collect())
-            }
-            HostLifecycleEvent::EnvRet(fname, res) => Step::Ret(fname.to_string(), res.clone()),
+            HostLifecycleEvent::EnvCall(fname, args) => Step::Call(
+                fname.to_string(),
+                args.iter().map(|arg| format!("{:?}", *arg)).collect(),
+            ),
+            HostLifecycleEvent::EnvRet(fname, res) => Step::Ret(
+                fname.to_string(),
+                res.map(|x| format!("{:?}", x))
+                    .map_err(|x| format!("{:?}", x.error)),
+            ),
         }
     }
     fn short_hash(hash: &crate::xdr::Hash) -> String {

@@ -8,6 +8,7 @@ use crate::{
     I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
     U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
+use core::fmt::Debug;
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
 use wasmi::{
     core::{Trap, TrapCode::BadSignature},
@@ -47,6 +48,43 @@ macro_rules! impl_relative_object_conversion {
                 Ok(Self::try_from(host.relative_to_absolute(self.into())?)?)
             }
         }
+    };
+}
+
+enum TraceArg<T: Debug> {
+    Bad(i64),
+    Ok(T),
+}
+impl<T> Debug for TraceArg<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TraceArg::Bad(i) => write!(f, "bad:{:?}", i),
+            TraceArg::Ok(t) => write!(f, "{:?}", t),
+        }
+    }
+}
+
+macro_rules! homogenize_tuple {
+    ($u:ident, ()) => {
+        &[]
+    };
+    ($u:ident, ($_a:expr)) => {
+        &[&$u]
+    };
+    ($u:ident, ($_a:expr, $_b:expr)) => {
+        &[&$u.0, &$u.1]
+    };
+    ($u:ident, ($_a:expr, $_b:expr, $_c:expr)) => {
+        &[&$u.0, &$u.1, &$u.2]
+    };
+    ($u:ident, ($_a:expr, $_b:expr, $_c:expr, $_d:expr)) => {
+        &[&$u.0, &$u.1, &$u.2, &$u.3]
+    };
+    ($u:ident, ($_a:expr, $_b:expr, $_c:expr, $_d:expr, $_e:expr)) => {
+        &[&$u.0, &$u.1, &$u.2, &$u.3, &$u.4]
     };
 }
 
@@ -161,17 +199,15 @@ macro_rules! generate_dispatch_functions {
                     let host = caller.data().clone();
 
                     {
-                        host.env_call_hook(&core::stringify!($fn_id), &[$(
-                            // Incoming args might or might-not be type-correct;
-                            // we attempt to unmarshal here but fail safely and
-                            // log the bad i64 if it doesn't work. The failure
-                            // will be repeated below in the attempted call, and
-                            // will propagate.
+                        #[allow(unused)]
+                        let trace_args = ($(
                             match <$type>::try_marshal_from_relative_value(Value::I64($arg), &host) {
-                                Ok(val) => format!("{:?}", val),
-                                Err(_) => format!("bad:{:?}", $arg),
+                                Ok(val) => TraceArg::Ok(val),
+                                Err(_) => TraceArg::Bad($arg),
                             }
-                        ),*])?;
+                        ),*);
+                        let hook_args: &[&dyn std::fmt::Debug] = homogenize_tuple!(trace_args, ($($arg),*));
+                        host.env_call_hook(&core::stringify!($fn_id), hook_args)?;
                     }
 
                     // This is where the VM -> Host boundary is crossed.
@@ -196,11 +232,11 @@ macro_rules! generate_dispatch_functions {
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::check_env_arg(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?, &host)?),*);
 
                     {
-                        let res_str: Result<String,&HostError> = match &res {
-                            Ok(ok) => Ok(format!("{:?}", ok)),
+                        let dyn_res: Result<&dyn core::fmt::Debug,&HostError> = match &res {
+                            Ok(ref ok) => Ok(ok),
                             Err(err) => Err(err)
                         };
-                        host.env_ret_hook(&core::stringify!($fn_id), &res_str)?;
+                        host.env_ret_hook(&core::stringify!($fn_id), &dyn_res)?;
                     }
 
                     // On the off chance we got an error with no context, we can
