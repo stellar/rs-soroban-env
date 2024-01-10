@@ -308,9 +308,7 @@ impl Vm {
 
             Ok(vm)
         } else {
-            let vm = instantiate()?;
-
-            Ok(vm)
+            instantiate()
         }
     }
 
