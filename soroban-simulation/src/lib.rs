@@ -272,7 +272,7 @@ pub fn preflight_footprint_ttl_op(
     }
 }
 
-pub fn preflight_extend_footprint_ttl(
+fn preflight_extend_footprint_ttl(
     footprint: LedgerFootprint,
     extend_to: u32,
     ledger_storage: &LedgerStorage,
@@ -294,7 +294,7 @@ pub fn preflight_extend_footprint_ttl(
     })
 }
 
-pub fn preflight_restore_footprint(
+fn preflight_restore_footprint(
     footprint: LedgerFootprint,
     ledger_storage: &LedgerStorage,
     bucket_list_size: u64,
