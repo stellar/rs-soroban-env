@@ -196,6 +196,87 @@ impl Vm {
         Ok(())
     }
 
+    /// Instantiates a VM given the arguments provided in [`Self::new`]
+    pub fn instantiate(
+        host: &Host,
+        contract_id: Hash,
+        module_wasm_code: &[u8],
+    ) -> Result<Rc<Self>, HostError> {
+        host.charge_budget(
+            ContractCostType::VmInstantiation,
+            Some(module_wasm_code.len() as u64),
+        )?;
+
+        let mut config = wasmi::Config::default();
+        let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
+
+        // Turn off most optional wasm features, leaving on some
+        // post-MVP features commonly enabled by Rust and Clang.
+        config
+            .wasm_multi_value(false)
+            .wasm_mutable_global(true)
+            .wasm_saturating_float_to_int(false)
+            .wasm_sign_extension(true)
+            .floats(false)
+            .consume_fuel(true)
+            .fuel_consumption_mode(FuelConsumptionMode::Eager)
+            .set_fuel_costs(fuel_costs);
+
+        let engine = Engine::new(&config);
+        let module = {
+            let _span0 = tracy_span!("parse module");
+            host.map_err(Module::new(&engine, module_wasm_code))?
+        };
+
+        Self::check_max_args(host, &module)?;
+        Self::check_meta_section(host, &module)?;
+
+        let mut store = Store::new(&engine, host.clone());
+        store.limiter(|host| host);
+
+        let mut linker = <Linker<Host>>::new(&engine);
+
+        {
+            let _span0 = tracy_span!("define host functions");
+            for hf in HOST_FUNCTIONS {
+                let func = (hf.wrap)(&mut store);
+                host.map_err(
+                    linker
+                        .define(hf.mod_str, hf.fn_str, func)
+                        .map_err(|le| wasmi::Error::Linker(le)),
+                )?;
+            }
+        }
+
+        let not_started_instance = {
+            let _span0 = tracy_span!("instantiate module");
+            host.map_err(linker.instantiate(&mut store, &module))?
+        };
+
+        let instance = host.map_err(
+            not_started_instance
+                .ensure_no_start(&mut store)
+                .map_err(|ie| wasmi::Error::Instantiation(ie)),
+        )?;
+
+        let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
+            ext.into_memory()
+        } else {
+            None
+        };
+
+        // Here we do _not_ supply the store with any fuel. Fuel is supplied
+        // right before the VM is being run, i.e., before crossing the host->VM
+        // boundary.
+        Ok(Rc::new(Self {
+            contract_id,
+            module,
+            store: RefCell::new(store),
+            instance,
+            memory,
+        }))
+    }
+
     /// Constructs a new instance of a [Vm] within the provided [Host],
     /// establishing a new execution context for a contract identified by
     /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
@@ -221,85 +302,9 @@ impl Vm {
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
 
-        let instantiate = || -> Result<Rc<Self>, HostError> {
-            host.charge_budget(
-                ContractCostType::VmInstantiation,
-                Some(module_wasm_code.len() as u64),
-            )?;
-
-            let mut config = wasmi::Config::default();
-            let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
-
-            // Turn off most optional wasm features, leaving on some
-            // post-MVP features commonly enabled by Rust and Clang.
-            config
-                .wasm_multi_value(false)
-                .wasm_mutable_global(true)
-                .wasm_saturating_float_to_int(false)
-                .wasm_sign_extension(true)
-                .floats(false)
-                .consume_fuel(true)
-                .fuel_consumption_mode(FuelConsumptionMode::Eager)
-                .set_fuel_costs(fuel_costs);
-
-            let engine = Engine::new(&config);
-            let module = {
-                let _span0 = tracy_span!("parse module");
-                host.map_err(Module::new(&engine, module_wasm_code))?
-            };
-
-            Self::check_max_args(host, &module)?;
-            Self::check_meta_section(host, &module)?;
-
-            let mut store = Store::new(&engine, host.clone());
-            store.limiter(|host| host);
-
-            let mut linker = <Linker<Host>>::new(&engine);
-
-            {
-                let _span0 = tracy_span!("define host functions");
-                for hf in HOST_FUNCTIONS {
-                    let func = (hf.wrap)(&mut store);
-                    host.map_err(
-                        linker
-                            .define(hf.mod_str, hf.fn_str, func)
-                            .map_err(|le| wasmi::Error::Linker(le)),
-                    )?;
-                }
-            }
-
-            let not_started_instance = {
-                let _span0 = tracy_span!("instantiate module");
-                host.map_err(linker.instantiate(&mut store, &module))?
-            };
-
-            let instance = host.map_err(
-                not_started_instance
-                    .ensure_no_start(&mut store)
-                    .map_err(|ie| wasmi::Error::Instantiation(ie)),
-            )?;
-
-            let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
-                ext.into_memory()
-            } else {
-                None
-            };
-
-            // Here we do _not_ supply the store with any fuel. Fuel is supplied
-            // right before the VM is being run, i.e., before crossing the host->VM
-            // boundary.
-            Ok(Rc::new(Self {
-                contract_id,
-                module,
-                store: RefCell::new(store),
-                instance,
-                memory,
-            }))
-        };
-
         if cfg!(feature = "time") {
             let now = Instant::now();
-            let vm = instantiate()?;
+            let vm = Self::instantiate(host, contract_id, module_wasm_code)?;
 
             host.as_budget().track_time(
                 ContractCostType::VmInstantiation,
@@ -308,7 +313,7 @@ impl Vm {
 
             Ok(vm)
         } else {
-            instantiate()
+            Self::instantiate(host, contract_id, module_wasm_code)
         }
     }
 
