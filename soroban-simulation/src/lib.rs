@@ -44,7 +44,7 @@ pub fn preflight_invoke_hf_op(
     source_account: AccountId,
     ledger_info: LedgerInfo,
     enable_debug: bool,
-) -> Result<PreflightResult> {
+) -> std::result::Result<PreflightResult, Box<dyn std::error::Error>> {
     let ledger_storage_rc = Rc::new(ledger_storage);
     let budget = get_budget_from_network_config_params(&ledger_storage_rc)
         .context("cannot create budget")?;
@@ -250,8 +250,8 @@ pub fn preflight_footprint_ttl_op(
     op_body: OperationBody,
     footprint: LedgerFootprint,
     current_ledger_seq: u32,
-) -> Result<PreflightResult> {
-    match op_body {
+) -> std::result::Result<PreflightResult, Box<dyn std::error::Error>> {
+    let a = match op_body {
         OperationBody::ExtendFootprintTtl(op) => preflight_extend_footprint_ttl(
             footprint,
             op.extend_to,
@@ -269,7 +269,8 @@ pub fn preflight_footprint_ttl_op(
             "preflight_footprint_ttl_op(): unsupported operation type {}",
             op.name()
         )),
-    }
+    };
+    Ok(a?)
 }
 
 fn preflight_extend_footprint_ttl(

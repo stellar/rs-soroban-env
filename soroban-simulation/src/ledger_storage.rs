@@ -82,7 +82,7 @@ pub trait LedgerGetter {
         &self,
         key: &LedgerKey,
         include_not_live: bool,
-    ) -> anyhow::Result<(LedgerEntry, Option<u32>), Error>;
+    ) -> Result<(LedgerEntry, Option<u32>), Error>;
 }
 
 pub struct LedgerStorage {
