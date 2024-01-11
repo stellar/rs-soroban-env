@@ -302,7 +302,7 @@ impl Vm {
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
 
-        if cfg!(feature = "time") {
+        if cfg!(not(target_family = "wasm")) {
             let now = Instant::now();
             let vm = Self::instantiate(host, contract_id, module_wasm_code)?;
 
