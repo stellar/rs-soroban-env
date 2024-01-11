@@ -18,6 +18,7 @@ exclude = ["soroban-test-wasms/wasm-workspace"]
 
 [workspace.package]
 version = "20.1.0"
+rust-version = "1.74.0"
 
 [workspace.dependencies]
 soroban-env-common = { version = "=20.1.0", path = "soroban-env-common", default-features = false }
