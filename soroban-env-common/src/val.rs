@@ -248,11 +248,11 @@ impl Tag {
 #[derive(Copy, Clone)]
 pub struct Val(u64);
 
-impl Default for Val {
-    fn default() -> Self {
-        Self::from_void().into()
-    }
-}
+// impl Default for Val {
+//     fn default() -> Self {
+//         Self::from_void().into()
+//     }
+// }
 
 // Impl AsRef/AsMut and TryFromVal<Val> so that clients can abstract over a
 // wrapper-or-Val because all wrappers also impl these.
