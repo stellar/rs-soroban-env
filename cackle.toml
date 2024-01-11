@@ -124,11 +124,11 @@ allow_unsafe = true
 allow_unsafe = true
 build.allow_apis = [
     "env",
-    "thread",
-    "rand"
 ]
 allow_apis = [
     "time",
+    "thread",
+    "rand",
 ]
 
 [pkg.unicode-ident]
