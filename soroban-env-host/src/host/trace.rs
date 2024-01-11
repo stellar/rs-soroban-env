@@ -1,17 +1,18 @@
 #![allow(dead_code)]
-
-use crate::{
-    budget::AsBudget, events::InternalEvent, host::Context, host::Frame, xdr::ContractExecutable,
-    Host, HostError, Symbol, SymbolObject, SymbolSmall, Val,
-};
-use std::{
-    collections::hash_map::DefaultHasher,
-    fmt::{Debug, Display},
-    hash::Hasher,
-    rc::Rc,
-};
-
 use super::metered_hash::MeteredHash;
+use crate::{
+    budget::AsBudget, events::InternalEvent, host::Context, host::Frame, Host, HostError, Val,
+};
+use std::{collections::hash_map::DefaultHasher, fmt::Debug, hash::Hasher, rc::Rc};
+
+// Formatting TraceEvents and TraceStates is done in a submodule.
+mod fmt;
+
+// When capturing a TraceState, we want to ensure that the shadow budget is much higher
+// than normal; not so high that it will run forever but high enough that we can manage
+// to actually record the quantity of detail that tracing records (eg. hashing everything
+// in the host on every host function call and return!).
+const TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR: u64 = 100;
 
 pub type TraceHook = Rc<dyn for<'a> Fn(&'a Host, TraceEvent<'a>) -> Result<(), HostError>>;
 
@@ -24,112 +25,102 @@ pub enum TraceEvent<'a> {
     End,
 }
 
-impl<'a> TraceEvent<'a> {
-    pub fn is_begin(&self) -> bool {
-        match self {
-            TraceEvent::Begin => true,
-            _ => false,
-        }
-    }
+/// A TraceRecord is simply a pair of a [TraceEvent] and a [TraceState] with a
+/// convenience constructor that tries to build the [TraceState] and returns the
+/// [TraceEvent] in a `Result::Err` if it fails (eg. if the shadow budget is
+/// exhausted).
+pub struct TraceRecord<'a> {
+    pub event: TraceEvent<'a>,
+    pub state: TraceState,
+}
 
-    pub fn is_end(&self) -> bool {
-        match self {
-            TraceEvent::End => true,
-            _ => false,
-        }
-    }
-
-    fn short_hash(hash: &crate::xdr::Hash) -> String {
-        let Ok(word) = <[u8; 4]>::try_from(&hash.0[0..4]) else {
-            return String::new();
-        };
-        format!("{:4.4x}", u32::from_be_bytes(word))
-    }
-    fn exec(exec: &ContractExecutable) -> String {
-        match exec {
-            ContractExecutable::Wasm(hash) => Self::short_hash(hash),
-            ContractExecutable::StellarAsset => "SAC".to_string(),
-        }
-    }
-    fn sym(s: &Symbol) -> String {
-        if let Ok(small) = SymbolSmall::try_from(*s) {
-            small.to_string()
-        } else if let Ok(obj) = SymbolObject::try_from(*s) {
-            format!("sym#{}", obj.get_handle())
-        } else {
-            format!("{:?}", s)
-        }
-    }
-    fn frame_contract_func_and_args(frame: &Frame) -> (String, String, &[Val]) {
-        match frame {
-            Frame::ContractVM {
-                fn_name,
-                args,
-                instance,
-                ..
-            } => (
-                format!("VM:{}", Self::exec(&instance.executable)),
-                Self::sym(fn_name).to_string(),
-                &args,
-            ),
-            // TODO: this isn't ideal, we should capture the args in Frame::HostFunction
-            Frame::HostFunction(ty) => (format!("{:?}", ty), "".to_string(), &[]),
-            Frame::StellarAssetContract(id, fn_name, args, _) => (
-                format!("SAC:{}", Self::short_hash(id)),
-                Self::sym(fn_name).to_string(),
-                &args,
-            ),
-            #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(tc) => (
-                format!("TEST:{}", Self::short_hash(&tc.id)),
-                Self::sym(&tc.func).to_string(),
-                &tc.args,
-            ),
+impl<'a> TraceRecord<'a> {
+    pub(crate) fn new(host: &Host, event: TraceEvent<'a>) -> Result<Self, TraceEvent<'a>> {
+        match TraceState::new(host) {
+            Some(state) => Ok(Self { event, state }),
+            None => Err(event),
         }
     }
 }
 
-impl<'a> Display for TraceEvent<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TraceEvent::PushCtx(ctx) => {
-                let (contract, func, args) = Self::frame_contract_func_and_args(&ctx.frame);
-                write!(f, "push {contract}:{func}(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg:?}")?;
-                }
-                write!(f, ")")
-            }
-            TraceEvent::PopCtx(ctx, Ok(ok)) => {
-                let (contract, func, _) = Self::frame_contract_func_and_args(&ctx.frame);
-                write!(f, "pop {contract}:{func} -> Ok({ok:?})")
-            }
-            TraceEvent::PopCtx(ctx, Err(err)) => {
-                let (contract, func, _) = Self::frame_contract_func_and_args(&ctx.frame);
-                write!(f, "pop {contract}:{func} -> Err({:?})", err.error)
-            }
-            TraceEvent::EnvCall(hostfn, args) => {
-                write!(f, "call {hostfn}(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg:?}")?;
-                }
-                write!(f, ")")
-            }
-            TraceEvent::EnvRet(hostfn, Ok(ok)) => {
-                write!(f, "ret {hostfn} -> Ok({ok:?})")
-            }
-            TraceEvent::EnvRet(hostfn, Err(err)) => {
-                write!(f, "ret {hostfn} -> Err({:?})", err.error)
-            }
-            TraceEvent::Begin => write!(f, "begin"),
-            TraceEvent::End => write!(f, "end"),
+/// TraceState holds a summary of the state of a Soroban host at a particular moment.
+/// It is relatively expensive to capture, and is captured under the shadow budget.
+/// If the shadow budget is exhausted, capturing the TraceState will fail (which is
+/// why its constructor returns an `Option`).
+pub struct TraceState {
+    cpu_insns: u64,
+    mem_bytes: u64,
+    local_prng_hash: u64,
+    base_prng_hash: u64,
+    local_objs_size: usize,
+    local_objs_hash: u64,
+    global_objs_size: usize,
+    global_objs_hash: u64,
+    vm_mem_size: usize,
+    vm_mem_hash: u64,
+    vm_exports_size: usize,
+    vm_exports_hash: u64,
+    events_size: usize,
+    events_hash: u64,
+    instance_storage_size: usize,
+    instance_storage_hash: u64,
+    ledger_storage_size: usize,
+    ledger_storage_hash: u64,
+    storage_footprint_size: usize,
+    storage_footprint_hash: u64,
+    auth_stack_size: usize,
+    auth_stack_hash: u64,
+    auth_trackers_size: usize,
+    auth_trackers_hash: u64,
+    context_stack_size: usize,
+    context_stack_hash: u64,
+}
+
+impl TraceState {
+    fn new(host: &Host) -> Option<Self> {
+        let budget = host.budget_ref();
+        if budget
+            .ensure_shadow_cpu_limit_factor(TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR)
+            .is_err()
+        {
+            return None;
         }
+        let mut state = None;
+        budget.with_shadow_mode(|| {
+            let (vm_mem_hash, vm_mem_size) = host.memory_hash_and_size();
+            let (vm_exports_hash, vm_exports_size) = host.vm_exports_hash_and_size();
+            let (auth_trackers_hash, auth_trackers_size) = host.auth_trackers_hash_and_size();
+            state = Some(TraceState {
+                cpu_insns: host.as_budget().get_cpu_insns_consumed()?,
+                mem_bytes: host.as_budget().get_mem_bytes_consumed()?,
+                local_prng_hash: host.local_prng_hash(),
+                base_prng_hash: host.base_prng_hash(),
+                local_objs_size: host.local_objs_size(),
+                local_objs_hash: host.local_objs_hash(),
+                global_objs_size: host.global_objs_size(),
+                global_objs_hash: host.global_objs_hash(),
+                vm_mem_size,
+                vm_mem_hash,
+                vm_exports_size,
+                vm_exports_hash,
+                events_size: host.events_size(),
+                events_hash: host.events_hash(),
+                instance_storage_size: host.instance_storage_size(),
+                instance_storage_hash: host.instance_storage_hash(),
+                ledger_storage_size: host.ledger_storage_size(),
+                ledger_storage_hash: host.ledger_storage_hash(),
+                storage_footprint_size: host.storage_footprint_size(),
+                storage_footprint_hash: host.storage_footprint_hash(),
+                context_stack_size: host.context_stack_size(),
+                context_stack_hash: host.context_stack_hash(),
+                auth_stack_size: host.auth_stack_size(),
+                auth_stack_hash: host.auth_stack_hash(),
+                auth_trackers_size,
+                auth_trackers_hash,
+            });
+            Ok(())
+        });
+        state
     }
 }
 
@@ -349,125 +340,5 @@ impl Host {
             }
         }
         (0, 0)
-    }
-}
-
-pub(crate) struct TraceRecord<'a> {
-    pub(crate) event: TraceEvent<'a>,
-    cpu_insns: u64,
-    mem_bytes: u64,
-    local_prng_hash: u64,
-    base_prng_hash: u64,
-    local_objs_size: usize,
-    local_objs_hash: u64,
-    global_objs_size: usize,
-    global_objs_hash: u64,
-    vm_mem_size: usize,
-    vm_mem_hash: u64,
-    vm_exports_size: usize,
-    vm_exports_hash: u64,
-    events_size: usize,
-    events_hash: u64,
-    instance_storage_size: usize,
-    instance_storage_hash: u64,
-    ledger_storage_size: usize,
-    ledger_storage_hash: u64,
-    storage_footprint_size: usize,
-    storage_footprint_hash: u64,
-    auth_stack_size: usize,
-    auth_stack_hash: u64,
-    auth_trackers_size: usize,
-    auth_trackers_hash: u64,
-    context_stack_size: usize,
-    context_stack_hash: u64,
-}
-
-impl<'a> TraceRecord<'a> {
-    fn render_hash(hash: u64) -> String {
-        // Truncate the hash to u32, to fit on a line.
-        if hash == 0 {
-            "-".to_string()
-        } else {
-            format!("{:4.4x}", hash as u32)
-        }
-    }
-
-    fn render_size_and_hash(size: usize, hash: u64) -> String {
-        if size == 0 {
-            "-".to_string()
-        } else {
-            format!("{}@{}", size, Self::render_hash(hash))
-        }
-    }
-
-    // Render needs to return a (key,value) pair for step number `n` in a given
-    // test. The returned key needs to be unique and should probably start with
-    // a rendering of the number `n`.
-    pub(crate) fn render(&self, n: usize) -> (String, String) {
-        (
-            format!("{:4.4} {}", n, self.event),
-            format!(
-                "cpu:{}, mem:{}, prngs:{}/{}, objs:{}/{}, vm:{}/{}, evt:{}, store:{}/{}, foot:{}, stk:{}, auth:{}/{}",
-                self.cpu_insns,
-                self.mem_bytes,
-                Self::render_hash(self.local_prng_hash),
-                Self::render_hash(self.base_prng_hash),
-                Self::render_size_and_hash(self.local_objs_size, self.local_objs_hash),
-                Self::render_size_and_hash(self.global_objs_size, self.global_objs_hash),
-                Self::render_size_and_hash(self.vm_mem_size, self.vm_mem_hash),
-                Self::render_size_and_hash(self.vm_exports_size, self.vm_exports_hash),
-                Self::render_size_and_hash(self.events_size, self.events_hash),
-                Self::render_size_and_hash(self.instance_storage_size, self.instance_storage_hash),
-                Self::render_size_and_hash(self.ledger_storage_size, self.ledger_storage_hash),
-                Self::render_size_and_hash(self.storage_footprint_size, self.storage_footprint_hash),
-                Self::render_size_and_hash(self.context_stack_size, self.context_stack_hash),
-                Self::render_size_and_hash(self.auth_stack_size, self.auth_stack_hash),
-                Self::render_size_and_hash(self.auth_trackers_size, self.auth_trackers_hash),
-            ),
-        )
-    }
-    pub(crate) fn new(host: &Host, event: TraceEvent<'a>) -> Option<Self> {
-        let budget = host.budget_ref();
-        if budget.ensure_shadow_cpu_limit_factor(100).is_err() {
-            return None;
-        }
-        let mut obs = None;
-        budget.with_shadow_mode(|| {
-            let (vm_mem_hash, vm_mem_size) = host.memory_hash_and_size();
-            let (vm_exports_hash, vm_exports_size) = host.vm_exports_hash_and_size();
-            let (auth_trackers_hash, auth_trackers_size) = host.auth_trackers_hash_and_size();
-
-            obs = Some(TraceRecord {
-                event,
-                cpu_insns: host.as_budget().get_cpu_insns_consumed()?,
-                mem_bytes: host.as_budget().get_mem_bytes_consumed()?,
-                local_prng_hash: host.local_prng_hash(),
-                base_prng_hash: host.base_prng_hash(),
-                local_objs_size: host.local_objs_size(),
-                local_objs_hash: host.local_objs_hash(),
-                global_objs_size: host.global_objs_size(),
-                global_objs_hash: host.global_objs_hash(),
-                vm_mem_size,
-                vm_mem_hash,
-                vm_exports_size,
-                vm_exports_hash,
-                events_size: host.events_size(),
-                events_hash: host.events_hash(),
-                instance_storage_size: host.instance_storage_size(),
-                instance_storage_hash: host.instance_storage_hash(),
-                ledger_storage_size: host.ledger_storage_size(),
-                ledger_storage_hash: host.ledger_storage_hash(),
-                storage_footprint_size: host.storage_footprint_size(),
-                storage_footprint_hash: host.storage_footprint_hash(),
-                context_stack_size: host.context_stack_size(),
-                context_stack_hash: host.context_stack_hash(),
-                auth_stack_size: host.auth_stack_size(),
-                auth_stack_hash: host.auth_stack_hash(),
-                auth_trackers_size,
-                auth_trackers_hash,
-            });
-            Ok(())
-        });
-        obs
     }
 }

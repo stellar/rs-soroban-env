@@ -84,10 +84,10 @@ impl Observations {
     // _not_ in update_observations mode (i.e. it's enforcing) it also calls
     // assert_eq! on the observations at this point, which will cause an
     // observed test to fail if there were differences from the old recording.
-    fn check(old: &Observations, new: &mut Observations, name: &'static str, ob: TraceRecord) {
+    fn check(old: &Observations, new: &mut Observations, name: &'static str, tr: TraceRecord) {
         let mut disagreement: Option<(usize, String, String)> = None;
 
-        if ob.event.is_begin() {
+        if tr.event.is_begin() {
             new.0.clear();
         }
 
@@ -96,16 +96,19 @@ impl Observations {
         // the last line's full state, for greater compactness and legibility.
         const PREV_FULL: &str = "___PREV_FULL";
         let prev = new.0.remove(PREV_FULL).unwrap_or_default();
-        let (id, full) = ob.render(new.0.len());
-        new.0.insert(PREV_FULL.to_string(), full.clone());
-        if ob.event.is_begin() || ob.event.is_end() {
-            new.0.insert(id.clone(), full);
+
+        let key = format!("{:4.4} {}", new.0.len(), tr.event);
+        let value = format!("{}", tr.state);
+
+        new.0.insert(PREV_FULL.to_string(), value.clone());
+        if tr.event.is_begin() || tr.event.is_end() {
+            new.0.insert(key.clone(), value);
         } else {
-            let diff = diff_line(&prev, &full);
-            new.0.insert(id.clone(), diff);
+            let diff = diff_line(&prev, &value);
+            new.0.insert(key.clone(), diff);
         }
 
-        if ob.event.is_end() {
+        if tr.event.is_end() {
             new.0.remove(PREV_FULL);
             if old.0.len() != new.0.len() {
                 println!("old and new observations of {name} have different lengths");
@@ -193,20 +196,20 @@ impl ObservedHost {
         let new_obs = self.new_obs.clone();
         let testname = self.testname;
         Rc::new(move |host, evt| {
-            let ob = TraceRecord::new(host, evt).expect("observing host");
-            Observations::check(&old_obs.borrow(), &mut new_obs.borrow_mut(), testname, ob);
+            let tr = TraceRecord::new(host, evt).expect("observing host");
+            Observations::check(&old_obs.borrow(), &mut new_obs.borrow_mut(), testname, tr);
             Ok(())
         })
     }
 
     #[cfg(all(not(feature = "next"), feature = "testutils"))]
     fn observe_and_check(&self, evt: TraceEvent) {
-        let ob = TraceRecord::new(&self.host, evt).expect("observing host");
+        let tr = TraceRecord::new(&self.host, evt).expect("observing host");
         Observations::check(
             &self.old_obs.borrow(),
             &mut self.new_obs.borrow_mut(),
             self.testname,
-            ob,
+            tr,
         );
     }
 }
