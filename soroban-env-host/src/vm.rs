@@ -197,7 +197,7 @@ impl Vm {
     }
 
     /// Instantiates a VM given the arguments provided in [`Self::new`]
-    pub fn instantiate(
+    fn instantiate(
         host: &Host,
         contract_id: Hash,
         module_wasm_code: &[u8],
