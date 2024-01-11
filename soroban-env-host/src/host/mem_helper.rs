@@ -333,7 +333,7 @@ impl Host {
             )
         })?;
         copy_bytes_in(obj_buf)?;
-        self.add_host_object(HOT::try_from(obj_new)?)
+        self.add_host_object(HOT::try_from_bytes(self, obj_new)?)
     }
 
     pub(crate) fn memobj_copy_from_slice<HOT: MemHostObjectType>(
@@ -372,7 +372,7 @@ impl Host {
         self.charge_budget(ContractCostType::MemAlloc, Some(len as u64))?;
         let mut vnew: Vec<u8> = vec![0; len as usize];
         self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut vnew)?;
-        self.add_host_object::<HOT>(vnew.try_into()?)
+        self.add_host_object::<HOT>(HOT::try_from_bytes(self, vnew)?)
     }
 
     pub(crate) fn symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<bool, HostError> {

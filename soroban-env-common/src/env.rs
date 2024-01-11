@@ -168,7 +168,7 @@ pub trait EnvBase: Sized + Clone {
     fn string_new_from_slice(&self, slice: &[u8]) -> Result<StringObject, Self::Error>;
 
     /// Form a new `Symbol` host object from a slice of client memory.
-    fn symbol_new_from_slice(&self, slice: &str) -> Result<SymbolObject, Self::Error>;
+    fn symbol_new_from_slice(&self, slice: &[u8]) -> Result<SymbolObject, Self::Error>;
 
     /// Form a new `Map` host object from a slice of symbol-names and a slice of values.
     /// Keys must be in sorted order.

@@ -534,7 +534,7 @@ mod tests {
             }),
             ScVal::Bytes(xdr::ScBytes::try_from(vec![]).unwrap()),
             ScVal::String(xdr::ScString::try_from(vec![]).unwrap()),
-            ScVal::Symbol(xdr::ScSymbol::try_from("big-symbol").unwrap()),
+            ScVal::Symbol(xdr::ScSymbol::try_from("very_big_symbol").unwrap()),
             ScVal::Vec(Some(xdr::ScVec::try_from((0,)).unwrap())),
             ScVal::Map(Some(xdr::ScMap::try_from(vec![]).unwrap())),
             ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
@@ -702,7 +702,7 @@ mod tests {
             Tag::StringObject => Val::try_from_val(host, &"foo").unwrap(),
             Tag::SymbolObject => Val::try_from_val(
                 host,
-                &ScVal::Symbol(xdr::ScSymbol::try_from("a-big-symbol").unwrap()),
+                &ScVal::Symbol(xdr::ScSymbol::try_from("a_very_big_symbol").unwrap()),
             )
             .unwrap(),
             Tag::VecObject => {

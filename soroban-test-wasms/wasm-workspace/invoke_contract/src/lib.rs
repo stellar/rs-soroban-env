@@ -51,4 +51,8 @@ impl Contract {
             vec![&env, threshold.into_val(&env), (extend_to + 10u32).into_val(&env)],
         )
     }
+
+    pub fn get_protocol_version(env: Env) -> u32 {
+        env.ledger().protocol_version()
+    }
 }
