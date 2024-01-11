@@ -196,32 +196,12 @@ impl Vm {
         Ok(())
     }
 
-    /// Constructs a new instance of a [Vm] within the provided [Host],
-    /// establishing a new execution context for a contract identified by
-    /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
-    ///
-    /// This function performs several steps:
-    ///
-    ///   - Parses and performs WASM validation on the module.
-    ///   - Checks that the module contains an [meta::INTERFACE_VERSION] that
-    ///     matches the host.
-    ///   - Checks that the module has no floating point code or `start`
-    ///     function, or post-MVP wasm extensions.
-    ///   - Instantiates the module, leaving it ready to accept function
-    ///     invocations.
-    ///   - Looks up and caches its linear memory export named `memory`
-    ///     if it exists.
-    ///
-    /// This method is called automatically as part of [Host::invoke_function]
-    /// and does not usually need to be called from outside the crate.
-    pub fn new(
+    /// Instantiates a VM given the arguments provided in [`Self::new`]
+    fn instantiate(
         host: &Host,
         contract_id: Hash,
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
-        let _span = tracy_span!("Vm::new");
-        let now = Instant::now();
-
         host.charge_budget(
             ContractCostType::VmInstantiation,
             Some(module_wasm_code.len() as u64),
@@ -288,19 +268,53 @@ impl Vm {
         // Here we do _not_ supply the store with any fuel. Fuel is supplied
         // right before the VM is being run, i.e., before crossing the host->VM
         // boundary.
-        let vm = Rc::new(Self {
+        Ok(Rc::new(Self {
             contract_id,
             module,
             store: RefCell::new(store),
             instance,
             memory,
-        });
+        }))
+    }
 
-        host.as_budget().track_time(
-            ContractCostType::VmInstantiation,
-            now.elapsed().as_nanos() as u64,
-        )?;
-        Ok(vm)
+    /// Constructs a new instance of a [Vm] within the provided [Host],
+    /// establishing a new execution context for a contract identified by
+    /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
+    ///
+    /// This function performs several steps:
+    ///
+    ///   - Parses and performs WASM validation on the module.
+    ///   - Checks that the module contains an [meta::INTERFACE_VERSION] that
+    ///     matches the host.
+    ///   - Checks that the module has no floating point code or `start`
+    ///     function, or post-MVP wasm extensions.
+    ///   - Instantiates the module, leaving it ready to accept function
+    ///     invocations.
+    ///   - Looks up and caches its linear memory export named `memory`
+    ///     if it exists.
+    ///
+    /// This method is called automatically as part of [Host::invoke_function]
+    /// and does not usually need to be called from outside the crate.
+    pub fn new(
+        host: &Host,
+        contract_id: Hash,
+        module_wasm_code: &[u8],
+    ) -> Result<Rc<Self>, HostError> {
+        let _span = tracy_span!("Vm::new");
+
+        if cfg!(not(target_family = "wasm")) {
+            let now = Instant::now();
+            let vm = Self::instantiate(host, contract_id, module_wasm_code)?;
+
+            host.as_budget().track_time(
+                ContractCostType::VmInstantiation,
+                now.elapsed().as_nanos() as u64,
+            )?;
+
+            Ok(vm)
+        } else {
+            Self::instantiate(host, contract_id, module_wasm_code)
+        }
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {
