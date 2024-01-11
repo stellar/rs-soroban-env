@@ -66,6 +66,7 @@ jobs:
   build-and-test:
     strategy:
       matrix:
+        rust: [msrv, latest]
         sys:
         - os: ubuntu-latest
           target: wasm32-unknown-unknown
@@ -87,12 +88,19 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: stellar/actions/rust-cache@main
+    - name: Use the minimum supported Rust version
+      if: matrix.rust == 'msrv'
+      run: |
+        msrv="$(cargo metadata --format-version 1 --no-deps | jq -r '.packages | map(.rust_version) | map(values) | min')"
+        rustup override set $msrv
+        rustup component add clippy --toolchain $msrv
     - run: rustup update
+    - run: cargo version
     - run: rustup target add ${{ matrix.sys.target }}
-    - uses: stellar/binaries@v12
+    - uses: stellar/binaries@v18
       with:
         name: cargo-hack
-        version: 0.5.16
+        version: 0.5.28
     - run: cargo hack --each-feature clippy --locked --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
       run: cargo hack --each-feature test --profile test-opt --locked --target ${{ matrix.sys.target }}
