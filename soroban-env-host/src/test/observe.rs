@@ -181,7 +181,6 @@ impl ObservedHost {
             testname,
             host,
         };
-        oh.observe_and_check(TraceEvent::Begin);
         oh.host
             .set_trace_hook(Some(oh.make_obs_hook()))
             .expect("installing host lifecycle hook");
@@ -201,17 +200,6 @@ impl ObservedHost {
             Ok(())
         })
     }
-
-    #[cfg(all(not(feature = "next"), feature = "testutils"))]
-    fn observe_and_check(&self, evt: TraceEvent) {
-        let tr = TraceRecord::new(&self.host, evt).expect("observing host");
-        Observations::check(
-            &self.old_obs.borrow(),
-            &mut self.new_obs.borrow_mut(),
-            self.testname,
-            tr,
-        );
-    }
 }
 
 impl std::ops::Deref for ObservedHost {
@@ -228,6 +216,5 @@ impl Drop for ObservedHost {
         self.host
             .set_trace_hook(None)
             .expect("resetting host lifecycle hook");
-        self.observe_and_check(TraceEvent::End)
     }
 }

@@ -18,7 +18,9 @@ pub type TraceHook = Rc<dyn for<'a> Fn(&'a Host, TraceEvent<'a>) -> Result<(), H
 
 pub enum TraceEvent<'a> {
     Begin,
+    #[allow(private_interfaces)]
     PushCtx(&'a Context),
+    #[allow(private_interfaces)]
     PopCtx(&'a Context, &'a Result<Val, &'a HostError>),
     EnvCall(&'static str, &'a [&'a dyn Debug]),
     EnvRet(&'static str, &'a Result<&'a dyn Debug, &'a HostError>),

@@ -44,7 +44,7 @@ mod validity;
 
 pub use error::HostError;
 pub use prng::{Seed, SEED_BYTES};
-pub use trace::{TraceEvent, TraceHook, TraceState, TraceRecord};
+pub use trace::{TraceEvent, TraceHook, TraceRecord, TraceState};
 
 use self::{
     frame::{Context, ContractReentryMode},
@@ -2933,11 +2933,10 @@ impl Host {
 
 impl Host {
     #[allow(dead_code)]
-    pub(crate) fn set_trace_hook(
-        &self,
-        hook: Option<TraceHook>,
-    ) -> Result<(), HostError> {
+    pub(crate) fn set_trace_hook(&self, hook: Option<TraceHook>) -> Result<(), HostError> {
+        self.call_any_lifecycle_hook(TraceEvent::End)?;
         *self.try_borrow_trace_hook_mut()? = hook;
+        self.call_any_lifecycle_hook(TraceEvent::Begin)?;
         Ok(())
     }
 
