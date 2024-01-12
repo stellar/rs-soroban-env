@@ -35,7 +35,7 @@ pub struct TraceRecord<'a> {
 }
 
 impl<'a> TraceRecord<'a> {
-    pub(crate) fn new(host: &Host, event: TraceEvent<'a>) -> Result<Self, TraceEvent<'a>> {
+    pub fn new(host: &Host, event: TraceEvent<'a>) -> Result<Self, TraceEvent<'a>> {
         match TraceState::new(host) {
             Some(state) => Ok(Self { event, state }),
             None => Err(event),
@@ -77,7 +77,7 @@ pub struct TraceState {
 }
 
 impl TraceState {
-    fn new(host: &Host) -> Option<Self> {
+    pub fn new(host: &Host) -> Option<Self> {
         let budget = host.budget_ref();
         if budget
             .ensure_shadow_cpu_limit_factor(TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR)

@@ -471,7 +471,6 @@ impl Host {
             storage: None,
         };
         let rp = self.push_context(ctx)?;
-        #[cfg(feature = "testutils")]
         {
             // We do this _after_ the context is pushed, in order to let the
             // observation code assume a context exists
