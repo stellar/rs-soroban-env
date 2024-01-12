@@ -51,7 +51,7 @@ pub(crate) fn compute_host_function_transaction_data_and_min_fee(
         write_entries: u32::try_from(soroban_resources.footprint.read_write.as_vec().len())?,
         read_bytes: soroban_resources.read_bytes,
         write_bytes: soroban_resources.write_bytes,
-        // Note: we could get a better transaction size if the full transaction was passed down to libpreflight
+        // Note: we could get a better transaction size if the full transaction was passed down
         transaction_size_bytes: estimate_max_transaction_size_for_operation(
             &OperationBody::InvokeHostFunction(op.clone()),
             &soroban_resources.footprint,

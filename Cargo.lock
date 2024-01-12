@@ -1436,7 +1436,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-preflight"
+name = "soroban-simulation"
 version = "20.1.0"
 dependencies = [
  "anyhow",

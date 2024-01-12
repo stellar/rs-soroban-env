@@ -1,5 +1,5 @@
 [package]
-name = "soroban-preflight"
+name = "soroban-simulation"
 description = "Soroban host invocation simulations."
 homepage = "https://github.com/stellar/rs-soroban-env"
 repository = "https://github.com/stellar/rs-soroban-env"

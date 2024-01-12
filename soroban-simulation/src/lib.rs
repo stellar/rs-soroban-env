@@ -25,7 +25,7 @@ pub struct RestorePreamble {
 }
 
 #[derive(Default)]
-pub struct PreflightResult {
+pub struct SimulationResult {
     pub error: String,
     pub auth: Vec<SorobanAuthorizationEntry>,
     pub result: Option<ScVal>,
@@ -37,14 +37,14 @@ pub struct PreflightResult {
     pub restore_preamble: Option<RestorePreamble>,
 }
 
-pub fn preflight_invoke_hf_op(
+pub fn simulate_invoke_hf_op(
     ledger_storage: LedgerStorage,
     bucket_list_size: u64,
     invoke_hf_op: InvokeHostFunctionOp,
     source_account: AccountId,
     ledger_info: LedgerInfo,
     enable_debug: bool,
-) -> std::result::Result<PreflightResult, Box<dyn std::error::Error>> {
+) -> std::result::Result<SimulationResult, Box<dyn std::error::Error>> {
     let ledger_storage_rc = Rc::new(ledger_storage);
     let budget = get_budget_from_network_config_params(&ledger_storage_rc)
         .context("cannot create budget")?;
@@ -77,7 +77,7 @@ pub fn preflight_invoke_hf_op(
             .context("cannot set authorization entries")?;
     }
 
-    // Run the preflight.
+    // Run the simulation.
     let maybe_result = host
         .invoke_function(invoke_hf_op.host_function.clone())
         .context("host invocation failed");
@@ -102,7 +102,7 @@ pub fn preflight_invoke_hf_op(
         Ok(r) => r,
         // If the invocation failed, try to at least add the diagnostic events
         Err(e) => {
-            return Ok(PreflightResult {
+            return Ok(SimulationResult {
                 // See https://docs.rs/anyhow/latest/anyhow/struct.Error.html#display-representations
                 error: format!("{e:?}"),
                 events: diagnostic_events,
@@ -135,7 +135,7 @@ pub fn preflight_invoke_hf_op(
     )
     .context("cannot compute restore preamble")?;
 
-    Ok(PreflightResult {
+    Ok(SimulationResult {
         auth: auths.to_vec(),
         result: Some(result),
         transaction_data: Some(transaction_data),
@@ -244,42 +244,42 @@ fn get_budget_from_network_config_params(ledger_storage: &LedgerStorage) -> Resu
     Ok(budget)
 }
 
-pub fn preflight_footprint_ttl_op(
+pub fn simulate_footprint_ttl_op(
     ledger_storage: &LedgerStorage,
     bucket_list_size: u64,
     op_body: OperationBody,
     footprint: LedgerFootprint,
     current_ledger_seq: u32,
-) -> std::result::Result<PreflightResult, Box<dyn std::error::Error>> {
+) -> std::result::Result<SimulationResult, Box<dyn std::error::Error>> {
     let a = match op_body {
-        OperationBody::ExtendFootprintTtl(op) => preflight_extend_footprint_ttl(
+        OperationBody::ExtendFootprintTtl(op) => simulate_extend_footprint_ttl(
             footprint,
             op.extend_to,
             ledger_storage,
             bucket_list_size,
             current_ledger_seq,
         ),
-        OperationBody::RestoreFootprint(_) => preflight_restore_footprint(
+        OperationBody::RestoreFootprint(_) => simulate_restore_footprint(
             footprint,
             ledger_storage,
             bucket_list_size,
             current_ledger_seq,
         ),
         op => Err(anyhow!(
-            "preflight_footprint_ttl_op(): unsupported operation type {}",
+            "simulate_footprint_ttl_op(): unsupported operation type {}",
             op.name()
         )),
     };
     Ok(a?)
 }
 
-fn preflight_extend_footprint_ttl(
+fn simulate_extend_footprint_ttl(
     footprint: LedgerFootprint,
     extend_to: u32,
     ledger_storage: &LedgerStorage,
     bucket_list_size: u64,
     current_ledger_seq: u32,
-) -> Result<PreflightResult> {
+) -> Result<SimulationResult> {
     let (transaction_data, min_fee) =
         fees::compute_extend_footprint_ttl_transaction_data_and_min_fee(
             footprint,
@@ -288,26 +288,26 @@ fn preflight_extend_footprint_ttl(
             bucket_list_size,
             current_ledger_seq,
         )?;
-    Ok(PreflightResult {
+    Ok(SimulationResult {
         transaction_data: Some(transaction_data),
         min_fee,
         ..Default::default()
     })
 }
 
-fn preflight_restore_footprint(
+fn simulate_restore_footprint(
     footprint: LedgerFootprint,
     ledger_storage: &LedgerStorage,
     bucket_list_size: u64,
     current_ledger_seq: u32,
-) -> Result<PreflightResult> {
+) -> Result<SimulationResult> {
     let (transaction_data, min_fee) = fees::compute_restore_footprint_transaction_data_and_min_fee(
         footprint,
         ledger_storage,
         bucket_list_size,
         current_ledger_seq,
     )?;
-    Ok(PreflightResult {
+    Ok(SimulationResult {
         transaction_data: Some(transaction_data),
         min_fee,
         ..Default::default()
