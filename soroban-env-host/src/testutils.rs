@@ -459,7 +459,7 @@ impl Host {
         if std::env::var("EXCLUDE_VM_INSTANTIATION").is_ok() {
             let ht2 = ht.clone();
             let budget2 = budget.clone();
-            self.set_lifecycle_event_hook(Some(Rc::new(move |_, evt| {
+            self.set_trace_hook(Some(Rc::new(move |_, evt| {
                 if let TraceEvent::PushCtx(_) = evt {
                     budget2.reset_unlimited()?;
                     ht2.borrow_mut().start(None);
@@ -470,7 +470,7 @@ impl Host {
             ht.borrow_mut().start(None);
         }
         let val = self.call(contract, func, args);
-        self.set_lifecycle_event_hook(None)?;
+        self.set_trace_hook(None)?;
 
         let (cpu_actual, mem_actual, time_nsecs) = Rc::into_inner(ht).unwrap().into_inner().stop();
 

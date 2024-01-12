@@ -44,7 +44,7 @@ mod validity;
 
 pub use error::HostError;
 pub use prng::{Seed, SEED_BYTES};
-pub use trace::{TraceEvent, TraceHook};
+pub use trace::{TraceEvent, TraceHook, TraceState, TraceRecord};
 
 use self::{
     frame::{Context, ContractReentryMode},
@@ -141,7 +141,7 @@ struct HostImpl {
     // the host's execution. No guarantees are made about the stability of this
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
-    lifecycle_event_hook: RefCell<Option<TraceHook>>,
+    trace_hook: RefCell<Option<TraceHook>>,
     // Store a simple contract invocation hook for public usage.
     // The hook triggers when the top-level contract invocation
     // starts and when it ends.
@@ -273,10 +273,10 @@ impl_checked_borrow_helpers!(
 );
 
 impl_checked_borrow_helpers!(
-    lifecycle_event_hook,
+    trace_hook,
     Option<TraceHook>,
-    try_borrow_lifecycle_event_hook,
-    try_borrow_lifecycle_event_hook_mut
+    try_borrow_trace_hook,
+    try_borrow_trace_hook_mut
 );
 
 #[cfg(any(test, feature = "testutils"))]
@@ -335,7 +335,7 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
-            lifecycle_event_hook: RefCell::new(None),
+            trace_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
@@ -2933,16 +2933,16 @@ impl Host {
 
 impl Host {
     #[allow(dead_code)]
-    pub(crate) fn set_lifecycle_event_hook(
+    pub(crate) fn set_trace_hook(
         &self,
         hook: Option<TraceHook>,
     ) -> Result<(), HostError> {
-        *self.try_borrow_lifecycle_event_hook_mut()? = hook;
+        *self.try_borrow_trace_hook_mut()? = hook;
         Ok(())
     }
 
     pub(crate) fn call_any_lifecycle_hook(&self, event: TraceEvent) -> Result<(), HostError> {
-        match &*self.try_borrow_lifecycle_event_hook()? {
+        match &*self.try_borrow_trace_hook()? {
             Some(hook) => hook(self, event),
             None => Ok(()),
         }

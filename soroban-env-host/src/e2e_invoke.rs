@@ -12,7 +12,7 @@ use crate::{
         crypto::sha256_hash_from_bytes,
         ledger_info_helper::get_key_durability,
         metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
-        metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
+        metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr}, TraceHook,
     },
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
     xdr::{
@@ -231,6 +231,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     encoded_ttl_entries: I,
     base_prng_seed: T,
     diagnostic_events: &mut Vec<DiagnosticEvent>,
+    trace_hook: Option<TraceHook>
 ) -> Result<InvokeHostFunctionResult, HostError> {
     let _span0 = tracy_span!("invoke_host_function");
 
@@ -250,6 +251,9 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
 
     let storage = Storage::with_enforcing_footprint_and_map(footprint, storage_map);
     let host = Host::with_storage_and_budget(storage, budget.clone());
+    if let Some(th) = trace_hook {
+        host.set_trace_hook(Some(th))?;
+    }
     let auth_entries = host.build_auth_entries_from_xdr(encoded_auth_entries)?;
     let host_function: HostFunction = host.metered_from_xdr(encoded_host_fn.as_ref())?;
     let source_account: AccountId = host.metered_from_xdr(encoded_source_account.as_ref())?;

@@ -183,7 +183,7 @@ impl ObservedHost {
         };
         oh.observe_and_check(TraceEvent::Begin);
         oh.host
-            .set_lifecycle_event_hook(Some(oh.make_obs_hook()))
+            .set_trace_hook(Some(oh.make_obs_hook()))
             .expect("installing host lifecycle hook");
         oh
     }
@@ -226,7 +226,7 @@ impl std::ops::Deref for ObservedHost {
 impl Drop for ObservedHost {
     fn drop(&mut self) {
         self.host
-            .set_lifecycle_event_hook(None)
+            .set_trace_hook(None)
             .expect("resetting host lifecycle hook");
         self.observe_and_check(TraceEvent::End)
     }
