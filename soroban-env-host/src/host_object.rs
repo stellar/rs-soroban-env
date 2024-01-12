@@ -18,8 +18,7 @@ use crate::{
 pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
 pub(crate) type HostVec = MeteredVector<Val>;
 
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) enum HostObject {
     Vec(HostVec),
     Map(HostMap),

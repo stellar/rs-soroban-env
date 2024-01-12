@@ -18,7 +18,11 @@ pub(crate) use dispatch::dummy0;
 use crate::{
     budget::{AsBudget, Budget},
     err,
-    host::{error::TryBorrowOrErr, metered_clone::MeteredContainer, metered_hash::MeteredHash},
+    host::{
+        error::TryBorrowOrErr,
+        metered_clone::MeteredContainer,
+        metered_hash::{CountingHasher, MeteredHash},
+    },
     meta::{self, get_ledger_protocol_version},
     xdr::{ContractCostType, Hash, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
@@ -59,20 +63,9 @@ pub struct Vm {
     pub(crate) memory: Option<Memory>,
 }
 
-#[cfg(feature = "testutils")]
 impl std::hash::Hash for Vm {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.contract_id.hash(state);
-    }
-}
-
-impl MeteredHash for Vm {
-    fn metered_hash<H: std::hash::Hasher>(
-        &self,
-        state: &mut H,
-        budget: &crate::budget::Budget,
-    ) -> Result<(), HostError> {
-        self.contract_id.metered_hash(state, budget)
     }
 }
 
@@ -509,13 +502,12 @@ impl Vm {
     }
 
     pub(crate) fn memory_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
-        use std::collections::hash_map::DefaultHasher;
         use std::hash::Hasher;
         if let Some(mem) = self.memory {
             self.with_vmcaller(|vmcaller| {
-                let mut state = DefaultHasher::default();
+                let mut state = CountingHasher::default();
                 let data = mem.data(vmcaller.try_ref()?);
-                u8::metered_hash_slice(data, &mut state, budget)?;
+                data.metered_hash(&mut state, budget)?;
                 Ok((state.finish(), data.len()))
             })
         } else {
@@ -527,13 +519,12 @@ impl Vm {
     // wasm _exports_. There might be tables or globals a wasm doesn't export
     // but there's no obvious way to observe them.
     pub(crate) fn exports_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
-        use std::collections::hash_map::DefaultHasher;
         use std::hash::Hasher;
         use wasmi::{Extern, StoreContext};
         self.with_vmcaller(|vmcaller| {
             let ctx: StoreContext<'_, _> = vmcaller.try_ref()?.into();
             let mut size: usize = 0;
-            let mut state = DefaultHasher::default();
+            let mut state = CountingHasher::default();
             for export in self.instance.exports(vmcaller.try_ref()?) {
                 size = size.saturating_add(1);
                 export.name().metered_hash(&mut state, budget)?;

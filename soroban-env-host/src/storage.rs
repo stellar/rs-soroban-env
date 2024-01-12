@@ -11,10 +11,7 @@ use std::rc::Rc;
 
 use crate::{
     budget::Budget,
-    host::{
-        ledger_info_helper::get_key_durability, metered_hash::MeteredHash,
-        metered_map::MeteredOrdMap,
-    },
+    host::{ledger_info_helper::get_key_durability, metered_map::MeteredOrdMap},
     xdr::{ContractDataDurability, LedgerEntry, LedgerKey, ScErrorCode, ScErrorType},
     Env, Error, Host, HostError, Val,
 };
@@ -26,22 +23,10 @@ pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<EntryWithLiveUntil>, B
 /// The in-memory instance storage of the current running contract. Initially
 /// contains entries from the `ScMap` of the corresponding `ScContractInstance`
 /// contract data entry.
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct InstanceStorageMap {
     pub(crate) map: MeteredOrdMap<Val, Val, Host>,
     pub(crate) is_modified: bool,
-}
-
-impl MeteredHash for InstanceStorageMap {
-    fn metered_hash<H: std::hash::Hasher>(
-        &self,
-        state: &mut H,
-        budget: &Budget,
-    ) -> Result<(), HostError> {
-        self.map.metered_hash(state, budget)?;
-        self.is_modified.metered_hash(state, budget)
-    }
 }
 
 impl InstanceStorageMap {
@@ -56,8 +41,7 @@ impl InstanceStorageMap {
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
 /// in a given transaction.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is only read.
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is only _allowed_ to be read.
@@ -65,16 +49,6 @@ pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is written (and also possibly read)
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is _allowed_ to be written (and also allowed to be read).
     ReadWrite,
-}
-
-impl MeteredHash for AccessType {
-    fn metered_hash<H: std::hash::Hasher>(
-        &self,
-        state: &mut H,
-        budget: &Budget,
-    ) -> Result<(), HostError> {
-        self.hash_discriminant(state, budget)
-    }
 }
 
 /// A helper type used by [FootprintMode::Recording] to provide access
@@ -94,8 +68,7 @@ pub trait SnapshotSource {
 /// running a "preflight" execution in [FootprintMode::Recording],
 /// against a suitably fresh [SnapshotSource].
 // Notes on metering: covered by the underneath `MeteredOrdMap`.
-#[derive(Clone, Default)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Default, Hash)]
 pub struct Footprint(pub FootprintMap);
 
 impl Footprint {

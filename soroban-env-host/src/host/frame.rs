@@ -19,8 +19,6 @@ use crate::{
 use core::cell::RefCell;
 use std::rc::Rc;
 
-use super::metered_hash::MeteredHash;
-
 /// Determines the re-entry mode for calling a contract.
 pub(crate) enum ContractReentryMode {
     /// Re-entry is completely prohibited.
@@ -63,23 +61,6 @@ pub(crate) struct TestContractFrame {
     pub(crate) instance: ScContractInstance,
 }
 
-#[cfg(any(test, feature = "testutils"))]
-impl MeteredHash for TestContractFrame {
-    fn metered_hash<H: std::hash::Hasher>(
-        &self,
-        state: &mut H,
-        budget: &crate::budget::Budget,
-    ) -> Result<(), HostError> {
-        self.id.metered_hash(state, budget)?;
-        self.func.metered_hash(state, budget)?;
-        self.args.metered_hash(state, budget)?;
-        if let Some(panic) = self.panic.borrow().as_ref() {
-            panic.metered_hash(state, budget)?;
-        }
-        self.instance.metered_hash(state, budget)
-    }
-}
-
 #[cfg(feature = "testutils")]
 impl std::hash::Hash for TestContractFrame {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -108,24 +89,11 @@ impl TestContractFrame {
 
 /// Context pairs a variable-case [`Frame`] enum with state that's common to all
 /// cases (eg. a [`Prng`]).
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct Context {
     pub(crate) frame: Frame,
     pub(crate) prng: Option<Prng>,
     pub(crate) storage: Option<InstanceStorageMap>,
-}
-
-impl MeteredHash for Context {
-    fn metered_hash<H: std::hash::Hasher>(
-        &self,
-        state: &mut H,
-        budget: &crate::budget::Budget,
-    ) -> Result<(), HostError> {
-        self.frame.metered_hash(state, budget)?;
-        self.prng.metered_hash(state, budget)?;
-        self.storage.metered_hash(state, budget)
-    }
 }
 
 /// Holds contextual information about a single invocation, either
@@ -139,8 +107,7 @@ impl MeteredHash for Context {
 /// Frames are also the units of (sub-)transactions: each frame captures
 /// the host state when it is pushed, and the [`FrameGuard`] will either
 /// commit or roll back that state when it pops the stack.
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) enum Frame {
     ContractVM {
         vm: Rc<Vm>,
@@ -153,40 +120,6 @@ pub(crate) enum Frame {
     StellarAssetContract(Hash, Symbol, Vec<Val>, ScContractInstance),
     #[cfg(any(test, feature = "testutils"))]
     TestContract(TestContractFrame),
-}
-
-impl MeteredHash for Frame {
-    fn metered_hash<H: std::hash::Hasher>(
-        &self,
-        state: &mut H,
-        budget: &crate::budget::Budget,
-    ) -> Result<(), HostError> {
-        self.hash_discriminant(state, budget)?;
-        match self {
-            Frame::ContractVM {
-                vm,
-                fn_name,
-                args,
-                instance,
-                relative_objects,
-            } => {
-                vm.metered_hash(state, budget)?;
-                fn_name.metered_hash(state, budget)?;
-                args.metered_hash(state, budget)?;
-                instance.metered_hash(state, budget)?;
-                relative_objects.metered_hash(state, budget)
-            }
-            Frame::HostFunction(host_fn) => host_fn.metered_hash(state, budget),
-            Frame::StellarAssetContract(id, fn_name, args, instance) => {
-                id.metered_hash(state, budget)?;
-                fn_name.metered_hash(state, budget)?;
-                args.metered_hash(state, budget)?;
-                instance.metered_hash(state, budget)
-            }
-            #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(tc) => tc.metered_hash(state, budget),
-        }
-    }
 }
 
 impl Frame {

@@ -1,9 +1,15 @@
 #![allow(dead_code)]
-use super::metered_hash::MeteredHash;
 use crate::{
-    budget::AsBudget, events::InternalEvent, host::Context, host::Frame, Host, HostError, Val,
+    budget::AsBudget,
+    events::InternalEvent,
+    host::Frame,
+    host::{
+        metered_hash::{CountingHasher, MeteredHash},
+        Context,
+    },
+    Host, HostError, Val,
 };
-use std::{collections::hash_map::DefaultHasher, fmt::Debug, hash::Hasher, rc::Rc};
+use std::{fmt::Debug, hash::Hasher, rc::Rc};
 
 // Formatting TraceEvents and TraceStates is done in a submodule.
 mod fmt;
@@ -12,7 +18,7 @@ mod fmt;
 // than normal; not so high that it will run forever but high enough that we can manage
 // to actually record the quantity of detail that tracing records (eg. hashing everything
 // in the host on every host function call and return!).
-const TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR: u64 = 100;
+const TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR: u64 = 500;
 
 pub type TraceHook = Rc<dyn for<'a> Fn(&'a Host, TraceEvent<'a>) -> Result<(), HostError>>;
 
@@ -128,14 +134,14 @@ impl TraceState {
 
 impl Host {
     fn hash_one<H: MeteredHash>(&self, h: &H) -> u64 {
-        let mut state = DefaultHasher::default();
+        let mut state = CountingHasher::default();
         self.budget_ref()
             .with_shadow_mode(|| h.metered_hash(&mut state, self.budget_ref()));
         state.finish()
     }
 
     fn hash_iter<H: MeteredHash>(&self, h: impl Iterator<Item = H>) -> u64 {
-        let mut state = DefaultHasher::default();
+        let mut state = CountingHasher::default();
         self.budget_ref().with_shadow_mode(|| {
             for i in h {
                 i.metered_hash(&mut state, self.budget_ref())?;
