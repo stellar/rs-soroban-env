@@ -1,6 +1,3 @@
-use expect_test::expect;
-use soroban_test_wasms::HOSTILE;
-
 use crate::{
     budget::{AsBudget, Budget},
     host_object::HostVec,
@@ -14,10 +11,13 @@ use crate::{
     DiagnosticLevel, Env, EnvBase, Error, Host, HostError, Symbol, SymbolSmall, Tag, Val,
     VecObject,
 };
+use expect_test::expect;
+use soroban_env_common::TryIntoVal;
+use soroban_test_wasms::HOSTILE;
 
 #[test]
 fn hostile_iloop_traps() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
     let res = host.call(
@@ -34,7 +34,7 @@ fn hostile_iloop_traps() -> Result<(), HostError> {
 
 #[test]
 fn hostile_badack_traps() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
     let res = host.call(
@@ -51,26 +51,8 @@ fn hostile_badack_traps() -> Result<(), HostError> {
 }
 
 #[test]
-fn hostile_ssmash_traps() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
-    let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
-
-    let res = host.call(
-        contract_id_obj,
-        Symbol::try_from_small_str("ssmash")?,
-        host.add_host_object(HostVec::new())?,
-    );
-
-    assert!(HostError::result_matches_err(
-        res,
-        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
-    ));
-    Ok(())
-}
-
-#[test]
 fn hostile_oob1_traps() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
     let res = host.call(
@@ -88,7 +70,7 @@ fn hostile_oob1_traps() -> Result<(), HostError> {
 
 #[test]
 fn hostile_oob2_traps() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
     let res = host.call(
@@ -135,7 +117,7 @@ fn assert_err_value_invalid_input(res: Result<Val, HostError>) {
 
 #[test]
 fn hostile_forged_objects_trap() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
     host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
@@ -276,7 +258,7 @@ fn guest_val_integrity_errors() {
         assert_err_value_invalid_input(res);
     }
 
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
     for i in BAD_VALS {
         check_badval(&host, contract_id_obj, *i);
@@ -313,9 +295,10 @@ fn excessive_memory_growth() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_mem_grow(32);
     let host = Host::test_host_with_recording_footprint();
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
-    let host = host
-        .test_budget(0, 0)
-        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    let host =
+        observe_host!(host
+            .test_budget(0, 0)
+            .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1));
     host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
 
     // This one should just run out of memory.
@@ -372,7 +355,7 @@ fn instantiate_with_mem_and_table_sizes(
 
 #[test]
 fn moderate_sized_initial_memory_request_ok() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_mem_and_table_sizes(&host, 10, 0);
     assert!(res.is_ok());
     assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000 * 10);
@@ -381,7 +364,7 @@ fn moderate_sized_initial_memory_request_ok() -> Result<(), HostError> {
 
 #[test]
 fn initial_memory_request_over_limit_fails() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_mem_and_table_sizes(&host, 1000, 0);
     assert!(HostError::result_matches_err(
         res,
@@ -394,7 +377,7 @@ fn initial_memory_request_over_limit_fails() -> Result<(), HostError> {
 
 #[test]
 fn moderate_sized_initial_table_request_ok() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_mem_and_table_sizes(&host, 0, 500);
     assert!(res.is_ok());
     Ok(())
@@ -402,7 +385,7 @@ fn moderate_sized_initial_table_request_ok() -> Result<(), HostError> {
 
 #[test]
 fn initial_table_request_over_limit_fails() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_mem_and_table_sizes(&host, 0, 2000);
     assert!(HostError::result_matches_err(
         res,
@@ -427,7 +410,7 @@ fn instantiate_with_data_segment(
 
 #[test]
 fn data_segment_smaller_than_a_page_fits_in_one_page_memory() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.as_budget().reset_unlimited_cpu()?;
     let res = instantiate_with_data_segment(&host, 1, 0, 5000);
     assert!(res.is_ok());
@@ -437,7 +420,7 @@ fn data_segment_smaller_than_a_page_fits_in_one_page_memory() -> Result<(), Host
 
 #[test]
 fn data_segment_larger_than_a_page_does_not_fit_in_one_page_memory() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.as_budget().reset_unlimited_cpu()?;
     let res = instantiate_with_data_segment(&host, 1, 0, 100_000);
     assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
@@ -450,7 +433,7 @@ fn data_segment_larger_than_a_page_does_not_fit_in_one_page_memory() -> Result<(
 
 #[test]
 fn data_segment_larger_than_a_page_fits_in_two_page_memory() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.as_budget().reset_unlimited_cpu()?;
     let res = instantiate_with_data_segment(&host, 2, 0, 100_000);
     assert!(res.is_ok());
@@ -474,7 +457,7 @@ fn instantiate_with_page_and_segment_count(
 
 #[test]
 fn many_small_segments_ok() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_page_and_segment_count(&host, 1, 10000, 1);
     assert!(res.is_ok());
     Ok(())
@@ -482,7 +465,7 @@ fn many_small_segments_ok() -> Result<(), HostError> {
 
 #[test]
 fn few_large_segments_ok() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_page_and_segment_count(&host, 1, 10, 10000);
     assert!(res.is_ok());
     Ok(())
@@ -490,7 +473,7 @@ fn few_large_segments_ok() -> Result<(), HostError> {
 
 #[test]
 fn many_large_segments_exceeds_budget() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_page_and_segment_count(&host, 20, 10000, 10000);
     assert!(HostError::result_matches_err(
         res,
@@ -501,7 +484,7 @@ fn many_large_segments_exceeds_budget() -> Result<(), HostError> {
 
 #[test]
 fn too_many_segments_exceeds_budget() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_page_and_segment_count(&host, 1, 50_000_000, 1);
     assert!(HostError::result_matches_err(
         res,
@@ -540,7 +523,7 @@ fn broken_object() {
 #[test]
 fn excessive_logging() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_linear_memory_logging();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
@@ -644,7 +627,7 @@ fn excessive_logging() -> Result<(), HostError> {
 #[test]
 fn test_unreachable_contract_should_fail() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_unreachable();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
@@ -666,7 +649,7 @@ fn test_indirect_call_via_table_access() -> Result<(), HostError> {
     // this module contains a table with 128 FuncRef elements, 3 of which are
     // occuplied with 1 host function 2 contract functions
     let wasm = wasm_util::wasm_module_with_indirect_call();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
     host.budget_ref().reset_unlimited()?;
 
@@ -707,7 +690,7 @@ fn test_indirect_call_via_table_access() -> Result<(), HostError> {
 #[test]
 fn test_div_by_zero() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_div_by_zero();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
@@ -727,7 +710,7 @@ fn test_div_by_zero() -> Result<(), HostError> {
 #[test]
 fn test_integer_overflow() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_integer_overflow();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
@@ -747,7 +730,7 @@ fn test_integer_overflow() -> Result<(), HostError> {
 #[test]
 fn test_corrupt_custom_section() -> Result<(), HostError> {
     // let wasm = wasm_util::wasm_module_with_custom_section("custom", vec![24; 7].as_slice());
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     host.as_budget().reset_unlimited()?;
 
@@ -853,7 +836,7 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
 #[test]
 fn test_floating_point() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_floating_point_ops();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -870,7 +853,7 @@ fn test_floating_point() -> Result<(), HostError> {
 #[test]
 fn test_multiple_memory() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_multiple_memories();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -887,7 +870,7 @@ fn test_multiple_memory() -> Result<(), HostError> {
 #[test]
 fn test_function_import_with_wrong_type() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_lying_about_import_function_type();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -904,7 +887,7 @@ fn test_function_import_with_wrong_type() -> Result<(), HostError> {
 #[test]
 fn test_import_nonexistent_function() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_importing_nonexistent_function();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -922,7 +905,7 @@ fn test_import_nonexistent_function() -> Result<(), HostError> {
 fn test_duplicate_function_import() -> Result<(), HostError> {
     // repeating importing the same function is actually okay
     let wasm = wasm_util::wasm_module_with_duplicate_function_import(5);
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -948,7 +931,7 @@ fn test_duplicate_function_import() -> Result<(), HostError> {
 #[test]
 fn test_export_nonexistent_function() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_nonexistent_function_export();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -965,7 +948,7 @@ fn test_export_nonexistent_function() -> Result<(), HostError> {
 #[test]
 fn test_nonexistent_func_element() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_nonexistent_func_element();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -982,7 +965,7 @@ fn test_nonexistent_func_element() -> Result<(), HostError> {
 #[test]
 fn test_no_start() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_start_function();
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -998,7 +981,7 @@ fn test_no_start() -> Result<(), HostError> {
 
 #[test]
 fn test_too_large_data_count() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.as_budget().reset_unlimited()?;
     host.enable_debug()?;
 
@@ -1020,7 +1003,7 @@ fn test_too_large_data_count() -> Result<(), HostError> {
 
 #[test]
 fn test_lying_about_data_count() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
 
     // sanity check: truthful data count passes validation
@@ -1048,7 +1031,7 @@ fn test_lying_about_data_count() -> Result<(), HostError> {
 
 #[test]
 fn test_multi_value() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
 
     // lying about the count
@@ -1067,7 +1050,7 @@ fn test_multi_value() -> Result<(), HostError> {
 
 #[test]
 fn test_large_wasm_code() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
 
     let wasm = wasm_util::wasm_module_with_4n_insns(100000);
     let res = host.register_test_contract_wasm_from_source_account(
@@ -1084,7 +1067,7 @@ fn test_large_wasm_code() -> Result<(), HostError> {
 
 #[test]
 fn test_large_number_of_internal_funcs() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
 
     let wasm = wasm_util::wasm_module_with_n_funcs_no_export(100000);
     let res = host.register_test_contract_wasm_from_source_account(
@@ -1101,7 +1084,7 @@ fn test_large_number_of_internal_funcs() -> Result<(), HostError> {
 
 #[test]
 fn test_repeated_export_same_func() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
 
     // the export limit in wasmparser is 100000, although that doesn't appear in
     // the WASM spec (or I couldn't find it), and wasmi doesn't have that limit either
@@ -1120,7 +1103,7 @@ fn test_repeated_export_same_func() -> Result<(), HostError> {
 
 #[test]
 fn test_large_elements() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let wasm = wasm_util::wasm_module_large_elements(100001, 100001);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -1136,7 +1119,7 @@ fn test_large_elements() -> Result<(), HostError> {
 
 #[test]
 fn test_oob_elements() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let wasm = wasm_util::wasm_module_large_elements(128, 129);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -1152,7 +1135,7 @@ fn test_oob_elements() -> Result<(), HostError> {
 
 #[test]
 fn test_large_globals() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let wasm = wasm_util::wasm_module_large_globals(100001);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -1168,7 +1151,7 @@ fn test_large_globals() -> Result<(), HostError> {
 
 #[test]
 fn test_large_number_of_tables() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     // even though we have enabled wasmi_reference_type, which makes multiple
     // tables possible, we have explicitly set our table count limit to 1, in
@@ -1188,7 +1171,7 @@ fn test_large_number_of_tables() -> Result<(), HostError> {
 
 #[test]
 fn test_large_number_of_func_types() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     let wasm = wasm_util::wasm_module_with_many_func_types(100001);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -1204,7 +1187,7 @@ fn test_large_number_of_func_types() -> Result<(), HostError> {
 
 #[test]
 fn test_simd() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let wasm = wasm_util::wasm_module_with_simd_add_i32x4();
     let res = host.register_test_contract_wasm_from_source_account(
@@ -1221,7 +1204,7 @@ fn test_simd() -> Result<(), HostError> {
 
 #[test]
 fn test_invalid_expr_in_global() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     for i in 0..3 {
         let wasm = wasm_util::wasm_module_various_constexr_in_global(i);
@@ -1240,7 +1223,7 @@ fn test_invalid_expr_in_global() -> Result<(), HostError> {
 
 #[test]
 fn test_invalid_expr_in_elements() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     for i in 0..4 {
         let wasm = wasm_util::wasm_module_various_constexpr_in_elements(i);
@@ -1259,7 +1242,7 @@ fn test_invalid_expr_in_elements() -> Result<(), HostError> {
 
 #[test]
 fn test_invalid_expr_in_segments() -> Result<(), HostError> {
-    let host = Host::test_host_with_recording_footprint();
+    let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     for i in 0..4 {
         let wasm = wasm_util::wasm_module_various_constexr_in_data_segment(i);
@@ -1274,4 +1257,36 @@ fn test_invalid_expr_in_segments() -> Result<(), HostError> {
         ));
     }
     Ok(())
+}
+
+#[test]
+fn test_stack_depth_stability() {
+    const MAX_WASM_STACK_DEPTH: u32 = 1024;
+
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.as_budget().reset_unlimited().unwrap();
+    let contract_id = host.register_test_contract_wasm(HOSTILE);
+    assert!(host
+        .call(
+            contract_id,
+            Symbol::try_from_small_str("deepstack").unwrap(),
+            test_vec![&*host, MAX_WASM_STACK_DEPTH - 1].into(),
+        )
+        .is_ok());
+    assert!(HostError::result_matches_err(
+        host.call(
+            contract_id,
+            Symbol::try_from_small_str("deepstack").unwrap(),
+            test_vec![&*host, MAX_WASM_STACK_DEPTH].into(),
+        ),
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    assert!(HostError::result_matches_err(
+        host.call(
+            contract_id,
+            Symbol::try_from_small_str("deepstack").unwrap(),
+            test_vec![&*host, MAX_WASM_STACK_DEPTH * 10].into(),
+        ),
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
 }
