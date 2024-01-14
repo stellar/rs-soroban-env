@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(691827)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:188452, mem:691907, objs:-/1@dcefc2d5",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Err(Error(Budget, ExceededLimit))": "cpu:284126550, mem:1383798",
+  "   5 end": "cpu:284126550, mem:1383798, prngs:-/9b4a753, objs:-/1@dcefc2d5, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
