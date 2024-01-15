@@ -198,6 +198,7 @@ macro_rules! generate_dispatch_functions {
 
                     let host = caller.data().clone();
 
+                    if host.env_hook_enabled()
                     {
                         #[allow(unused)]
                         let trace_args = ($(
@@ -231,6 +232,7 @@ macro_rules! generate_dispatch_functions {
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::check_env_arg(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?, &host)?),*);
 
+                    if host.env_hook_enabled()
                     {
                         let dyn_res: Result<&dyn core::fmt::Debug,&HostError> = match &res {
                             Ok(ref ok) => Ok(ok),

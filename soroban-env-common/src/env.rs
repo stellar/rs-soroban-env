@@ -76,6 +76,13 @@ pub trait EnvBase: Sized + Clone {
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> !;
 
+    /// Return true if the environment has a hook installed to trace calls
+    /// and returns using [`Self::env_call_hook`] and [`Self::env_ret_hook`].
+    #[cfg(feature = "std")]
+    fn env_hook_enabled(&self) -> bool {
+        false
+    }
+
     /// A general interface for tracing all env-method calls, intended to
     /// be called from macros that do dispatch on all such methods.
     #[cfg(feature = "std")]

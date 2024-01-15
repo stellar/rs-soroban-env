@@ -570,6 +570,7 @@ impl Host {
 
 macro_rules! call_env_call_hook {
     ($self:expr, $($arg:expr),*) => {
+        if $self.env_hook_enabled()
         {
             $self.env_call_hook(function_short_name!(), &[$(&$arg),*])?;
         }
@@ -578,11 +579,13 @@ macro_rules! call_env_call_hook {
 
 macro_rules! call_env_ret_hook {
     ($self:expr, $arg:expr) => {{
-        let dyn_res: Result<&dyn core::fmt::Debug, &HostError> = match &$arg {
-            Ok(ref ok) => Ok(ok),
-            Err(err) => Err(err),
-        };
-        $self.env_ret_hook(function_short_name!(), &dyn_res)?;
+        if $self.env_hook_enabled() {
+            let dyn_res: Result<&dyn core::fmt::Debug, &HostError> = match &$arg {
+                Ok(ref ok) => Ok(ok),
+                Err(err) => Err(err),
+            };
+            $self.env_ret_hook(function_short_name!(), &dyn_res)?;
+        }
     }};
 }
 
@@ -681,6 +684,13 @@ impl EnvBase for Host {
             }
         }
         x
+    }
+
+    fn env_hook_enabled(&self) -> bool {
+        match self.try_borrow_trace_hook() {
+            Ok(hook) => hook.is_some(),
+            Err(_) => false,
+        }
     }
 
     fn env_call_hook(&self, fname: &'static str, args: &[&dyn Debug]) -> Result<(), HostError> {

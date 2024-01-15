@@ -180,6 +180,7 @@ macro_rules! vmcaller_none_function_helper {
             #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
             let _span = tracy_span!(core::stringify!($fn_id));
             #[cfg(feature = "std")]
+            if self.env_hook_enabled()
             {
                 self.env_call_hook(&core::stringify!($fn_id), &[$(&$arg),*])?;
             }
@@ -189,6 +190,7 @@ macro_rules! vmcaller_none_function_helper {
                 Err(err) => Err(err)
             };
             #[cfg(feature = "std")]
+            if self.env_hook_enabled()
             {
                 let dyn_res: Result<&dyn core::fmt::Debug,&Self::Error> = match &res {
                     Ok(ref ok) => Ok(ok),
