@@ -33,6 +33,5 @@ fn main() {
         encoded_ttl_entries,
         base_prng_seed,
         &mut diagnostic_events,
-        None,
     );
 }

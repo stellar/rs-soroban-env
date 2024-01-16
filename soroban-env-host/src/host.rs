@@ -568,23 +568,23 @@ impl Host {
     }
 }
 
-macro_rules! call_env_call_hook {
+macro_rules! call_trace_env_call {
     ($self:expr, $($arg:expr),*) => {
-        if $self.env_hook_enabled()
+        if $self.tracing_enabled()
         {
-            $self.env_call_hook(function_short_name!(), &[$(&$arg),*])?;
+            $self.trace_env_call(function_short_name!(), &[$(&$arg),*])?;
         }
     };
 }
 
-macro_rules! call_env_ret_hook {
+macro_rules! call_trace_env_ret {
     ($self:expr, $arg:expr) => {{
-        if $self.env_hook_enabled() {
+        if $self.tracing_enabled() {
             let dyn_res: Result<&dyn core::fmt::Debug, &HostError> = match &$arg {
                 Ok(ref ok) => Ok(ok),
                 Err(err) => Err(err),
             };
-            $self.env_ret_hook(function_short_name!(), &dyn_res)?;
+            $self.trace_env_ret(function_short_name!(), &dyn_res)?;
         }
     }};
 }
@@ -686,18 +686,18 @@ impl EnvBase for Host {
         x
     }
 
-    fn env_hook_enabled(&self) -> bool {
+    fn tracing_enabled(&self) -> bool {
         match self.try_borrow_trace_hook() {
             Ok(hook) => hook.is_some(),
             Err(_) => false,
         }
     }
 
-    fn env_call_hook(&self, fname: &'static str, args: &[&dyn Debug]) -> Result<(), HostError> {
+    fn trace_env_call(&self, fname: &'static str, args: &[&dyn Debug]) -> Result<(), HostError> {
         self.call_any_lifecycle_hook(TraceEvent::EnvCall(fname, args))
     }
 
-    fn env_ret_hook(
+    fn trace_env_ret(
         &self,
         fname: &'static str,
         res: &Result<&dyn Debug, &HostError>,
@@ -724,9 +724,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &[u8],
     ) -> Result<BytesObject, HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_from_slice::<ScBytes>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -736,9 +736,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScBytes>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -748,9 +748,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScString>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -760,28 +760,28 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, s, b_pos, slice.len());
+        call_trace_env_call!(self, s, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScSymbol>(s, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<BytesObject, HostError> {
-        call_env_call_hook!(self, mem.len());
+        call_trace_env_call!(self, mem.len());
         let res = self.add_host_object(self.scbytes_from_slice(mem)?);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn string_new_from_slice(&self, s: &[u8]) -> Result<StringObject, HostError> {
-        call_env_call_hook!(self, s.len());
+        call_trace_env_call!(self, s.len());
         let res = self.add_host_object(ScString(self.metered_slice_to_vec(s)?.try_into()?));
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn symbol_new_from_slice(&self, s: &[u8]) -> Result<SymbolObject, HostError> {
-        call_env_call_hook!(self, s.len());
+        call_trace_env_call!(self, s.len());
         // Note: this whole function could be replaced by `ScSymbol::try_from_bytes`
         // in order to avoid duplication. It is duplicated in order to support
         // a slightly different check order for the sake of observation consistency.
@@ -797,12 +797,12 @@ impl EnvBase for Host {
             })?;
         }
         let res = self.add_host_object(ScSymbol(self.metered_slice_to_vec(s)?.try_into()?));
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
-        call_env_call_hook!(self, keys.len());
+        call_trace_env_call!(self, keys.len());
         if keys.len() != vals.len() {
             return Err(self.err(
                 ScErrorType::Object,
@@ -823,7 +823,7 @@ impl EnvBase for Host {
             .collect::<Result<Vec<(Val, Val)>, HostError>>()?;
         let map = HostMap::from_map(map_vec, self)?;
         let res = self.add_host_object(map);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -833,7 +833,7 @@ impl EnvBase for Host {
         keys: &[&str],
         vals: &mut [Val],
     ) -> Result<Void, HostError> {
-        call_env_call_hook!(self, map, keys.len());
+        call_trace_env_call!(self, map, keys.len());
         if keys.len() != vals.len() {
             return Err(self.err(
                 ScErrorType::Object,
@@ -864,23 +864,23 @@ impl EnvBase for Host {
             Ok(())
         })?;
         let res = Ok(Val::VOID);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error> {
-        call_env_call_hook!(self, vals.len());
+        call_trace_env_call!(self, vals.len());
         let vec = HostVec::from_exact_iter(vals.iter().cloned(), self.budget_ref())?;
         for v in vec.iter() {
             self.check_val_integrity(*v)?;
         }
         let res = self.add_host_object(vec);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn vec_unpack_to_slice(&self, vec: VecObject, vals: &mut [Val]) -> Result<Void, Self::Error> {
-        call_env_call_hook!(self, vec, vals.len());
+        call_trace_env_call!(self, vec, vals.len());
         self.visit_obj(vec, |hv: &HostVec| {
             if hv.len() != vals.len() {
                 return Err(self.err(
@@ -895,12 +895,12 @@ impl EnvBase for Host {
             Ok(())
         })?;
         let res = Ok(Val::VOID);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn symbol_index_in_strs(&self, sym: Symbol, slices: &[&str]) -> Result<U32Val, Self::Error> {
-        call_env_call_hook!(self, sym, slices.len());
+        call_trace_env_call!(self, sym, slices.len());
         let mut found = None;
         for (i, slice) in slices.iter().enumerate() {
             if self.symbol_matches(slice.as_bytes(), sym)? && found.is_none() {
@@ -916,15 +916,15 @@ impl EnvBase for Host {
             )),
             Some(idx) => Ok(U32Val::from(self.usize_to_u32(idx)?)),
         };
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, HostError> {
-        call_env_call_hook!(self, msg.len(), vals.len());
+        call_trace_env_call!(self, msg.len(), vals.len());
         self.log_diagnostics(msg, vals);
         let res = Ok(Void::from(()));
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 }

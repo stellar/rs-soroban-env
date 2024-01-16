@@ -198,7 +198,7 @@ macro_rules! generate_dispatch_functions {
 
                     let host = caller.data().clone();
 
-                    if host.env_hook_enabled()
+                    if host.tracing_enabled()
                     {
                         #[allow(unused)]
                         let trace_args = ($(
@@ -208,7 +208,7 @@ macro_rules! generate_dispatch_functions {
                             }
                         ),*);
                         let hook_args: &[&dyn std::fmt::Debug] = homogenize_tuple!(trace_args, ($($arg),*));
-                        host.env_call_hook(&core::stringify!($fn_id), hook_args)?;
+                        host.trace_env_call(&core::stringify!($fn_id), hook_args)?;
                     }
 
                     // This is where the VM -> Host boundary is crossed.
@@ -232,13 +232,13 @@ macro_rules! generate_dispatch_functions {
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::check_env_arg(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?, &host)?),*);
 
-                    if host.env_hook_enabled()
+                    if host.tracing_enabled()
                     {
                         let dyn_res: Result<&dyn core::fmt::Debug,&HostError> = match &res {
                             Ok(ref ok) => Ok(ok),
                             Err(err) => Err(err)
                         };
-                        host.env_ret_hook(&core::stringify!($fn_id), &dyn_res)?;
+                        host.trace_env_ret(&core::stringify!($fn_id), &dyn_res)?;
                     }
 
                     // On the off chance we got an error with no context, we can
