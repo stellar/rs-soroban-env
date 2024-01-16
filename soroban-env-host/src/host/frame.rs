@@ -61,7 +61,7 @@ pub(crate) struct TestContractFrame {
     pub(crate) instance: ScContractInstance,
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
 impl std::hash::Hash for TestContractFrame {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);

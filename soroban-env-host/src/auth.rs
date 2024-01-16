@@ -313,7 +313,7 @@ struct RecordingAuthInfo {
     disable_non_root_auth: bool,
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "recording_auth"))]
 impl std::hash::Hash for RecordingAuthInfo {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         if let Ok(tracker_by_address_handle) = self.tracker_by_address_handle.try_borrow() {

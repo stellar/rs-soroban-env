@@ -65,8 +65,15 @@ mod compare;
 mod convert;
 mod env;
 mod error;
-#[cfg(feature = "testutils")]
+
+// mod hash contains "shlalow" impls of Hash for `Val` wrappers that are risky
+// to expose in general since they do not "look through" the env to their
+// underlying objects, instead hashing the object references themselves. This is
+// sufficiently dangerous that we guard it behind a specific feature that only
+// an informed consumer should enable.
+#[cfg(feature = "shallow-val-hash")]
 mod hash;
+
 mod object;
 mod option;
 mod result;
