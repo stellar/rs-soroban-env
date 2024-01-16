@@ -1,9 +1,9 @@
 mod fees;
-mod ledger_storage;
+pub mod ledger_storage;
 mod state_ttl;
 
 use anyhow::{anyhow, bail, Context, Result};
-use ledger_storage::LedgerStorage;
+pub use ledger_storage::LedgerStorage;
 use soroban_env_host::auth::RecordedAuthPayload;
 use soroban_env_host::budget::Budget;
 use soroban_env_host::events::Events;
@@ -37,12 +37,17 @@ pub struct SimulationResult {
     pub restore_preamble: Option<RestorePreamble>,
 }
 
+pub struct ResourceConfig {
+    pub instruction_leeway: u64,
+}
+
 pub fn simulate_invoke_hf_op(
     ledger_storage: LedgerStorage,
     bucket_list_size: u64,
     invoke_hf_op: InvokeHostFunctionOp,
     source_account: AccountId,
     ledger_info: LedgerInfo,
+    resource_config: ResourceConfig,
     enable_debug: bool,
 ) -> std::result::Result<SimulationResult, Box<dyn std::error::Error>> {
     let ledger_storage_rc = Rc::new(ledger_storage);
@@ -120,6 +125,7 @@ pub fn simulate_invoke_hf_op(
         &ledger_storage_rc,
         &storage,
         &budget,
+        &resource_config,
         &diagnostic_events,
         &result,
         bucket_list_size,
