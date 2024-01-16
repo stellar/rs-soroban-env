@@ -37,7 +37,6 @@ pub struct SimulationResult {
     pub restore_preamble: Option<RestorePreamble>,
 }
 
-#[derive(Default)]
 pub struct ResourceConfig {
     pub instruction_leeway: u64,
 }
