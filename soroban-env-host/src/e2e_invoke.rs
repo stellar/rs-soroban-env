@@ -279,8 +279,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     }
     let encoded_invoke_result = result.and_then(|res| {
         let mut encoded_result_sc_val = vec![];
-        metered_write_xdr(&budget, &res, &mut encoded_result_sc_val)
-            .and_then(|_| Ok(encoded_result_sc_val))
+        metered_write_xdr(&budget, &res, &mut encoded_result_sc_val).map(|_| encoded_result_sc_val)
     });
     if encoded_invoke_result.is_ok() {
         let init_storage_snapshot = StorageMapSnapshotSource {
