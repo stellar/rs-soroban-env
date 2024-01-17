@@ -76,20 +76,47 @@ pub trait EnvBase: Sized + Clone {
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> !;
 
+    #[cfg(all(feature = "std", feature = "testutils"))]
+    #[deprecated(note = "replaced by trace_env_call")]
+    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    #[cfg(all(feature = "std", feature = "testutils"))]
+    #[deprecated(note = "replaced by trace_env_ret")]
+    fn env_ret_hook(
+        &self,
+        _fname: &'static str,
+        _res: &Result<String, &Self::Error>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// Return true if the environment wants to receive trace calls and and
+    /// returns using [`Self::trace_env_call`] and [`Self::trace_env_ret`].
+    #[cfg(feature = "std")]
+    fn tracing_enabled(&self) -> bool {
+        false
+    }
+
     /// A general interface for tracing all env-method calls, intended to
     /// be called from macros that do dispatch on all such methods.
-    #[cfg(all(feature = "std", feature = "testutils"))]
-    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
+    #[cfg(feature = "std")]
+    fn trace_env_call(
+        &self,
+        _fname: &'static str,
+        _args: &[&dyn core::fmt::Debug],
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     /// A general interface for tracing all env-method returns, intended to
     /// be called from macros that do dispatch on all such methods.
-    #[cfg(all(feature = "std", feature = "testutils"))]
-    fn env_ret_hook(
+    #[cfg(feature = "std")]
+    fn trace_env_ret(
         &self,
         _fname: &'static str,
-        _res: &Result<String, &Self::Error>,
+        _res: &Result<&dyn core::fmt::Debug, &Self::Error>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

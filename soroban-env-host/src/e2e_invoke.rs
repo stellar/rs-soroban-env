@@ -13,6 +13,7 @@ use crate::{
         ledger_info_helper::get_key_durability,
         metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
+        TraceHook,
     },
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
     xdr::{
@@ -233,6 +234,39 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     base_prng_seed: T,
     diagnostic_events: &mut Vec<DiagnosticEvent>,
 ) -> Result<InvokeHostFunctionResult, HostError> {
+    invoke_host_function_with_trace_hook(
+        budget,
+        enable_diagnostics,
+        encoded_host_fn,
+        encoded_resources,
+        encoded_source_account,
+        encoded_auth_entries,
+        ledger_info,
+        encoded_ledger_entries,
+        encoded_ttl_entries,
+        base_prng_seed,
+        diagnostic_events,
+        None,
+    )
+}
+
+/// Same as `invoke_host_function` but allows to pass a trace hook which will
+/// be installed in the host for the duration of the invocation.
+#[allow(clippy::too_many_arguments)]
+pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
+    budget: &Budget,
+    enable_diagnostics: bool,
+    encoded_host_fn: T,
+    encoded_resources: T,
+    encoded_source_account: T,
+    encoded_auth_entries: I,
+    ledger_info: LedgerInfo,
+    encoded_ledger_entries: I,
+    encoded_ttl_entries: I,
+    base_prng_seed: T,
+    diagnostic_events: &mut Vec<DiagnosticEvent>,
+    trace_hook: Option<TraceHook>,
+) -> Result<InvokeHostFunctionResult, HostError> {
     let _span0 = tracy_span!("invoke_host_function");
 
     let resources: SorobanResources =
@@ -251,6 +285,10 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
 
     let storage = Storage::with_enforcing_footprint_and_map(footprint, storage_map);
     let host = Host::with_storage_and_budget(storage, budget.clone());
+    let have_trace_hook = trace_hook.is_some();
+    if let Some(th) = trace_hook {
+        host.set_trace_hook(Some(th))?;
+    }
     let auth_entries = host.build_auth_entries_from_xdr(encoded_auth_entries)?;
     let host_function: HostFunction = host.metered_from_xdr(encoded_host_fn.as_ref())?;
     let source_account: AccountId = host.metered_from_xdr(encoded_source_account.as_ref())?;
@@ -273,6 +311,9 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
         let _span1 = tracy_span!("Host::invoke_function");
         host.invoke_function(host_function)
     };
+    if have_trace_hook {
+        host.set_trace_hook(None)?;
+    }
     let (storage, events) = host.try_finish()?;
     if enable_diagnostics {
         extract_diagnostic_events(&events, diagnostic_events);

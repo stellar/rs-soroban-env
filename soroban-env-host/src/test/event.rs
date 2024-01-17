@@ -169,7 +169,7 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
     Ok(())
 }
 
-fn log_some_diagnostics(host: crate::test::observe::ObservedHost) -> Result<Events, HostError> {
+fn log_some_diagnostics(host: Host) -> Result<Events, HostError> {
     let args: Vec<_> = (0..1000).map(|u| Val::from_u32(u).to_val()).collect();
     let contract_id = Hash([0; 32]);
     host.log_diagnostics("logging some diagnostics", args.as_slice());
@@ -184,16 +184,16 @@ fn log_some_diagnostics(host: crate::test::observe::ObservedHost) -> Result<Even
         &Symbol::try_from_small_str("fn_return")?,
         &Symbol::try_from_small_str("pass")?.into(),
     );
-    let realhost = (*host).clone();
-    drop(host);
-    let (_, evts) = realhost.try_finish()?;
+    let (_, evts) = host.try_finish()?;
     Ok(evts)
 }
 
 #[test]
 fn test_diagnostic_events_do_not_affect_metering_with_debug_off() -> Result<(), HostError> {
     // DEBUG mode OFF
-    let host = observe_host!(Host::test_host());
+
+    // NB: We don't observe here since the test is sensitive to shadow budget.
+    let host = Host::test_host();
     let budget = host.as_budget().clone();
     budget.reset_default()?;
     let evts = log_some_diagnostics(host)?;
@@ -209,7 +209,9 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_off() -> Result<(), 
 fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_sufficient_budget(
 ) -> Result<(), HostError> {
     // DEBUG mode ON, budget sufficient
-    let host = observe_host!(Host::test_host());
+
+    // NB: We don't observe here since the test is sensitive to shadow budget.
+    let host = Host::test_host();
     host.enable_debug()?;
     let budget = host.as_budget().clone();
     budget.reset_default()?;
@@ -226,7 +228,9 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_sufficient_bu
 fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_budget(
 ) -> Result<(), HostError> {
     // DEBUG mode ON, budget insufficient
-    let host = observe_host!(Host::test_host());
+
+    // NB: We don't observe here since the test is sensitive to shadow budget.
+    let host = Host::test_host();
     host.enable_debug()?;
     let budget = host.as_budget().clone();
     budget.reset_default()?;
