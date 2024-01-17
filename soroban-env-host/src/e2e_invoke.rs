@@ -4,6 +4,12 @@
 /// host functions.
 use std::{cmp::max, rc::Rc};
 
+#[cfg(any(test, feature = "recording_mode"))]
+use crate::{
+    auth::RecordedAuthPayload,
+    xdr::{ContractEvent, ReadXdr, ScVal, SorobanAddressCredentials, SorobanCredentials, WriteXdr},
+    DEFAULT_XDR_RW_LIMITS,
+};
 use crate::{
     budget::{AsBudget, Budget},
     events::Events,
@@ -24,6 +30,8 @@ use crate::{
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
+#[cfg(any(test, feature = "recording_mode"))]
+use sha2::{Digest, Sha256};
 
 pub type TtlEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<TtlEntry>, Budget>;
 
@@ -45,6 +53,26 @@ pub struct InvokeHostFunctionResult {
     ///
     /// Empty when invocation fails.
     pub encoded_contract_events: Vec<Vec<u8>>,
+}
+
+/// Result of invoking a single host function prepared for embedder consumption.
+#[cfg(any(test, feature = "recording_mode"))]
+pub struct InvokeHostFunctionRecordingModeResult {
+    /// Result value of the invoked function or error returned for invocation.
+    pub invoke_result: Result<ScVal, HostError>,
+    pub resources: SorobanResources,
+    pub auth: Vec<SorobanAuthorizationEntry>,
+    /// All the ledger changes caused by this invocation, including no-ops.
+    ///
+    /// Read-only entry can only have their live until ledger increased.
+    /// Read-write entries can be modified arbitrarily or removed.
+    ///
+    /// Empty when invocation fails.
+    pub ledger_changes: Vec<LedgerEntryChange>,
+    /// All the events that contracts emitted during invocation.
+    ///
+    /// Empty when invocation fails.
+    pub contract_events: Vec<ContractEvent>,
 }
 
 /// Represents a change of the ledger entry from 'old' value to the 'new' one.
@@ -85,10 +113,10 @@ pub struct LedgerEntryLiveUntilChange {
 /// Returns the difference between the `storage` and its initial snapshot as
 /// `LedgerEntryChanges`.
 /// Returns an entry for every item in `storage` footprint.
-pub fn get_ledger_changes<T: SnapshotSource>(
+pub fn get_ledger_changes(
     budget: &Budget,
     storage: &Storage,
-    init_storage_snapshot: &T,
+    init_storage_snapshot: &(impl SnapshotSource + ?Sized),
     init_ttl_entries: TtlEntryMap,
 ) -> Result<Vec<LedgerEntryChange>, HostError> {
     // Skip allocation metering for this for the sake of simplicity - the
@@ -272,7 +300,7 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     let resources: SorobanResources =
         metered_from_xdr_with_budget(encoded_resources.as_ref(), &budget)?;
     let footprint = build_storage_footprint_from_xdr(&budget, resources.footprint)?;
-    let storage_and_ttl_maps = build_storage_map_from_xdr_ledger_entries(
+    let (storage_map, init_ttl_map) = build_storage_map_from_xdr_ledger_entries(
         &budget,
         &footprint,
         encoded_ledger_entries,
@@ -280,7 +308,6 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
         ledger_info.sequence_number,
     )?;
 
-    let storage_map = storage_and_ttl_maps.0;
     let init_storage_map = storage_map.metered_clone(budget)?;
 
     let storage = Storage::with_enforcing_footprint_and_map(footprint, storage_map);
@@ -327,12 +354,8 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
             budget: &budget,
             map: &init_storage_map,
         };
-        let ledger_changes = get_ledger_changes(
-            &budget,
-            &storage,
-            &init_storage_snapshot,
-            storage_and_ttl_maps.1,
-        )?;
+        let ledger_changes =
+            get_ledger_changes(&budget, &storage, &init_storage_snapshot, init_ttl_map)?;
         let encoded_contract_events = encode_contract_events(budget, &events)?;
         Ok(InvokeHostFunctionResult {
             encoded_invoke_result,
@@ -348,8 +371,263 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     }
 }
 
+#[cfg(any(test, feature = "recording_mode"))]
+impl Host {
+    fn to_xdr_non_metered(&self, v: &impl WriteXdr) -> Result<Vec<u8>, HostError> {
+        v.to_xdr(DEFAULT_XDR_RW_LIMITS).map_err(|_| {
+            self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "could not convert XDR struct to bytes - the input is too deep or too large",
+                &[],
+            )
+        })
+    }
+
+    fn xdr_roundtrip<T>(&self, v: &T) -> Result<T, HostError>
+    where
+        T: WriteXdr + ReadXdr,
+    {
+        self.metered_from_xdr(self.to_xdr_non_metered(v)?.as_slice())
+    }
+}
+
+#[cfg(any(test, feature = "recording_mode"))]
+fn storage_footprint_to_ledger_footprint(
+    footprint: &Footprint,
+) -> Result<LedgerFootprint, HostError> {
+    let mut read_only: Vec<LedgerKey> = Vec::with_capacity(footprint.0.len());
+    let mut read_write: Vec<LedgerKey> = Vec::with_capacity(footprint.0.len());
+    for (key, access_type) in &footprint.0 {
+        match access_type {
+            AccessType::ReadOnly => read_only.push((**key).clone()),
+            AccessType::ReadWrite => read_write.push((**key).clone()),
+        }
+    }
+    Ok(LedgerFootprint {
+        read_only: read_only
+            .try_into()
+            .map_err(|_| HostError::from((ScErrorType::Storage, ScErrorCode::InternalError)))?,
+        read_write: read_write
+            .try_into()
+            .map_err(|_| HostError::from((ScErrorType::Storage, ScErrorCode::InternalError)))?,
+    })
+}
+
+#[cfg(any(test, feature = "recording_mode"))]
+impl RecordedAuthPayload {
+    fn into_auth_entry_with_emulated_signature(
+        self,
+    ) -> Result<SorobanAuthorizationEntry, HostError> {
+        const EMULATED_SIGNATURE_SIZE: usize = 512;
+
+        match (self.address, self.nonce) {
+            (Some(address), Some(nonce)) => Ok(SorobanAuthorizationEntry {
+                credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                    address,
+                    nonce,
+                    signature_expiration_ledger: 0,
+                    signature: ScVal::Bytes(
+                        vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
+                    ),
+                }),
+                root_invocation: self.invocation,
+            }),
+            (None, None) => Ok(SorobanAuthorizationEntry {
+                credentials: SorobanCredentials::SourceAccount,
+                root_invocation: self.invocation,
+            }),
+            (_, _) => Err((ScErrorType::Auth, ScErrorCode::InternalError).into()),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "recording_mode"))]
+fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
+    match &mut auth_entry.credentials {
+        SorobanCredentials::Address(address_creds) => {
+            address_creds.signature = ScVal::Void;
+        }
+        SorobanCredentials::SourceAccount => {}
+    }
+}
+
+/// Invokes a host function within a fresh host instance in 'recording' mode.
+///
+/// The purpose of recording mode is to measure the resources necessary for
+/// the invocation to succeed in the 'enforcing' mode (i.e. via
+/// `invoke_host_function`). The following information is recorded:
+///
+/// - Footprint - this is based on the ledger entries accessed.
+/// - Read/write bytes - this is based on the sizes of ledger entries read
+/// from the provided `ledger_snapshot`
+/// - Authorization payloads - when the input `auth_entries` is `None`, Host
+/// switches to recording auth mode and fills the recorded data in the output.
+/// When `auth_entries` is not `None`, the authorization is performed in
+/// enforcing mode and `auth_entries` are passed through to the output.
+/// - Instructions - this simply measures the instructions measured by the
+/// provided `budget`. While this function makes the best effort to emulate
+/// the work performed by `invoke_host_function`, the measured value might
+/// still be slightly lower than the actual value used during the enforcing
+/// call. Typically this difference should be within 1% from the correct
+/// value, but in scenarios where recording auth is used it might be
+/// significantly higher (e.g. if the user uses multisig with classic
+/// accounts or custom accounts - there is currently no way to emulate that
+/// in recording auth mode).
+///
+/// The input `Budget` should normally be configured to match the network
+/// limits. Exceeding the budget is the only error condition for this
+/// function, otherwise we try to populate
+/// `InvokeHostFunctionRecordingModeResult` as much as possible (e.g.
+/// if host function invocation fails, we would still populate the resources). 
+///
+/// When diagnostics are enabled, we try to populate `diagnostic_events`
+/// even if the `InvokeHostFunctionResult` fails for any reason.
+#[cfg(any(test, feature = "recording_mode"))]
+#[allow(clippy::too_many_arguments)]
+pub fn invoke_host_function_in_recording_mode(
+    budget: &Budget,
+    enable_diagnostics: bool,
+    host_fn: &HostFunction,
+    source_account: &AccountId,
+    auth_entries: Option<Vec<SorobanAuthorizationEntry>>,
+    ledger_info: LedgerInfo,
+    ledger_snapshot: Rc<dyn SnapshotSource>,
+    base_prng_seed: [u8; 32],
+    diagnostic_events: &mut Vec<DiagnosticEvent>,
+) -> Result<InvokeHostFunctionRecordingModeResult, HostError> {
+    let storage = Storage::with_recording_footprint(ledger_snapshot.clone());
+    let host = Host::with_storage_and_budget(storage, budget.clone());
+    let is_recording_auth = auth_entries.is_none();
+    let ledger_seq = ledger_info.sequence_number;
+    let host_function = host.xdr_roundtrip(host_fn)?;
+    let source_account: AccountId = host.xdr_roundtrip(source_account)?;
+    host.set_source_account(source_account)?;
+    host.set_ledger_info(ledger_info)?;
+    host.set_base_prng_seed(base_prng_seed)?;
+    if let Some(auth_entries) = &auth_entries {
+        host.set_authorization_entries(auth_entries.clone())?;
+    } else {
+        host.switch_to_recording_auth(true)?;
+    }
+
+    if enable_diagnostics {
+        host.set_diagnostic_level(DiagnosticLevel::Debug)?;
+    }
+    let invoke_result = host.invoke_function(host_function);
+
+    if let Ok(res) = &invoke_result {
+        let mut encoded_result_sc_val = vec![];
+        metered_write_xdr(&budget, res, &mut encoded_result_sc_val)?;
+    }
+    let mut output_auth = if let Some(auth_entries) = auth_entries {
+        auth_entries
+    } else {
+        let recorded_auth = host.get_recorded_auth_payloads()?;
+        recorded_auth
+            .into_iter()
+            .map(|a| a.into_auth_entry_with_emulated_signature())
+            .collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>()?
+    };
+    let encoded_auth_entries = output_auth
+        .iter()
+        .map(|e| host.to_xdr_non_metered(e))
+        .collect::<Result<Vec<Vec<u8>>, HostError>>()?;
+    let decoded_auth_entries = host.build_auth_entries_from_xdr(encoded_auth_entries.iter())?;
+    if is_recording_auth {
+        host.set_authorization_entries(decoded_auth_entries)?;
+        for auth_entry in &mut output_auth {
+            clear_signature(auth_entry);
+        }
+    }
+
+    let (footprint, read_bytes, init_ttl_map) = host.with_mut_storage(|storage| {
+        let footprint = storage_footprint_to_ledger_footprint(&storage.footprint)?;
+        let _footprint_from_xdr = build_storage_footprint_from_xdr(&budget, footprint.clone())?;
+
+        let mut encoded_ledger_entries = Vec::with_capacity(storage.footprint.0.len());
+        let mut encoded_ttl_entries = Vec::with_capacity(storage.footprint.0.len());
+        let mut read_bytes = 0_u32;
+        for (lk, _) in &storage.footprint.0 {
+            if ledger_snapshot.has(lk)? {
+                let (le, live_until) = ledger_snapshot.get(lk)?;
+                let encoded_le = host.to_xdr_non_metered(&*le)?;
+                read_bytes = read_bytes.saturating_add(encoded_le.len() as u32);
+                encoded_ledger_entries.push(encoded_le);
+                if let Some(live_until_ledger) = live_until {
+                    let key_xdr = host.to_xdr_non_metered(lk.as_ref())?;
+                    let key_hash: [u8; 32] = Sha256::digest(&key_xdr).into();
+                    let ttl_entry = TtlEntry {
+                        key_hash: key_hash.try_into().map_err(|_| {
+                            HostError::from((ScErrorType::Context, ScErrorCode::InternalError))
+                        })?,
+                        live_until_ledger_seq: live_until_ledger,
+                    };
+                    encoded_ttl_entries.push(host.to_xdr_non_metered(&ttl_entry)?);
+                } else {
+                    encoded_ttl_entries.push(vec![]);
+                }
+            }
+        }
+        let (init_storage, init_ttl_map) = build_storage_map_from_xdr_ledger_entries(
+            &budget,
+            &storage.footprint,
+            encoded_ledger_entries.iter(),
+            encoded_ttl_entries.iter(),
+            ledger_seq,
+        )?;
+        let _init_storage_clone = init_storage.metered_clone(budget)?;
+        Ok((footprint, read_bytes, init_ttl_map))
+    })?;
+    let mut resources = SorobanResources {
+        footprint,
+        instructions: 0,
+        read_bytes,
+        write_bytes: 0,
+    };
+    let _resources_roundtrip: SorobanResources =
+        host.metered_from_xdr(host.to_xdr_non_metered(&resources)?.as_slice())?;
+    let (storage, events) = host.try_finish()?;
+    if enable_diagnostics {
+        extract_diagnostic_events(&events, diagnostic_events);
+    }
+
+    let (ledger_changes, contract_events) = if invoke_result.is_ok() {
+        let ledger_changes =
+            get_ledger_changes(&budget, &storage, &*ledger_snapshot, init_ttl_map)?;
+        let _encoded_contract_events = encode_contract_events(budget, &events)?;
+        let contract_events: Vec<ContractEvent> = events
+            .0
+            .into_iter()
+            .filter(|e| !e.failed_call && e.event.type_ != ContractEventType::Diagnostic)
+            .map(|e| e.event)
+            .collect();
+
+        (ledger_changes, contract_events)
+    } else {
+        (vec![], vec![])
+    };
+    resources.instructions = budget.get_cpu_insns_consumed()? as u32;
+    for ledger_change in &ledger_changes {
+        if !ledger_change.read_only {
+            if let Some(new_entry) = &ledger_change.encoded_new_value {
+                resources.write_bytes =
+                    resources.write_bytes.saturating_add(new_entry.len() as u32);
+            }
+        }
+    }
+
+    Ok(InvokeHostFunctionRecordingModeResult {
+        invoke_result,
+        resources,
+        auth: output_auth,
+        ledger_changes,
+        contract_events,
+    })
+}
+
 /// Encodes host events as `ContractEvent` XDR.
-pub fn encode_contract_events(budget: &Budget, events: &Events) -> Result<Vec<Vec<u8>>, HostError> {
+fn encode_contract_events(budget: &Budget, events: &Events) -> Result<Vec<Vec<u8>>, HostError> {
     let ce = events
         .0
         .iter()
@@ -529,7 +807,10 @@ impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
         {
             Ok((Rc::clone(entry), *live_until_ledger))
         } else {
-            Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into())
+            Err(HostError::from((
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+            )))
         }
     }
 
@@ -537,7 +818,10 @@ impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
         if let Some(maybe_value) = self.map.get::<Rc<LedgerKey>>(key, self.budget)? {
             Ok(maybe_value.is_some())
         } else {
-            Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into())
+            Err(HostError::from((
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+            )))
         }
     }
 }

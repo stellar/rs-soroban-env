@@ -187,7 +187,7 @@ impl Host {
 
         let ctx = self.try_borrow_context_stack_mut()?.pop();
 
-        #[cfg(any(test, feature = "recording_auth"))]
+        #[cfg(any(test, feature = "recording_mode"))]
         if self.try_borrow_context_stack()?.is_empty() {
             // When there are no contexts left, emulate authentication for the
             // recording auth mode. This is a no-op for the enforcing mode.

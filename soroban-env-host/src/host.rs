@@ -57,7 +57,7 @@ use self::{
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 use rand_chacha::ChaCha20Rng;
 use soroban_env_common::SymbolSmall;
 
@@ -117,7 +117,7 @@ struct HostImpl {
     // base or local) such that contracts behave exactly the same whether or not
     // they're recording auth. Therefore this task gets its own PRNG, seeded when
     // the base PRNG is seeded (as a derived PRNG).
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     recording_auth_nonce_prng: RefCell<Option<ChaCha20Rng>>,
     // Some tests _of the host_ rely on pseudorandom _input_ data. For these cases we attach
     // yet another unmetered PRNG to the host.
@@ -157,6 +157,10 @@ struct HostImpl {
     #[doc(hidden)]
     #[cfg(any(test, feature = "testutils"))]
     coverage_scoreboard: RefCell<CoverageScoreboard>,
+
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "recording_mode"))]
+    suppress_diagnostic_events: RefCell<bool>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -245,7 +249,7 @@ impl_checked_borrow_helpers!(
     try_borrow_base_prng_mut
 );
 
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 impl_checked_borrow_helpers!(
     recording_auth_nonce_prng,
     Option<ChaCha20Rng>,
@@ -295,6 +299,14 @@ impl_checked_borrow_helpers!(
     try_borrow_coverage_scoreboard_mut
 );
 
+#[cfg(any(test, feature = "recording_mode"))]
+impl_checked_borrow_helpers!(
+    suppress_diagnostic_events,
+    bool,
+    try_borrow_suppress_diagnostic_events,
+    try_borrow_suppress_diagnostic_events_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -327,7 +339,7 @@ impl Host {
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
-            #[cfg(any(test, feature = "recording_auth"))]
+            #[cfg(any(test, feature = "recording_mode"))]
             recording_auth_nonce_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             test_prng: RefCell::new(None),
@@ -340,6 +352,8 @@ impl Host {
             top_contract_invocation_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             coverage_scoreboard: Default::default(),
+            #[cfg(any(test, feature = "recording_mode"))]
+            suppress_diagnostic_events: RefCell::new(false),
         }))
     }
 
@@ -377,7 +391,7 @@ impl Host {
         }
     }
 
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     pub(crate) fn with_recording_auth_nonce_prng<T>(
         &self,
         f: impl FnOnce(&mut ChaCha20Rng) -> Result<T, HostError>,
@@ -405,7 +419,7 @@ impl Host {
         }
     }
 
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     pub fn switch_to_recording_auth(&self, disable_non_root_auth: bool) -> Result<(), HostError> {
         *self.try_borrow_authorization_manager_mut()? =
             AuthorizationManager::new_recording(disable_non_root_auth);
@@ -433,7 +447,7 @@ impl Host {
         {
             *self.try_borrow_test_prng_mut()? = Some(test_prng);
         }
-        #[cfg(any(test, feature = "recording_auth"))]
+        #[cfg(any(test, feature = "recording_mode"))]
         {
             *self.try_borrow_recording_auth_nonce_prng_mut()? = Some(recording_auth_nonce_prng);
         }
@@ -539,6 +553,21 @@ impl Host {
                 return self.budget_ref().with_shadow_mode(f);
             }
         }
+    }
+
+    /// Calls the provided function while ensuring that no diagnostic events are
+    /// recorded.
+    /// This is useful for emulating operations only for the sake of budget
+    /// accounting in recording mode.
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub(crate) fn with_suppressed_diagnostic_events<F>(&self, f: F) -> Result<(), HostError>
+    where
+        F: FnOnce() -> Result<(), HostError>,
+    {
+        *self.try_borrow_suppress_diagnostic_events_mut()? = true;
+        f()?;
+        *self.try_borrow_suppress_diagnostic_events_mut()? = false;
+        Ok(())
     }
 
     /// Returns whether the Host can be finished by calling

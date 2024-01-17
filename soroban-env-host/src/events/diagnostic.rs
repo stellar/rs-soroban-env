@@ -25,6 +25,11 @@ impl Host {
         args: Vec<InternalDiagnosticArg>,
     ) -> Result<(), HostError> {
         self.with_debug_mode(|| {
+            #[cfg(any(test, feature = "recording_mode"))]
+            if *self.try_borrow_suppress_diagnostic_events()? {
+                return Ok(());
+            }
+
             let de = Rc::metered_new(
                 InternalDiagnosticEvent {
                     contract_id,
@@ -62,6 +67,10 @@ impl Host {
         args: &[Val],
     ) {
         self.with_debug_mode(|| {
+            #[cfg(any(test, feature = "recording_mode"))]
+            if *self.try_borrow_suppress_diagnostic_events()? {
+                return Ok(());
+            }
             let error_sym = SymbolSmall::try_from_str("error")?;
             let contract_id = self.get_current_contract_id_opt_internal()?;
             Vec::<InternalDiagnosticArg>::charge_bulk_init_cpy(2, self)?;

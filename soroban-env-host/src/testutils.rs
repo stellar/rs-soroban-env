@@ -1,3 +1,4 @@
+use crate::e2e_invoke::ledger_entry_to_ledger_key;
 use crate::{
     budget::Budget,
     builtin_contracts::testutils::create_account,
@@ -118,6 +119,16 @@ pub struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u
 impl MockSnapshotSource {
     pub fn new() -> Self {
         Self(BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new())
+    }
+
+    pub fn from_entries(entries: Vec<(LedgerEntry, Option<u32>)>) -> Self {
+        let mut map = BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new();
+        let dummy_budget = Budget::default();
+        for (e, maybe_ttl) in entries {
+            let key = Rc::new(ledger_entry_to_ledger_key(&e, &dummy_budget).unwrap());
+            map.insert(key, (Rc::new(e), maybe_ttl));
+        }
+        Self(map)
     }
 }
 impl SnapshotSource for MockSnapshotSource {
