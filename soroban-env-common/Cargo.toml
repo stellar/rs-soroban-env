@@ -38,6 +38,7 @@ wasmi = ["dep:wasmi"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
 next = ["stellar-xdr/next", "soroban-env-macros/next"]
 tracy = ["dep:tracy-client"]
+shallow-val-hash = []
 
 [package.metadata.docs.rs]
 all-features = true

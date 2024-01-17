@@ -22,6 +22,15 @@ impl<A> Default for MeteredVector<A> {
     }
 }
 
+impl<T> std::hash::Hash for MeteredVector<T>
+where
+    T: std::hash::Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.vec.hash(state);
+    }
+}
+
 impl<A> MeteredVector<A>
 where
     A: DeclaredSizeForMetering,

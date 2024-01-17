@@ -61,7 +61,7 @@ pub(crate) struct TestContractFrame {
     pub(crate) instance: ScContractInstance,
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
 impl std::hash::Hash for TestContractFrame {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
@@ -89,8 +89,7 @@ impl TestContractFrame {
 
 /// Context pairs a variable-case [`Frame`] enum with state that's common to all
 /// cases (eg. a [`Prng`]).
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct Context {
     pub(crate) frame: Frame,
     pub(crate) prng: Option<Prng>,
@@ -108,8 +107,7 @@ pub(crate) struct Context {
 /// Frames are also the units of (sub-)transactions: each frame captures
 /// the host state when it is pushed, and the [`FrameGuard`] will either
 /// commit or roll back that state when it pops the stack.
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) enum Frame {
     ContractVM {
         vm: Rc<Vm>,
@@ -406,12 +404,11 @@ impl Host {
             storage: None,
         };
         let rp = self.push_context(ctx)?;
-        #[cfg(feature = "testutils")]
         {
             // We do this _after_ the context is pushed, in order to let the
             // observation code assume a context exists
             if let Some(ctx) = self.try_borrow_context_stack()?.last() {
-                self.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::PushCtx(ctx))?;
+                self.call_any_lifecycle_hook(crate::host::TraceEvent::PushCtx(ctx))?;
             }
         }
         #[cfg(any(test, feature = "testutils"))]
@@ -506,12 +503,15 @@ impl Host {
                 res = Err(e)
             }
         }
-        #[cfg(feature = "testutils")]
         {
             // We do this _before_ the context is popped, in order to let the
             // observation code assume a context exists
             if let Some(ctx) = self.try_borrow_context_stack()?.last() {
-                self.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::PopCtx(&ctx, &res))?;
+                let res = match &res {
+                    Ok(v) => Ok(*v),
+                    Err(ref e) => Err(e),
+                };
+                self.call_any_lifecycle_hook(crate::host::TraceEvent::PopCtx(&ctx, &res))?;
             }
         }
         if res.is_err() {

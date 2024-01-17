@@ -33,15 +33,18 @@ pub(crate) mod ledger_info_helper;
 mod lifecycle;
 mod mem_helper;
 pub(crate) mod metered_clone;
+pub(crate) mod metered_hash;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod num;
 mod prng;
+pub(crate) mod trace;
 mod validity;
 
 pub use error::HostError;
 pub use prng::{Seed, SEED_BYTES};
+pub use trace::{TraceEvent, TraceHook, TraceRecord, TraceState};
 
 use self::{
     frame::{Context, ContractReentryMode},
@@ -69,19 +72,6 @@ pub struct LedgerInfo {
     pub min_persistent_entry_ttl: u32,
     pub max_entry_ttl: u32,
 }
-
-#[cfg(any(test, feature = "testutils"))]
-#[allow(dead_code)]
-pub(crate) enum HostLifecycleEvent<'a> {
-    PushCtx(&'a Context),
-    PopCtx(&'a Context, &'a Result<Val, HostError>),
-    EnvCall(&'static str, &'a [String]),
-    EnvRet(&'static str, &'a Result<String, String>),
-}
-
-#[cfg(any(test, feature = "testutils"))]
-pub(crate) type HostLifecycleHook =
-    Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]
@@ -151,8 +141,7 @@ struct HostImpl {
     // the host's execution. No guarantees are made about the stability of this
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
-    #[cfg(any(test, feature = "testutils"))]
-    lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
+    trace_hook: RefCell<Option<TraceHook>>,
     // Store a simple contract invocation hook for public usage.
     // The hook triggers when the top-level contract invocation
     // starts and when it ends.
@@ -283,12 +272,11 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager_mut
 );
 
-#[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
-    lifecycle_event_hook,
-    Option<HostLifecycleHook>,
-    try_borrow_lifecycle_event_hook,
-    try_borrow_lifecycle_event_hook_mut
+    trace_hook,
+    Option<TraceHook>,
+    try_borrow_trace_hook,
+    try_borrow_trace_hook_mut
 );
 
 #[cfg(any(test, feature = "testutils"))]
@@ -347,8 +335,7 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
-            #[cfg(any(test, feature = "testutils"))]
-            lifecycle_event_hook: RefCell::new(None),
+            trace_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
@@ -581,38 +568,25 @@ impl Host {
     }
 }
 
-#[cfg(feature = "testutils")]
-macro_rules! call_env_call_hook {
+macro_rules! call_trace_env_call {
     ($self:expr, $($arg:expr),*) => {
-        #[cfg(feature="testutils")]
+        if $self.tracing_enabled()
         {
-            $self.env_call_hook(function_short_name!(), &[$(format!("{:?}", $arg)),*])?;
+            $self.trace_env_call(function_short_name!(), &[$(&$arg),*])?;
         }
     };
 }
 
-#[cfg(not(feature = "testutils"))]
-macro_rules! call_env_call_hook {
-    ($self:expr, $($arg:expr),*) => {};
-}
-
-#[cfg(feature = "testutils")]
-macro_rules! call_env_ret_hook {
-    ($self:expr, $arg:expr) => {
-        #[cfg(feature = "testutils")]
-        {
-            let res_str: Result<String, &HostError> = match &$arg {
-                Ok(ok) => Ok(format!("{:?}", ok)),
+macro_rules! call_trace_env_ret {
+    ($self:expr, $arg:expr) => {{
+        if $self.tracing_enabled() {
+            let dyn_res: Result<&dyn core::fmt::Debug, &HostError> = match &$arg {
+                Ok(ref ok) => Ok(ok),
                 Err(err) => Err(err),
             };
-            $self.env_ret_hook(function_short_name!(), &res_str)?;
+            $self.trace_env_ret(function_short_name!(), &dyn_res)?;
         }
-    };
-}
-
-#[cfg(not(feature = "testutils"))]
-macro_rules! call_env_ret_hook {
-    ($self:expr, $arg:expr) => {};
+    }};
 }
 
 // Notes on metering: these are called from the guest and thus charged on the VM instructions.
@@ -712,22 +686,23 @@ impl EnvBase for Host {
         x
     }
 
-    #[cfg(feature = "testutils")]
-    fn env_call_hook(&self, fname: &'static str, args: &[String]) -> Result<(), HostError> {
-        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvCall(fname, args))
+    fn tracing_enabled(&self) -> bool {
+        match self.try_borrow_trace_hook() {
+            Ok(hook) => hook.is_some(),
+            Err(_) => false,
+        }
     }
 
-    #[cfg(feature = "testutils")]
-    fn env_ret_hook(
+    fn trace_env_call(&self, fname: &'static str, args: &[&dyn Debug]) -> Result<(), HostError> {
+        self.call_any_lifecycle_hook(TraceEvent::EnvCall(fname, args))
+    }
+
+    fn trace_env_ret(
         &self,
         fname: &'static str,
-        res: &Result<String, &HostError>,
+        res: &Result<&dyn Debug, &HostError>,
     ) -> Result<(), HostError> {
-        // We have to defer error formatting to here because the Env type does
-        // not know enough about the structure of errors (in particular that we
-        // do _not_ want to format debuginfo into the lifecycle-hook string).
-        let res = res.clone().map_err(|he| format!("{:?}", he.error));
-        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvRet(fname, &res))
+        self.call_any_lifecycle_hook(TraceEvent::EnvRet(fname, res))
     }
 
     fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
@@ -749,9 +724,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &[u8],
     ) -> Result<BytesObject, HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_from_slice::<ScBytes>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -761,9 +736,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScBytes>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -773,9 +748,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScString>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -785,28 +760,28 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, s, b_pos, slice.len());
+        call_trace_env_call!(self, s, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScSymbol>(s, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<BytesObject, HostError> {
-        call_env_call_hook!(self, mem.len());
+        call_trace_env_call!(self, mem.len());
         let res = self.add_host_object(self.scbytes_from_slice(mem)?);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn string_new_from_slice(&self, s: &[u8]) -> Result<StringObject, HostError> {
-        call_env_call_hook!(self, s.len());
+        call_trace_env_call!(self, s.len());
         let res = self.add_host_object(ScString(self.metered_slice_to_vec(s)?.try_into()?));
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn symbol_new_from_slice(&self, s: &[u8]) -> Result<SymbolObject, HostError> {
-        call_env_call_hook!(self, s.len());
+        call_trace_env_call!(self, s.len());
         // Note: this whole function could be replaced by `ScSymbol::try_from_bytes`
         // in order to avoid duplication. It is duplicated in order to support
         // a slightly different check order for the sake of observation consistency.
@@ -822,12 +797,12 @@ impl EnvBase for Host {
             })?;
         }
         let res = self.add_host_object(ScSymbol(self.metered_slice_to_vec(s)?.try_into()?));
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
-        call_env_call_hook!(self, keys.len());
+        call_trace_env_call!(self, keys.len());
         if keys.len() != vals.len() {
             return Err(self.err(
                 ScErrorType::Object,
@@ -848,7 +823,7 @@ impl EnvBase for Host {
             .collect::<Result<Vec<(Val, Val)>, HostError>>()?;
         let map = HostMap::from_map(map_vec, self)?;
         let res = self.add_host_object(map);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -858,7 +833,7 @@ impl EnvBase for Host {
         keys: &[&str],
         vals: &mut [Val],
     ) -> Result<Void, HostError> {
-        call_env_call_hook!(self, map, keys.len());
+        call_trace_env_call!(self, map, keys.len());
         if keys.len() != vals.len() {
             return Err(self.err(
                 ScErrorType::Object,
@@ -889,23 +864,23 @@ impl EnvBase for Host {
             Ok(())
         })?;
         let res = Ok(Val::VOID);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error> {
-        call_env_call_hook!(self, vals.len());
+        call_trace_env_call!(self, vals.len());
         let vec = HostVec::from_exact_iter(vals.iter().cloned(), self.budget_ref())?;
         for v in vec.iter() {
             self.check_val_integrity(*v)?;
         }
         let res = self.add_host_object(vec);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn vec_unpack_to_slice(&self, vec: VecObject, vals: &mut [Val]) -> Result<Void, Self::Error> {
-        call_env_call_hook!(self, vec, vals.len());
+        call_trace_env_call!(self, vec, vals.len());
         self.visit_obj(vec, |hv: &HostVec| {
             if hv.len() != vals.len() {
                 return Err(self.err(
@@ -920,12 +895,12 @@ impl EnvBase for Host {
             Ok(())
         })?;
         let res = Ok(Val::VOID);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn symbol_index_in_strs(&self, sym: Symbol, slices: &[&str]) -> Result<U32Val, Self::Error> {
-        call_env_call_hook!(self, sym, slices.len());
+        call_trace_env_call!(self, sym, slices.len());
         let mut found = None;
         for (i, slice) in slices.iter().enumerate() {
             if self.symbol_matches(slice.as_bytes(), sym)? && found.is_none() {
@@ -941,15 +916,15 @@ impl EnvBase for Host {
             )),
             Some(idx) => Ok(U32Val::from(self.usize_to_u32(idx)?)),
         };
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, HostError> {
-        call_env_call_hook!(self, msg.len(), vals.len());
+        call_trace_env_call!(self, msg.len(), vals.len());
         self.log_diagnostics(msg, vals);
         let res = Ok(Void::from(()));
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 }
@@ -2964,23 +2939,19 @@ impl Host {
     {
         f(self.0.budget.clone())
     }
+}
 
-    #[cfg(any(test, feature = "testutils"))]
+impl Host {
     #[allow(dead_code)]
-    pub(crate) fn set_lifecycle_event_hook(
-        &self,
-        hook: Option<HostLifecycleHook>,
-    ) -> Result<(), HostError> {
-        *self.try_borrow_lifecycle_event_hook_mut()? = hook;
+    pub(crate) fn set_trace_hook(&self, hook: Option<TraceHook>) -> Result<(), HostError> {
+        self.call_any_lifecycle_hook(TraceEvent::End)?;
+        *self.try_borrow_trace_hook_mut()? = hook;
+        self.call_any_lifecycle_hook(TraceEvent::Begin)?;
         Ok(())
     }
 
-    #[cfg(feature = "testutils")]
-    pub(crate) fn call_any_lifecycle_hook(
-        &self,
-        event: HostLifecycleEvent,
-    ) -> Result<(), HostError> {
-        match &*self.try_borrow_lifecycle_event_hook()? {
+    pub(crate) fn call_any_lifecycle_hook(&self, event: TraceEvent) -> Result<(), HostError> {
+        match &*self.try_borrow_trace_hook()? {
             Some(hook) => hook(self, event),
             None => Ok(()),
         }

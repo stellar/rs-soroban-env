@@ -523,7 +523,8 @@ fn broken_object() {
 #[test]
 fn excessive_logging() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_linear_memory_logging();
-    let host = observe_host!(Host::test_host_with_recording_footprint());
+    // NB: We don't observe here since the test is sensitive to shadow budget.
+    let host = Host::test_host_with_recording_footprint();
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
