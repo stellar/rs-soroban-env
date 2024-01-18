@@ -74,6 +74,14 @@ impl Budget {
         Ok(())
     }
 
+    pub fn reset_cpu_limit(&self, cpu: u64) -> Result<(), HostError> {
+        self.with_mut_budget(|mut b| {
+            b.cpu_insns.reset(cpu);
+            Ok(())
+        })?;
+        self.reset_tracker()
+    }
+
     pub fn reset_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
         self.with_mut_budget(|mut b| {
             b.cpu_insns.reset(cpu);

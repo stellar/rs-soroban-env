@@ -9,6 +9,7 @@ mod complex;
 mod crypto;
 mod depth_limit;
 mod dispatch;
+mod e2e_tests;
 mod event;
 mod finish;
 mod frame;

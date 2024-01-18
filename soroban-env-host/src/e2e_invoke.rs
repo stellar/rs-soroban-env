@@ -69,6 +69,7 @@ pub struct LedgerEntryChange {
 }
 
 /// Represents the live until-related state of the entry.
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct LedgerEntryLiveUntilChange {
     /// Hash of the LedgerKey for the entry that this live until ledger change is tied to
     pub key_hash: Vec<u8>,
@@ -111,7 +112,7 @@ pub fn get_ledger_changes<T: SnapshotSource>(
 
         if let Some(durability) = durability {
             let key_hash = match init_ttl_entries.get::<Rc<LedgerKey>>(key, budget)? {
-                Some(ee) => ee.key_hash.0.to_vec(),
+                Some(ttl_entry) => ttl_entry.key_hash.0.to_vec(),
                 None => sha256_hash_from_bytes(entry_change.encoded_key.as_slice(), budget)?,
             };
 
@@ -317,11 +318,10 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     if enable_diagnostics {
         extract_diagnostic_events(&events, diagnostic_events);
     }
-    let encoded_invoke_result = result.map(|res| {
+    let encoded_invoke_result = result.and_then(|res| {
         let mut encoded_result_sc_val = vec![];
-        metered_write_xdr(&budget, &res, &mut encoded_result_sc_val)?;
-        Ok(encoded_result_sc_val)
-    })?;
+        metered_write_xdr(&budget, &res, &mut encoded_result_sc_val).map(|_| encoded_result_sc_val)
+    });
     if encoded_invoke_result.is_ok() {
         let init_storage_snapshot = StorageMapSnapshotSource {
             budget: &budget,
@@ -377,7 +377,10 @@ fn extract_diagnostic_events(events: &Events, diagnostic_events: &mut Vec<Diagno
     }
 }
 
-fn ledger_entry_to_ledger_key(le: &LedgerEntry, budget: &Budget) -> Result<LedgerKey, HostError> {
+pub(crate) fn ledger_entry_to_ledger_key(
+    le: &LedgerEntry,
+    budget: &Budget,
+) -> Result<LedgerKey, HostError> {
     match &le.data {
         LedgerEntryData::Account(a) => Ok(LedgerKey::Account(LedgerKeyAccount {
             account_id: a.account_id.metered_clone(budget)?,
@@ -456,12 +459,12 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
         let key = Rc::metered_new(ledger_entry_to_ledger_key(&le, budget)?, budget)?;
 
         if !ttl_buf.as_ref().is_empty() {
-            let ee = Rc::metered_new(
+            let ttl_entry = Rc::metered_new(
                 metered_from_xdr_with_budget::<TtlEntry>(ttl_buf.as_ref(), budget)?,
                 budget,
             )?;
 
-            if ee.live_until_ledger_seq < ledger_num {
+            if ttl_entry.live_until_ledger_seq < ledger_num {
                 return Err(Error::from_type_and_code(
                     ScErrorType::Storage,
                     ScErrorCode::InternalError,
@@ -469,9 +472,9 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
                 .into());
             }
 
-            live_until_ledger = Some(ee.live_until_ledger_seq);
+            live_until_ledger = Some(ttl_entry.live_until_ledger_seq);
 
-            ttl_map = ttl_map.insert(key.clone(), ee, budget)?;
+            ttl_map = ttl_map.insert(key.clone(), ttl_entry, budget)?;
         } else if matches!(le.as_ref().data, LedgerEntryData::ContractData(_))
             || matches!(le.as_ref().data, LedgerEntryData::ContractCode(_))
         {

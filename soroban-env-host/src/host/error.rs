@@ -132,9 +132,18 @@ impl HostError {
         Error: From<C>,
     {
         match res {
-            Ok(_) => false,
+            Ok(_) => {
+                eprintln!("result is not an error");
+                false
+            }
             Err(he) => {
                 let error: Error = code.into();
+                if he.error != error {
+                    eprintln!(
+                        "expected error != actual error: {:?} != {:?}",
+                        error, he.error
+                    );
+                }
                 he.error == error
             }
         }
