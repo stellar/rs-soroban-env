@@ -1,12 +1,12 @@
+//! These Hash impls exist strictly for use in soroban-env-host's tracing
+//! subsystem. Since they do not "look through" to the environment they are
+//! misleading and potentially dangerous to expose for general use.
+
 use crate::{
     AddressObject, BytesObject, DurationObject, I128Object, I256Object, I64Object, MapObject,
     Object, StringObject, Symbol, SymbolObject, TimepointObject, U128Object, U256Object, U64Object,
     Val, VecObject,
 };
-
-// These impls exist strictly for use in test observation. Since they do not
-// "look through" to the environment they are misleading and potentially
-// dangerous to expose for general use.
 
 impl core::hash::Hash for Val {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {

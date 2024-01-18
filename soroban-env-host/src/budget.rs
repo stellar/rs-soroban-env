@@ -778,6 +778,12 @@ impl Budget {
         Ok(())
     }
 
+    pub(crate) fn ensure_shadow_cpu_limit_factor(&self, factor: u64) -> Result<(), HostError> {
+        let mut b = self.0.try_borrow_mut_or_err()?;
+        b.cpu_insns.shadow_limit = b.cpu_insns.limit.saturating_mul(factor);
+        Ok(())
+    }
+
     pub fn get_tracker(&self, ty: ContractCostType) -> Result<CostTracker, HostError> {
         self.0
             .try_borrow_or_err()?

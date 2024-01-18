@@ -13,7 +13,7 @@ jobs:
     # temporarily disabling publish-dry-run, it appears to be broken with recent
     # changes to dependency specifications?
     # needs: [fmt, cackle, cargo-deny, check-git-rev-deps, build-and-test, publish-dry-run]
-    needs: [fmt, cackle, cargo-deny, check-git-rev-deps, build-and-test]
+    needs: [fmt, cackle, cargo-deny, check-git-rev-deps, semver-checks, build-and-test]
     runs-on: ubuntu-latest
     steps:
     - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
@@ -62,6 +62,17 @@ jobs:
     - run: rustup component add rust-analyzer
     - name: Check if rust-analyzer encounters any errors parsing project
       run: rust-analyzer analysis-stats . 2>&1 | (! grep ERROR)
+
+  semver-checks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: rustup update
+    - uses: stellar/binaries@v18
+      with:
+        name: cargo-semver-checks
+        version: 0.27.0
+    - run: cargo semver-checks
 
   build-and-test:
     strategy:

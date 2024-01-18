@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_env_common::{BytesObject, U32Val, Env as _};
+use soroban_env_common::{BytesObject, Env as _, U32Val};
 use soroban_sdk::{contract, contractimpl, Bytes, Env, FromVal, Val, Vec};
 
 #[contract]
@@ -16,9 +16,11 @@ fn ack(m: u32, n: u32) -> u32 {
     return ack(m - 1, ack(m, n - 1));
 }
 
-fn stacksmash(n: u64) {
-    if n > 0 {
-        stacksmash(n + n / 2)
+fn recursive(depth: u32) -> u32 {
+    if depth != 0 {
+        depth + recursive(depth - 1)
+    } else {
+        0
     }
 }
 
@@ -39,8 +41,8 @@ impl Contract {
         ack(4, 8);
     }
 
-    pub fn ssmash() {
-        stacksmash(2)
+    pub fn deepstack(_env: Env, depth: u32) -> u32 {
+        recursive(depth)
     }
 
     pub fn oob1() -> u32 {

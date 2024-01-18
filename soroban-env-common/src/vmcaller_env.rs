@@ -179,22 +179,24 @@ macro_rules! vmcaller_none_function_helper {
         fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error> {
             #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
             let _span = tracy_span!(core::stringify!($fn_id));
-            #[cfg(all(feature = "std", feature = "testutils"))]
+            #[cfg(feature = "std")]
+            if self.tracing_enabled()
             {
-                self.env_call_hook(&core::stringify!($fn_id), &[$(format!("{:?}", $arg)),*])?;
+                self.trace_env_call(&core::stringify!($fn_id), &[$(&$arg),*])?;
             }
             let res: Result<_, _> = self.augment_err_result(<Self as VmCallerEnv>::$fn_id(self, &mut VmCaller::none(), $($arg.check_env_arg(self)?),*));
             let res = match res {
                 Ok(ok) => Ok(ok.check_env_arg(self)?),
                 Err(err) => Err(err)
             };
-            #[cfg(all(feature = "std", feature = "testutils"))]
+            #[cfg(feature = "std")]
+            if self.tracing_enabled()
             {
-                let res_str: Result<String,&Self::Error> = match &res {
-                    Ok(ok) => Ok(format!("{:?}", ok)),
+                let dyn_res: Result<&dyn core::fmt::Debug,&Self::Error> = match &res {
+                    Ok(ref ok) => Ok(ok),
                     Err(err) => Err(err)
                 };
-                self.env_ret_hook(&core::stringify!($fn_id), &res_str)?;
+                self.trace_env_ret(&core::stringify!($fn_id), &dyn_res)?;
             }
             res
         }

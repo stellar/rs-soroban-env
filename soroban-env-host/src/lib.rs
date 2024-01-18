@@ -45,6 +45,9 @@ pub use soroban_env_common::*;
 pub mod e2e_invoke;
 pub mod fees;
 
+#[doc(hidden)]
+pub use host::{TraceEvent, TraceHook, TraceRecord, TraceState};
+
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 pub mod cost_runner;

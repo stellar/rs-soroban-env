@@ -30,6 +30,16 @@ where
     }
 }
 
+impl<K, V, Ctx> std::hash::Hash for MeteredOrdMap<K, V, Ctx>
+where
+    K: std::hash::Hash,
+    V: std::hash::Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.map.hash(state);
+    }
+}
+
 impl<K, V, Ctx> MeteredOrdMap<K, V, Ctx>
 where
     K: DeclaredSizeForMetering,

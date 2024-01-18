@@ -22,6 +22,9 @@ include = [
     "std::sys::unix::rand::hashmap_random_keys",
     "hashbrown::raw",
 ]
+no_auto_detect = [
+    "soroban-env-common",
+]
 
 [api.rand]
 include = [
@@ -127,6 +130,8 @@ build.allow_apis = [
 ]
 allow_apis = [
     "time",
+    "thread",
+    "rand",
 ]
 
 [pkg.unicode-ident]
@@ -401,3 +406,11 @@ allow_unsafe = true
 
 [pkg.itertools]
 allow_unsafe = true
+
+[pkg.anyhow]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]

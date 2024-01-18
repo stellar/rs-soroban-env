@@ -60,7 +60,6 @@ pub(crate) struct InternalDiagnosticEvent {
     pub args: Vec<InternalDiagnosticArg>,
 }
 
-#[cfg(feature = "testutils")]
 impl std::hash::Hash for InternalEvent {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
@@ -81,7 +80,6 @@ impl std::hash::Hash for InternalEvent {
     }
 }
 
-#[cfg(feature = "testutils")]
 impl std::hash::Hash for EventError {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
