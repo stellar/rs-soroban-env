@@ -245,6 +245,27 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_
 }
 
 #[test]
+#[cfg(all(not(feature = "next"), feature = "testutils"))]
+// This is a regression test: we accidentally wired up the tracing
+// infrastructure in such a way that when it did a try_borrow on host fields it
+// wanted to observe, it called the helpers that emit "internal error"
+// diagnostic events for any failed borrows. We actually don't want that to
+// happen, we want failed borrows from the tracing subsystem to be silent.
+fn test_observation_does_not_emit_diagnostic_events_from_failed_borrows() -> Result<(), HostError> {
+    let host = Host::test_host();
+    let obs_host = observe_host!(host.clone());
+    host.enable_debug()?;
+    let storage = host.try_borrow_storage_mut()?;
+    host.obj_from_i64(1)?;
+    drop(storage);
+    drop(obs_host);
+    let (_, evts) = host.try_finish()?;
+    dbg!(&evts);
+    assert_eq!(evts.0.len(), 0);
+    Ok(())
+}
+
+#[test]
 fn nonexistent_topic_obj_handle() -> Result<(), HostError> {
     let host = Host::test_host();
     let data = Val::from_void().to_val();
