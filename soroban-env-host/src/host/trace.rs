@@ -160,14 +160,14 @@ impl Host {
     }
 
     fn base_prng_hash(&self) -> u64 {
-        if let Ok(prng) = self.try_borrow_base_prng() {
+        if let Ok(prng) = self.0.base_prng.try_borrow() {
             self.hash_optional(&*prng)
         } else {
             0
         }
     }
     fn local_prng_hash(&self) -> u64 {
-        if let Ok(ctxs) = self.try_borrow_context_stack() {
+        if let Ok(ctxs) = self.0.context_stack.try_borrow() {
             if let Some(ctx) = ctxs.last() {
                 return self.hash_optional(&ctx.prng);
             }
@@ -175,7 +175,7 @@ impl Host {
         0
     }
     fn local_objs_size(&self) -> usize {
-        if let Ok(ctxs) = self.try_borrow_context_stack() {
+        if let Ok(ctxs) = self.0.context_stack.try_borrow() {
             if let Some(ctx) = ctxs.last() {
                 if let Frame::ContractVM {
                     relative_objects, ..
@@ -188,7 +188,7 @@ impl Host {
         0
     }
     fn local_objs_hash(&self) -> u64 {
-        if let Ok(ctxs) = self.try_borrow_context_stack() {
+        if let Ok(ctxs) = self.0.context_stack.try_borrow() {
             if let Some(ctx) = ctxs.last() {
                 if let Frame::ContractVM {
                     relative_objects, ..
@@ -202,21 +202,21 @@ impl Host {
         0
     }
     fn global_objs_size(&self) -> usize {
-        if let Ok(objs) = self.try_borrow_objects() {
+        if let Ok(objs) = self.0.objects.try_borrow() {
             objs.len()
         } else {
             0
         }
     }
     fn global_objs_hash(&self) -> u64 {
-        if let Ok(objs) = self.try_borrow_objects() {
+        if let Ok(objs) = self.0.objects.try_borrow() {
             self.hash_iter(objs.iter())
         } else {
             0
         }
     }
     fn memory_hash_and_size(&self) -> (u64, usize) {
-        if let Ok(ctxs) = self.try_borrow_context_stack() {
+        if let Ok(ctxs) = self.0.context_stack.try_borrow() {
             if let Some(ctx) = ctxs.last() {
                 if let Frame::ContractVM { vm, .. } = &ctx.frame {
                     if let Ok(pair) = vm.memory_hash_and_size(self.budget_ref()) {
@@ -228,7 +228,7 @@ impl Host {
         (0, 0)
     }
     fn events_size(&self) -> usize {
-        if let Ok(evts) = self.try_borrow_events() {
+        if let Ok(evts) = self.0.events.try_borrow() {
             evts.vec
                 .iter()
                 .filter(|(e, _)| match e {
@@ -241,7 +241,7 @@ impl Host {
         }
     }
     fn events_hash(&self) -> u64 {
-        if let Ok(evts) = self.try_borrow_events() {
+        if let Ok(evts) = self.0.events.try_borrow() {
             self.hash_iter(evts.vec.iter().filter(|(e, _)| match e {
                 InternalEvent::Contract(_) => true,
                 InternalEvent::Diagnostic(_) => false,
@@ -251,7 +251,7 @@ impl Host {
         }
     }
     fn instance_storage_size(&self) -> usize {
-        if let Ok(ctxs) = self.try_borrow_context_stack() {
+        if let Ok(ctxs) = self.0.context_stack.try_borrow() {
             if let Some(ctx) = ctxs.last() {
                 if let Some(storage) = &ctx.storage {
                     return storage.map.len();
@@ -261,7 +261,7 @@ impl Host {
         0
     }
     fn instance_storage_hash(&self) -> u64 {
-        if let Ok(ctxs) = self.try_borrow_context_stack() {
+        if let Ok(ctxs) = self.0.context_stack.try_borrow() {
             if let Some(ctx) = ctxs.last() {
                 if let Some(storage) = &ctx.storage {
                     return self.hash_one(&storage.map);
@@ -271,14 +271,14 @@ impl Host {
         0
     }
     fn ledger_storage_size(&self) -> usize {
-        if let Ok(store) = self.try_borrow_storage() {
+        if let Ok(store) = self.0.storage.try_borrow() {
             store.map.len()
         } else {
             0
         }
     }
     fn ledger_storage_hash(&self) -> u64 {
-        if let Ok(store) = self.try_borrow_storage() {
+        if let Ok(store) = self.0.storage.try_borrow() {
             self.hash_one(&store.map)
         } else {
             0
@@ -286,14 +286,14 @@ impl Host {
     }
 
     fn auth_stack_size(&self) -> usize {
-        if let Ok(auth_mgr) = self.try_borrow_authorization_manager() {
+        if let Ok(auth_mgr) = self.0.authorization_manager.try_borrow() {
             auth_mgr.stack_size()
         } else {
             0
         }
     }
     fn auth_stack_hash(&self) -> u64 {
-        if let Ok(auth_mgr) = self.try_borrow_authorization_manager() {
+        if let Ok(auth_mgr) = self.0.authorization_manager.try_borrow() {
             if let Ok(hash) = auth_mgr.stack_hash(self.budget_ref()) {
                 return hash;
             }
@@ -301,7 +301,7 @@ impl Host {
         0
     }
     fn auth_trackers_hash_and_size(&self) -> (u64, usize) {
-        if let Ok(auth_mgr) = self.try_borrow_authorization_manager() {
+        if let Ok(auth_mgr) = self.0.authorization_manager.try_borrow() {
             if let Ok(pair) = auth_mgr.trackers_hash_and_size(self.budget_ref()) {
                 return pair;
             }
@@ -309,28 +309,28 @@ impl Host {
         (0, 0)
     }
     fn context_stack_size(&self) -> usize {
-        if let Ok(frames) = self.try_borrow_context_stack() {
+        if let Ok(frames) = self.0.context_stack.try_borrow() {
             frames.len()
         } else {
             0
         }
     }
     fn context_stack_hash(&self) -> u64 {
-        if let Ok(frames) = self.try_borrow_context_stack() {
+        if let Ok(frames) = self.0.context_stack.try_borrow() {
             self.hash_iter(frames.iter())
         } else {
             0
         }
     }
     fn storage_footprint_size(&self) -> usize {
-        if let Ok(storage) = self.try_borrow_storage() {
+        if let Ok(storage) = self.0.storage.try_borrow() {
             storage.footprint.0.len()
         } else {
             0
         }
     }
     fn storage_footprint_hash(&self) -> u64 {
-        if let Ok(storage) = self.try_borrow_storage() {
+        if let Ok(storage) = self.0.storage.try_borrow() {
             self.hash_one(&storage.footprint.0)
         } else {
             0
@@ -338,7 +338,7 @@ impl Host {
     }
 
     fn vm_exports_hash_and_size(&self) -> (u64, usize) {
-        if let Ok(ctxs) = self.try_borrow_context_stack() {
+        if let Ok(ctxs) = self.0.context_stack.try_borrow() {
             if let Some(ctx) = ctxs.last() {
                 if let Frame::ContractVM { vm, .. } = &ctx.frame {
                     if let Ok(pair) = vm.exports_hash_and_size(self.budget_ref()) {
