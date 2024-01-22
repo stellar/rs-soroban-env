@@ -59,6 +59,11 @@
 //! confirm identical behaviour with libsodium.
 
 use ed25519_dalek::{Signature, VerifyingKey, PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH};
+use soroban_env_common::{Env, EnvBase};
+use soroban_env_host::{
+    xdr::{ScErrorCode, ScErrorType},
+    Host,
+};
 
 // The Zcash work produced 14 x 14 = 196 test vectors expressing combinations
 // of boundary cases for public keys and signatures (14 here being the 8
@@ -69,6 +74,9 @@ use ed25519_dalek::{Signature, VerifyingKey, PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH
 // _rejects_ them all.
 #[test]
 fn check_zcash_test_vectors_are_rejected() {
+    let host = Host::default();
+    const ZIP215_TEST_MESSAGE: &[u8] = b"Zcash";
+    let msg = host.bytes_new_from_slice(&ZIP215_TEST_MESSAGE).unwrap();
     for (i, test_vector) in ZCASH_TEST_VECTORS.iter().enumerate() {
         println!("Zcash Test vector {}", i);
         let public_key: [u8; PUBLIC_KEY_LENGTH] = hex::decode(test_vector.public_key)
@@ -83,8 +91,17 @@ fn check_zcash_test_vectors_are_rejected() {
         let sig = Signature::from_bytes(&signature);
         // The ZIP-215 test vectors are all valid signatures of the message "Zcash",
         // but we want to reject them because they're all small-order points.
-        const ZIP215_TEST_MESSAGE: &[u8] = b"Zcash";
         assert!(vk.verify_strict(&ZIP215_TEST_MESSAGE, &sig).is_err());
+
+        // Also run the same test through the host interface to confirm it there.
+        let pk = host.bytes_new_from_slice(&public_key).unwrap();
+        let sig = host.bytes_new_from_slice(&signature).unwrap();
+        match host.verify_sig_ed25519(pk, msg, sig) {
+            Ok(_) => panic!("accepted Zcash testcase {} that should be rejected", i),
+            Err(e) => assert!(
+                e.error.is_type(ScErrorType::Crypto) && e.error.is_code(ScErrorCode::InvalidInput),
+            ),
+        }
     }
 }
 
@@ -92,6 +109,7 @@ fn check_zcash_test_vectors_are_rejected() {
 // set of test vectors in section 5 of the paper that we check here as well.
 #[test]
 fn check_iacr_2020_1244_test_vectors() {
+    let host = Host::default();
     for (i, test_vector) in IACR_2020_1244_TEST_VECTORS.iter().enumerate() {
         println!("IACR 2020/1244 Test vector {}", i);
         let public_key: [u8; PUBLIC_KEY_LENGTH] = hex::decode(test_vector.pub_key)
@@ -110,6 +128,19 @@ fn check_iacr_2020_1244_test_vectors() {
             .unwrap();
         let res = vk.verify_strict(&message, &sig).is_err();
         assert_eq!(res, test_vector.should_fail);
+
+        // Test through the host interface as well.
+        let pk = host.bytes_new_from_slice(&public_key).unwrap();
+        let sig = host.bytes_new_from_slice(&signature).unwrap();
+        let msg = host.bytes_new_from_slice(&message).unwrap();
+        match host.verify_sig_ed25519(pk, msg, sig) {
+            Ok(_) => assert!(!test_vector.should_fail),
+            Err(e) => assert!(
+                test_vector.should_fail
+                    && e.error.is_type(ScErrorType::Crypto)
+                    && e.error.is_code(ScErrorCode::InvalidInput),
+            ),
+        }
     }
 }
 
