@@ -70,7 +70,7 @@ use ed25519_dalek::{Signature, VerifyingKey, PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH
 #[test]
 fn check_zcash_test_vectors_are_rejected() {
     for (i, test_vector) in ZCASH_TEST_VECTORS.iter().enumerate() {
-        println!("IACR 2020/1244 Test vector {}", i);
+        println!("Zcash Test vector {}", i);
         let public_key: [u8; PUBLIC_KEY_LENGTH] = hex::decode(test_vector.public_key)
             .unwrap()
             .try_into()
