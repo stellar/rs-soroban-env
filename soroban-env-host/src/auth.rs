@@ -2028,7 +2028,7 @@ impl AccountAuthorizationTracker {
             ScAddress::Account(acc) => {
                 // Emulate verification of a single signature that belongs to this
                 // account.
-                // We could emulate more (up to 20) signature verificaitons, but
+                // We could emulate more (up to 20) signature verifications, but
                 // since signature verification is a pretty expensive operation, while
                 // multisig in combination with Soroban auth is probably pretty rare,
                 // multisig users should either use enforcing auth simulation, or
