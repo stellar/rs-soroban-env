@@ -627,7 +627,7 @@ pub fn invoke_host_function_in_recording_mode(
 }
 
 /// Encodes host events as `ContractEvent` XDR.
-fn encode_contract_events(budget: &Budget, events: &Events) -> Result<Vec<Vec<u8>>, HostError> {
+pub fn encode_contract_events(budget: &Budget, events: &Events) -> Result<Vec<Vec<u8>>, HostError> {
     let ce = events
         .0
         .iter()
