@@ -479,7 +479,7 @@ fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
 /// limits. Exceeding the budget is the only error condition for this
 /// function, otherwise we try to populate
 /// `InvokeHostFunctionRecordingModeResult` as much as possible (e.g.
-/// if host function invocation fails, we would still populate the resources). 
+/// if host function invocation fails, we would still populate the resources).
 ///
 /// When diagnostics are enabled, we try to populate `diagnostic_events`
 /// even if the `InvokeHostFunctionResult` fails for any reason.
