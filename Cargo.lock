@@ -1465,8 +1465,8 @@ version = "20.1.0"
 
 [[package]]
 name = "soroban-wasmi"
-version = "0.31.1-soroban.20.0.0"
-source = "git+https://github.com/stellar/wasmi?rev=ab29800224d85ee64d4ac127bac84cdbb0276721#ab29800224d85ee64d4ac127bac84cdbb0276721"
+version = "0.31.1-soroban.20.0.1"
+source = "git+https://github.com/stellar/wasmi?rev=0ed3f3dee30dc41ebe21972399e0a73a41944aa0#0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
 dependencies = [
  "smallvec",
  "spin",
@@ -1848,12 +1848,12 @@ dependencies = [
 [[package]]
 name = "wasmi_arena"
 version = "0.4.0"
-source = "git+https://github.com/stellar/wasmi?rev=ab29800224d85ee64d4ac127bac84cdbb0276721#ab29800224d85ee64d4ac127bac84cdbb0276721"
+source = "git+https://github.com/stellar/wasmi?rev=0ed3f3dee30dc41ebe21972399e0a73a41944aa0#0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
 
 [[package]]
 name = "wasmi_core"
 version = "0.13.0"
-source = "git+https://github.com/stellar/wasmi?rev=ab29800224d85ee64d4ac127bac84cdbb0276721#ab29800224d85ee64d4ac127bac84cdbb0276721"
+source = "git+https://github.com/stellar/wasmi?rev=0ed3f3dee30dc41ebe21972399e0a73a41944aa0#0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
 dependencies = [
  "downcast-rs",
  "libm",
