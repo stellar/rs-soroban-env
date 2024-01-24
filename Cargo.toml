@@ -36,9 +36,9 @@ default-features = false
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
-version = "=0.31.1-soroban.20.0.0"
+version = "=0.31.1-soroban.20.0.1"
 git = "https://github.com/stellar/wasmi"
-rev = "ab29800224d85ee64d4ac127bac84cdbb0276721"
+rev = "0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # stellar-xdr = { path = "../rs-stellar-xdr/" }
