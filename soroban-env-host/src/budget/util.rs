@@ -2,7 +2,7 @@
     test,
     feature = "testutils",
     feature = "bench",
-    feature = "recording_auth"
+    feature = "recording_mode"
 ))]
 use crate::{budget::Budget, HostError};
 
@@ -169,7 +169,7 @@ impl Budget {
     }
 }
 
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 impl Budget {
     /// Variant of `with_shadow_mode`, enabled only in testing and
     /// non-production scenarios, that produces a `Result<>` rather than eating

@@ -119,14 +119,17 @@ impl<'a> TestSigner<'a> {
         host.from_host_val(signature).unwrap()
     }
 
-    pub(crate) fn address(&self, host: &Host) -> Address {
-        let sc_address = match self {
+    pub(crate) fn sc_address(&self) -> ScAddress {
+        match self {
             TestSigner::AccountInvoker(acc_id) => ScAddress::Account(acc_id.clone()),
             TestSigner::Account(acc) => ScAddress::Account(acc.account_id.clone()),
             TestSigner::AccountContract(signer) => signer.address.to_sc_address().unwrap(),
             TestSigner::ContractInvoker(contract_id) => ScAddress::Contract(contract_id.clone()),
-        };
-        Address::try_from_val(host, &host.add_host_object(sc_address).unwrap()).unwrap()
+        }
+    }
+
+    pub(crate) fn address(&self, host: &Host) -> Address {
+        Address::try_from_val(host, &host.add_host_object(self.sc_address()).unwrap()).unwrap()
     }
 }
 
