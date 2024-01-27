@@ -13,6 +13,9 @@ pub const TTL_ENTRY_SIZE: u32 = 48;
 const INSTRUCTIONS_INCREMENT: i64 = 10000;
 const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
 
+// minimum effective write fee per 1KB
+const MINIMUM_WRITE_FEE_PER_1KB: i64 = 1000;
+
 /// These are the resource upper bounds specified by the Soroban transaction.
 pub struct TransactionResources {
     /// Number of CPU instructions.
@@ -238,18 +241,22 @@ pub fn compute_write_fee_per_1kb(
         .write_fee_1kb_bucket_list_high
         .saturating_sub(fee_config.write_fee_1kb_bucket_list_low)
         .clamp_fee();
-    let bucket_list_size_before_reaching_target =
-        bucket_list_size_bytes.min(fee_config.bucket_list_target_size_bytes);
-    // Convert multipliers to i128 to make sure we can handle large bucket list
-    // sizes.
-    let mut write_fee_per_1kb = num_integer::div_ceil(
-        (fee_rate_multiplier as i128)
-            .saturating_mul(bucket_list_size_before_reaching_target as i128),
-        fee_config.bucket_list_target_size_bytes as i128,
-    )
-    .clamp_fee();
-    write_fee_per_1kb = write_fee_per_1kb.saturating_add(fee_config.write_fee_1kb_bucket_list_low);
-    if bucket_list_size_bytes > fee_config.bucket_list_target_size_bytes {
+    let mut write_fee_per_1kb: i64 = 0;
+    if bucket_list_size_bytes < fee_config.bucket_list_target_size_bytes {
+        let bucket_list_size_before_reaching_target =
+            bucket_list_size_bytes.min(fee_config.bucket_list_target_size_bytes);
+        // Convert multipliers to i128 to make sure we can handle large bucket list
+        // sizes.
+        write_fee_per_1kb = num_integer::div_ceil(
+            (fee_rate_multiplier as i128)
+                .saturating_mul(bucket_list_size_before_reaching_target as i128),
+            fee_config.bucket_list_target_size_bytes as i128,
+        )
+        .clamp_fee();
+        // no clamp_fee here
+        write_fee_per_1kb = write_fee_per_1kb.saturating_add(fee_config.write_fee_1kb_bucket_list_low);
+    } else {
+        write_fee_per_1kb = fee_config.write_fee_1kb_bucket_list_high;
         let bucket_list_size_after_reaching_target =
             bucket_list_size_bytes - fee_config.bucket_list_target_size_bytes;
         let post_target_fee = num_integer::div_ceil(
@@ -261,7 +268,11 @@ pub fn compute_write_fee_per_1kb(
         .clamp_fee();
         write_fee_per_1kb = write_fee_per_1kb.saturating_add(post_target_fee);
     }
-    write_fee_per_1kb
+    if write_fee_per_1kb < MINIMUM_WRITE_FEE_PER_1KB {
+        MINIMUM_WRITE_FEE_PER_1KB
+    } else {
+        write_fee_per_1kb
+    }
 }
 
 /// Computes the total rent-related fee for the provided ledger entry changes.
