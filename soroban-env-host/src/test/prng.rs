@@ -25,11 +25,26 @@ const U64_RANGE: SymbolSmall = ss_from_str("u64_range");
 const SHUFFLE: SymbolSmall = ss_from_str("shuffle");
 const RESEED: SymbolSmall = ss_from_str("reseed");
 
+// These aren't host functions, but we provide them as a way to observe the
+// callee's seed.
+const GETSEED: SymbolSmall = ss_from_str("getseed");
+const SUBSEED: SymbolSmall = ss_from_str("subseed");
+
 const SEED_LEN: u32 = 32;
 const LO: u64 = 12345;
 const HI: u64 = 78910;
 
 pub struct PRNGUsingTest;
+
+impl PRNGUsingTest {
+    fn register_as(host: &Host, id: &[u8; 32]) -> AddressObject {
+        let scaddr = ScAddress::Contract(Hash(*id));
+        let addrobj = host.add_host_object(scaddr).unwrap();
+        host.register_test_contract(addrobj, std::rc::Rc::new(PRNGUsingTest))
+            .unwrap();
+        addrobj
+    }
+}
 
 impl ContractFunctionSet for PRNGUsingTest {
     fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Option<Val> {
@@ -62,6 +77,25 @@ impl ContractFunctionSet for PRNGUsingTest {
             host.prng_bytes_new(U32Val::from(SEED_LEN))
                 .unwrap()
                 .to_val()
+
+        // These aren't host functions, but we provide them as a way to observe
+        // the callee's seed.
+        } else if func == GETSEED {
+            host.with_current_prng(|prng| {
+                Ok(host
+                    .bytes_new_from_slice(&prng.0.get_seed())
+                    .unwrap()
+                    .to_val())
+            })
+            .unwrap()
+        } else if func == SUBSEED {
+            let callee = args[0].try_into().unwrap();
+            host.call(
+                callee,
+                GETSEED.into(),
+                host.test_vec_obj::<u32>(&[]).unwrap(),
+            )
+            .unwrap()
         } else {
             return None;
         };
@@ -140,36 +174,32 @@ fn prng_test() -> Result<(), HostError> {
     Ok(())
 }
 
+fn host_and_contract_with_seed(
+    seed: [u8; 32],
+    testname: &'static str,
+) -> Result<(ObservedHost, AddressObject), HostError> {
+    let host = ObservedHost::new(testname, Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    host.set_base_prng_seed(seed)?;
+    let id = PRNGUsingTest::register_as(&host, &[0; 32]);
+    Ok((host, id))
+}
+
 // This test checks that setting the base seed to two different values
 // produces _frame_ PRNG behaviour that differs; and that setting it
 // to the same value twice produces the same behaviour both times.
 #[test]
 fn base_prng_seed() -> Result<(), HostError> {
-    fn hostand_contract_with_seed(
-        seed: [u8; 32],
-        testname: &'static str,
-    ) -> Result<(ObservedHost, AddressObject), HostError> {
-        let host = ObservedHost::new(testname, Host::test_host_with_recording_footprint());
-        host.enable_debug()?;
-        host.set_base_prng_seed(seed)?;
-
-        let dummy_id = [0; 32];
-        let dummy_address = ScAddress::Contract(Hash(dummy_id));
-        let id = host.add_host_object(dummy_address)?;
-        host.register_test_contract(id, std::rc::Rc::new(PRNGUsingTest))?;
-        Ok((host, id))
-    }
-
     let seed0 = [0; 32];
     let seed1 = [0; 32];
     let seed2 = [2; 32];
 
     let (host0, id0) =
-        hostand_contract_with_seed(seed0, "soroban-end-host::test::prng::base_prng_seed_0")?;
+        host_and_contract_with_seed(seed0, "soroban-end-host::test::prng::base_prng_seed_0")?;
     let (host1, id1) =
-        hostand_contract_with_seed(seed1, "soroban-end-host::test::prng::base_prng_seed_1")?;
+        host_and_contract_with_seed(seed1, "soroban-end-host::test::prng::base_prng_seed_1")?;
     let (host2, id2) =
-        hostand_contract_with_seed(seed2, "soroban-end-host::test::prng::base_prng_seed_2")?;
+        host_and_contract_with_seed(seed2, "soroban-end-host::test::prng::base_prng_seed_2")?;
 
     let args0 = host0.test_vec_obj::<u64>(&[0, 90])?;
     let args1 = host1.test_vec_obj::<u64>(&[0, 90])?;
@@ -198,34 +228,19 @@ fn base_prng_seed() -> Result<(), HostError> {
 // This is a variant of the above test, but using the bytes_new method.
 #[test]
 fn base_prng_seed_bytes() -> Result<(), HostError> {
-    fn hostand_contract_with_seed(
-        seed: [u8; 32],
-        testname: &'static str,
-    ) -> Result<(ObservedHost, AddressObject), HostError> {
-        let host = ObservedHost::new(testname, Host::test_host_with_recording_footprint());
-        host.enable_debug()?;
-        host.set_base_prng_seed(seed)?;
-
-        let dummy_id = [0; 32];
-        let dummy_address = ScAddress::Contract(Hash(dummy_id));
-        let id = host.add_host_object(dummy_address)?;
-        host.register_test_contract(id, std::rc::Rc::new(PRNGUsingTest))?;
-        Ok((host, id))
-    }
-
     let seed0 = [0; 32];
     let seed1 = [0; 32];
     let seed2 = [2; 32];
 
-    let (host0, id0) = hostand_contract_with_seed(
+    let (host0, id0) = host_and_contract_with_seed(
         seed0,
         "soroban-end-host::test::prng::base_prng_seed_bytes_0",
     )?;
-    let (host1, id1) = hostand_contract_with_seed(
+    let (host1, id1) = host_and_contract_with_seed(
         seed1,
         "soroban-end-host::test::prng::base_prng_seed_bytes_1",
     )?;
-    let (host2, id2) = hostand_contract_with_seed(
+    let (host2, id2) = host_and_contract_with_seed(
         seed2,
         "soroban-end-host::test::prng::base_prng_seed_bytes_2",
     )?;
@@ -303,4 +318,33 @@ fn chacha_test_vectors() {
     let ref_out5 = hex!("c2c64d378cd536374ae204b9ef933fcd1a8b2288b3dfa49672ab765b54ee27c78a970e0e955c14f3a88e741b97c286f75f8fc299e8148362fa198a39531bed6d");
     chacha_stream_2.fill_bytes(&mut out);
     assert_eq!(ref_out5, out);
+}
+
+#[test]
+fn check_caller_and_callee_seed_always_different() -> Result<(), HostError> {
+    let mut base_seed = [0; 32];
+    let (host0, id0) = host_and_contract_with_seed(
+        base_seed,
+        "soroban-end-host::test::prng::check_caller_and_callee_seed_always_different_0",
+    )?;
+    let id1 = PRNGUsingTest::register_as(&host0, &[1; 32]);
+    for i in 0..100 {
+        base_seed[0] = i;
+        host0.set_base_prng_seed(base_seed)?;
+        let caller_seed: BytesObject = host0
+            .call(id0, GETSEED.into(), host0.vec_new_from_slice(&[])?)?
+            .try_into()?;
+        let caller_seed = <[u8; 32]>::try_from_val(&*host0, &caller_seed)?;
+
+        let callee_seed: BytesObject = host0
+            .call(
+                id0,
+                SUBSEED.into(),
+                host0.vec_new_from_slice(&[id1.to_val()])?,
+            )?
+            .try_into()?;
+        let callee_seed = <[u8; 32]>::try_from_val(&*host0, &callee_seed)?;
+        assert_ne!(caller_seed, callee_seed);
+    }
+    Ok(())
 }

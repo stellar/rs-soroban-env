@@ -79,7 +79,7 @@ use std::ops::RangeInclusive;
 ///   - All these PRNGs are ChaCha20: a strong, cheap, standard CSPRNG.
 ///
 #[derive(Debug, Clone)]
-pub(crate) struct Prng(ChaCha20Rng);
+pub(crate) struct Prng(pub(crate) ChaCha20Rng);
 
 pub type Seed = <rand_chacha::ChaCha20Rng as rand::SeedableRng>::Seed;
 pub const SEED_BYTES: u64 = <Seed as DeclaredSizeForMetering>::DECLARED_SIZE;
