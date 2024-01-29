@@ -28,12 +28,12 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
         ScAddress::Account(acct) => match &acct.0 {
             PublicKeyTypeEd25519(e) => {
                 let strkey = stellar_strkey::ed25519::PublicKey(e.0.clone());
-                write!(f, "Address(Account({}))", strkey)
+                write!(f, "{}", strkey)
             }
         },
         ScAddress::Contract(hash) => {
             let strkey = stellar_strkey::Contract(hash.0.clone());
-            write!(f, "Address(Contract({}))", strkey)
+            write!(f, "{}", strkey)
         }
     }
 }
@@ -160,7 +160,7 @@ fn host_event_contract_id_is_strkey() {
     };
     assert_eq!(
         format!("{}", he),
-        "[Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4, topics:[Address(Account(GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF))], data:Void"
+        "[Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4, topics:[GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF], data:Void"
     );
 }
 
