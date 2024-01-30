@@ -398,22 +398,17 @@ fn test_asset_init(testname: &'static str, asset_code: &[u8]) {
         expected_stellar_asset_contract_address
     );
 
-    assert_eq!(
-        contract.symbol().unwrap().to_string(),
-        String::from_utf8(asset_code.to_vec()).unwrap()
-    );
-    assert_eq!(contract.decimals().unwrap(), 7);
-    let name = contract.name().unwrap().to_string();
-
-    let mut expected = String::from_utf8(asset_code.to_vec())
+    let asset_code_trimmed = String::from_utf8(asset_code.to_vec())
         .unwrap()
         .trim_matches(char::from(0))
         .to_string();
-    expected.push(':');
-    let k = ed25519::PublicKey(test.issuer_key.verifying_key().to_bytes());
-    expected.push_str(k.to_string().as_str());
+    assert_eq!(contract.symbol().unwrap().to_string(), asset_code_trimmed);
 
-    assert_eq!(name, expected);
+    assert_eq!(contract.decimals().unwrap(), 7);
+
+    let name = contract.name().unwrap().to_string();
+    let k = ed25519::PublicKey(test.issuer_key.verifying_key().to_bytes());
+    assert_eq!(name, format!("{}:{}", asset_code_trimmed, k.to_string()));
 
     let account_id = signing_key_to_account_id(&test.user_key);
     test.create_account(
