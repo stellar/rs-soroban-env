@@ -142,12 +142,15 @@ fn render_sep0011_asset<const N: usize>(
 
     let mut s: std::string::String = std::string::String::with_capacity(capacity);
     render_sep0011_asset_code(&symbuf, &mut s)?;
+
+    // Use the sep-11 (trimmed and/or escaped) asset code we just rendered for the metadata symbol.
+    let symbol = String::try_from_val(e, &e.string_new_from_slice(s.as_bytes())?)?;
+
+    // Then follow it with a colon and the issuer's strkey for the metadata name.
     s.push(':');
     s.push_str(&ed25519::PublicKey(issuer.to_array()?).to_string());
-    Ok((
-        String::try_from_val(e, &e.string_new_from_slice(s.as_bytes())?)?,
-        symbol,
-    ))
+    let name = String::try_from_val(e, &e.string_new_from_slice(s.as_bytes())?)?;
+    Ok((name, symbol))
 }
 
 pub(crate) fn set_metadata(e: &Host) -> Result<(), HostError> {
