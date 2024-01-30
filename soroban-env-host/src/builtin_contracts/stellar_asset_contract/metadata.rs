@@ -21,8 +21,15 @@ pub(crate) struct StellarAssetContractMetadata {
 
 pub const DECIMAL: u32 = 7;
 
-// This does a specific and fairly unique escaping transformation as defined
-// in TxRep / SEP-0011.
+// This does a specific and fairly unique escaping transformation as defined in
+// TxRep / SEP-0011.
+//
+// Note: this seemed appropriate when it was initially added but is really
+// overkill, since all asset codes admitted to the system are validated to be
+// ASCII alphanumeric, with only trailing zeroes and only unambiguous
+// zero-padded lengths, over in [`validate_asset`]; but we reproduce the
+// escaping logic in SEP-0011 here anyway to add some defense in depth, in case
+// validation was somehow missed.
 fn render_sep0011_asset_code(buf: &[u8], out: &mut std::string::String) -> Result<(), HostError> {
     if buf.len() != 4 && buf.len() != 12 {
         return Err((ScErrorType::Value, ScErrorCode::InvalidInput).into());
