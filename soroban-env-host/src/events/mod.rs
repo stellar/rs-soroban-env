@@ -27,12 +27,12 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
     match addr {
         ScAddress::Account(acct) => match &acct.0 {
             PublicKeyTypeEd25519(e) => {
-                let strkey = stellar_strkey::ed25519::PublicKey(e.0.clone());
+                let strkey = stellar_strkey::ed25519::PublicKey(e.0);
                 write!(f, "{}", strkey)
             }
         },
         ScAddress::Contract(hash) => {
-            let strkey = stellar_strkey::Contract(hash.0.clone());
+            let strkey = stellar_strkey::Contract(hash.0);
             write!(f, "{}", strkey)
         }
     }
@@ -116,7 +116,7 @@ impl core::fmt::Display for HostEvent {
         match &self.event.contract_id {
             None => (),
             Some(hash) => {
-                let strkey = stellar_strkey::Contract(hash.0.clone());
+                let strkey = stellar_strkey::Contract(hash.0);
                 write!(f, "contract:{}, ", strkey)?
             }
         }
