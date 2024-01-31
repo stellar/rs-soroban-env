@@ -1115,10 +1115,10 @@ impl AuthorizationManager {
         let account_trackers_snapshot = match &self.mode {
             AuthorizationMode::Enforcing => {
                 let len = self.try_borrow_account_trackers(host)?.len();
-                let mut snapshots = Vec::with_capacity(len);
                 Vec::<Option<AccountAuthorizationTrackerSnapshot>>::charge_bulk_init_cpy(
                     len as u64, host,
                 )?;
+                let mut snapshots = Vec::with_capacity(len);
                 for t in self.try_borrow_account_trackers(host)?.iter() {
                     let sp = if let Ok(tracker) = t.try_borrow() {
                         Some(tracker.snapshot(host.as_budget())?)
