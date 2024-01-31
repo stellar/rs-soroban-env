@@ -454,11 +454,9 @@ fn initialization_invalid() -> Result<(), HostError> {
 
     let map = host.map_new_from_slices(&keys, &vals.as_slice())?;
     let res = host.from_host_val(map.to_val());
-    // This is actually Budget::ExceededLimit, but ScVal::try_from_val converts
-    // he error to a ConversionError. We have an issue for it https://github.com/stellar/rs-soroban-env/issues/1046
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
 
     Ok(())

@@ -320,9 +320,8 @@ impl Host {
         // and is done inside `from_host_obj`.
         let _span = tracy_span!("Val to ScVal");
         let scval = self.budget_cloned().with_limited_depth(|_| {
-            ScVal::try_from_val(self, &val).map_err(|cerr: crate::ConversionError| {
-                self.error(cerr.into(), "failed to convert host value to ScVal", &[])
-            })
+            ScVal::try_from_val(self, &val)
+                .map_err(|cerr| self.error(cerr, "failed to convert host value to ScVal", &[val]))
         })?;
         // This is a check of internal logical consistency: we came _from_ a Val
         // so the ScVal definitely should have been representable.
@@ -337,9 +336,7 @@ impl Host {
         // and is done inside `to_host_obj`.
         self.budget_cloned().with_limited_depth(|_| {
             v.try_into_val(self)
-                .map_err(|cerr: crate::ConversionError| {
-                    self.error(cerr.into(), "failed to convert ScVal to host value", &[])
-                })
+                .map_err(|cerr| self.error(cerr, "failed to convert ScVal to host value", &[]))
         })
     }
 
@@ -521,11 +518,11 @@ impl Host {
             | ScVal::I32(_)
             | ScVal::LedgerKeyNonce(_)
             | ScVal::ContractInstance(_)
-            | ScVal::LedgerKeyContractInstance => Err(err!(
-                self,
-                (ScErrorType::Value, ScErrorCode::InternalError),
+            | ScVal::LedgerKeyContractInstance => Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InternalError,
                 "converting ScValObjRef on non-object ScVal type",
-                *val
+                &[],
             )),
         }
     }

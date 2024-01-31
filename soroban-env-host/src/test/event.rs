@@ -318,12 +318,9 @@ fn too_big_event_topic() -> Result<(), HostError> {
 
     let host = (*host).clone();
     let res = host.try_finish();
-    // This fails at converting from Bytes to ScBytes due to out-of-budget
-    // however, the `ScVal::try_from_val` converts it into a `ConversionError`
-    // which is misleading. We already have a tracking issue #1076.
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
     Ok(())
 }
@@ -341,12 +338,9 @@ fn too_big_event_data() -> Result<(), HostError> {
 
     let host = (*host).clone();
     let res = host.try_finish();
-    // This fails at converting from Bytes to ScBytes due to out-of-budget
-    // however, the `ScVal::try_from_val` converts it into a `ConversionError`
-    // which is misleading. We already have a tracking issue #1076.
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
     Ok(())
 }
