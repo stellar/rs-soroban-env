@@ -766,7 +766,10 @@ impl AuthorizationManager {
         host: &Host,
         auth_entries: Vec<SorobanAuthorizationEntry>,
     ) -> Result<Self, HostError> {
-        Vec::<AccountAuthorizationTracker>::charge_bulk_init_cpy(auth_entries.len() as u64, host)?;
+        Vec::<RefCell<AccountAuthorizationTracker>>::charge_bulk_init_cpy(
+            auth_entries.len() as u64,
+            host,
+        )?;
         let mut trackers = Vec::with_capacity(auth_entries.len());
         for auth_entry in auth_entries {
             trackers.push(RefCell::new(

@@ -16,7 +16,7 @@
 //! pointers. The rest of each struct is considered its "shallow" part and
 //! charged based on its declared size (see [`DeclaredSizeForMetering`]).
 
-use std::{iter::FromIterator, mem, rc::Rc};
+use std::{cell::RefCell, iter::FromIterator, mem, rc::Rc};
 
 use crate::{
     budget::{AsBudget, DepthLimiter},
@@ -321,6 +321,15 @@ impl MeteredClone for Asset {}
 
 // cloning Rc is just a ref-count bump
 impl<T> MeteredClone for Rc<T> {}
+
+// cloning a RefCell clones its underlying data structure
+impl<T: MeteredClone> MeteredClone for RefCell<T> {
+    const IS_SHALLOW: bool = T::IS_SHALLOW;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.borrow().charge_for_substructure(budget)
+    }
+}
 
 impl<K, V> MeteredClone for (K, V)
 where

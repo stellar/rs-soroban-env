@@ -28,7 +28,7 @@ use crate::{
     U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val,
     VecObject, Void, I256, U256,
 };
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 use wasmi::Value;
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
@@ -184,6 +184,11 @@ impl_declared_size_type!(SorobanAuthorizedFunction, 104);
 // cloning 16 bytes.
 impl<T> DeclaredSizeForMetering for Rc<T> {
     const DECLARED_SIZE: u64 = 16;
+}
+
+// RefCell is the underlying data plus an `isize` flag
+impl<T: DeclaredSizeForMetering> DeclaredSizeForMetering for RefCell<T> {
+    const DECLARED_SIZE: u64 = T::DECLARED_SIZE + 8;
 }
 
 // Cloning a slice only clones the reference without deep cloning its contents.
@@ -403,6 +408,7 @@ mod test {
 
         // composite types
         expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());
+        expect!["72"].assert_eq(size_of::<RefCell<ScVal>>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
         expect!["72"].assert_eq(size_of::<(Val, ScVal)>().to_string().as_str());
         expect!["320"].assert_eq(size_of::<[ScVal; 5]>().to_string().as_str());
@@ -557,6 +563,7 @@ mod test {
 
         // composite types
         assert_mem_size_le_declared_size!(Rc<ScVal>);
+        assert_mem_size_le_declared_size!(RefCell<ScVal>);
         assert_mem_size_le_declared_size!(&[ScVal]);
         assert_mem_size_le_declared_size!((Val, ScVal));
         assert_mem_size_le_declared_size!([ScVal; 5]);
