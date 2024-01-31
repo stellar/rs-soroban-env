@@ -52,7 +52,7 @@ use std::ops::RangeInclusive;
 ///     a state machine like so:
 ///
 ///       - tx1: write commitment finalizing all inputs to "random action", plus
-///              N = current ledger and S = prng_new_bytes(32).
+///              N = current ledger and S = prng_bytes_new(32).
 ///
 ///       - tx2: re-read all committed values, if ledger > N, prng_reseed(S),
 ///              and use PRNG to take "random" action committed-to.

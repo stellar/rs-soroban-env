@@ -5,8 +5,8 @@ use rand_chacha::ChaCha20Rng;
 use crate::{
     test::observe::ObservedHost,
     xdr::{Hash, ScAddress, ScVal, ScVec},
-    AddressObject, BytesObject, ContractFunctionSet, Env, EnvBase, Host, HostError, Symbol,
-    SymbolSmall, TryFromVal, TryIntoVal, U32Val, U64Object, U64Val, Val, VecObject,
+    AddressObject, BytesObject, ContractFunctionSet, Env, EnvBase, Host, HostError, StorageType,
+    Symbol, SymbolSmall, TryFromVal, TryIntoVal, U32Val, U64Object, U64Val, Val, VecObject,
 };
 
 /// prng tests
@@ -29,6 +29,15 @@ const RESEED: SymbolSmall = ss_from_str("reseed");
 // callee's seed.
 const GETSEED: SymbolSmall = ss_from_str("getseed");
 const SUBSEED: SymbolSmall = ss_from_str("subseed");
+
+// These also aren't host functions, they're part of the commit-reveal test.
+const COMMIT: SymbolSmall = ss_from_str("commit");
+const SEED: SymbolSmall = ss_from_str("seed");
+const LEDGER: SymbolSmall = ss_from_str("ledger");
+const REVEAL: SymbolSmall = ss_from_str("reveal");
+const ERR_ALREADY_COMMITTED: crate::Val = crate::Error::from_contract_error(1).to_val();
+const ERR_NOT_COMMITTED: crate::Val = crate::Error::from_contract_error(2).to_val();
+const ERR_REVEAL_TOO_EARLY: crate::Val = crate::Error::from_contract_error(3).to_val();
 
 const SEED_LEN: u32 = 32;
 const LO: u64 = 12345;
@@ -96,6 +105,60 @@ impl ContractFunctionSet for PRNGUsingTest {
                 host.test_vec_obj::<u32>(&[]).unwrap(),
             )
             .unwrap()
+
+        // These also aren't host functions, they're part of the commit-reveal
+        // test.
+        } else if func == COMMIT {
+            let already_committed: bool = host
+                .has_contract_data(SEED.to_val(), StorageType::Instance)
+                .unwrap()
+                .into();
+            if already_committed {
+                ERR_ALREADY_COMMITTED
+            } else {
+                let committed_seed = host.prng_bytes_new(32.into()).unwrap();
+                let target_ledger = u32::from(host.get_ledger_sequence().unwrap()) + 1_u32;
+                host.put_contract_data(
+                    SEED.to_val(),
+                    committed_seed.to_val(),
+                    StorageType::Instance,
+                )
+                .unwrap();
+                host.put_contract_data(
+                    LEDGER.to_val(),
+                    U32Val::from(target_ledger).to_val(),
+                    StorageType::Instance,
+                )
+                .unwrap();
+                Val::VOID.to_val()
+            }
+        } else if func == REVEAL {
+            let already_committed: bool = host
+                .has_contract_data(SEED.to_val(), StorageType::Instance)
+                .unwrap()
+                .into();
+            if !already_committed {
+                ERR_NOT_COMMITTED
+            } else {
+                let reveal_ledger: u32 = host
+                    .get_contract_data(LEDGER.to_val(), StorageType::Instance)
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+                if u32::from(host.get_ledger_sequence().unwrap()) < reveal_ledger {
+                    ERR_REVEAL_TOO_EARLY
+                } else {
+                    let committed_seed = host
+                        .get_contract_data(SEED.to_val(), StorageType::Instance)
+                        .unwrap()
+                        .try_into()
+                        .unwrap();
+                    host.prng_reseed(committed_seed).unwrap();
+                    U64Val::try_from_val(host, &host.prng_u64_in_inclusive_range(0, 100).unwrap())
+                        .unwrap()
+                        .to_val()
+                }
+            }
         } else {
             return None;
         };
@@ -345,6 +408,83 @@ fn check_caller_and_callee_seed_always_different() -> Result<(), HostError> {
             .try_into()?;
         let callee_seed = <[u8; 32]>::try_from_val(&*host0, &callee_seed)?;
         assert_ne!(caller_seed, callee_seed);
+    }
+    Ok(())
+}
+
+#[test]
+fn try_until_chosen_number() -> Result<(), HostError> {
+    let base_seed = [0; 32];
+    let (host0, id0) = host_and_contract_with_seed(
+        base_seed,
+        "soroban-end-host::test::prng::try_until_chosen_number",
+    )?;
+
+    let mut i = 0;
+    while i < 10000 {
+        let args = host0.test_vec_obj::<u64>(&[0, 100])?;
+        let u64_0: U64Val = host0.call(id0, U64_RANGE.into(), args)?.try_into()?;
+        let u64_0 = u64::try_from_val(&*host0, &u64_0)?;
+        if u64_0 == 42 {
+            return Ok(());
+        }
+        i += 1;
+    }
+    Err(host0.err(
+        crate::xdr::ScErrorType::Context,
+        crate::xdr::ScErrorCode::InternalError,
+        "try_until_chosen_number failed to find 42",
+        &[],
+    ))
+}
+
+#[test]
+fn commit_reveal() -> Result<(), HostError> {
+    let base_seed = [0; 32];
+    let (host0, id0) =
+        host_and_contract_with_seed(base_seed, "soroban-end-host::test::prng::commit_reveal")?;
+
+    let args = host0.test_vec_obj::<u32>(&[])?;
+
+    // Reveal fails before commit.
+    assert!(host0
+        .try_call(id0, REVEAL.into(), args)
+        .unwrap()
+        .shallow_eq(&ERR_NOT_COMMITTED));
+
+    // First commit works.
+    host0.call(id0, COMMIT.into(), args)?;
+
+    // Second commit fails.
+    assert!(host0
+        .try_call(id0, COMMIT.into(), args)
+        .unwrap()
+        .shallow_eq(&ERR_ALREADY_COMMITTED));
+
+    // Early-by-time reveal fails.
+    assert!(host0
+        .try_call(id0, REVEAL.into(), args)
+        .unwrap()
+        .shallow_eq(&ERR_REVEAL_TOO_EARLY));
+
+    host0.with_mut_ledger_info(|linfo| {
+        linfo.sequence_number += 1;
+    })?;
+
+    // Eventual reveal ok.
+    assert!(host0.call(id0, REVEAL.into(), args).is_ok());
+
+    // Once revealed, every call is the same.
+    let mut i = 0;
+    let mut prev = None;
+    while i < 100 {
+        let u64_0: U64Val = host0.call(id0, REVEAL.into(), args)?.try_into()?;
+        let u64_0 = u64::try_from_val(&*host0, &u64_0)?;
+        if let Some(prev) = prev {
+            assert_eq!(prev, u64_0);
+        }
+        prev = Some(u64_0);
+        i += 1;
     }
     Ok(())
 }
