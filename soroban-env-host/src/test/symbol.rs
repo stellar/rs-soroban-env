@@ -180,10 +180,6 @@ fn invalid_symbol_conversions() {
         assert!(e.error.is_type(ScErrorType::Value));
         assert!(e.error.is_code(ScErrorCode::InvalidInput));
     };
-    let unexpected_type_err = |e: HostError| {
-        assert!(e.error.is_type(ScErrorType::Value));
-        assert!(e.error.is_code(ScErrorCode::UnexpectedType));
-    };
     for s in symbol_byte_strs {
         // Some of the test strings aren't valid UTF-8, but we should only interpret
         // them as bytes.
@@ -207,7 +203,7 @@ fn invalid_symbol_conversions() {
                 .unwrap()
                 .into(),
         );
-        unexpected_type_err(
+        invalid_input_err(
             host.to_host_val(&ScVal::Symbol(ScSymbol(s_str.try_into().unwrap())))
                 .err()
                 .unwrap(),
