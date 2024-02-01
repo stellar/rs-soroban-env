@@ -67,9 +67,9 @@ nalgebra = { version = "=0.32.3", default-features = false, features = ["std"]}
 wasm-encoder = "=0.36.2"
 
 [dev-dependencies.stellar-xdr]
-version = "=20.0.2"
+version = "=20.1.0"
 # git = "https://github.com/stellar/rs-stellar-xdr"
-# rev = "a928e82943e4e93c887555fdec3b1e139ad810d2"
+# rev = "8b9d623ef40423a8462442b86997155f2c04d3a1"
 default-features = false
 features = ["arbitrary"]
 
