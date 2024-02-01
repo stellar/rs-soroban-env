@@ -247,7 +247,7 @@ pub fn compute_write_fee_per_1kb(
         // sizes.
         write_fee_per_1kb = num_integer::div_ceil(
             (fee_rate_multiplier as i128).saturating_mul(bucket_list_size_bytes as i128),
-            fee_config.bucket_list_target_size_bytes as i128,
+            (fee_config.bucket_list_target_size_bytes as i128).max(1),
         )
         .clamp_fee();
         // no clamp_fee here
@@ -261,7 +261,7 @@ pub fn compute_write_fee_per_1kb(
             (fee_rate_multiplier as i128)
                 .saturating_mul(bucket_list_size_after_reaching_target as i128)
                 .saturating_mul(fee_config.bucket_list_write_fee_growth_factor as i128),
-            fee_config.bucket_list_target_size_bytes as i128,
+            (fee_config.bucket_list_target_size_bytes as i128).max(1),
         )
         .clamp_fee();
         write_fee_per_1kb = write_fee_per_1kb.saturating_add(post_target_fee);
@@ -400,10 +400,10 @@ fn rent_fee_for_size_and_ledgers(
         fee_config.temporary_rent_rate_denominator
     };
     let denom = DATA_SIZE_1KB_INCREMENT.saturating_mul(storage_coef);
-    num_integer::div_ceil(num, denom)
+    num_integer::div_ceil(num, denom.max(1))
 }
 
 fn compute_fee_per_increment(resource_value: u32, fee_rate: i64, increment: i64) -> i64 {
     let resource_val: i64 = resource_value.into();
-    num_integer::div_ceil(resource_val.saturating_mul(fee_rate), increment)
+    num_integer::div_ceil(resource_val.saturating_mul(fee_rate), increment.max(1))
 }
