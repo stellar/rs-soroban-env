@@ -1173,7 +1173,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 449456,
+            instructions: 449458,
             read_bytes: 636,
             write_bytes: 104,
         }
@@ -1234,7 +1234,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 450897,
+            instructions: 450899,
             read_bytes: 636,
             write_bytes: 104,
         }
