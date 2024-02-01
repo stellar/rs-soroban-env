@@ -243,13 +243,10 @@ pub fn compute_write_fee_per_1kb(
         .clamp_fee();
     let mut write_fee_per_1kb: i64;
     if bucket_list_size_bytes < fee_config.bucket_list_target_size_bytes {
-        let bucket_list_size_before_reaching_target =
-            bucket_list_size_bytes.min(fee_config.bucket_list_target_size_bytes);
         // Convert multipliers to i128 to make sure we can handle large bucket list
         // sizes.
         write_fee_per_1kb = num_integer::div_ceil(
-            (fee_rate_multiplier as i128)
-                .saturating_mul(bucket_list_size_before_reaching_target as i128),
+            (fee_rate_multiplier as i128).saturating_mul(bucket_list_size_bytes as i128),
             fee_config.bucket_list_target_size_bytes as i128,
         )
         .clamp_fee();
