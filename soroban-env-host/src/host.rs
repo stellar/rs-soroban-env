@@ -1520,8 +1520,7 @@ impl VmCallerEnv for Host {
             pos: keys_pos,
             len,
         } = self.get_mem_fn_args(keys_pos, len)?;
-        Vec::<Symbol>::charge_bulk_init_cpy(len as u64, self)?;
-        let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
+        let mut key_syms = Vec::<Symbol>::with_metered_capacity(len as usize, self)?;
         self.metered_vm_scan_slices_in_linear_memory(
             vmcaller,
             &vm,
@@ -2515,8 +2514,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
-            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
             vnew.extend_from_slice(hv.as_slice());
             vnew.push(u);
             Ok(ScBytes(vnew.try_into()?))
@@ -2601,8 +2599,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the insert
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
-            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
             vnew.extend_from_slice(hv.as_slice());
             vnew.insert(i as usize, u);
             Ok(ScBytes(vnew.try_into()?))
@@ -2621,8 +2618,7 @@ impl VmCallerEnv for Host {
                 // we allocate large enough memory to hold the new combined vector, so that
                 // allocation only happens once, and charge for it upfront.
                 let len = self.validate_usize_sum_fits_in_u32(sb1.len(), sb2.len())?;
-                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-                let mut vnew: Vec<u8> = Vec::with_capacity(len);
+                let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
                 vnew.extend_from_slice(sb1.as_slice());
                 vnew.extend_from_slice(sb2.as_slice());
                 Ok(vnew)

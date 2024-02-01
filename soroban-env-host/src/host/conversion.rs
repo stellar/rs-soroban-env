@@ -261,8 +261,7 @@ impl Host {
     }
 
     pub(crate) fn host_map_to_scmap(&self, map: &HostMap) -> Result<ScMap, HostError> {
-        Vec::<ScMapEntry>::charge_bulk_init_cpy(map.len() as u64, self)?;
-        let mut mv = Vec::with_capacity(map.len());
+        let mut mv = Vec::<ScMapEntry>::with_metered_capacity(map.len(), self)?;
         for (k, v) in map.iter(self)? {
             let key = self.from_host_val(*k)?;
             let val = self.from_host_val(*v)?;
@@ -433,16 +432,14 @@ impl Host {
             // below. There is no otherwise ubiquitous metering for ScVal->Val conversion,
             // since most of them happen in the "common" crate with no access to the host.
             ScVal::Vec(Some(v)) => {
-                Vec::<Val>::charge_bulk_init_cpy(v.len() as u64, self)?;
-                let mut vv = Vec::with_capacity(v.len());
+                let mut vv = Vec::<Val>::with_metered_capacity(v.len(), self)?;
                 for e in v.iter() {
                     vv.push(self.to_host_val(e)?)
                 }
                 Ok(self.add_host_object(HostVec::from_vec(vv)?)?.into())
             }
             ScVal::Map(Some(m)) => {
-                Vec::<(Val, Val)>::charge_bulk_init_cpy(m.len() as u64, self)?;
-                let mut mm = Vec::with_capacity(m.len());
+                let mut mm = Vec::<(Val, Val)>::with_metered_capacity(m.len(), self)?;
                 for pair in m.iter() {
                     let k = self.to_host_val(&pair.key)?;
                     let v = self.to_host_val(&pair.val)?;

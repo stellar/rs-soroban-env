@@ -766,8 +766,10 @@ impl AuthorizationManager {
         host: &Host,
         auth_entries: Vec<SorobanAuthorizationEntry>,
     ) -> Result<Self, HostError> {
-        Vec::<AccountAuthorizationTracker>::charge_bulk_init_cpy(auth_entries.len() as u64, host)?;
-        let mut trackers = Vec::with_capacity(auth_entries.len());
+        let mut trackers = Vec::<RefCell<AccountAuthorizationTracker>>::with_metered_capacity(
+            auth_entries.len(),
+            host,
+        )?;
         for auth_entry in auth_entries {
             trackers.push(RefCell::new(
                 AccountAuthorizationTracker::from_authorization_entry(host, auth_entry)?,
@@ -849,7 +851,10 @@ impl AuthorizationManager {
         let auth_entries =
             host.visit_obj(auth_entries, |e: &HostVec| e.to_vec(host.budget_ref()))?;
         let mut trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
-        Vec::<Val>::charge_bulk_init_cpy(auth_entries.len() as u64, host)?;
+        Vec::<InvokerContractAuthorizationTracker>::charge_bulk_init_cpy(
+            auth_entries.len() as u64,
+            host,
+        )?;
         trackers.reserve(auth_entries.len());
         for e in auth_entries {
             trackers.push(
@@ -1112,10 +1117,10 @@ impl AuthorizationManager {
         let account_trackers_snapshot = match &self.mode {
             AuthorizationMode::Enforcing => {
                 let len = self.try_borrow_account_trackers(host)?.len();
-                let mut snapshots = Vec::with_capacity(len);
-                Vec::<Option<AccountAuthorizationTrackerSnapshot>>::charge_bulk_init_cpy(
-                    len as u64, host,
-                )?;
+                let mut snapshots =
+                    Vec::<Option<AccountAuthorizationTrackerSnapshot>>::with_metered_capacity(
+                        len, host,
+                    )?;
                 for t in self.try_borrow_account_trackers(host)?.iter() {
                     let sp = if let Ok(tracker) = t.try_borrow() {
                         Some(tracker.snapshot(host.as_budget())?)
