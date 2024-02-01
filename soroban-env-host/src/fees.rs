@@ -241,7 +241,7 @@ pub fn compute_write_fee_per_1kb(
         .write_fee_1kb_bucket_list_high
         .saturating_sub(fee_config.write_fee_1kb_bucket_list_low)
         .clamp_fee();
-    let mut write_fee_per_1kb: i64 = 0;
+    let mut write_fee_per_1kb: i64;
     if bucket_list_size_bytes < fee_config.bucket_list_target_size_bytes {
         let bucket_list_size_before_reaching_target =
             bucket_list_size_bytes.min(fee_config.bucket_list_target_size_bytes);
