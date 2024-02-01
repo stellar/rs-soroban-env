@@ -14,7 +14,7 @@ const INSTRUCTIONS_INCREMENT: i64 = 10000;
 const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
 
 // minimum effective write fee per 1KB
-const MINIMUM_WRITE_FEE_PER_1KB: i64 = 1000;
+pub const MINIMUM_WRITE_FEE_PER_1KB: i64 = 1000;
 
 /// These are the resource upper bounds specified by the Soroban transaction.
 pub struct TransactionResources {
