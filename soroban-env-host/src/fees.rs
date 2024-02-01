@@ -256,7 +256,7 @@ pub fn compute_write_fee_per_1kb(
     } else {
         write_fee_per_1kb = fee_config.write_fee_1kb_bucket_list_high;
         let bucket_list_size_after_reaching_target =
-            bucket_list_size_bytes - fee_config.bucket_list_target_size_bytes;
+            bucket_list_size_bytes.saturating_sub(fee_config.bucket_list_target_size_bytes);
         let post_target_fee = num_integer::div_ceil(
             (fee_rate_multiplier as i128)
                 .saturating_mul(bucket_list_size_after_reaching_target as i128)
