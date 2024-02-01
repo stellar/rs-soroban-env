@@ -266,11 +266,8 @@ pub fn compute_write_fee_per_1kb(
         .clamp_fee();
         write_fee_per_1kb = write_fee_per_1kb.saturating_add(post_target_fee);
     }
-    if write_fee_per_1kb < MINIMUM_WRITE_FEE_PER_1KB {
-        MINIMUM_WRITE_FEE_PER_1KB
-    } else {
-        write_fee_per_1kb
-    }
+
+    write_fee_per_1kb.max(MINIMUM_WRITE_FEE_PER_1KB)
 }
 
 /// Computes the total rent-related fee for the provided ledger entry changes.
