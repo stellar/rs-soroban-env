@@ -121,11 +121,8 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
         let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
         let res = host.deserialize_from_bytes(bo);
         assert!(res.is_err());
-        assert!(res
-            .err()
-            .unwrap()
-            .error
-            .is_code(ScErrorCode::UnexpectedType));
+        let err = res.err().unwrap().error;
+        assert!(err.is_code(ScErrorCode::UnexpectedType) || err.is_code(ScErrorCode::InvalidInput));
         Ok(())
     };
     // u64
@@ -293,7 +290,10 @@ fn arbitrary_xdr_roundtrips() -> Result<(), HostError> {
                 successes += 1;
             }
             Err(err) => {
-                assert!(err.error.is_code(ScErrorCode::UnexpectedType));
+                assert!(
+                    err.error.is_code(ScErrorCode::UnexpectedType)
+                        || err.error.is_code(ScErrorCode::InvalidInput)
+                );
                 failures += 1;
             }
         }

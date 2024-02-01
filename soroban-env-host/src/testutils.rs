@@ -1016,14 +1016,22 @@ pub(crate) mod wasm {
         me.finish_no_validate()
     }
 
-    pub(crate) fn wasm_module_with_many_tables(n: u32) -> Vec<u8> {
+    pub(crate) fn wasm_module_with_extern_ref() -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        me.table(RefType::EXTERNREF, 2, None);
+        me.custom_section(
+            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
+            &soroban_env_common::meta::XDR,
+        );
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_additional_tables(n: u32) -> Vec<u8> {
         let mut me = ModEmitter::default();
-        for i in 0..n {
-            let rt = match i % 2 == 0 {
-                true => RefType::FUNCREF,
-                false => RefType::EXTERNREF,
-            };
-            me.table(rt, 2, None);
+        // by default, module already includes a table, here we are creating
+        // additional ones
+        for _i in 0..n {
+            me.table(RefType::FUNCREF, 2, None);
         }
         // wasmparser has an limit of 100 tables. wasmi does not have such a limit
         me.finish_no_validate()
