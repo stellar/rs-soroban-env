@@ -1,3 +1,4 @@
+use blst::{blst_p2, blst_p1_add, blst_p1, blst_p1_affine, blst_p1_uncompress, BLST_ERROR, blst_p1_from_affine, blst_p2_deserialize, blst_p2_from_affine, blst_p2_affine, blst_p1_serialize, blst_p1_mult, blst_p1_affine_in_g1, blst_p1_on_curve, blst_p2_affine_in_g2, blst_p2_on_curve, blst_p2_add, blst_p2_serialize, blst_p2_mult, blst_p1_serialize};
 use crate::host::prng::SEED_BYTES;
 use crate::{
     budget::AsBudget,
@@ -11,8 +12,13 @@ use rand::RngCore;
 use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use sha3::Keccak256;
+use crate::budget::Budget;
 
 use super::metered_clone::MeteredContainer;
+
+const BLST_G1_UNCOMPRESSED_SIZE: usize = 96;
+const BLST_G2_UNCOMPRESSED_SIZE: usize = 192;
+const BLST_SCALAR_SIZE: usize = 255;
 
 impl Host {
     // Ed25519 functions
@@ -21,7 +27,7 @@ impl Host {
         name: &'static str,
         sig: BytesObject,
     ) -> Result<ed25519_dalek::Signature, HostError> {
-        self.fixed_length_bytes_from_bytesobj_input::<ed25519_dalek::Signature, {ed25519_dalek::SIGNATURE_LENGTH}>(name, sig)
+        self.fixed_length_bytes_from_bytesobj_input::<ed25519_dalek::Signature, { ed25519_dalek::SIGNATURE_LENGTH }>(name, sig)
     }
 
     pub(crate) fn ed25519_pub_key_from_bytes(
@@ -223,6 +229,129 @@ impl Host {
             Ok(hash)
         })
     }
+
+    pub(crate) fn bls12_g1_add_raw(&self, p0: &[u8; BLST_G1_UNCOMPRESSED_SIZE], p1: &[u8; BLST_G1_UNCOMPRESSED_SIZE], budget: Budget) -> Result<[u8; BLST_G1_UNCOMPRESSED_SIZE], HostError> {
+        budget.as_budget().charge(ContractCostType::Int256AddSub, None)?;
+        let p0 = decode_p1(p0);
+        let p1 = decode_p1(p1);
+        let mut res = blst_p1::default();
+        let mut out = [0u8; BLST_G1_UNCOMPRESSED_SIZE];
+
+        unsafe { blst_p1_add(&mut res, &p0, &p1) };
+
+        unsafe {
+            blst_p1_serialize(out.as_mut_ptr(), &res);
+        }
+
+        Ok(out)
+    }
+
+
+    pub(crate) fn bls12_g1_mul_raw(&self, scalar: u8, p1: &[u8; BLST_G1_UNCOMPRESSED_SIZE], budget: Budget) -> Result<[u8; BLST_G1_UNCOMPRESSED_SIZE], HostError> {
+        budget.as_budget().charge(ContractCostType::Int256Mul, None)?;
+
+        let p1 = decode_p1(p1);
+        let mut res = blst_p1::default();
+        let mut out = [0u8; BLST_G1_UNCOMPRESSED_SIZE];
+        unsafe { blst_p1_mult(&mut res, &p1, &scalar, BLST_SCALAR_SIZE) };
+
+        unsafe {
+            blst_p1_serialize(out.as_mut_ptr(), &res);
+        }
+
+        Ok(out)
+    }
+
+    pub(crate) fn bls12_g1_mul_raw_exp(&self, scalars: &[u8], p_n: &[u8], budget: Budget) -> Result<[u8; BLST_G1_UNCOMPRESSED_SIZE], HostError> {
+        budget.as_budget().charge(ContractCostType::Int256Mul, None)?;
+
+        if let Some(value) = self.validate_points_input(&p_n, BLST_G1_UNCOMPRESSED_SIZE) {
+            Err(value)
+        }
+
+        let mut res = blst_p1::default();
+        let mut out = [0u8; BLST_G1_UNCOMPRESSED_SIZE];
+        for (i, chunk) in p_n.chunks_exact(BLST_G1_UNCOMPRESSED_SIZE).enumerate() {
+            let p1 = decode_p1(chunk.try_into().unwrap());
+            let mut tmp = blst_p1::default();
+            let scalar = scalars[i];
+            unsafe { blst_p1_mult(&mut tmp, &p1, &scalar, BLST_SCALAR_SIZE) };
+            unsafe { blst_p1_add(&mut res, &res, &tmp) };
+        }
+
+        unsafe {
+            blst_p1_serialize(out.as_mut_ptr(), &res);
+        }
+
+        Ok(out)
+    }
+
+
+    pub(crate) fn bls12_g2_add_raw(p0: &[u8; BLST_G2_UNCOMPRESSED_SIZE], p1: &[u8; BLST_G2_UNCOMPRESSED_SIZE], budget: Budget) -> Result<[u8; BLST_G2_UNCOMPRESSED_SIZE], HostError> {
+        budget.as_budget().charge(ContractCostType::Int256AddSub, None)?;
+        let p0 = decode_p2(p0);
+        let p1 = decode_p2(p1);
+        let mut res = blst_p2::default();
+        let mut out = [0u8; BLST_G2_UNCOMPRESSED_SIZE];
+
+        unsafe { blst_p2_add(&mut res, &p0, &p1) };
+
+        unsafe {
+            blst_p2_serialize(out.as_mut_ptr(), &res);
+        }
+
+        Ok(out)
+    }
+
+    pub(crate) fn bls12_g2_mul_raw(scalar: u8, p1: &[u8; BLST_G2_UNCOMPRESSED_SIZE], budget: Budget) -> Result<[u8; BLST_G2_UNCOMPRESSED_SIZE], HostError> {
+        budget.as_budget().charge(ContractCostType::Int256Mul, None)?;
+
+        let p1 = decode_p2(p1);
+        let mut res = blst_p2::default();
+        let mut out = [0u8; BLST_G2_UNCOMPRESSED_SIZE];
+        unsafe { blst_p2_mult(&mut res, &p1, &scalar, BLST_SCALAR_SIZE) };
+
+        unsafe {
+            blst_p2_serialize(out.as_mut_ptr(), &res);
+        }
+        Ok(out)
+    }
+
+    pub(crate) fn bls12_g2_mul_raw_exp(&self, scalars: &[u8], p_n: &[u8], budget: Budget) -> Result<[u8; BLST_G2_UNCOMPRESSED_SIZE], HostError> {
+        budget.as_budget().charge(ContractCostType::Int256Mul, None)?;
+
+        if let Some(value) = self.validate_points_input(&p_n, BLST_G2_UNCOMPRESSED_SIZE) {
+            Err(value)
+        }
+
+        let mut res = blst_p2::default();
+        let mut out = [0u8; BLST_G2_UNCOMPRESSED_SIZE];
+        for (i, chunk) in p_n.chunks_exact(BLST_G2_UNCOMPRESSED_SIZE).enumerate() {
+            let p2 = decode_p2(chunk.try_into().unwrap());
+            let mut tmp = blst_p2::default();
+            let scalar = scalars[i];
+            unsafe { blst_p2_mult(&mut tmp, &p2, &scalar, BLST_SCALAR_SIZE) };
+            unsafe { blst_p2_add(&mut res, &res, &tmp) };
+        }
+
+        unsafe {
+            blst_p2_serialize(out.as_mut_ptr(), &res);
+        }
+
+        Ok(out)
+    }
+
+    fn validate_points_input(&self, p_n: &&[u8],size: usize) -> Option<HostError> {
+        if p_n.len() % size != 0 {
+            return Some(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("number of points bytes should divisible by {}", size).as_str(),
+                &[Val::from_u32(p_n.len() as u32).into()],
+            ));
+        }
+        None
+    }
 }
 
 pub(crate) fn sha256_hash_from_bytes_raw(
@@ -301,4 +430,52 @@ pub(crate) fn unbias_prng_seed(
         .map_err(|_| Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError))?;
     hmac.update(seed);
     Ok(hmac.finalize().into_bytes().into())
+}
+
+
+fn decode_p1_affine(bytes: &[u8; BLST_G1_UNCOMPRESSED_SIZE]) -> blst_p1_affine {
+    let mut raw = blst_p1_affine::default();
+    let success = unsafe { blst_p1_uncompress(&mut raw, bytes.as_ptr()) == BLST_ERROR::BLST_SUCCESS };
+    assert!(success);
+
+    let torsion_free = unsafe { blst_p1_affine_in_g1(&raw) };
+    assert!(torsion_free);
+
+    return raw;
+}
+
+fn decode_p1(bytes: &[u8; BLST_G1_UNCOMPRESSED_SIZE]) -> blst_p1 {
+    let p1_affine = decode_p1_affine(bytes);
+    let mut raw = blst_p1::default();
+
+    unsafe { blst_p1_from_affine(&mut raw, &p1_affine) };
+
+    let is_on_curve = unsafe { blst_p1_on_curve(&raw) };
+    assert!(is_on_curve);
+
+    return raw;
+}
+
+
+fn decode_p2_affine(bytes: &[u8; BLST_G2_UNCOMPRESSED_SIZE]) -> blst_p2_affine {
+    let mut raw = blst_p2_affine::default();
+    let success = unsafe { blst_p2_deserialize(&mut raw, bytes.as_ptr()) == BLST_ERROR::BLST_SUCCESS };
+    assert!(success);
+
+    let torsion_free = unsafe { blst_p2_affine_in_g2(&raw) };
+    assert!(torsion_free);
+
+    return raw;
+}
+
+fn decode_p2(bytes: &[u8; BLST_G2_UNCOMPRESSED_SIZE]) -> blst_p2 {
+    let p2_affine = decode_p2_affine(bytes);
+    let mut raw = blst_p2::default();
+
+    unsafe { blst_p2_from_affine(&mut raw, &p2_affine) };
+
+    let is_on_curve = unsafe { blst_p2_on_curve(&raw) };
+    assert!(is_on_curve);
+
+    return raw;
 }
