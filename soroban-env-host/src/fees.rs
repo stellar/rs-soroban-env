@@ -254,7 +254,8 @@ pub fn compute_write_fee_per_1kb(
         )
         .clamp_fee();
         // no clamp_fee here
-        write_fee_per_1kb = write_fee_per_1kb.saturating_add(fee_config.write_fee_1kb_bucket_list_low);
+        write_fee_per_1kb =
+            write_fee_per_1kb.saturating_add(fee_config.write_fee_1kb_bucket_list_low);
     } else {
         write_fee_per_1kb = fee_config.write_fee_1kb_bucket_list_high;
         let bucket_list_size_after_reaching_target =
