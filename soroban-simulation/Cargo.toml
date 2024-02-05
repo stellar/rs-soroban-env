@@ -11,7 +11,7 @@ edition = "2021"
 rust-version.workspace = true
 
 # Temporary until we publish, to satisfy cargo-semver-checks
-publish = false
+publish = true
 
 [dependencies]
 # To be removed
