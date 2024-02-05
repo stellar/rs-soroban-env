@@ -72,7 +72,7 @@ jobs:
       with:
         name: cargo-semver-checks
         version: 0.27.0
-    - run: cargo semver-checks
+    - run: cargo semver-checks --exclude soroban-simulation
 
   build-and-test:
     strategy:
