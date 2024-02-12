@@ -33,3 +33,4 @@ mod str;
 mod symbol;
 mod tuple;
 mod vec;
+mod protocol_gate;

@@ -4,6 +4,7 @@ use crate::{Error, HostError};
 use core::fmt::Debug;
 
 /// Helper types to annotate boolean function arguments
+#[allow(dead_code)]
 pub(crate) struct IsCpu(pub(crate) bool);
 pub(crate) struct IsShadowMode(pub(crate) bool);
 

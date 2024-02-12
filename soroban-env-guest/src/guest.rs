@@ -181,6 +181,14 @@ impl EnvBase for Guest {
         let vals_lm_len: U32Val = Val::from_u32(vals.len() as u32);
         self.log_from_linear_memory(msg_lm_pos, msg_lm_len, vals_lm_pos, vals_lm_len)
     }
+
+    fn check_protocol_version_lower_bound(&self, lower_bound: u32) -> Result<(), Self::Error> {
+        Err(core::arch::wasm32::unreachable())
+    }
+
+    fn check_protocol_version_upper_bound(&self, upper_bound: u32) -> Result<(), Self::Error> {
+        Err(core::arch::wasm32::unreachable())
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -276,7 +284,9 @@ call_macro_with_all_host_functions! { impl_env_for_guest }
 // unsafe extern function).
 macro_rules! extern_function_helper {
     {
-        $fn_str:literal, $(#[$attr:meta])* fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty
+        $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?,
+        $(#[$attr:meta])*
+        fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty
     }
     =>
     {
@@ -307,7 +317,7 @@ macro_rules! generate_extern_modules {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
         )*
@@ -341,7 +351,7 @@ macro_rules! generate_extern_modules {
                         // one `$()*` pattern-repetition expander so that it
                         // repeats only for the part of each mod that the
                         // corresponding pattern-repetition matcher.
-                        extern_function_helper!{$fn_str, $(#[$fn_attr])* fn $fn_id $args -> $ret}
+                        extern_function_helper!{$fn_str, $($min_proto)?, $($max_proto)?, $(#[$fn_attr])* fn $fn_id $args -> $ret}
                     )*
                 }
             }

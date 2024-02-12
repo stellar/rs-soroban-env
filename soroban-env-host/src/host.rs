@@ -61,7 +61,7 @@ pub(crate) use frame::Frame;
 use rand_chacha::ChaCha20Rng;
 use soroban_env_common::SymbolSmall;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Copy)]
 pub struct LedgerInfo {
     pub protocol_version: u32,
     pub sequence_number: u32,
@@ -955,6 +955,38 @@ impl EnvBase for Host {
         let res = Ok(Void::from(()));
         call_trace_env_ret!(self, res);
         res
+    }
+
+    fn check_protocol_version_lower_bound(&self, lower: u32) -> Result<(), Self::Error> {
+        self.with_ledger_info(|li| {
+            let proto = li.protocol_version;
+            if proto < lower {
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::IndexBounds,
+                    "ledger protocol {} is less than specified lower bound {}",
+                    &[Val::from_u32(proto).into(), Val::from_u32(lower).into()],
+                ))
+            } else {
+                Ok(())
+            }
+        })
+    }
+
+    fn check_protocol_version_upper_bound(&self, upper: u32) -> Result<(), Self::Error> {
+        self.with_ledger_info(|li| {
+            let proto = li.protocol_version;
+            if proto > upper {
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::IndexBounds,
+                    "ledger protocol {} is larger than specified upper bound {}",
+                    &[Val::from_u32(proto).into(), Val::from_u32(upper).into()],
+                ))
+            } else {
+                Ok(())
+            }
+        })
     }
 }
 
@@ -2703,6 +2735,13 @@ impl VmCallerEnv for Host {
     // region: "test" module functions
 
     fn dummy0(&self, _vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<Val, Self::Error> {
+        Ok(().into())
+    }
+
+    fn protocol_gated_dummy(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+    ) -> Result<Val, Self::Error> {
         Ok(().into())
     }
 
