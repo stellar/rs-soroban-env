@@ -376,6 +376,7 @@ allow_unsafe = true
 [pkg.syn]
 allow_unsafe = true
 allow_apis = [
+    "hash",
     "thread",
 ]
 
@@ -414,3 +415,6 @@ from.build.allow_apis = [
     "fs",
     "process",
 ]
+
+[pkg.rustversion]
+allow_proc_macro = true
