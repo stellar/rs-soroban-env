@@ -37,9 +37,25 @@ k256 = {version = "=0.13.1", features=["ecdsa", "arithmetic"]}
 # is needed to build the host for wasm (a rare but supported config).
 getrandom = { version = "=0.2.11", features=["js"] }
 sha3 = "=0.10.8"
-# NB: this must match the same curve25519-dalek version used by ed25519-dalek above
-# used only for calibration
-curve25519-dalek = { version = "=4.1.1", default-features = false, features = ["digest"]}
+# NB: this must match the same curve25519-dalek version used by ed25519-dalek
+# above used only for calibration
+#
+# NB temporary: curve25519-dalek _should_ be pinned to =4.1.1, and it _is_
+# pinned to that version in stellar-core (which embeds soroban-env-host), but
+# there is code in curve25519-dalek version 4.1.1 that does not compile on rust
+# nightly 2024-02-05, because of a small change to the way SIMD code is
+# feature-gated in the rust stdlib, and for inexplicable reasons docs.rs builds
+# its documentation using a nightly compiler. As a result, docs for
+# soroban-env-host can't build if we pin this to 4.1.1 here. So we give it a
+# _slightly_ wider version range _locally_, just to help the docs.rs build when
+# it is building docs for this crate alone. When stellar-core builds
+# soroban-env-host, it will still resolve curve25519-dalek to 4.1.1, since that
+# version satisfies both stellar-core's strict 4.1.1 requirement as well as our
+# range-requirement here. IOW nothing about this range-requirement changes what
+# stellar-core ultimately ships. This is a temporary workaround until the next
+# protocol release when we can safely bump the minimum curve25519-dalek version
+# in stellar-core as well.
+curve25519-dalek = { version = ">=4.1.1, <=4.1.2", default-features = false, features = ["digest"]}
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], default-features = false, optional = true }
