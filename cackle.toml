@@ -415,3 +415,6 @@ from.build.allow_apis = [
     "fs",
     "process",
 ]
+
+[pkg.rustversion]
+allow_proc_macro = true
