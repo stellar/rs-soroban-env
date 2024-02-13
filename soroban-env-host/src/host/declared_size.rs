@@ -376,7 +376,6 @@ mod test {
         expect!["32"].assert_eq(size_of::<PublicKey>().to_string().as_str());
         expect!["45"].assert_eq(size_of::<Asset>().to_string().as_str());
         expect!["45"].assert_eq(size_of::<TrustLineAsset>().to_string().as_str());
-        expect!["72"].assert_eq(size_of::<Signer>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<LedgerKeyAccount>().to_string().as_str());
         expect!["77"].assert_eq(size_of::<LedgerKeyTrustLine>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<LedgerKeyContractCode>().to_string().as_str());
@@ -385,7 +384,22 @@ mod test {
         expect!["128"].assert_eq(size_of::<TrustLineEntry>().to_string().as_str());
         expect!["56"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["36"].assert_eq(size_of::<TtlEntry>().to_string().as_str());
-        expect!["112"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
+
+        // NB: a couple structs shrank between rust 1.75 and 1.76 but this is harmless
+        // from a metering perspective -- we're just overcharging slightly.
+        #[rustversion::before(1.76)]
+        fn check_sizes_that_changed_at_rust_1_76() {
+            expect!["72"].assert_eq(size_of::<Signer>().to_string().as_str());
+            expect!["112"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
+        }
+        #[rustversion::since(1.76)]
+        fn check_sizes_that_changed_at_rust_1_76() {
+            expect!["64"].assert_eq(size_of::<Signer>().to_string().as_str());
+            expect!["104"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
+        }
+
+        check_sizes_that_changed_at_rust_1_76();
+
         expect!["256"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["128"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScBytes>().to_string().as_str());

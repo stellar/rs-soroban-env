@@ -1401,6 +1401,7 @@ dependencies = [
  "pretty_assertions",
  "rand",
  "rand_chacha",
+ "rustversion",
  "serde_json",
  "sha2",
  "sha3",
