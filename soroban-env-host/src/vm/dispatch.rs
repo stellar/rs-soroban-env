@@ -260,7 +260,7 @@ macro_rules! generate_dispatch_functions {
                         Err(hosterr) => {
                             // We make a new HostError here to capture the escalation event itself.
                             let escalation: HostError =
-                                host.error(hosterr.error,
+                                host.secondary_error(hosterr,
                                            concat!("escalating error to VM trap from failed host function call: ",
                                                    stringify!($fn_id)), &[]);
                             let trap: Trap = escalation.into();
