@@ -15,7 +15,7 @@ proc-macro = true
 [dependencies]
 syn = {version="=2.0.39",features=["full"]}
 quote = "=1.0.33"
-proc-macro2 = "=1.0.69"
+proc-macro2 = "1.0.69"
 itertools = "=0.11.0"
 
 [package.metadata.docs.rs]
