@@ -170,7 +170,7 @@ fn test_native_mode_calling_protocol_gated_host_fn() -> Result<(), HostError> {
     //           ^ ledger
     //
     li.protocol_version = 18;
-    host.set_ledger_info(li)?;
+    host.set_ledger_info(li.clone())?;
     let res = <Host as Env>::protocol_gated_dummy(&host);
     assert!(HostError::result_matches_err(
         res,
@@ -184,7 +184,7 @@ fn test_native_mode_calling_protocol_gated_host_fn() -> Result<(), HostError> {
     //                            ^ ledger
     //
     li.protocol_version = 19;
-    host.set_ledger_info(li)?;
+    host.set_ledger_info(li.clone())?;
     let res = <Host as Env>::protocol_gated_dummy(&host);
     assert!(res.is_ok());
 

@@ -61,7 +61,7 @@ pub(crate) use frame::Frame;
 use rand_chacha::ChaCha20Rng;
 use soroban_env_common::SymbolSmall;
 
-#[derive(Debug, Clone, Default, Copy)]
+#[derive(Debug, Clone, Default)]
 pub struct LedgerInfo {
     pub protocol_version: u32,
     pub sequence_number: u32,
