@@ -2000,8 +2000,30 @@ impl VmCallerEnv for Host {
         self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
+            None,
             extend_to.into(),
+            None
         )?;
+        Ok(Val::VOID)
+    }
+
+    fn extend_current_contract_instance_and_code_ttl_separately(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        instance_threshold: U32Val,
+        code_threshold: U32Val,
+        extend_instance_to: U32Val,
+        extend_code_to: U32Val,
+    ) -> Result<Void, HostError> {
+        let contract_id = self.get_current_contract_id_internal()?;
+        self.extend_contract_instance_and_code_ttl_from_contract_id(
+            &contract_id,
+            instance_threshold.into(),
+            Some(code_threshold.into()),
+            extend_instance_to.into(),
+            Some(extend_code_to.into())
+        )?;
+        
         Ok(Val::VOID)
     }
 
@@ -2016,7 +2038,29 @@ impl VmCallerEnv for Host {
         self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
+            None,
             extend_to.into(),
+            None
+        )?;
+        Ok(Val::VOID)
+    }
+
+    fn extend_contract_instance_and_code_ttl_separately(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        instance_threshold: U32Val,
+        code_threshold: U32Val,
+        extend_instance_to: U32Val,
+        extend_code_to: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        self.extend_contract_instance_and_code_ttl_from_contract_id(
+            &contract_id,
+            instance_threshold.into(),
+            Some(code_threshold.into()),
+            extend_instance_to.into(),
+            Some(extend_code_to.into())
         )?;
         Ok(Val::VOID)
     }

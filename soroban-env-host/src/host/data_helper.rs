@@ -236,18 +236,23 @@ impl Host {
     pub(crate) fn extend_contract_instance_and_code_ttl_from_contract_id(
         &self,
         contract_id: &Hash,
-        threshold: u32,
-        extend_to: u32,
+        instance_threshold: u32,
+        code_threshold: Option<u32>,
+        extend_instance_to: u32,
+        extend_code_to: Option<u32>,
     ) -> Result<(), HostError> {
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .extend_ttl(self, key.metered_clone(self)?, threshold, extend_to)
+            .extend_ttl(self, key.metered_clone(self)?, instance_threshold, extend_instance_to)
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
             .executable
         {
             ContractExecutable::Wasm(wasm_hash) => {
+                let extend_to = extend_code_to.unwrap_or(extend_instance_to);
+                let threshold = code_threshold.unwrap_or(instance_threshold);
+
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
                 self.try_borrow_storage_mut()?
                     .extend_ttl(self, key, threshold, extend_to)
