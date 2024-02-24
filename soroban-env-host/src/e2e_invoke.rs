@@ -4,6 +4,8 @@
 /// host functions.
 use std::{cmp::max, rc::Rc};
 
+use crate::ledger_info::get_key_durability;
+use crate::storage::EntryWithLiveUntil;
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
     auth::RecordedAuthPayload,
@@ -16,7 +18,6 @@ use crate::{
     fees::LedgerEntryRentChange,
     host::{
         crypto::sha256_hash_from_bytes,
-        ledger_info_helper::get_key_durability,
         metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
         TraceHook,
@@ -60,7 +61,10 @@ pub struct InvokeHostFunctionResult {
 pub struct InvokeHostFunctionRecordingModeResult {
     /// Result value of the invoked function or error returned for invocation.
     pub invoke_result: Result<ScVal, HostError>,
+    /// Resources recorded during the invocation, including the footprint.
     pub resources: SorobanResources,
+    /// Authorization data, either passed through from the call (when provided),
+    /// or recorded during the invocation.
     pub auth: Vec<SorobanAuthorizationEntry>,
     /// All the ledger changes caused by this invocation, including no-ops.
     ///
@@ -73,6 +77,9 @@ pub struct InvokeHostFunctionRecordingModeResult {
     ///
     /// Empty when invocation fails.
     pub contract_events: Vec<ContractEvent>,
+    /// Size of the encoded contract events and the return value.
+    /// Non-zero only when invocation has succeeded.
+    pub contract_events_and_return_value_size: u32,
 }
 
 /// Represents a change of the ledger entry from 'old' value to the 'new' one.
@@ -151,8 +158,7 @@ pub fn get_ledger_changes(
                 new_live_until_ledger: 0,
             });
         }
-        if init_storage_snapshot.has(key)? {
-            let (old_entry, old_live_until_ledger) = init_storage_snapshot.get(key)?;
+        if let Some((old_entry, old_live_until_ledger)) = init_storage_snapshot.get(key)? {
             let mut buf = vec![];
             metered_write_xdr(budget, old_entry.as_ref(), &mut buf)?;
             entry_change.old_entry_size_bytes = buf.len() as u32;
@@ -198,7 +204,7 @@ pub fn get_ledger_changes(
 /// Only meaningful changes are returned (i.e. no-op changes are skipped).
 ///
 /// Extracted changes can be used to compute the rent fee via `fees::compute_rent_fee`.
-pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<LedgerEntryRentChange> {
+pub fn extract_rent_changes(ledger_changes: &[LedgerEntryChange]) -> Vec<LedgerEntryRentChange> {
     ledger_changes
         .iter()
         .filter_map(|entry_change| {
@@ -515,10 +521,12 @@ pub fn invoke_host_function_in_recording_mode(
         host.set_diagnostic_level(DiagnosticLevel::Debug)?;
     }
     let invoke_result = host.invoke_function(host_function);
-
+    let mut contract_events_and_return_value_size = 0_u32;
     if let Ok(res) = &invoke_result {
         let mut encoded_result_sc_val = vec![];
         metered_write_xdr(&budget, res, &mut encoded_result_sc_val)?;
+        contract_events_and_return_value_size = contract_events_and_return_value_size
+            .saturating_add(encoded_result_sc_val.len() as u32);
     }
     let mut output_auth = if let Some(auth_entries) = auth_entries {
         auth_entries
@@ -549,8 +557,7 @@ pub fn invoke_host_function_in_recording_mode(
         let mut encoded_ttl_entries = Vec::with_capacity(storage.footprint.0.len());
         let mut read_bytes = 0_u32;
         for (lk, _) in &storage.footprint.0 {
-            if ledger_snapshot.has(lk)? {
-                let (le, live_until) = ledger_snapshot.get(lk)?;
+            if let Some((le, live_until)) = ledger_snapshot.get(lk)? {
                 let encoded_le = host.to_xdr_non_metered(&*le)?;
                 read_bytes = read_bytes.saturating_add(encoded_le.len() as u32);
                 encoded_ledger_entries.push(encoded_le);
@@ -595,7 +602,11 @@ pub fn invoke_host_function_in_recording_mode(
     let (ledger_changes, contract_events) = if invoke_result.is_ok() {
         let ledger_changes =
             get_ledger_changes(&budget, &storage, &*ledger_snapshot, init_ttl_map)?;
-        let _encoded_contract_events = encode_contract_events(budget, &events)?;
+        let encoded_contract_events = encode_contract_events(budget, &events)?;
+        for e in &encoded_contract_events {
+            contract_events_and_return_value_size =
+                contract_events_and_return_value_size.saturating_add(e.len() as u32);
+        }
         let contract_events: Vec<ContractEvent> = events
             .0
             .into_iter()
@@ -623,6 +634,7 @@ pub fn invoke_host_function_in_recording_mode(
         auth: output_auth,
         ledger_changes,
         contract_events,
+        contract_events_and_return_value_size,
     })
 }
 
@@ -801,27 +813,13 @@ struct StorageMapSnapshotSource<'a> {
 }
 
 impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
         if let Some(Some((entry, live_until_ledger))) =
             self.map.get::<Rc<LedgerKey>>(key, self.budget)?
         {
-            Ok((Rc::clone(entry), *live_until_ledger))
+            Ok(Some((Rc::clone(entry), *live_until_ledger)))
         } else {
-            Err(HostError::from((
-                ScErrorType::Storage,
-                ScErrorCode::InternalError,
-            )))
-        }
-    }
-
-    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
-        if let Some(maybe_value) = self.map.get::<Rc<LedgerKey>>(key, self.budget)? {
-            Ok(maybe_value.is_some())
-        } else {
-            Err(HostError::from((
-                ScErrorType::Storage,
-                ScErrorCode::InternalError,
-            )))
+            Ok(None)
         }
     }
 }

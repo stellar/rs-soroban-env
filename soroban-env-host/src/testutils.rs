@@ -1,13 +1,14 @@
 use crate::e2e_invoke::ledger_entry_to_ledger_key;
+use crate::storage::EntryWithLiveUntil;
 use crate::{
     budget::Budget,
     builtin_contracts::testutils::create_account,
     storage::{SnapshotSource, Storage},
     xdr::{
-        AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScErrorCode,
-        ScErrorType, ScVal, ScVec, Uint256,
+        AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScVal, ScVec,
+        Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
+    AddressObject, BytesObject, Env, EnvBase, Host, HostError, LedgerInfo, MeteredOrdMap,
     StorageType, SymbolSmall, Val, VecObject,
 };
 use rand::RngCore;
@@ -132,16 +133,12 @@ impl MockSnapshotSource {
     }
 }
 impl SnapshotSource for MockSnapshotSource {
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
-        if let Some(val) = self.0.get(key) {
-            Ok((Rc::clone(&val.0), val.1))
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        if let Some((entry, live_until)) = self.0.get(key) {
+            Ok(Some((Rc::clone(entry), *live_until)))
         } else {
-            Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::MissingValue).into())
+            Ok(None)
         }
-    }
-
-    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
-        Ok(self.0.contains_key(key))
     }
 }
 

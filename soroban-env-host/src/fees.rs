@@ -40,6 +40,8 @@ pub struct TransactionResources {
 /// This should be normally loaded from the ledger, with exception of the
 /// `fee_per_write_1kb`, that has to be computed via `compute_write_fee_per_1kb`
 /// function.
+
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct FeeConfiguration {
     /// Fee per `INSTRUCTIONS_INCREMENT=10000` instructions.
     pub fee_per_instruction_increment: i64,
@@ -64,6 +66,7 @@ pub struct FeeConfiguration {
 /// Network configuration used to determine the ledger write fee.
 ///
 /// This should be normally loaded from the ledger.
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct WriteFeeConfiguration {
     // Write fee grows linearly until bucket list reaches this size.
     pub bucket_list_target_size_bytes: i64,
@@ -104,6 +107,8 @@ pub struct LedgerEntryRentChange {
 /// This should be normally loaded from the ledger, with exception of the
 /// `fee_per_write_1kb`, that has to be computed via `compute_write_fee_per_1kb`
 /// function.
+
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct RentFeeConfiguration {
     /// Fee per 1KB written to ledger.
     /// This is the same field as in `FeeConfiguration` and it has to be
@@ -279,7 +284,7 @@ pub fn compute_write_fee_per_1kb(
 /// ledger changes. This is due to the fact that rent is managed automatically
 /// wihtout user-provided inputs.
 pub fn compute_rent_fee(
-    changed_entries: &Vec<LedgerEntryRentChange>,
+    changed_entries: &[LedgerEntryRentChange],
     fee_config: &RentFeeConfiguration,
     current_ledger_seq: u32,
 ) -> i64 {

@@ -17,9 +17,9 @@ use crate::{
         ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
-    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, TryFromVal,
-    U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv, Void, I256,
-    U256,
+    I256Object, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject,
+    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv,
+    Void, I256, U256,
 };
 
 mod comparison;
@@ -60,18 +60,6 @@ pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_mode"))]
 use rand_chacha::ChaCha20Rng;
 use soroban_env_common::SymbolSmall;
-
-#[derive(Debug, Clone, Default)]
-pub struct LedgerInfo {
-    pub protocol_version: u32,
-    pub sequence_number: u32,
-    pub timestamp: u64,
-    pub network_id: [u8; 32],
-    pub base_reserve: u32,
-    pub min_temp_entry_ttl: u32,
-    pub min_persistent_entry_ttl: u32,
-    pub max_entry_ttl: u32,
-}
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]
