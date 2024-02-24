@@ -113,6 +113,7 @@ pub struct RestoreOpSimulationResult {
 /// This function makes the best effort at returning non-Err result even
 /// for failed invocations. It should only fail if ledger is
 /// mis-configured (e.g. when computed fees cause overflows).
+#[allow(clippy::too_many_arguments)]
 pub fn simulate_invoke_host_function_op(
     snapshot_source: Rc<dyn SnapshotSource>,
     network_config: &NetworkConfig,

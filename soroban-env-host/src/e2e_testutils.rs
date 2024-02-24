@@ -138,13 +138,13 @@ pub fn get_account_id(pub_key: [u8; 32]) -> AccountId {
 pub fn get_contract_id_preimage(account_id: &AccountId, salt: &[u8; 32]) -> ContractIdPreimage {
     ContractIdPreimage::Address(ContractIdPreimageFromAddress {
         address: ScAddress::Account(account_id.clone()),
-        salt: Uint256(salt.clone().try_into().unwrap()),
+        salt: Uint256(*salt),
     })
 }
 
 pub fn get_contract_id_hash(id_preimage: &ContractIdPreimage) -> [u8; 32] {
     let preimage = HashIdPreimage::ContractId(HashIdPreimageContractId {
-        network_id: DEFAULT_NETWORK_ID.clone().try_into().unwrap(),
+        network_id: DEFAULT_NETWORK_ID.try_into().unwrap(),
         contract_id_preimage: id_preimage.clone(),
     });
     Sha256::digest(&preimage.to_xdr(Limits::none()).unwrap()).into()
