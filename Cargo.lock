@@ -1441,9 +1441,12 @@ name = "soroban-simulation"
 version = "20.2.2"
 dependencies = [
  "anyhow",
+ "pretty_assertions",
  "rand",
  "soroban-env-host",
+ "soroban-test-wasms",
  "static_assertions",
+ "tap",
  "thiserror",
 ]
 
@@ -1556,6 +1559,12 @@ checksum = "08e1173ee641651a3095fe95d86ae314cd1f959888097debce3e0f9ca532eef1"
 dependencies = [
  "unicode-width",
 ]
+
+[[package]]
+name = "tap"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "test_no_std"
