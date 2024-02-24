@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[test]
-fn ledger_protocol_greater_than_env_protcol_should_fail() -> Result<(), HostError> {
+fn ledger_protocol_greater_than_env_protocol_should_fail() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let mut li = LedgerInfo::default();
