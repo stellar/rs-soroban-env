@@ -182,12 +182,12 @@ impl EnvBase for Guest {
         self.log_from_linear_memory(msg_lm_pos, msg_lm_len, vals_lm_pos, vals_lm_len)
     }
 
-    fn check_protocol_version_lower_bound(&self, lower_bound: u32) -> Result<(), Self::Error> {
-        Err(core::arch::wasm32::unreachable())
+    fn check_protocol_version_lower_bound(&self, _lower_bound: u32) -> Result<(), Self::Error> {
+        core::arch::wasm32::unreachable()
     }
 
-    fn check_protocol_version_upper_bound(&self, upper_bound: u32) -> Result<(), Self::Error> {
-        Err(core::arch::wasm32::unreachable())
+    fn check_protocol_version_upper_bound(&self, _upper_bound: u32) -> Result<(), Self::Error> {
+        core::arch::wasm32::unreachable()
     }
 }
 
@@ -236,7 +236,7 @@ macro_rules! impl_env_for_guest {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
         )*
