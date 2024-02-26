@@ -150,7 +150,7 @@ macro_rules! generate_dispatch_functions {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident ($($arg:ident:$type:ty),*) -> $ret:ty }
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident ($($arg:ident:$type:ty),*) -> $ret:ty }
                 )*
             }
         )*
@@ -197,6 +197,14 @@ macro_rules! generate_dispatch_functions {
                     let _span = tracy_span!(core::stringify!($fn_id));
 
                     let host = caller.data().clone();
+
+                    // This is an additional protocol version guardrail that
+                    // should not be necessary. Any wasm contract containing a
+                    // call to an out-of-protocol-range host function should
+                    // have been rejected by the linker during VM instantiation.
+                    // This is just an additional guard rail for future proof.
+                    $( host.check_protocol_version_lower_bound($min_proto)?; )?
+                    $( host.check_protocol_version_upper_bound($max_proto)?; )?
 
                     if host.tracing_enabled()
                     {
