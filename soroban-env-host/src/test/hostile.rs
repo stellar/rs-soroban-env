@@ -729,7 +729,6 @@ fn test_integer_overflow() -> Result<(), HostError> {
 
 #[test]
 fn test_corrupt_custom_section() -> Result<(), HostError> {
-    // let wasm = wasm_util::wasm_module_with_custom_section("custom", vec![24; 7].as_slice());
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     host.as_budget().reset_unlimited()?;
