@@ -254,11 +254,16 @@ impl Host {
     /// enriches the returned [Error] with [DebugInfo] in the form of a
     /// [Backtrace] and snapshot of the [Events] buffer.
     pub(crate) fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
+        // Note that though we are calling `secondary_error`, this is likely the
+        // "primary" error and this call is an implementation detail to generate
+        // the initial backtrace.
         self.secondary_error(HostError::from(error), msg, args)
     }
 
     /// The same as [Host::error] but it will preserve the original
     /// backtrace from `error` instead of generating a new one.
+    ///
+    /// This is typically used to raise a new error when we already have an error.
     pub(crate) fn secondary_error(&self, error: HostError, msg: &str, args: &[Val]) -> HostError {
         let mut he = error;
         self.with_debug_mode(|| {
