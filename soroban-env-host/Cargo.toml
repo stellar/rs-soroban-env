@@ -99,10 +99,12 @@ bench = []
 # This feature guards the work-in-progress changes in soroban-env-host
 # API. Its main purpose is to be able to make API changes without bumping
 # the crate version.
-# These changes may be used by the 'Soroban-owned' crates, such as
-# stellar-core, soroban-simulation, and soroban-sdk.
-# When bumping the major version of soroban-env-host all the code guarded
-# by this feature should be enabled unconditionally.
+# These changes should be used by importers who depend on
+# an exact patch version of the crates in this repo, because breaking
+# changes may be introduced into any version in any code gated by
+# this feature.
+# When bumping the major version of any crates in this repo all the code
+# guarded by this feature should be enabled unconditionally.
 unstable-next-api = []
 
 [[bench]]
@@ -120,4 +122,4 @@ name = "variation_histograms"
 path = "benches/variation_histograms.rs"
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["recording_mode", "tracy", "testutils"]
