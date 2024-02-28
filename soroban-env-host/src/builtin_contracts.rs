@@ -16,5 +16,5 @@ pub(crate) use stellar_asset_contract::StellarAssetContract;
 
 pub(crate) mod account_contract;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testutils"))]
 pub(crate) mod testutils;

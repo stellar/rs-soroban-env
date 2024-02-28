@@ -225,6 +225,19 @@ impl ModEmitter {
         }
     }
 
+    #[cfg(feature = "adversarial")]
+    pub fn add_fn_type_no_check(&mut self, arity: Arity, ret: Arity) -> TypeRef {
+        let params: Vec<_> = std::iter::repeat(ValType::I64)
+            .take(arity.0 as usize)
+            .collect();
+        let rets: Vec<_> = std::iter::repeat(ValType::I64)
+            .take(ret.0 as usize)
+            .collect();
+        let ty_id = TypeRef(self.types.len());
+        self.types.function(params, rets);
+        ty_id
+    }
+
     /// Return the unique [`FuncRef`] for a function import with a given module
     /// name, function name, and arity, creating such an import in the `import`
     /// section of the module if it does not already exist.
@@ -277,7 +290,7 @@ impl ModEmitter {
             .export(name, wasm_encoder::ExportKind::Func, fid.0);
     }
 
-    pub fn define_elems(&mut self, funcs: &[FuncRef]) {
+    pub fn define_elem_funcs(&mut self, funcs: &[FuncRef]) {
         let table_index = 0;
         let offset = ConstExpr::i32_const(0);
         let ids: Vec<u32> = funcs.iter().map(|r| r.0).collect();
@@ -296,6 +309,26 @@ impl ModEmitter {
     pub fn define_data_segment(&mut self, mem_offset: u32, data: Vec<u8>) {
         self.data
             .active(0, &ConstExpr::i32_const(mem_offset as i32), data);
+    }
+
+    #[cfg(feature = "adversarial")]
+    pub fn define_active_elements(
+        &mut self,
+        table_index: Option<u32>,
+        offset: &ConstExpr,
+        elements: Elements<'_>,
+    ) {
+        self.elements.active(table_index, offset, elements);
+    }
+
+    #[cfg(feature = "adversarial")]
+    pub fn define_global(&mut self, val_type: ValType, mutable: bool, init_expr: &ConstExpr) {
+        self.global(val_type, mutable, init_expr);
+    }
+
+    #[cfg(feature = "adversarial")]
+    pub fn define_active_data(&mut self, memory_index: u32, offset: &ConstExpr, data: Vec<u8>) {
+        self.data.active(memory_index, offset, data);
     }
 
     /// Finish emitting code, consuming the `self`, serializing a WASM binary

@@ -26,7 +26,7 @@ fn deep_scval_to_host_val() -> Result<(), HostError> {
     // NB: this error code is not great, it's a consequence of
     // bug https://github.com/stellar/rs-soroban-env/issues/1046
     // where the TryIntoVal impl in common eats HostErrors
-    let code = (ScErrorType::Value, ScErrorCode::UnexpectedType);
+    let code = (ScErrorType::Context, ScErrorCode::ExceededLimit);
     assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
@@ -42,10 +42,7 @@ fn deep_host_val_to_scval() -> Result<(), HostError> {
         hv = host.vec_push_back(vv, hv.to_val())?;
     }
     let res = host.from_host_obj(hv);
-    // NB: this error code is not great, it's a consequence of
-    // bug https://github.com/stellar/rs-soroban-env/issues/1046
-    // where the TryIntoVal impl in common eats HostErrors
-    let code = (ScErrorType::Value, ScErrorCode::UnexpectedType);
+    let code = (ScErrorType::Context, ScErrorCode::ExceededLimit);
     assert!(HostError::result_matches_err(res, code));
     Ok(())
 }

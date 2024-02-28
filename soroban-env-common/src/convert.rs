@@ -371,16 +371,17 @@ impl<E: Env> TryFromVal<E, U256> for U256Val {
 impl<E: Env> TryFromVal<E, Val> for ScVal
 where
     ScValObject: TryFromVal<E, Object>,
+    <ScValObject as TryFromVal<E, Object>>::Error: Into<crate::Error>,
 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
-    fn try_from_val(env: &E, val: &Val) -> Result<Self, ConversionError> {
+    fn try_from_val(env: &E, val: &Val) -> Result<Self, crate::Error> {
         if let Ok(object) = Object::try_from(val) {
-            // Bug https://github.com/stellar/rs-soroban-env/issues/1076: it's
-            // not really great to be dropping the error from the other
-            // TryFromVal here, we should really switch to taking errors from E
-            // or returning Error or something.
-            let scvo: ScValObject = object.try_into_val(env).map_err(|_| ConversionError)?;
+            let scvo: ScValObject = object.try_into_val(env).map_err(|e| {
+                let e: <ScValObject as TryFromVal<E, Object>>::Error = e;
+                let e: crate::Error = e.into();
+                e
+            })?;
             return Ok(scvo.into());
         }
         let val = *val;
@@ -453,7 +454,7 @@ where
             | Tag::SmallCodeUpperBound
             | Tag::ObjectCodeLowerBound
             | Tag::ObjectCodeUpperBound
-            | Tag::Bad => Err(ConversionError),
+            | Tag::Bad => Err(ConversionError.into()),
         }
     }
 }
@@ -470,16 +471,21 @@ fn require_or_conversion_error(b: bool) -> Result<(), ConversionError> {
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, ScVal> for Val
 where
-    Object: for<'a> TryFromVal<E, ScValObjRef<'a>, Error = ConversionError>,
+    Object: for<'a> TryFromVal<E, ScValObjRef<'a>>,
+    for<'a> <Object as TryFromVal<E, ScValObjRef<'a>>>::Error: Into<crate::Error>,
 {
-    type Error = ConversionError;
+    type Error = crate::Error;
     fn try_from_val(env: &E, val: &ScVal) -> Result<Val, Self::Error> {
         if !Val::can_represent_scval(val) {
-            return Err(ConversionError);
+            return Err(ConversionError.into());
         }
 
         if let Some(scvo) = ScValObjRef::classify(val) {
-            let obj = Object::try_from_val(env, &scvo)?;
+            let obj = Object::try_from_val(env, &scvo).map_err(|e| {
+                let e: <Object as TryFromVal<E, ScValObjRef>>::Error = e;
+                let e: crate::Error = e.into();
+                e
+            })?;
             return Ok(obj.into());
         }
 
@@ -525,11 +531,9 @@ where
                 unsafe { Val::from_body_and_tag(i.lo_lo, Tag::I256Small) }
             }
             ScVal::Symbol(bytes) => {
-                let ss = match std::str::from_utf8(bytes.as_slice()) {
-                    Ok(ss) => ss,
-                    Err(_) => return Err(ConversionError),
-                };
-                SymbolSmall::try_from_str(ss)?.into()
+                // NB: Long symbols are objects and should have been
+                // handled before reaching this point.
+                SymbolSmall::try_from_bytes(bytes.as_slice())?.into()
             }
 
             // These should all have been classified as ScValObjRef above, or are
@@ -542,7 +546,7 @@ where
             | ScVal::Address(_)
             | ScVal::LedgerKeyNonce(_)
             | ScVal::LedgerKeyContractInstance
-            | ScVal::ContractInstance(_) => return Err(ConversionError),
+            | ScVal::ContractInstance(_) => return Err(ConversionError.into()),
         })
     }
 }

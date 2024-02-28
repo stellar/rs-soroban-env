@@ -2,7 +2,7 @@
     test,
     feature = "testutils",
     feature = "bench",
-    feature = "recording_auth"
+    feature = "recording_mode"
 ))]
 use crate::{budget::Budget, HostError};
 
@@ -74,6 +74,14 @@ impl Budget {
         Ok(())
     }
 
+    pub fn reset_cpu_limit(&self, cpu: u64) -> Result<(), HostError> {
+        self.with_mut_budget(|mut b| {
+            b.cpu_insns.reset(cpu);
+            Ok(())
+        })?;
+        self.reset_tracker()
+    }
+
     pub fn reset_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
         self.with_mut_budget(|mut b| {
             b.cpu_insns.reset(cpu);
@@ -91,7 +99,7 @@ impl Budget {
     /// of a specific fuel category. In order to get the correct, unscaled fuel
     /// count, we have to preset all the `FuelConfig` entries to 1.
     pub fn reset_fuel_config(&self) -> Result<(), HostError> {
-        self.0.try_borrow_mut_or_err()?.fuel_config.reset();
+        self.0.try_borrow_mut_or_err()?.fuel_costs = wasmi::FuelCosts::default();
         Ok(())
     }
 
@@ -161,7 +169,7 @@ impl Budget {
     }
 }
 
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 impl Budget {
     /// Variant of `with_shadow_mode`, enabled only in testing and
     /// non-production scenarios, that produces a `Result<>` rather than eating

@@ -21,8 +21,15 @@ pub(crate) struct StellarAssetContractMetadata {
 
 pub const DECIMAL: u32 = 7;
 
-// This does a specific and fairly unique escaping transformation as defined
-// in TxRep / SEP-0011.
+// This does a specific and fairly unique escaping transformation as defined in
+// TxRep / SEP-0011.
+//
+// Note: this seemed appropriate when it was initially added but is really
+// overkill, since all asset codes admitted to the system are validated to be
+// ASCII alphanumeric, with only trailing zeroes and only unambiguous
+// zero-padded lengths, over in [`validate_asset`]; but we reproduce the
+// escaping logic in SEP-0011 here anyway to add some defense in depth, in case
+// validation was somehow missed.
 fn render_sep0011_asset_code(buf: &[u8], out: &mut std::string::String) -> Result<(), HostError> {
     if buf.len() != 4 && buf.len() != 12 {
         return Err((ScErrorType::Value, ScErrorCode::InvalidInput).into());
@@ -142,12 +149,15 @@ fn render_sep0011_asset<const N: usize>(
 
     let mut s: std::string::String = std::string::String::with_capacity(capacity);
     render_sep0011_asset_code(&symbuf, &mut s)?;
+
+    // Use the sep-11 (trimmed and/or escaped) asset code we just rendered for the metadata symbol.
+    let symbol = String::try_from_val(e, &e.string_new_from_slice(s.as_bytes())?)?;
+
+    // Then follow it with a colon and the issuer's strkey for the metadata name.
     s.push(':');
     s.push_str(&ed25519::PublicKey(issuer.to_array()?).to_string());
-    Ok((
-        String::try_from_val(e, &e.string_new_from_slice(s.as_bytes())?)?,
-        symbol,
-    ))
+    let name = String::try_from_val(e, &e.string_new_from_slice(s.as_bytes())?)?;
+    Ok((name, symbol))
 }
 
 pub(crate) fn set_metadata(e: &Host) -> Result<(), HostError> {

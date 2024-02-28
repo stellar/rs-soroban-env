@@ -52,7 +52,7 @@ use std::ops::RangeInclusive;
 ///     a state machine like so:
 ///
 ///       - tx1: write commitment finalizing all inputs to "random action", plus
-///              N = current ledger and S = prng_new_bytes(32).
+///              N = current ledger and S = prng_bytes_new(32).
 ///
 ///       - tx2: re-read all committed values, if ledger > N, prng_reseed(S),
 ///              and use PRNG to take "random" action committed-to.
@@ -79,13 +79,12 @@ use std::ops::RangeInclusive;
 ///   - All these PRNGs are ChaCha20: a strong, cheap, standard CSPRNG.
 ///
 #[derive(Debug, Clone)]
-pub(crate) struct Prng(ChaCha20Rng);
+pub(crate) struct Prng(pub(crate) ChaCha20Rng);
 
 pub type Seed = <rand_chacha::ChaCha20Rng as rand::SeedableRng>::Seed;
 pub const SEED_BYTES: u64 = <Seed as DeclaredSizeForMetering>::DECLARED_SIZE;
 static_assertions::const_assert_eq!(SEED_BYTES, 32);
 
-#[cfg(any(feature = "testutils", test))]
 impl std::hash::Hash for Prng {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.get_seed().hash(state);

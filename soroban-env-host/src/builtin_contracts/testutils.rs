@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::rc::Rc;
 
 use crate::{Host, LedgerInfo};
@@ -81,7 +83,7 @@ impl<'a> TestSigner<'a> {
         account_id: &AccountId,
         mut signers: Vec<&'a SigningKey>,
     ) -> Self {
-        signers.sort_by_key(|k| k.verifying_key().as_bytes().clone());
+        signers.sort_by_key(|k| *k.verifying_key().as_bytes());
         TestSigner::Account(AccountSigner {
             account_id: account_id.clone(),
             signers,
@@ -100,7 +102,7 @@ impl<'a> TestSigner<'a> {
         }
     }
 
-    fn sign(&self, host: &Host, payload: &[u8]) -> ScVal {
+    pub(crate) fn sign(&self, host: &Host, payload: &[u8]) -> ScVal {
         let signature: Val = match self {
             TestSigner::AccountInvoker(_) | TestSigner::ContractInvoker(_) => Val::VOID.into(),
             TestSigner::Account(account_signer) => {
@@ -117,14 +119,17 @@ impl<'a> TestSigner<'a> {
         host.from_host_val(signature).unwrap()
     }
 
-    pub(crate) fn address(&self, host: &Host) -> Address {
-        let sc_address = match self {
+    pub(crate) fn sc_address(&self) -> ScAddress {
+        match self {
             TestSigner::AccountInvoker(acc_id) => ScAddress::Account(acc_id.clone()),
             TestSigner::Account(acc) => ScAddress::Account(acc.account_id.clone()),
             TestSigner::AccountContract(signer) => signer.address.to_sc_address().unwrap(),
             TestSigner::ContractInvoker(contract_id) => ScAddress::Contract(contract_id.clone()),
-        };
-        Address::try_from_val(host, &host.add_host_object(sc_address).unwrap()).unwrap()
+        }
+    }
+
+    pub(crate) fn address(&self, host: &Host) -> Address {
+        Address::try_from_val(host, &host.add_host_object(self.sc_address()).unwrap()).unwrap()
     }
 }
 

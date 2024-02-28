@@ -169,7 +169,7 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
     Ok(())
 }
 
-fn log_some_diagnostics(host: crate::test::observe::ObservedHost) -> Result<Events, HostError> {
+fn log_some_diagnostics(host: Host) -> Result<Events, HostError> {
     let args: Vec<_> = (0..1000).map(|u| Val::from_u32(u).to_val()).collect();
     let contract_id = Hash([0; 32]);
     host.log_diagnostics("logging some diagnostics", args.as_slice());
@@ -184,16 +184,16 @@ fn log_some_diagnostics(host: crate::test::observe::ObservedHost) -> Result<Even
         &Symbol::try_from_small_str("fn_return")?,
         &Symbol::try_from_small_str("pass")?.into(),
     );
-    let realhost = (*host).clone();
-    drop(host);
-    let (_, evts) = realhost.try_finish()?;
+    let (_, evts) = host.try_finish()?;
     Ok(evts)
 }
 
 #[test]
 fn test_diagnostic_events_do_not_affect_metering_with_debug_off() -> Result<(), HostError> {
     // DEBUG mode OFF
-    let host = observe_host!(Host::test_host());
+
+    // NB: We don't observe here since the test is sensitive to shadow budget.
+    let host = Host::test_host();
     let budget = host.as_budget().clone();
     budget.reset_default()?;
     let evts = log_some_diagnostics(host)?;
@@ -209,7 +209,9 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_off() -> Result<(), 
 fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_sufficient_budget(
 ) -> Result<(), HostError> {
     // DEBUG mode ON, budget sufficient
-    let host = observe_host!(Host::test_host());
+
+    // NB: We don't observe here since the test is sensitive to shadow budget.
+    let host = Host::test_host();
     host.enable_debug()?;
     let budget = host.as_budget().clone();
     budget.reset_default()?;
@@ -226,7 +228,9 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_sufficient_bu
 fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_budget(
 ) -> Result<(), HostError> {
     // DEBUG mode ON, budget insufficient
-    let host = observe_host!(Host::test_host());
+
+    // NB: We don't observe here since the test is sensitive to shadow budget.
+    let host = Host::test_host();
     host.enable_debug()?;
     let budget = host.as_budget().clone();
     budget.reset_default()?;
@@ -236,6 +240,27 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_
     assert_eq!(budget.get_mem_bytes_consumed()?, 0);
     assert_ne!(budget.get_shadow_cpu_insns_consumed()?, 0);
     assert_ne!(budget.get_shadow_mem_bytes_consumed()?, 0);
+    assert_eq!(evts.0.len(), 0);
+    Ok(())
+}
+
+#[test]
+#[cfg(all(not(feature = "next"), feature = "testutils"))]
+// This is a regression test: we accidentally wired up the tracing
+// infrastructure in such a way that when it did a try_borrow on host fields it
+// wanted to observe, it called the helpers that emit "internal error"
+// diagnostic events for any failed borrows. We actually don't want that to
+// happen, we want failed borrows from the tracing subsystem to be silent.
+fn test_observation_does_not_emit_diagnostic_events_from_failed_borrows() -> Result<(), HostError> {
+    let host = Host::test_host();
+    let obs_host = observe_host!(host.clone());
+    host.enable_debug()?;
+    let storage = host.try_borrow_storage_mut()?;
+    host.obj_from_i64(1)?;
+    drop(storage);
+    drop(obs_host);
+    let (_, evts) = host.try_finish()?;
+    dbg!(&evts);
     assert_eq!(evts.0.len(), 0);
     Ok(())
 }
@@ -293,12 +318,9 @@ fn too_big_event_topic() -> Result<(), HostError> {
 
     let host = (*host).clone();
     let res = host.try_finish();
-    // This fails at converting from Bytes to ScBytes due to out-of-budget
-    // however, the `ScVal::try_from_val` converts it into a `ConversionError`
-    // which is misleading. We already have a tracking issue #1076.
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
     Ok(())
 }
@@ -316,12 +338,9 @@ fn too_big_event_data() -> Result<(), HostError> {
 
     let host = (*host).clone();
     let res = host.try_finish();
-    // This fails at converting from Bytes to ScBytes due to out-of-budget
-    // however, the `ScVal::try_from_val` converts it into a `ConversionError`
-    // which is misleading. We already have a tracking issue #1076.
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
     Ok(())
 }

@@ -5,15 +5,15 @@ use rand_chacha::ChaCha20Rng;
 use crate::{
     test::observe::ObservedHost,
     xdr::{Hash, ScAddress, ScVal, ScVec},
-    AddressObject, BytesObject, ContractFunctionSet, Env, EnvBase, Host, HostError, Symbol,
-    SymbolSmall, TryFromVal, TryIntoVal, U32Val, U64Object, U64Val, Val, VecObject,
+    AddressObject, BytesObject, ContractFunctionSet, Env, EnvBase, Host, HostError, StorageType,
+    Symbol, SymbolSmall, TryFromVal, TryIntoVal, U32Val, U64Object, U64Val, Val, VecObject,
 };
 
 /// prng tests
 
 // Copy of SymbolSmall::from_str, but not protected by feature="testutils".
-// We know our uses here are test-only.
-pub const fn ss_from_str(s: &str) -> SymbolSmall {
+#[cfg(test)]
+const fn ss_from_str(s: &str) -> SymbolSmall {
     match SymbolSmall::try_from_str(s) {
         Ok(sym) => sym,
         _ => panic!("bad symbol"),
@@ -25,11 +25,35 @@ const U64_RANGE: SymbolSmall = ss_from_str("u64_range");
 const SHUFFLE: SymbolSmall = ss_from_str("shuffle");
 const RESEED: SymbolSmall = ss_from_str("reseed");
 
+// These aren't host functions, but we provide them as a way to observe the
+// callee's seed.
+const GETSEED: SymbolSmall = ss_from_str("getseed");
+const SUBSEED: SymbolSmall = ss_from_str("subseed");
+
+// These also aren't host functions, they're part of the commit-reveal test.
+const COMMIT: SymbolSmall = ss_from_str("commit");
+const SEED: SymbolSmall = ss_from_str("seed");
+const LEDGER: SymbolSmall = ss_from_str("ledger");
+const REVEAL: SymbolSmall = ss_from_str("reveal");
+const ERR_ALREADY_COMMITTED: crate::Val = crate::Error::from_contract_error(1).to_val();
+const ERR_NOT_COMMITTED: crate::Val = crate::Error::from_contract_error(2).to_val();
+const ERR_REVEAL_TOO_EARLY: crate::Val = crate::Error::from_contract_error(3).to_val();
+
 const SEED_LEN: u32 = 32;
 const LO: u64 = 12345;
 const HI: u64 = 78910;
 
 pub struct PRNGUsingTest;
+
+impl PRNGUsingTest {
+    fn register_as(host: &Host, id: &[u8; 32]) -> AddressObject {
+        let scaddr = ScAddress::Contract(Hash(*id));
+        let addrobj = host.add_host_object(scaddr).unwrap();
+        host.register_test_contract(addrobj, std::rc::Rc::new(PRNGUsingTest))
+            .unwrap();
+        addrobj
+    }
+}
 
 impl ContractFunctionSet for PRNGUsingTest {
     fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Option<Val> {
@@ -62,6 +86,79 @@ impl ContractFunctionSet for PRNGUsingTest {
             host.prng_bytes_new(U32Val::from(SEED_LEN))
                 .unwrap()
                 .to_val()
+
+        // These aren't host functions, but we provide them as a way to observe
+        // the callee's seed.
+        } else if func == GETSEED {
+            host.with_current_prng(|prng| {
+                Ok(host
+                    .bytes_new_from_slice(&prng.0.get_seed())
+                    .unwrap()
+                    .to_val())
+            })
+            .unwrap()
+        } else if func == SUBSEED {
+            let callee = args[0].try_into().unwrap();
+            host.call(
+                callee,
+                GETSEED.into(),
+                host.test_vec_obj::<u32>(&[]).unwrap(),
+            )
+            .unwrap()
+
+        // These also aren't host functions, they're part of the commit-reveal
+        // test.
+        } else if func == COMMIT {
+            let already_committed: bool = host
+                .has_contract_data(SEED.to_val(), StorageType::Instance)
+                .unwrap()
+                .into();
+            if already_committed {
+                ERR_ALREADY_COMMITTED
+            } else {
+                let committed_seed = host.prng_bytes_new(32.into()).unwrap();
+                let target_ledger = u32::from(host.get_ledger_sequence().unwrap()) + 1_u32;
+                host.put_contract_data(
+                    SEED.to_val(),
+                    committed_seed.to_val(),
+                    StorageType::Instance,
+                )
+                .unwrap();
+                host.put_contract_data(
+                    LEDGER.to_val(),
+                    U32Val::from(target_ledger).to_val(),
+                    StorageType::Instance,
+                )
+                .unwrap();
+                Val::VOID.to_val()
+            }
+        } else if func == REVEAL {
+            let already_committed: bool = host
+                .has_contract_data(SEED.to_val(), StorageType::Instance)
+                .unwrap()
+                .into();
+            if !already_committed {
+                ERR_NOT_COMMITTED
+            } else {
+                let reveal_ledger: u32 = host
+                    .get_contract_data(LEDGER.to_val(), StorageType::Instance)
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+                if u32::from(host.get_ledger_sequence().unwrap()) < reveal_ledger {
+                    ERR_REVEAL_TOO_EARLY
+                } else {
+                    let committed_seed = host
+                        .get_contract_data(SEED.to_val(), StorageType::Instance)
+                        .unwrap()
+                        .try_into()
+                        .unwrap();
+                    host.prng_reseed(committed_seed).unwrap();
+                    U64Val::try_from_val(host, &host.prng_u64_in_inclusive_range(0, 100).unwrap())
+                        .unwrap()
+                        .to_val()
+                }
+            }
         } else {
             return None;
         };
@@ -140,36 +237,32 @@ fn prng_test() -> Result<(), HostError> {
     Ok(())
 }
 
+fn host_and_contract_with_seed(
+    seed: [u8; 32],
+    testname: &'static str,
+) -> Result<(ObservedHost, AddressObject), HostError> {
+    let host = ObservedHost::new(testname, Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    host.set_base_prng_seed(seed)?;
+    let id = PRNGUsingTest::register_as(&host, &[0; 32]);
+    Ok((host, id))
+}
+
 // This test checks that setting the base seed to two different values
 // produces _frame_ PRNG behaviour that differs; and that setting it
 // to the same value twice produces the same behaviour both times.
 #[test]
 fn base_prng_seed() -> Result<(), HostError> {
-    fn hostand_contract_with_seed(
-        seed: [u8; 32],
-        testname: &'static str,
-    ) -> Result<(ObservedHost, AddressObject), HostError> {
-        let host = ObservedHost::new(testname, Host::test_host_with_recording_footprint());
-        host.enable_debug()?;
-        host.set_base_prng_seed(seed)?;
-
-        let dummy_id = [0; 32];
-        let dummy_address = ScAddress::Contract(Hash(dummy_id));
-        let id = host.add_host_object(dummy_address)?;
-        host.register_test_contract(id, std::rc::Rc::new(PRNGUsingTest))?;
-        Ok((host, id))
-    }
-
     let seed0 = [0; 32];
     let seed1 = [0; 32];
     let seed2 = [2; 32];
 
     let (host0, id0) =
-        hostand_contract_with_seed(seed0, "soroban-end-host::test::prng::base_prng_seed_0")?;
+        host_and_contract_with_seed(seed0, "soroban-end-host::test::prng::base_prng_seed_0")?;
     let (host1, id1) =
-        hostand_contract_with_seed(seed1, "soroban-end-host::test::prng::base_prng_seed_1")?;
+        host_and_contract_with_seed(seed1, "soroban-end-host::test::prng::base_prng_seed_1")?;
     let (host2, id2) =
-        hostand_contract_with_seed(seed2, "soroban-end-host::test::prng::base_prng_seed_2")?;
+        host_and_contract_with_seed(seed2, "soroban-end-host::test::prng::base_prng_seed_2")?;
 
     let args0 = host0.test_vec_obj::<u64>(&[0, 90])?;
     let args1 = host1.test_vec_obj::<u64>(&[0, 90])?;
@@ -198,34 +291,19 @@ fn base_prng_seed() -> Result<(), HostError> {
 // This is a variant of the above test, but using the bytes_new method.
 #[test]
 fn base_prng_seed_bytes() -> Result<(), HostError> {
-    fn hostand_contract_with_seed(
-        seed: [u8; 32],
-        testname: &'static str,
-    ) -> Result<(ObservedHost, AddressObject), HostError> {
-        let host = ObservedHost::new(testname, Host::test_host_with_recording_footprint());
-        host.enable_debug()?;
-        host.set_base_prng_seed(seed)?;
-
-        let dummy_id = [0; 32];
-        let dummy_address = ScAddress::Contract(Hash(dummy_id));
-        let id = host.add_host_object(dummy_address)?;
-        host.register_test_contract(id, std::rc::Rc::new(PRNGUsingTest))?;
-        Ok((host, id))
-    }
-
     let seed0 = [0; 32];
     let seed1 = [0; 32];
     let seed2 = [2; 32];
 
-    let (host0, id0) = hostand_contract_with_seed(
+    let (host0, id0) = host_and_contract_with_seed(
         seed0,
         "soroban-end-host::test::prng::base_prng_seed_bytes_0",
     )?;
-    let (host1, id1) = hostand_contract_with_seed(
+    let (host1, id1) = host_and_contract_with_seed(
         seed1,
         "soroban-end-host::test::prng::base_prng_seed_bytes_1",
     )?;
-    let (host2, id2) = hostand_contract_with_seed(
+    let (host2, id2) = host_and_contract_with_seed(
         seed2,
         "soroban-end-host::test::prng::base_prng_seed_bytes_2",
     )?;
@@ -303,4 +381,110 @@ fn chacha_test_vectors() {
     let ref_out5 = hex!("c2c64d378cd536374ae204b9ef933fcd1a8b2288b3dfa49672ab765b54ee27c78a970e0e955c14f3a88e741b97c286f75f8fc299e8148362fa198a39531bed6d");
     chacha_stream_2.fill_bytes(&mut out);
     assert_eq!(ref_out5, out);
+}
+
+#[test]
+fn check_caller_and_callee_seed_always_different() -> Result<(), HostError> {
+    let mut base_seed = [0; 32];
+    let (host0, id0) = host_and_contract_with_seed(
+        base_seed,
+        "soroban-end-host::test::prng::check_caller_and_callee_seed_always_different_0",
+    )?;
+    let id1 = PRNGUsingTest::register_as(&host0, &[1; 32]);
+    for i in 0..100 {
+        base_seed[0] = i;
+        host0.set_base_prng_seed(base_seed)?;
+        let caller_seed: BytesObject = host0
+            .call(id0, GETSEED.into(), host0.vec_new_from_slice(&[])?)?
+            .try_into()?;
+        let caller_seed = <[u8; 32]>::try_from_val(&*host0, &caller_seed)?;
+
+        let callee_seed: BytesObject = host0
+            .call(
+                id0,
+                SUBSEED.into(),
+                host0.vec_new_from_slice(&[id1.to_val()])?,
+            )?
+            .try_into()?;
+        let callee_seed = <[u8; 32]>::try_from_val(&*host0, &callee_seed)?;
+        assert_ne!(caller_seed, callee_seed);
+    }
+    Ok(())
+}
+
+#[test]
+fn try_until_chosen_number() -> Result<(), HostError> {
+    let base_seed = [0; 32];
+    let (host0, id0) = host_and_contract_with_seed(
+        base_seed,
+        "soroban-end-host::test::prng::try_until_chosen_number",
+    )?;
+
+    let mut i = 0;
+    while i < 10000 {
+        let args = host0.test_vec_obj::<u64>(&[0, 100])?;
+        let u64_0: U64Val = host0.call(id0, U64_RANGE.into(), args)?.try_into()?;
+        let u64_0 = u64::try_from_val(&*host0, &u64_0)?;
+        if u64_0 == 42 {
+            return Ok(());
+        }
+        i += 1;
+    }
+    Err(host0.err(
+        crate::xdr::ScErrorType::Context,
+        crate::xdr::ScErrorCode::InternalError,
+        "try_until_chosen_number failed to find 42",
+        &[],
+    ))
+}
+
+#[test]
+fn commit_reveal() -> Result<(), HostError> {
+    let base_seed = [0; 32];
+    let (host0, id0) =
+        host_and_contract_with_seed(base_seed, "soroban-end-host::test::prng::commit_reveal")?;
+
+    let args = host0.test_vec_obj::<u32>(&[])?;
+
+    // Reveal fails before commit.
+    assert!(host0
+        .try_call(id0, REVEAL.into(), args)
+        .unwrap()
+        .shallow_eq(&ERR_NOT_COMMITTED));
+
+    // First commit works.
+    host0.call(id0, COMMIT.into(), args)?;
+
+    // Second commit fails.
+    assert!(host0
+        .try_call(id0, COMMIT.into(), args)
+        .unwrap()
+        .shallow_eq(&ERR_ALREADY_COMMITTED));
+
+    // Early-by-time reveal fails.
+    assert!(host0
+        .try_call(id0, REVEAL.into(), args)
+        .unwrap()
+        .shallow_eq(&ERR_REVEAL_TOO_EARLY));
+
+    host0.with_mut_ledger_info(|linfo| {
+        linfo.sequence_number += 1;
+    })?;
+
+    // Eventual reveal ok.
+    assert!(host0.call(id0, REVEAL.into(), args).is_ok());
+
+    // Once revealed, every call is the same.
+    let mut i = 0;
+    let mut prev = None;
+    while i < 100 {
+        let u64_0: U64Val = host0.call(id0, REVEAL.into(), args)?.try_into()?;
+        let u64_0 = u64::try_from_val(&*host0, &u64_0)?;
+        if let Some(prev) = prev {
+            assert_eq!(prev, u64_0);
+        }
+        prev = Some(u64_0);
+        i += 1;
+    }
+    Ok(())
 }

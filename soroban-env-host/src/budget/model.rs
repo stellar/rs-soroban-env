@@ -35,19 +35,19 @@ pub trait HostCostModel {
 /// been scaled by this factor during parameter fitting to retain more significant
 /// digits. Thus to get the cost from the raw input, we need to scale the result
 /// back by the same factor.
-pub const COST_MODEL_LIN_TERM_SCALE_BITS: u32 = 7;
+const COST_MODEL_LIN_TERM_SCALE_BITS: u32 = 7;
 
 /// A helper type that wraps an u64 to signify the wrapped value have been scaled.
-#[derive(Clone, Default)]
-pub(crate) struct ScaledU64(pub(crate) u64);
+#[derive(Clone, Default, Debug)]
+pub struct ScaledU64(pub(crate) u64);
 
 impl ScaledU64 {
-    pub const fn unscale(self) -> u64 {
-        self.0 >> COST_MODEL_LIN_TERM_SCALE_BITS
-    }
-
     pub const fn from_unscaled_u64(u: u64) -> Self {
         ScaledU64(u << COST_MODEL_LIN_TERM_SCALE_BITS)
+    }
+
+    pub const fn unscale(self) -> u64 {
+        self.0 >> COST_MODEL_LIN_TERM_SCALE_BITS
     }
 
     pub const fn is_zero(&self) -> bool {
@@ -72,16 +72,19 @@ impl Display for ScaledU64 {
     }
 }
 
-impl Debug for ScaledU64 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Scaled({})", self.0)
+#[cfg(feature = "bench")]
+impl From<f64> for ScaledU64 {
+    fn from(unscaled: f64) -> Self {
+        let scaled = unscaled * ((1 << COST_MODEL_LIN_TERM_SCALE_BITS) as f64);
+        // We err on the side of overestimation by applying `ceil` to the input.
+        ScaledU64(scaled.ceil() as u64)
     }
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct MeteredCostComponent {
-    pub(crate) const_term: u64,
-    pub(crate) lin_term: ScaledU64,
+pub struct MeteredCostComponent {
+    pub const_term: u64,
+    pub lin_term: ScaledU64,
 }
 
 impl TryFrom<&ContractCostParamEntry> for MeteredCostComponent {

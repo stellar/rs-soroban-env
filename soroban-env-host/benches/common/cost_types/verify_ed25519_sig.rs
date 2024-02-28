@@ -15,7 +15,7 @@ impl HostCostMeasurement for VerifyEd25519SigMeasure {
     type Runner = VerifyEd25519SigRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> VerifyEd25519SigSample {
-        let size = 1 + input * Self::STEP_SIZE;
+        let size = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         let signingkey: SigningKey = SigningKey::generate(rng);
         let key: VerifyingKey = signingkey.verifying_key();
         let msg: Vec<u8> = (0..size).map(|x| x as u8).collect();

@@ -3,7 +3,7 @@ name = "test_no_std"
 version.workspace = true
 edition = "2021"
 publish = false
-rust-version = "1.74"
+rust-version.workspace = true
 
 [lib]
 doctest = false

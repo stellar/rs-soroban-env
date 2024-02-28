@@ -95,11 +95,11 @@ impl Host {
         match &entry.data {
             LedgerEntryData::ContractData(e) => match &e.val {
                 ScVal::ContractInstance(instance) => instance.metered_clone(self),
-                other => Err(err!(
-                    self,
-                    (ScErrorType::Storage, ScErrorCode::InternalError),
+                _ => Err(self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
                     "ledger entry for contract instance does not contain contract instance",
-                    *other
+                    &[],
                 )),
             },
             _ => Err(self.err(
@@ -243,7 +243,12 @@ impl Host {
     ) -> Result<(), HostError> {
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .extend_ttl(self, key.metered_clone(self)?, instance_threshold, extend_instance_to)
+            .extend_ttl(
+                self,
+                key.metered_clone(self)?,
+                instance_threshold,
+                extend_instance_to,
+            )
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
@@ -460,7 +465,7 @@ impl Host {
         t: StorageType,
     ) -> Result<(), HostError> {
         let durability: ContractDataDurability = t.try_into()?;
-        let key = self.contract_data_key_from_val(k, durability)?;
+        let key = self.storage_key_from_val(k, durability)?;
         // Currently the storage stores the whole ledger entries, while this
         // operation might only modify only the internal `ScVal` value. Thus we
         // need to only overwrite the value in case if there is already an

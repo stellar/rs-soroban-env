@@ -23,18 +23,10 @@ pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<EntryWithLiveUntil>, B
 /// The in-memory instance storage of the current running contract. Initially
 /// contains entries from the `ScMap` of the corresponding `ScContractInstance`
 /// contract data entry.
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct InstanceStorageMap {
     pub(crate) map: MeteredOrdMap<Val, Val, Host>,
     pub(crate) is_modified: bool,
-}
-
-#[cfg(feature = "testutils")]
-impl std::hash::Hash for StorageMap {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.map.hash(state);
-    }
 }
 
 impl InstanceStorageMap {
@@ -49,8 +41,7 @@ impl InstanceStorageMap {
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
 /// in a given transaction.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is only read.
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is only _allowed_ to be read.
@@ -77,16 +68,8 @@ pub trait SnapshotSource {
 /// running a "preflight" execution in [FootprintMode::Recording],
 /// against a suitably fresh [SnapshotSource].
 // Notes on metering: covered by the underneath `MeteredOrdMap`.
-#[derive(Clone, Default)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Default, Hash)]
 pub struct Footprint(pub FootprintMap);
-
-#[cfg(feature = "testutils")]
-impl std::hash::Hash for FootprintMap {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.map.hash(state);
-    }
-}
 
 impl Footprint {
     pub fn record_access(
@@ -491,5 +474,21 @@ impl Storage {
             }
         };
         Ok(())
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+impl Storage {
+    /// Unmetered function to access entry with lifetimes to test lifetime extensions.
+    pub fn get_entry_with_lifetime(
+        &self,
+        key: Rc<LedgerKey>,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        let entry = self.map.map.iter().find(|e| e.0 == key);
+
+        match entry {
+            None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
+            Some(pair_option) => Ok(pair_option.1.clone()),
+        }
     }
 }

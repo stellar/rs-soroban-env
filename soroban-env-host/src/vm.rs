@@ -14,11 +14,17 @@ mod func_info;
 
 #[cfg(feature = "bench")]
 pub(crate) use dispatch::dummy0;
+#[cfg(test)]
+pub(crate) use dispatch::protocol_gated_dummy;
 
 use crate::{
-    budget::AsBudget,
+    budget::{get_wasmi_config, AsBudget, Budget},
     err,
-    host::{error::TryBorrowOrErr, metered_clone::MeteredContainer},
+    host::{
+        error::TryBorrowOrErr,
+        metered_clone::MeteredContainer,
+        metered_hash::{CountingHasher, MeteredHash},
+    },
     meta::{self, get_ledger_protocol_version},
     xdr::{ContractCostType, Hash, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
@@ -29,11 +35,9 @@ use std::{cell::RefCell, io::Cursor, rc::Rc, time::Instant};
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 
-use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store, Value};
+use wasmi::{Engine, Instance, Linker, Memory, Module, Store, Value};
 
-#[cfg(any(test, feature = "testutils"))]
 use crate::VmCaller;
-#[cfg(any(test, feature = "testutils", feature = "bench"))]
 use wasmi::{Caller, StoreContextMut};
 impl wasmi::core::HostError for HostError {}
 
@@ -61,7 +65,6 @@ pub struct Vm {
     pub(crate) memory: Option<Memory>,
 }
 
-#[cfg(feature = "testutils")]
 impl std::hash::Hash for Vm {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.contract_id.hash(state);
@@ -150,7 +153,7 @@ impl Vm {
         Ok(())
     }
 
-    fn check_meta_section(host: &Host, m: &Module) -> Result<(), HostError> {
+    fn check_meta_section(host: &Host, m: &Module) -> Result<u64, HostError> {
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut limits = DEFAULT_XDR_RW_LIMITS;
             limits.len = env_meta.len();
@@ -158,7 +161,8 @@ impl Vm {
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;
-                Vm::check_contract_interface_version(host, v)
+                Vm::check_contract_interface_version(host, v)?;
+                Ok(v)
             } else {
                 Err(host.err(
                     ScErrorType::WasmVm,
@@ -196,52 +200,18 @@ impl Vm {
         Ok(())
     }
 
-    /// Constructs a new instance of a [Vm] within the provided [Host],
-    /// establishing a new execution context for a contract identified by
-    /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
-    ///
-    /// This function performs several steps:
-    ///
-    ///   - Parses and performs WASM validation on the module.
-    ///   - Checks that the module contains an [meta::INTERFACE_VERSION] that
-    ///     matches the host.
-    ///   - Checks that the module has no floating point code or `start`
-    ///     function, or post-MVP wasm extensions.
-    ///   - Instantiates the module, leaving it ready to accept function
-    ///     invocations.
-    ///   - Looks up and caches its linear memory export named `memory`
-    ///     if it exists.
-    ///
-    /// This method is called automatically as part of [Host::invoke_function]
-    /// and does not usually need to be called from outside the crate.
-    pub fn new(
+    /// Instantiates a VM given the arguments provided in [`Self::new`]
+    fn instantiate(
         host: &Host,
         contract_id: Hash,
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
-        let _span = tracy_span!("Vm::new");
-        let now = Instant::now();
-
         host.charge_budget(
             ContractCostType::VmInstantiation,
             Some(module_wasm_code.len() as u64),
         )?;
 
-        let mut config = wasmi::Config::default();
-        let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
-
-        // Turn off most optional wasm features, leaving on some
-        // post-MVP features commonly enabled by Rust and Clang.
-        config
-            .wasm_multi_value(false)
-            .wasm_mutable_global(true)
-            .wasm_saturating_float_to_int(false)
-            .wasm_sign_extension(true)
-            .floats(false)
-            .consume_fuel(true)
-            .fuel_consumption_mode(FuelConsumptionMode::Eager)
-            .set_fuel_costs(fuel_costs);
-
+        let config = get_wasmi_config(host)?;
         let engine = Engine::new(&config);
         let module = {
             let _span0 = tracy_span!("parse module");
@@ -249,7 +219,8 @@ impl Vm {
         };
 
         Self::check_max_args(host, &module)?;
-        Self::check_meta_section(host, &module)?;
+        let interface_version = Self::check_meta_section(host, &module)?;
+        let contract_proto = get_ledger_protocol_version(interface_version);
 
         let mut store = Store::new(&engine, host.clone());
         store.limiter(|host| host);
@@ -257,8 +228,39 @@ impl Vm {
         let mut linker = <Linker<Host>>::new(&engine);
 
         {
+            // We perform link-time protocol version gating here.
+            // Reasons for doing link-time instead of run-time check:
+            // 1. VM instantiation is performed in both contract upload and
+            //    execution, thus any errorous contract will be rejected at
+            //    upload time.
+            // 2. If a contract contains a call to an outdated host function,
+            //    i.e. `contract_protocol > hf.max_supported_protocol`, failing
+            //    early is preferred from resource usage perspective.
+            // 3. If a contract contains a call to an non-existent host
+            //    function, the current (correct) behavior is to return
+            //    `Wasmi::LinkerError::MissingDefinition` error (which gets
+            //    converted to a `(WasmVm, InvalidAction)`). If that host
+            //    function is defined in a later protocol, and we replay that
+            //    contract (in the earlier protocol where it belongs), not
+            //    linking the function preserves the right behavior and error
+            //    code.
             let _span0 = tracy_span!("define host functions");
+            let ledger_proto = host.with_ledger_info(|li| Ok(li.protocol_version))?;
             for hf in HOST_FUNCTIONS {
+                if let Some(min_proto) = hf.min_proto {
+                    if contract_proto < min_proto || ledger_proto < min_proto {
+                        // We skip linking this hf instead of returning an error
+                        // because we have to support old contracts during replay.
+                        continue;
+                    }
+                }
+                if let Some(max_proto) = hf.max_proto {
+                    if contract_proto > max_proto || ledger_proto > max_proto {
+                        // We skip linking this hf instead of returning an error
+                        // because we have to support old contracts during replay.
+                        continue;
+                    }
+                }
                 let func = (hf.wrap)(&mut store);
                 host.map_err(
                     linker
@@ -288,19 +290,53 @@ impl Vm {
         // Here we do _not_ supply the store with any fuel. Fuel is supplied
         // right before the VM is being run, i.e., before crossing the host->VM
         // boundary.
-        let vm = Rc::new(Self {
+        Ok(Rc::new(Self {
             contract_id,
             module,
             store: RefCell::new(store),
             instance,
             memory,
-        });
+        }))
+    }
 
-        host.as_budget().track_time(
-            ContractCostType::VmInstantiation,
-            now.elapsed().as_nanos() as u64,
-        )?;
-        Ok(vm)
+    /// Constructs a new instance of a [Vm] within the provided [Host],
+    /// establishing a new execution context for a contract identified by
+    /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
+    ///
+    /// This function performs several steps:
+    ///
+    ///   - Parses and performs WASM validation on the module.
+    ///   - Checks that the module contains an [meta::INTERFACE_VERSION] that
+    ///     matches the host.
+    ///   - Checks that the module has no floating point code or `start`
+    ///     function, or post-MVP wasm extensions.
+    ///   - Instantiates the module, leaving it ready to accept function
+    ///     invocations.
+    ///   - Looks up and caches its linear memory export named `memory`
+    ///     if it exists.
+    ///
+    /// This method is called automatically as part of [Host::invoke_function]
+    /// and does not usually need to be called from outside the crate.
+    pub fn new(
+        host: &Host,
+        contract_id: Hash,
+        module_wasm_code: &[u8],
+    ) -> Result<Rc<Self>, HostError> {
+        let _span = tracy_span!("Vm::new");
+
+        if cfg!(not(target_family = "wasm")) {
+            let now = Instant::now();
+            let vm = Self::instantiate(host, contract_id, module_wasm_code)?;
+
+            host.as_budget().track_time(
+                ContractCostType::VmInstantiation,
+                now.elapsed().as_nanos() as u64,
+            )?;
+
+            Ok(vm)
+        } else {
+            Self::instantiate(host, contract_id, module_wasm_code)
+        }
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {
@@ -464,8 +500,6 @@ impl Vm {
     /// Utility function that synthesizes a `VmCaller<Host>` configured to point
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
-    #[cfg(any(test, feature = "testutils"))]
-    #[allow(unused)]
     pub(crate) fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
@@ -488,38 +522,33 @@ impl Vm {
         f(caller)
     }
 
-    #[cfg(all(test, not(feature = "next"), feature = "testutils"))]
-    pub(crate) fn memory_hash_and_size(&self) -> (u64, usize) {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+    pub(crate) fn memory_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
+        use std::hash::Hasher;
         if let Some(mem) = self.memory {
-            if let Ok((hash, size)) = self.with_vmcaller(|vmcaller| {
-                let mut state = DefaultHasher::default();
+            self.with_vmcaller(|vmcaller| {
+                let mut state = CountingHasher::default();
                 let data = mem.data(vmcaller.try_ref()?);
-                data.hash(&mut state);
+                data.metered_hash(&mut state, budget)?;
                 Ok((state.finish(), data.len()))
-            }) {
-                return (hash, size);
-            }
+            })
+        } else {
+            Ok((0, 0))
         }
-        (0, 0)
     }
 
-    #[cfg(all(test, not(feature = "next"), feature = "testutils"))]
     // This is pretty weak: we just observe the state that wasmi exposes through
     // wasm _exports_. There might be tables or globals a wasm doesn't export
     // but there's no obvious way to observe them.
-    pub(crate) fn exports_hash_and_size(&self) -> (u64, usize) {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+    pub(crate) fn exports_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
+        use std::hash::Hasher;
         use wasmi::{Extern, StoreContext};
-        if let Ok((hash, size)) = self.with_vmcaller(|vmcaller| {
+        self.with_vmcaller(|vmcaller| {
             let ctx: StoreContext<'_, _> = vmcaller.try_ref()?.into();
             let mut size: usize = 0;
-            let mut state = DefaultHasher::default();
+            let mut state = CountingHasher::default();
             for export in self.instance.exports(vmcaller.try_ref()?) {
                 size = size.saturating_add(1);
-                export.name().hash(&mut state);
+                export.name().metered_hash(&mut state, budget)?;
 
                 match export.into_extern() {
                     // Funcs are immutable, memory we hash separately above.
@@ -527,26 +556,30 @@ impl Vm {
 
                     Extern::Table(t) => {
                         let sz = t.size(&ctx);
-                        sz.hash(&mut state);
+                        sz.metered_hash(&mut state, budget)?;
                         size = size.saturating_add(sz as usize);
                         for i in 0..sz {
                             if let Some(elem) = t.get(&ctx, i) {
+                                // This is a slight fudge to avoid having to
+                                // define a ton of additional MeteredHash impls
+                                // for wasmi substructures, since there is a
+                                // bounded size on the string representation of
+                                // a value, we're comfortable going temporarily
+                                // over budget here.
                                 let s = format!("{:?}", elem);
-                                s.hash(&mut state);
+                                budget.charge(ContractCostType::MemAlloc, Some(s.len() as u64))?;
+                                s.metered_hash(&mut state, budget)?;
                             }
                         }
                     }
                     Extern::Global(g) => {
                         let s = format!("{:?}", g.get(&ctx));
-                        s.hash(&mut state);
+                        budget.charge(ContractCostType::MemAlloc, Some(s.len() as u64))?;
+                        s.metered_hash(&mut state, budget)?;
                     }
                 }
             }
             Ok((state.finish(), size))
-        }) {
-            (hash, size)
-        } else {
-            (0, 0)
-        }
+        })
     }
 }

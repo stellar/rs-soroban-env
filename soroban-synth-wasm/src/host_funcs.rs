@@ -35,7 +35,7 @@ macro_rules! generate_call_emitter_functions {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident ($($arg:ident:$type:ty),*) -> $ret:ty }
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident ($($arg:ident:$type:ty),*) -> $ret:ty }
                 )*
             }
         )*
@@ -44,8 +44,10 @@ macro_rules! generate_call_emitter_functions {
     =>  // The part of the macro above this line is a matcher; below is its expansion.
 
     {
-        // This macro expands to a single item: an impl block with a set of methods
-        // for emitting wasm that calls host functions.
+        // This macro expands to a single item: an impl block with a set of
+        // methods for emitting wasm that calls host functions. We do not
+        // perform any protocol version checks here, since this module is for
+        // synthesizing test wasms calling host functions.
         impl FuncEmitter
         {
         $(

@@ -76,20 +76,47 @@ pub trait EnvBase: Sized + Clone {
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> !;
 
+    #[cfg(all(feature = "std", feature = "testutils"))]
+    #[deprecated(note = "replaced by trace_env_call")]
+    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    #[cfg(all(feature = "std", feature = "testutils"))]
+    #[deprecated(note = "replaced by trace_env_ret")]
+    fn env_ret_hook(
+        &self,
+        _fname: &'static str,
+        _res: &Result<String, &Self::Error>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// Return true if the environment wants to receive trace calls and and
+    /// returns using [`Self::trace_env_call`] and [`Self::trace_env_ret`].
+    #[cfg(feature = "std")]
+    fn tracing_enabled(&self) -> bool {
+        false
+    }
+
     /// A general interface for tracing all env-method calls, intended to
     /// be called from macros that do dispatch on all such methods.
-    #[cfg(all(feature = "std", feature = "testutils"))]
-    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
+    #[cfg(feature = "std")]
+    fn trace_env_call(
+        &self,
+        _fname: &'static str,
+        _args: &[&dyn core::fmt::Debug],
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     /// A general interface for tracing all env-method returns, intended to
     /// be called from macros that do dispatch on all such methods.
-    #[cfg(all(feature = "std", feature = "testutils"))]
-    fn env_ret_hook(
+    #[cfg(feature = "std")]
+    fn trace_env_ret(
         &self,
         _fname: &'static str,
-        _res: &Result<String, &Self::Error>,
+        _res: &Result<&dyn core::fmt::Debug, &Self::Error>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -168,7 +195,7 @@ pub trait EnvBase: Sized + Clone {
     fn string_new_from_slice(&self, slice: &[u8]) -> Result<StringObject, Self::Error>;
 
     /// Form a new `Symbol` host object from a slice of client memory.
-    fn symbol_new_from_slice(&self, slice: &str) -> Result<SymbolObject, Self::Error>;
+    fn symbol_new_from_slice(&self, slice: &[u8]) -> Result<SymbolObject, Self::Error>;
 
     /// Form a new `Map` host object from a slice of symbol-names and a slice of values.
     /// Keys must be in sorted order.
@@ -198,6 +225,14 @@ pub trait EnvBase: Sized + Clone {
     /// events are enabled. When running on host, logs directly; when running on
     /// guest, redirects through log_from_linear_memory.
     fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, Self::Error>;
+
+    /// Check the current ledger protocol version against a provided lower
+    /// bound, error if protocol version is out-of-bound.
+    fn check_protocol_version_lower_bound(&self, lower_bound: u32) -> Result<(), Self::Error>;
+
+    /// Check the current ledger protocol version against a provided upper
+    /// bound, error if protocol version is out-of-bound.
+    fn check_protocol_version_upper_bound(&self, upper_bound: u32) -> Result<(), Self::Error>;
 }
 
 /// This trait is used by macro-generated dispatch and forwarding functions to
@@ -302,6 +337,7 @@ generate_call_macro_with_all_host_functions!("env.json");
 // trait.
 macro_rules! host_function_helper {
     {
+        $($min_proto:literal)?, $($max_proto:literal)?,
         $(#[$attr:meta])*
         fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
@@ -332,7 +368,7 @@ macro_rules! generate_env_trait {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
         )*
@@ -360,7 +396,7 @@ macro_rules! generate_env_trait {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the Env trait.
-                    host_function_helper!{$(#[$fn_attr])* fn $fn_id $args -> $ret}
+                    host_function_helper!{$($min_proto)?, $($max_proto)?, $(#[$fn_attr])* fn $fn_id $args -> $ret}
                 )*
             )*
         }

@@ -78,6 +78,7 @@ impl<'a, T> VmCaller<'a, T> {
 // trait.
 macro_rules! host_function_helper {
     {
+        $($min_proto:literal)?, $($max_proto:literal)?,
         $(#[$attr:meta])*
         fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty
     }
@@ -109,7 +110,7 @@ macro_rules! generate_vmcaller_checked_env_trait {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
         )*
@@ -146,7 +147,7 @@ macro_rules! generate_vmcaller_checked_env_trait {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the VmCallerEnv trait.
-                    host_function_helper!{$(#[$fn_attr])* fn $fn_id $args -> $ret}
+                    host_function_helper!{$($min_proto)?, $($max_proto)?, $(#[$fn_attr])* fn $fn_id $args -> $ret}
                 )*
             )*
         }
@@ -169,7 +170,7 @@ call_macro_with_all_host_functions! { generate_vmcaller_checked_env_trait }
 // and produces the the corresponding method declaration to be used in the Env
 // trait.
 macro_rules! vmcaller_none_function_helper {
-    {fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
+    {$($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
     {
         // We call `augment_err_result` here to give the Env a chance to attach
@@ -177,24 +178,33 @@ macro_rules! vmcaller_none_function_helper {
         // that didn't have an Env on hand when creating the error. This will at
         // least localize the error to a given Env call.
         fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error> {
+            // Check the ledger protocol version against the function-specified
+            // boundaries, this prevents calling a host function using the host
+            // directly as `Env` (i.e. native mode) when the protocol version is
+            // out of bound.
+            $( self.check_protocol_version_lower_bound($min_proto)?; )?
+            $( self.check_protocol_version_upper_bound($max_proto)?; )?
+
             #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
             let _span = tracy_span!(core::stringify!($fn_id));
-            #[cfg(all(feature = "std", feature = "testutils"))]
+            #[cfg(feature = "std")]
+            if self.tracing_enabled()
             {
-                self.env_call_hook(&core::stringify!($fn_id), &[$(format!("{:?}", $arg)),*])?;
+                self.trace_env_call(&core::stringify!($fn_id), &[$(&$arg),*])?;
             }
             let res: Result<_, _> = self.augment_err_result(<Self as VmCallerEnv>::$fn_id(self, &mut VmCaller::none(), $($arg.check_env_arg(self)?),*));
             let res = match res {
                 Ok(ok) => Ok(ok.check_env_arg(self)?),
                 Err(err) => Err(err)
             };
-            #[cfg(all(feature = "std", feature = "testutils"))]
+            #[cfg(feature = "std")]
+            if self.tracing_enabled()
             {
-                let res_str: Result<String,&Self::Error> = match &res {
-                    Ok(ok) => Ok(format!("{:?}", ok)),
+                let dyn_res: Result<&dyn core::fmt::Debug,&Self::Error> = match &res {
+                    Ok(ref ok) => Ok(ok),
                     Err(err) => Err(err)
                 };
-                self.env_ret_hook(&core::stringify!($fn_id), &res_str)?;
+                self.trace_env_ret(&core::stringify!($fn_id), &dyn_res)?;
             }
             res
         }
@@ -222,7 +232,7 @@ macro_rules! impl_env_for_vmcaller_env {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
         )*
@@ -247,7 +257,7 @@ macro_rules! impl_env_for_vmcaller_env {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the impl.
-                    vmcaller_none_function_helper!{fn $fn_id $args -> $ret}
+                    vmcaller_none_function_helper!{$($min_proto)?, $($max_proto)?, fn $fn_id $args -> $ret}
                 )*
             )*
         }

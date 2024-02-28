@@ -1,17 +1,18 @@
-use rand::RngCore;
-use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
-use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
-
+use crate::e2e_invoke::ledger_entry_to_ledger_key;
 use crate::{
     budget::Budget,
+    builtin_contracts::testutils::create_account,
     storage::{SnapshotSource, Storage},
     xdr::{
         AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScErrorCode,
         ScErrorType, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, StorageType,
-    SymbolSmall, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
+    StorageType, SymbolSmall, Val, VecObject,
 };
+use rand::RngCore;
+use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
+use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
 
 /// Catch panics while suppressing the default panic hook that prints to the
 /// console.
@@ -119,6 +120,16 @@ impl MockSnapshotSource {
     pub fn new() -> Self {
         Self(BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new())
     }
+
+    pub fn from_entries(entries: Vec<(LedgerEntry, Option<u32>)>) -> Self {
+        let mut map = BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new();
+        let dummy_budget = Budget::default();
+        for (e, maybe_ttl) in entries {
+            let key = Rc::new(ledger_entry_to_ledger_key(&e, &dummy_budget).unwrap());
+            map.insert(key, (Rc::new(e), maybe_ttl));
+        }
+        Self(map)
+    }
 }
 impl SnapshotSource for MockSnapshotSource {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
@@ -132,6 +143,17 @@ impl SnapshotSource for MockSnapshotSource {
     fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
         Ok(self.0.contains_key(key))
     }
+}
+
+#[cfg(test)]
+pub(crate) fn interface_meta_with_custom_versions(proto: u32, pre: u32) -> Vec<u8> {
+    use crate::xdr::{Limited, Limits, ScEnvMetaEntry, WriteXdr};
+    let iv = (proto as u64) << 32 | pre as u64;
+    let entry = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(iv);
+    let bytes = Vec::<u8>::new();
+    let mut w = Limited::new(bytes, Limits::none());
+    entry.write_xdr(&mut w).unwrap();
+    w.inner
 }
 
 impl Host {
@@ -260,12 +282,22 @@ impl Host {
         .unwrap()
     }
 
-    pub fn test_host_with_wasms_and_enforcing_footprint(
+    pub fn new_recording_fuzz_host(
         contract_wasms: &[&[u8]],
-        contract_zero_extra_read_keys: &[(ScVal, StorageType)],
-        contract_zero_extra_write_keys: &[(ScVal, StorageType)],
-    ) -> (Host, Vec<AddressObject>) {
+        data_keys: &BTreeMap<ScVal, (StorageType, bool)>,
+        n_signers: usize,
+    ) -> (Host, Vec<AddressObject>, Vec<ed25519_dalek::SigningKey>) {
+        use crate::builtin_contracts::testutils::{
+            generate_signing_key, signing_key_to_account_id,
+        };
+
         let host = Self::test_host_with_recording_footprint();
+        host.switch_to_recording_auth(false).unwrap();
+        host.with_budget(|budget| {
+            budget.reset_unlimited()?;
+            Ok(())
+        })
+        .unwrap();
         let mut contract_addresses = Vec::new();
         for contract_wasm in contract_wasms.iter() {
             contract_addresses.push(host.register_test_contract_wasm(contract_wasm));
@@ -275,25 +307,159 @@ impl Host {
         else {
             panic!()
         };
+
         let test = SymbolSmall::try_from_str("test").unwrap();
-        host.with_test_contract_frame(contract_hash, test.into(), || {
-            for (rv, rt) in contract_zero_extra_read_keys {
-                let val = host.to_host_val(rv).unwrap();
-                host.has_contract_data(val, *rt).unwrap();
-            }
-            for (wv, wt) in contract_zero_extra_write_keys {
-                let val = host.to_host_val(wv).unwrap();
-                host.del_contract_data(val, *wt).unwrap();
+
+        // First step: insert all the data values in question into the storage map.
+        host.with_test_contract_frame(contract_hash.clone(), test.into(), || {
+            for (k, (t, _)) in data_keys.iter() {
+                let v = host.to_host_val(k).unwrap();
+                host.put_contract_data(v, v, *t).unwrap();
             }
             Ok(Val::VOID.into())
         })
         .unwrap();
-        host.with_mut_storage(|storage| {
+
+        // Second step: generate some accounts to sign things with.
+        let signing_keys = (0..n_signers)
+            .map(|_| generate_signing_key(&host))
+            .collect();
+        for signing_key in &signing_keys {
+            create_account(
+                &host,
+                &signing_key_to_account_id(signing_key),
+                vec![(&signing_key, 1)],
+                100_000_000,
+                1,
+                [1, 0, 0, 0],
+                None,
+                None,
+                0,
+            )
+        }
+
+        (host, contract_addresses, signing_keys)
+    }
+
+    pub fn switch_fuzz_host_to_enforcing(
+        &self,
+        data_keys: &BTreeMap<ScVal, (StorageType, bool)>,
+        signing_keys: &[ed25519_dalek::SigningKey],
+    ) {
+        use crate::builtin_contracts::testutils::TestSigner;
+        use crate::xdr::{
+            HashIdPreimage, HashIdPreimageSorobanAuthorization, SorobanAddressCredentials,
+            SorobanAuthorizationEntry, SorobanCredentials,
+        };
+        self.with_budget(|budget| {
+            budget.reset_unlimited()?;
+            Ok(())
+        })
+        .unwrap();
+
+        // Modify footprint entries to read-only-ness as required, synthesize
+        // empty storage-map entries that were accessed by keys the contract made
+        // up, and switch to enforcing mode.
+        self.with_mut_storage(|storage| {
+            storage.footprint.0 = MeteredOrdMap::from_exact_iter(
+                storage
+                    .footprint
+                    .0
+                    .iter(self.budget_ref())
+                    .unwrap()
+                    .map(|(k, accesstype)| {
+                        let mut accesstype = *accesstype;
+                        if let LedgerKey::ContractData(k) = k.as_ref() {
+                            if let Some((_, ro)) = data_keys.get(&k.key) {
+                                if *ro {
+                                    accesstype = crate::storage::AccessType::ReadOnly;
+                                } else {
+                                    accesstype = crate::storage::AccessType::ReadWrite;
+                                }
+                            }
+                        }
+                        (k.clone(), accesstype)
+                    }),
+                self.budget_ref(),
+            )
+            .unwrap();
+
+            // Synthesize empty entries for anything the contract made up (these
+            // will be in the footprint but not yet in the map, which is an
+            // invariant violation we need to repair here).
+            let mut map = BTreeMap::new();
+            for (k, v) in storage.map.iter(self.budget_ref()).unwrap() {
+                map.insert(k.clone(), v.clone());
+            }
+            for (k, _) in storage.footprint.0.iter(self.budget_ref()).unwrap() {
+                if !map.contains_key(k) {
+                    map.insert(k.clone(), None);
+                }
+            }
+            // Reset any nonces so they can be consumed.
+            for (k, v) in map.iter_mut() {
+                if let LedgerKey::ContractData(k) = k.as_ref() {
+                    if let ScVal::LedgerKeyNonce(_) = &k.key {
+                        *v = None;
+                    }
+                }
+            }
+            storage.map = MeteredOrdMap::from_exact_iter(
+                map.iter().map(|(k, v)| (k.clone(), v.clone())),
+                self.budget_ref(),
+            )
+            .unwrap();
             storage.mode = crate::storage::FootprintMode::Enforcing;
             Ok(())
         })
         .unwrap();
-        (host, contract_addresses)
+
+        // Sign and install auth entries for all the recorded auth payloads.
+        let mut auth_entries = Vec::new();
+        let account_signers = signing_keys
+            .iter()
+            .map(TestSigner::account)
+            .collect::<Vec<_>>();
+        for payload in self.get_recorded_auth_payloads().unwrap().iter() {
+            for signer in account_signers.iter() {
+                let Some(address) = &payload.address else {
+                    continue;
+                };
+                let Some(nonce) = payload.nonce else { continue };
+                if *address == ScAddress::Account(signer.account_id()) {
+                    let address = address.clone();
+                    let signature_expiration_ledger =
+                        u32::from(self.get_ledger_sequence().unwrap()) + 10000;
+                    let network_id = self
+                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                        .unwrap()
+                        .try_into()
+                        .unwrap();
+                    let signature_payload_preimage =
+                        HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                            network_id,
+                            invocation: payload.invocation.clone(),
+                            nonce,
+                            signature_expiration_ledger,
+                        });
+                    let signature_payload =
+                        self.metered_hash_xdr(&signature_payload_preimage).unwrap();
+                    let signature = signer.sign(&self, &signature_payload);
+                    let credentials = SorobanCredentials::Address(SorobanAddressCredentials {
+                        address: address.clone(),
+                        nonce: nonce,
+                        signature_expiration_ledger,
+                        signature,
+                    });
+                    let entry = SorobanAuthorizationEntry {
+                        credentials,
+                        root_invocation: payload.invocation.clone(),
+                    };
+                    auth_entries.push(entry);
+                }
+            }
+        }
+        self.set_authorization_entries(auth_entries).unwrap();
     }
 
     #[cfg(all(test, feature = "testutils"))]
@@ -303,7 +469,7 @@ impl Host {
         func: crate::Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
-        use crate::{budget::AsBudget, host::HostLifecycleEvent};
+        use crate::{budget::AsBudget, host::TraceEvent};
         use soroban_bench_utils::HostTracker;
         use std::cell::RefCell;
 
@@ -315,8 +481,8 @@ impl Host {
         if std::env::var("EXCLUDE_VM_INSTANTIATION").is_ok() {
             let ht2 = ht.clone();
             let budget2 = budget.clone();
-            self.set_lifecycle_event_hook(Some(Rc::new(move |_, evt| {
-                if let HostLifecycleEvent::PushCtx(_) = evt {
+            self.set_trace_hook(Some(Rc::new(move |_, evt| {
+                if let TraceEvent::PushCtx(_) = evt {
                     budget2.reset_unlimited()?;
                     ht2.borrow_mut().start(None);
                 }
@@ -326,7 +492,7 @@ impl Host {
             ht.borrow_mut().start(None);
         }
         let val = self.call(contract, func, args);
-        self.set_lifecycle_event_hook(None)?;
+        self.set_trace_hook(None)?;
 
         let (cpu_actual, mem_actual, time_nsecs) = Rc::into_inner(ht).unwrap().into_inner().stop();
 
@@ -370,8 +536,11 @@ impl Host {
 
 #[cfg(test)]
 pub(crate) mod wasm {
+    use super::interface_meta_with_custom_versions;
     use crate::{Symbol, Tag, U32Val, Val};
+    use soroban_env_common::meta::{get_pre_release_version, INTERFACE_VERSION};
     use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
+    use wasm_encoder::{ConstExpr, Elements, RefType};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         let mut fe = ModEmitter::default().func(Arity(1), 0);
@@ -454,7 +623,7 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass2").unwrap());
         let (mut me, f2) = fe.finish();
         // store in table
-        me.define_elems(&[f0, f1, f2]);
+        me.define_elem_funcs(&[f0, f1, f2]);
         let ty = me.get_fn_type(Arity(0), Arity(1));
         // the caller
         fe = me.func(Arity(1), 0);
@@ -723,7 +892,7 @@ pub(crate) mod wasm {
         fe.push(Symbol::try_from_small_str("pass2").unwrap());
         let (mut me, f2) = fe.finish();
         // store in table, FuncRef(100) is invalid
-        me.define_elems(&[f0, f1, f2, FuncRef(100)]);
+        me.define_elem_funcs(&[f0, f1, f2, FuncRef(100)]);
         me.finish_no_validate()
     }
 
@@ -744,13 +913,51 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
-    pub(crate) fn wasm_module_large_elements(n: u32) -> Vec<u8> {
-        let mut me = ModEmitter::from_configs(1, n);
+    // if n > m, we have oob elements
+    pub(crate) fn wasm_module_large_elements(m: u32, n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::from_configs(1, m);
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
-        // store in table, FuncRef(100) is invalid
-        me.define_elems(vec![f0; n as usize].as_slice());
+        me.define_elem_funcs(vec![f0; n as usize].as_slice());
         me.finish()
+    }
+
+    pub(crate) fn wasm_module_various_constexpr_in_elements(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+
+        match case {
+            0 =>
+            // err: wrong type, expect i32, passing i64
+            {
+                me.define_active_elements(
+                    None,
+                    &ConstExpr::i64_const(0),
+                    Elements::Functions(&[f0.0]),
+                )
+            }
+            // err: fp
+            1 => me.define_active_elements(
+                None,
+                &ConstExpr::f64_const(1.0),
+                Elements::Functions(&[f0.0]),
+            ),
+            // err: simd
+            2 => me.define_active_elements(
+                None,
+                &ConstExpr::v128_const(1),
+                Elements::Functions(&[f0.0]),
+            ),
+            // err: wrong type, expect i32, passing funcref
+            3 => me.define_active_elements(
+                None,
+                &ConstExpr::ref_func(f0.0),
+                Elements::Functions(&[f0.0]),
+            ),
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
     }
 
     pub(crate) fn wasm_module_large_globals(n: u32) -> Vec<u8> {
@@ -759,5 +966,129 @@ pub(crate) mod wasm {
             me.define_global_i64(i as i64, true, None);
         }
         me.finish()
+    }
+
+    pub(crate) fn wasm_module_various_constexr_in_global(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        match case {
+            0 =>
+            // err: mismatch
+            {
+                me.define_global(wasm_encoder::ValType::I32, true, &ConstExpr::i64_const(1))
+            }
+            1 =>
+            // err: fp
+            {
+                me.define_global(wasm_encoder::ValType::F32, true, &ConstExpr::f32_const(1.0))
+            }
+            2 =>
+            // err: simd
+            {
+                me.define_global(wasm_encoder::ValType::V128, true, &ConstExpr::v128_const(1))
+            }
+            3 =>
+            // okay: func
+            {
+                let fr = me.import_func("t", "_", Arity(0));
+                me.define_global(
+                    wasm_encoder::ValType::Ref(RefType::FUNCREF),
+                    true,
+                    &ConstExpr::ref_func(fr.0),
+                )
+            }
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_various_constexr_in_data_segment(case: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // an imported function
+        let f0 = me.import_func("t", "_", Arity(0));
+
+        match case {
+            0 =>
+            // err: wrong type, expect i32, passing i64
+            {
+                me.define_active_data(0, &ConstExpr::i64_const(0), vec![0; 8]);
+            }
+            // err: fp
+            1 => {
+                me.define_active_data(0, &ConstExpr::f64_const(0.0), vec![0; 8]);
+            }
+            // err: simd
+            2 => {
+                me.define_active_data(0, &ConstExpr::v128_const(0), vec![0; 8]);
+            }
+            // err: wrong type, expect i32, passing funcref
+            3 => {
+                me.define_active_data(0, &ConstExpr::ref_func(f0.0), vec![0; 8]);
+            }
+            _ => panic!("not a valid option"),
+        }
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_extern_ref() -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        me.table(RefType::EXTERNREF, 2, None);
+        me.custom_section(
+            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
+            &soroban_env_common::meta::XDR,
+        );
+        me.finish_no_validate()
+    }
+
+    pub(crate) fn wasm_module_with_additional_tables(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        // by default, module already includes a table, here we are creating
+        // additional ones
+        for _i in 0..n {
+            me.table(RefType::FUNCREF, 2, None);
+        }
+        // wasmparser has an limit of 100 tables. wasmi does not have such a limit
+        me.finish_no_validate()
+    }
+
+    // The only type allowed in the MVP is the function type. There are more
+    // composite types defined by the GC proposal, which should not be allowed
+    // and we will verify that in another test.
+    pub(crate) fn wasm_module_with_many_func_types(n: u32) -> Vec<u8> {
+        let mut me = ModEmitter::default();
+        for _i in 0..n {
+            // it is allowed to define the same types over and over
+            me.add_fn_type_no_check(Arity(0), Arity(0));
+        }
+        me.finish()
+    }
+
+    pub(crate) fn wasm_module_with_simd_add_i32x4() -> Vec<u8> {
+        let me = ModEmitter::default();
+        let mut fe = me.func(Arity(0), 0);
+        // we load [u32, u32, u32, u32] x 2, add them and store back
+        fe.i32_const(32); // ptr for storing the result
+        fe.i32_const(0); // ptr for the first 4xi32
+        fe.v128_load(0, 0);
+        fe.i32_const(16); // ptr for the second 4xi32
+        fe.v128_load(0, 0);
+        fe.i32x4_add();
+        fe.v128_store(0, 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_calling_protocol_gated_host_fn(wasm_proto: u32) -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        let pre = get_pre_release_version(INTERFACE_VERSION);
+        me.custom_section(
+            &"contractenvmetav0",
+            interface_meta_with_custom_versions(wasm_proto, pre).as_slice(),
+        );
+        // protocol_gated_dummy
+        let f0 = me.import_func("t", "0", Arity(0));
+        // the caller
+        let mut fe = me.func(Arity(0), 0);
+        fe.call_func(f0);
+        fe.finish_and_export("test").finish()
     }
 }

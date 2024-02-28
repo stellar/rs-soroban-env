@@ -6,7 +6,8 @@ mod wasmi_helper;
 
 pub(crate) use limits::DepthLimiter;
 pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
-pub use model::COST_MODEL_LIN_TERM_SCALE_BITS;
+pub use model::{MeteredCostComponent, ScaledU64};
+pub(crate) use wasmi_helper::{get_wasmi_config, load_calibrated_fuel_costs};
 
 use std::{
     cell::{RefCell, RefMut},
@@ -21,8 +22,6 @@ use crate::{
 };
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
-use model::ScaledU64;
-use wasmi_helper::FuelConfig;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CostTracker {
@@ -138,7 +137,7 @@ pub(crate) struct BudgetImpl {
     /// For the purpose of calibration and reporting; not used for budget-limiting nor does it affect consensus
     tracker: BudgetTracker,
     is_in_shadow_mode: bool,
-    fuel_config: FuelConfig,
+    fuel_costs: wasmi::FuelCosts,
     depth_limit: u32,
 }
 
@@ -155,7 +154,7 @@ impl BudgetImpl {
             mem_bytes: BudgetDimension::try_from_config(mem_cost_params)?,
             tracker: Default::default(),
             is_in_shadow_mode: false,
-            fuel_config: Default::default(),
+            fuel_costs: load_calibrated_fuel_costs(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
@@ -247,7 +246,7 @@ impl Default for BudgetImpl {
             mem_bytes: BudgetDimension::default(),
             tracker: Default::default(),
             is_in_shadow_mode: false,
-            fuel_config: Default::default(),
+            fuel_costs: load_calibrated_fuel_costs(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
@@ -584,6 +583,57 @@ impl Display for BudgetImpl {
     }
 }
 
+#[allow(unused)]
+#[cfg(test)]
+impl BudgetImpl {
+    // Utility function for printing default budget cost parameters in cpp format
+    // so that it can be ported into stellar-core.
+    // When needing it, copy and run the following test
+    // ```
+    // #[test]
+    // fn test() {
+    //     let bi = BudgetImpl::default();
+    //     bi.print_default_params_in_cpp();
+    // }
+    // ```
+    // and copy the screen output.
+    fn print_default_params_in_cpp(&self) {
+        // cpu
+        println!();
+        println!();
+        println!();
+        for ct in ContractCostType::variants() {
+            let Some(cpu) = self.cpu_insns.get_cost_model(ct) else {
+                continue;
+            };
+            println!("case {}:", ct.name());
+            println!(
+                "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
+                cpu.const_term, cpu.lin_term.0
+            );
+            println!("break;");
+        }
+        // mem
+        println!();
+        println!();
+        println!();
+        for ct in ContractCostType::variants() {
+            let Some(mem) = self.mem_bytes.get_cost_model(ct) else {
+                continue;
+            };
+            println!("case {}:", ct.name());
+            println!(
+                "params[val] = ContractCostParamEntry{{ExtensionPoint{{0}}, {}, {}}};",
+                mem.const_term, mem.lin_term.0
+            );
+            println!("break;");
+        }
+        println!();
+        println!();
+        println!();
+    }
+}
+
 #[derive(Clone)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
@@ -728,6 +778,12 @@ impl Budget {
         Ok(())
     }
 
+    pub(crate) fn ensure_shadow_cpu_limit_factor(&self, factor: u64) -> Result<(), HostError> {
+        let mut b = self.0.try_borrow_mut_or_err()?;
+        b.cpu_insns.shadow_limit = b.cpu_insns.limit.saturating_mul(factor);
+        Ok(())
+    }
+
     pub fn get_tracker(&self, ty: ContractCostType) -> Result<CostTracker, HostError> {
         self.0
             .try_borrow_or_err()?
@@ -767,17 +823,5 @@ impl Budget {
 
     pub(crate) fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
         self.0.try_borrow_mut_or_err()?.get_wasmi_fuel_remaining()
-    }
-
-    // generate a wasmi fuel cost schedule based on our calibration
-    pub(crate) fn wasmi_fuel_costs(&self) -> Result<wasmi::FuelCosts, HostError> {
-        let config = &self.0.try_borrow_or_err()?.fuel_config;
-        let mut costs = wasmi::FuelCosts::default();
-        costs.base = config.base;
-        costs.entity = config.entity;
-        costs.load = config.load;
-        costs.store = config.store;
-        costs.call = config.call;
-        Ok(costs)
     }
 }

@@ -9,7 +9,7 @@ use crate::{
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num,
     impl_wrapping_obj_to_num,
     num::*,
-    storage::Storage,
+    storage::{EntryWithLiveUntil, Storage},
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, Duration, Hash,
@@ -17,9 +17,9 @@ use crate::{
         ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
-    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall,
-    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv,
-    Void, I256, U256,
+    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, TryFromVal,
+    U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv, Void, I256,
+    U256,
 };
 
 mod comparison;
@@ -33,15 +33,18 @@ pub(crate) mod ledger_info_helper;
 mod lifecycle;
 mod mem_helper;
 pub(crate) mod metered_clone;
+pub(crate) mod metered_hash;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod num;
 mod prng;
+pub(crate) mod trace;
 mod validity;
 
 pub use error::HostError;
 pub use prng::{Seed, SEED_BYTES};
+pub use trace::{TraceEvent, TraceHook, TraceRecord, TraceState};
 
 use self::{
     frame::{Context, ContractReentryMode},
@@ -54,8 +57,9 @@ use self::{
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 use rand_chacha::ChaCha20Rng;
+use soroban_env_common::SymbolSmall;
 
 #[derive(Debug, Clone, Default)]
 pub struct LedgerInfo {
@@ -70,19 +74,6 @@ pub struct LedgerInfo {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-#[allow(dead_code)]
-pub(crate) enum HostLifecycleEvent<'a> {
-    PushCtx(&'a Context),
-    PopCtx(&'a Context, &'a Result<Val, HostError>),
-    EnvCall(&'static str, &'a [String]),
-    EnvRet(&'static str, &'a Result<String, String>),
-}
-
-#[cfg(any(test, feature = "testutils"))]
-pub(crate) type HostLifecycleHook =
-    Rc<dyn for<'a> Fn(&'a Host, HostLifecycleEvent<'a>) -> Result<(), HostError>>;
-
-#[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]
 pub enum ContractInvocationEvent {
     Start,
@@ -91,6 +82,12 @@ pub enum ContractInvocationEvent {
 
 #[cfg(any(test, feature = "testutils"))]
 pub type ContractInvocationHook = Rc<dyn for<'a> Fn(&'a Host, ContractInvocationEvent) -> ()>;
+
+#[cfg(any(test, feature = "testutils"))]
+#[derive(Clone, Default)]
+pub struct CoverageScoreboard {
+    pub vm_to_vm_calls: usize,
+}
 
 #[derive(Clone, Default)]
 struct HostImpl {
@@ -120,7 +117,7 @@ struct HostImpl {
     // base or local) such that contracts behave exactly the same whether or not
     // they're recording auth. Therefore this task gets its own PRNG, seeded when
     // the base PRNG is seeded (as a derived PRNG).
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     recording_auth_nonce_prng: RefCell<Option<ChaCha20Rng>>,
     // Some tests _of the host_ rely on pseudorandom _input_ data. For these cases we attach
     // yet another unmetered PRNG to the host.
@@ -144,14 +141,26 @@ struct HostImpl {
     // the host's execution. No guarantees are made about the stability of this
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
-    #[cfg(any(test, feature = "testutils"))]
-    lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
+    trace_hook: RefCell<Option<TraceHook>>,
     // Store a simple contract invocation hook for public usage.
     // The hook triggers when the top-level contract invocation
     // starts and when it ends.
     #[doc(hidden)]
     #[cfg(any(test, feature = "testutils"))]
     top_contract_invocation_hook: RefCell<Option<ContractInvocationHook>>,
+
+    // A utility to help us measure certain key events we're interested
+    // in observing the coverage of. Only written-to, never read, it
+    // exists only so that we can observe in aggregated code-coverage
+    // measurements whether the lines of code that write to its fields are
+    // covered.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "testutils"))]
+    coverage_scoreboard: RefCell<CoverageScoreboard>,
+
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "recording_mode"))]
+    suppress_diagnostic_events: RefCell<bool>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -240,7 +249,7 @@ impl_checked_borrow_helpers!(
     try_borrow_base_prng_mut
 );
 
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 impl_checked_borrow_helpers!(
     recording_auth_nonce_prng,
     Option<ChaCha20Rng>,
@@ -267,12 +276,11 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager_mut
 );
 
-#[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
-    lifecycle_event_hook,
-    Option<HostLifecycleHook>,
-    try_borrow_lifecycle_event_hook,
-    try_borrow_lifecycle_event_hook_mut
+    trace_hook,
+    Option<TraceHook>,
+    try_borrow_trace_hook,
+    try_borrow_trace_hook_mut
 );
 
 #[cfg(any(test, feature = "testutils"))]
@@ -281,6 +289,22 @@ impl_checked_borrow_helpers!(
     Option<ContractInvocationHook>,
     try_borrow_top_contract_invocation_hook,
     try_borrow_top_contract_invocation_hook_mut
+);
+
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
+    coverage_scoreboard,
+    CoverageScoreboard,
+    try_borrow_coverage_scoreboard,
+    try_borrow_coverage_scoreboard_mut
+);
+
+#[cfg(any(test, feature = "recording_mode"))]
+impl_checked_borrow_helpers!(
+    suppress_diagnostic_events,
+    bool,
+    try_borrow_suppress_diagnostic_events,
+    try_borrow_suppress_diagnostic_events_mut
 );
 
 impl Debug for HostImpl {
@@ -315,7 +339,7 @@ impl Host {
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
-            #[cfg(any(test, feature = "recording_auth"))]
+            #[cfg(any(test, feature = "recording_mode"))]
             recording_auth_nonce_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             test_prng: RefCell::new(None),
@@ -323,10 +347,13 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
-            #[cfg(any(test, feature = "testutils"))]
-            lifecycle_event_hook: RefCell::new(None),
+            trace_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
+            #[cfg(any(test, feature = "testutils"))]
+            coverage_scoreboard: Default::default(),
+            #[cfg(any(test, feature = "recording_mode"))]
+            suppress_diagnostic_events: RefCell::new(false),
         }))
     }
 
@@ -364,7 +391,7 @@ impl Host {
         }
     }
 
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     pub(crate) fn with_recording_auth_nonce_prng<T>(
         &self,
         f: impl FnOnce(&mut ChaCha20Rng) -> Result<T, HostError>,
@@ -392,7 +419,7 @@ impl Host {
         }
     }
 
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     pub fn switch_to_recording_auth(&self, disable_non_root_auth: bool) -> Result<(), HostError> {
         *self.try_borrow_authorization_manager_mut()? =
             AuthorizationManager::new_recording(disable_non_root_auth);
@@ -420,7 +447,7 @@ impl Host {
         {
             *self.try_borrow_test_prng_mut()? = Some(test_prng);
         }
-        #[cfg(any(test, feature = "recording_auth"))]
+        #[cfg(any(test, feature = "recording_mode"))]
         {
             *self.try_borrow_recording_auth_nonce_prng_mut()? = Some(recording_auth_nonce_prng);
         }
@@ -528,6 +555,21 @@ impl Host {
         }
     }
 
+    /// Calls the provided function while ensuring that no diagnostic events are
+    /// recorded.
+    /// This is useful for emulating operations only for the sake of budget
+    /// accounting in recording mode.
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub(crate) fn with_suppressed_diagnostic_events<F>(&self, f: F) -> Result<(), HostError>
+    where
+        F: FnOnce() -> Result<(), HostError>,
+    {
+        *self.try_borrow_suppress_diagnostic_events_mut()? = true;
+        f()?;
+        *self.try_borrow_suppress_diagnostic_events_mut()? = false;
+        Ok(())
+    }
+
     /// Returns whether the Host can be finished by calling
     /// [`Host::try_finish`].
     ///
@@ -555,38 +597,25 @@ impl Host {
     }
 }
 
-#[cfg(feature = "testutils")]
-macro_rules! call_env_call_hook {
+macro_rules! call_trace_env_call {
     ($self:expr, $($arg:expr),*) => {
-        #[cfg(feature="testutils")]
+        if $self.tracing_enabled()
         {
-            $self.env_call_hook(function_short_name!(), &[$(format!("{:?}", $arg)),*])?;
+            $self.trace_env_call(function_short_name!(), &[$(&$arg),*])?;
         }
     };
 }
 
-#[cfg(not(feature = "testutils"))]
-macro_rules! call_env_call_hook {
-    ($self:expr, $($arg:expr),*) => {};
-}
-
-#[cfg(feature = "testutils")]
-macro_rules! call_env_ret_hook {
-    ($self:expr, $arg:expr) => {
-        #[cfg(feature = "testutils")]
-        {
-            let res_str: Result<String, &HostError> = match &$arg {
-                Ok(ok) => Ok(format!("{:?}", ok)),
+macro_rules! call_trace_env_ret {
+    ($self:expr, $arg:expr) => {{
+        if $self.tracing_enabled() {
+            let dyn_res: Result<&dyn core::fmt::Debug, &HostError> = match &$arg {
+                Ok(ref ok) => Ok(ok),
                 Err(err) => Err(err),
             };
-            $self.env_ret_hook(function_short_name!(), &res_str)?;
+            $self.trace_env_ret(function_short_name!(), &dyn_res)?;
         }
-    };
-}
-
-#[cfg(not(feature = "testutils"))]
-macro_rules! call_env_ret_hook {
-    ($self:expr, $arg:expr) => {};
+    }};
 }
 
 // Notes on metering: these are called from the guest and thus charged on the VM instructions.
@@ -686,22 +715,23 @@ impl EnvBase for Host {
         x
     }
 
-    #[cfg(feature = "testutils")]
-    fn env_call_hook(&self, fname: &'static str, args: &[String]) -> Result<(), HostError> {
-        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvCall(fname, args))
+    fn tracing_enabled(&self) -> bool {
+        match self.try_borrow_trace_hook() {
+            Ok(hook) => hook.is_some(),
+            Err(_) => false,
+        }
     }
 
-    #[cfg(feature = "testutils")]
-    fn env_ret_hook(
+    fn trace_env_call(&self, fname: &'static str, args: &[&dyn Debug]) -> Result<(), HostError> {
+        self.call_any_lifecycle_hook(TraceEvent::EnvCall(fname, args))
+    }
+
+    fn trace_env_ret(
         &self,
         fname: &'static str,
-        res: &Result<String, &HostError>,
+        res: &Result<&dyn Debug, &HostError>,
     ) -> Result<(), HostError> {
-        // We have to defer error formatting to here because the Env type does
-        // not know enough about the structure of errors (in particular that we
-        // do _not_ want to format debuginfo into the lifecycle-hook string).
-        let res = res.clone().map_err(|he| format!("{:?}", he.error));
-        self.call_any_lifecycle_hook(HostLifecycleEvent::EnvRet(fname, &res))
+        self.call_any_lifecycle_hook(TraceEvent::EnvRet(fname, res))
     }
 
     fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
@@ -723,9 +753,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &[u8],
     ) -> Result<BytesObject, HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_from_slice::<ScBytes>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -735,9 +765,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScBytes>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -747,9 +777,9 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, b, b_pos, slice.len());
+        call_trace_env_call!(self, b, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScString>(b, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -759,41 +789,49 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        call_env_call_hook!(self, s, b_pos, slice.len());
+        call_trace_env_call!(self, s, b_pos, slice.len());
         let res = self.memobj_copy_to_slice::<ScSymbol>(s, b_pos, slice);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<BytesObject, HostError> {
-        call_env_call_hook!(self, mem.len());
+        call_trace_env_call!(self, mem.len());
         let res = self.add_host_object(self.scbytes_from_slice(mem)?);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn string_new_from_slice(&self, s: &[u8]) -> Result<StringObject, HostError> {
-        call_env_call_hook!(self, s.len());
+        call_trace_env_call!(self, s.len());
         let res = self.add_host_object(ScString(self.metered_slice_to_vec(s)?.try_into()?));
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
-    fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
-        call_env_call_hook!(self, s.len());
+    fn symbol_new_from_slice(&self, s: &[u8]) -> Result<SymbolObject, HostError> {
+        call_trace_env_call!(self, s.len());
+        // Note: this whole function could be replaced by `ScSymbol::try_from_bytes`
+        // in order to avoid duplication. It is duplicated in order to support
+        // a slightly different check order for the sake of observation consistency.
         self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
-        for ch in s.chars() {
-            SymbolSmall::validate_char(ch)?;
+        for b in s {
+            SymbolSmall::validate_byte(*b).map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "byte is not allowed in Symbol",
+                    &[(*b as u32).into()],
+                )
+            })?;
         }
-        let res = self.add_host_object(ScSymbol(
-            self.metered_slice_to_vec(s.as_bytes())?.try_into()?,
-        ));
-        call_env_ret_hook!(self, res);
+        let res = self.add_host_object(ScSymbol(self.metered_slice_to_vec(s)?.try_into()?));
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
-        call_env_call_hook!(self, keys.len());
+        call_trace_env_call!(self, keys.len());
         if keys.len() != vals.len() {
             return Err(self.err(
                 ScErrorType::Object,
@@ -814,7 +852,7 @@ impl EnvBase for Host {
             .collect::<Result<Vec<(Val, Val)>, HostError>>()?;
         let map = HostMap::from_map(map_vec, self)?;
         let res = self.add_host_object(map);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
@@ -824,7 +862,7 @@ impl EnvBase for Host {
         keys: &[&str],
         vals: &mut [Val],
     ) -> Result<Void, HostError> {
-        call_env_call_hook!(self, map, keys.len());
+        call_trace_env_call!(self, map, keys.len());
         if keys.len() != vals.len() {
             return Err(self.err(
                 ScErrorType::Object,
@@ -855,23 +893,23 @@ impl EnvBase for Host {
             Ok(())
         })?;
         let res = Ok(Val::VOID);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error> {
-        call_env_call_hook!(self, vals.len());
+        call_trace_env_call!(self, vals.len());
         let vec = HostVec::from_exact_iter(vals.iter().cloned(), self.budget_ref())?;
         for v in vec.iter() {
             self.check_val_integrity(*v)?;
         }
         let res = self.add_host_object(vec);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn vec_unpack_to_slice(&self, vec: VecObject, vals: &mut [Val]) -> Result<Void, Self::Error> {
-        call_env_call_hook!(self, vec, vals.len());
+        call_trace_env_call!(self, vec, vals.len());
         self.visit_obj(vec, |hv: &HostVec| {
             if hv.len() != vals.len() {
                 return Err(self.err(
@@ -886,12 +924,12 @@ impl EnvBase for Host {
             Ok(())
         })?;
         let res = Ok(Val::VOID);
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn symbol_index_in_strs(&self, sym: Symbol, slices: &[&str]) -> Result<U32Val, Self::Error> {
-        call_env_call_hook!(self, sym, slices.len());
+        call_trace_env_call!(self, sym, slices.len());
         let mut found = None;
         for (i, slice) in slices.iter().enumerate() {
             if self.symbol_matches(slice.as_bytes(), sym)? && found.is_none() {
@@ -907,16 +945,48 @@ impl EnvBase for Host {
             )),
             Some(idx) => Ok(U32Val::from(self.usize_to_u32(idx)?)),
         };
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
     }
 
     fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, HostError> {
-        call_env_call_hook!(self, msg.len(), vals.len());
+        call_trace_env_call!(self, msg.len(), vals.len());
         self.log_diagnostics(msg, vals);
         let res = Ok(Void::from(()));
-        call_env_ret_hook!(self, res);
+        call_trace_env_ret!(self, res);
         res
+    }
+
+    fn check_protocol_version_lower_bound(&self, lower: u32) -> Result<(), Self::Error> {
+        self.with_ledger_info(|li| {
+            let proto = li.protocol_version;
+            if proto < lower {
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::IndexBounds,
+                    "ledger protocol {} is less than specified lower bound {}",
+                    &[Val::from_u32(proto).into(), Val::from_u32(lower).into()],
+                ))
+            } else {
+                Ok(())
+            }
+        })
+    }
+
+    fn check_protocol_version_upper_bound(&self, upper: u32) -> Result<(), Self::Error> {
+        self.with_ledger_info(|li| {
+            let proto = li.protocol_version;
+            if proto > upper {
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::IndexBounds,
+                    "ledger protocol {} is larger than specified upper bound {}",
+                    &[Val::from_u32(proto).into(), Val::from_u32(upper).into()],
+                ))
+            } else {
+                Ok(())
+            }
+        })
     }
 }
 
@@ -1482,17 +1552,18 @@ impl VmCallerEnv for Host {
             pos: keys_pos,
             len,
         } = self.get_mem_fn_args(keys_pos, len)?;
-        Vec::<Symbol>::charge_bulk_init_cpy(len as u64, self)?;
-        let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
+        let mut key_syms = Vec::<Symbol>::with_metered_capacity(len as usize, self)?;
         self.metered_vm_scan_slices_in_linear_memory(
             vmcaller,
             &vm,
             keys_pos,
             len as usize,
             |_n, slice| {
+                // Optimization note: this does an unnecessary `ScVal` roundtrip.
+                // We should just use `Symbol::try_from_val` on the slice instead.
                 self.charge_budget(ContractCostType::MemCpy, Some(slice.len() as u64))?;
                 let scsym = ScSymbol(slice.try_into()?);
-                let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
+                let sym = Symbol::try_from(self.to_valid_host_val(&ScVal::Symbol(scsym))?)?;
                 key_syms.push(sym);
                 Ok(())
             },
@@ -1914,7 +1985,7 @@ impl VmCallerEnv for Host {
                     .get(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
                 match &entry.data {
-                    LedgerEntryData::ContractData(e) => Ok(self.to_host_val(&e.val)?),
+                    LedgerEntryData::ContractData(e) => Ok(self.to_valid_host_val(&e.val)?),
                     _ => Err(self.err(
                         ScErrorType::Storage,
                         ScErrorCode::InternalError,
@@ -1948,7 +2019,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
-                let key = self.contract_data_key_from_val(k, t.try_into()?)?;
+                let key = self.storage_key_from_val(k, t.try_into()?)?;
                 self.try_borrow_storage_mut()?
                     .del(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
@@ -1983,7 +2054,7 @@ impl VmCallerEnv for Host {
                 &[],
             ))?;
         }
-        let key = self.contract_data_key_from_val(k, t.try_into()?)?;
+        let key = self.storage_key_from_val(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
             .extend_ttl(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
@@ -2002,28 +2073,29 @@ impl VmCallerEnv for Host {
             threshold.into(),
             None,
             extend_to.into(),
-            None
+            None,
         )?;
         Ok(Val::VOID)
     }
 
-    fn extend_current_contract_instance_and_code_ttl_separately(
+    fn extend_contract_instance_ttl(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
-        instance_threshold: U32Val,
-        code_threshold: U32Val,
-        extend_instance_to: U32Val,
-        extend_code_to: U32Val,
-    ) -> Result<Void, HostError> {
-        let contract_id = self.get_current_contract_id_internal()?;
-        self.extend_contract_instance_and_code_ttl_from_contract_id(
-            &contract_id,
-            instance_threshold.into(),
-            Some(code_threshold.into()),
-            extend_instance_to.into(),
-            Some(extend_code_to.into())
-        )?;
-        
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        threshold: U32Val,
+        extend_to: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.try_borrow_storage_mut()?
+            .extend_ttl(
+                self,
+                key.metered_clone(self)?,
+                threshold.into(),
+                extend_to.into(),
+            )
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+
         Ok(Val::VOID)
     }
 
@@ -2040,28 +2112,34 @@ impl VmCallerEnv for Host {
             threshold.into(),
             None,
             extend_to.into(),
-            None
+            None,
         )?;
         Ok(Val::VOID)
     }
 
-    fn extend_contract_instance_and_code_ttl_separately(
+    fn extend_contract_code_ttl(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
-        instance_threshold: U32Val,
-        code_threshold: U32Val,
-        extend_instance_to: U32Val,
-        extend_code_to: U32Val,
+        threshold: U32Val,
+        extend_to: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
-        self.extend_contract_instance_and_code_ttl_from_contract_id(
-            &contract_id,
-            instance_threshold.into(),
-            Some(code_threshold.into()),
-            extend_instance_to.into(),
-            Some(extend_code_to.into())
-        )?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+
+        match self
+            .retrieve_contract_instance_from_storage(&key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.try_borrow_storage_mut()?
+                    .extend_ttl(self, key, threshold.into(), extend_to.into())
+                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
+            }
+            ContractExecutable::StellarAsset => {}
+        }
+
         Ok(Val::VOID)
     }
 
@@ -2273,7 +2351,12 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        if Val::can_represent_scval(&scv) {
+        // Metering bug: the representation check is not metered,
+        // so if the value is not valid, we won't charge anything for
+        // walking the `ScVal`. Since `to_host_val` performs validation
+        // and has proper metering, next protocol version should just
+        // call `to_host_val` directly.
+        if Val::can_represent_scval_recursive(&scv) {
             self.to_host_val(&scv)
         } else {
             Err(self.err(
@@ -2514,8 +2597,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
-            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
             vnew.extend_from_slice(hv.as_slice());
             vnew.push(u);
             Ok(ScBytes(vnew.try_into()?))
@@ -2600,8 +2682,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the insert
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
-            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
             vnew.extend_from_slice(hv.as_slice());
             vnew.insert(i as usize, u);
             Ok(ScBytes(vnew.try_into()?))
@@ -2620,8 +2701,7 @@ impl VmCallerEnv for Host {
                 // we allocate large enough memory to hold the new combined vector, so that
                 // allocation only happens once, and charge for it upfront.
                 let len = self.validate_usize_sum_fits_in_u32(sb1.len(), sb2.len())?;
-                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-                let mut vnew: Vec<u8> = Vec::with_capacity(len);
+                let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
                 vnew.extend_from_slice(sb1.as_slice());
                 vnew.extend_from_slice(sb2.as_slice());
                 Ok(vnew)
@@ -2706,6 +2786,13 @@ impl VmCallerEnv for Host {
     // region: "test" module functions
 
     fn dummy0(&self, _vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<Val, Self::Error> {
+        Ok(().into())
+    }
+
+    fn protocol_gated_dummy(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+    ) -> Result<Val, Self::Error> {
         Ok(().into())
     }
 
@@ -2968,22 +3055,25 @@ impl Host {
         f(self.0.budget.clone())
     }
 
-    #[cfg(any(test, feature = "testutils"))]
-    #[allow(dead_code)]
-    pub(crate) fn set_lifecycle_event_hook(
+    pub fn retrieve_entry_with_lifetime(
         &self,
-        hook: Option<HostLifecycleHook>,
-    ) -> Result<(), HostError> {
-        *self.try_borrow_lifecycle_event_hook_mut()? = hook;
+        key: Rc<crate::xdr::LedgerKey>,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        self.0.storage.borrow().get_entry_with_lifetime(key)
+    }
+}
+
+impl Host {
+    #[allow(dead_code)]
+    pub(crate) fn set_trace_hook(&self, hook: Option<TraceHook>) -> Result<(), HostError> {
+        self.call_any_lifecycle_hook(TraceEvent::End)?;
+        *self.try_borrow_trace_hook_mut()? = hook;
+        self.call_any_lifecycle_hook(TraceEvent::Begin)?;
         Ok(())
     }
 
-    #[cfg(feature = "testutils")]
-    pub(crate) fn call_any_lifecycle_hook(
-        &self,
-        event: HostLifecycleEvent,
-    ) -> Result<(), HostError> {
-        match &*self.try_borrow_lifecycle_event_hook()? {
+    pub(crate) fn call_any_lifecycle_hook(&self, event: TraceEvent) -> Result<(), HostError> {
+        match &*self.try_borrow_trace_hook()? {
             Some(hook) => hook(self, event),
             None => Ok(()),
         }

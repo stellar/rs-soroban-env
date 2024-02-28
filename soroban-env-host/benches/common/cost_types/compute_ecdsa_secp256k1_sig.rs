@@ -16,7 +16,7 @@ impl HostCostMeasurement for ComputeEcdsaSecp256k1SigMeasure {
     type Runner = ComputeEcdsaSecp256k1SigRun;
 
     fn new_random_case(_host: &Host, _rng: &mut StdRng, input: u64) -> Vec<u8> {
-        let size = 1 + input * Self::STEP_SIZE;
+        let size = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
 
         // Very awkward: the 'rand' crate has two copies linked in due to
         // divergence between the requirements of k256 and ed25519. The StdRng

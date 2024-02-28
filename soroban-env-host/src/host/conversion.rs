@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use crate::host_object::MemHostObjectType;
 use crate::{
     budget::{AsBudget, DepthLimiter},
     err,
@@ -124,17 +125,6 @@ impl Host {
         })
     }
 
-    /// Converts a [`Val`] to an [`ScVal`] and combines it with the currently-executing
-    /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
-    // Notes on metering: covered by components.
-    pub fn storage_key_from_val(
-        &self,
-        k: Val,
-        durability: ContractDataDurability,
-    ) -> Result<Rc<LedgerKey>, HostError> {
-        self.storage_key_from_scval(self.from_host_val(k)?, durability)
-    }
-
     pub(crate) fn storage_key_for_address(
         &self,
         contract: ScAddress,
@@ -160,14 +150,15 @@ impl Host {
         self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability)
     }
 
+    /// Converts a [`Val`] to an [`ScVal`] and combines it with the currently-executing
+    /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     // Notes on metering: covered by components.
-    pub(crate) fn contract_data_key_from_val(
+    pub(crate) fn storage_key_from_val(
         &self,
         k: Val,
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
-        self.check_val_representable_scval(&key_scval)?;
         self.storage_key_from_scval(key_scval, durability)
     }
 
@@ -270,8 +261,7 @@ impl Host {
     }
 
     pub(crate) fn host_map_to_scmap(&self, map: &HostMap) -> Result<ScMap, HostError> {
-        Vec::<ScMapEntry>::charge_bulk_init_cpy(map.len() as u64, self)?;
-        let mut mv = Vec::with_capacity(map.len());
+        let mut mv = Vec::<ScMapEntry>::with_metered_capacity(map.len(), self)?;
         for (k, v) in map.iter(self)? {
             let key = self.from_host_val(*k)?;
             let val = self.from_host_val(*v)?;
@@ -329,9 +319,8 @@ impl Host {
         // and is done inside `from_host_obj`.
         let _span = tracy_span!("Val to ScVal");
         let scval = self.budget_cloned().with_limited_depth(|_| {
-            ScVal::try_from_val(self, &val).map_err(|cerr: crate::ConversionError| {
-                self.error(cerr.into(), "failed to convert host value to ScVal", &[])
-            })
+            ScVal::try_from_val(self, &val)
+                .map_err(|cerr| self.error(cerr, "failed to convert host value to ScVal", &[val]))
         })?;
         // This is a check of internal logical consistency: we came _from_ a Val
         // so the ScVal definitely should have been representable.
@@ -341,17 +330,29 @@ impl Host {
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
         let _span = tracy_span!("ScVal to Val");
-        // This is an internal consistency check: this is an internal method and
-        // any caller should have previously rejected non-representable ScVals.
-        self.check_val_representable_scval(&v)?;
         // This is the depth limit checkpoint for `ScVal`->`Val` conversion.
         // Metering of val conversion happens only if an object is encountered,
         // and is done inside `to_host_obj`.
         self.budget_cloned().with_limited_depth(|_| {
             v.try_into_val(self)
-                .map_err(|cerr: crate::ConversionError| {
-                    self.error(cerr.into(), "failed to convert ScVal to host value", &[])
-                })
+                .map_err(|cerr| self.error(cerr, "failed to convert ScVal to host value", &[]))
+        })
+    }
+
+    // Version of `to_host_val` for the internal cases where the value has to
+    // be valid by construction (e.g. read from ledger).
+    pub(crate) fn to_valid_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
+        self.to_host_val(v).map_err(|e| {
+            if e.error.is_type(ScErrorType::Budget) {
+                e
+            } else {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InternalError,
+                    "unexpected non-Val-representable ScVal in internal conversion",
+                    &[],
+                )
+            }
         })
     }
 
@@ -426,24 +427,19 @@ impl Host {
 
     pub(crate) fn to_host_obj(&self, ob: &ScValObjRef<'_>) -> Result<Object, HostError> {
         let val: &ScVal = (*ob).into();
-        // This is an internal consistency check: this is an internal method and any
-        // caller should have previously rejected non-representable ScVals.
-        self.check_val_representable_scval(val)?;
         match val {
             // Here we have to make sure host object conversion is charged in each variant
             // below. There is no otherwise ubiquitous metering for ScVal->Val conversion,
             // since most of them happen in the "common" crate with no access to the host.
             ScVal::Vec(Some(v)) => {
-                Vec::<Val>::charge_bulk_init_cpy(v.len() as u64, self)?;
-                let mut vv = Vec::with_capacity(v.len());
+                let mut vv = Vec::<Val>::with_metered_capacity(v.len(), self)?;
                 for e in v.iter() {
                     vv.push(self.to_host_val(e)?)
                 }
                 Ok(self.add_host_object(HostVec::from_vec(vv)?)?.into())
             }
             ScVal::Map(Some(m)) => {
-                Vec::<(Val, Val)>::charge_bulk_init_cpy(m.len() as u64, self)?;
-                let mut mm = Vec::with_capacity(m.len());
+                let mut mm = Vec::<(Val, Val)>::with_metered_capacity(m.len(), self)?;
                 for pair in m.iter() {
                     let k = self.to_host_val(&pair.key)?;
                     let v = self.to_host_val(&pair.val)?;
@@ -499,7 +495,15 @@ impl Host {
             }
             ScVal::Bytes(b) => Ok(self.add_host_object(b.metered_clone(self)?)?.into()),
             ScVal::String(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
-            ScVal::Symbol(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
+            // Similarly to `ScMap`, not every `SCSymbol` XDR is valid. Thus it has to be
+            // created with the respective fallible conversion method.
+            ScVal::Symbol(s) => Ok(self
+                .add_host_object(ScSymbol::try_from_bytes(
+                    self,
+                    s.0.metered_clone(self.as_budget())?.into(),
+                )?)?
+                .into()),
+
             ScVal::Address(addr) => Ok(self.add_host_object(addr.metered_clone(self)?)?.into()),
 
             // None of the following cases should have made it into this function, they
@@ -511,11 +515,11 @@ impl Host {
             | ScVal::I32(_)
             | ScVal::LedgerKeyNonce(_)
             | ScVal::ContractInstance(_)
-            | ScVal::LedgerKeyContractInstance => Err(err!(
-                self,
-                (ScErrorType::Value, ScErrorCode::InternalError),
+            | ScVal::LedgerKeyContractInstance => Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InternalError,
                 "converting ScValObjRef on non-object ScVal type",
-                *val
+                &[],
             )),
         }
     }

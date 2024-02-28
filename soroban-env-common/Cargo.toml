@@ -8,7 +8,7 @@ license = "Apache-2.0"
 version.workspace = true
 readme = "../README.md"
 edition = "2021"
-rust-version = "1.74"
+rust-version.workspace = true
 
 [build_dependencies]
 crate-git-revision = "=0.0.6"
@@ -38,6 +38,7 @@ wasmi = ["dep:wasmi"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
 next = ["stellar-xdr/next", "soroban-env-macros/next"]
 tracy = ["dep:tracy-client"]
+shallow-val-hash = []
 
 [package.metadata.docs.rs]
 all-features = true

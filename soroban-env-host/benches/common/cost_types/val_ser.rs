@@ -13,7 +13,7 @@ impl HostCostMeasurement for ValSerMeasure {
     const STEP_SIZE: u64 = 256;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> (ScVal, Vec<u8>) {
-        let len = 1 + input * Self::STEP_SIZE;
+        let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         let mut buf = vec![0; len as usize];
         rng.fill_bytes(buf.as_mut_slice());
         let v = ScVal::Bytes(buf.try_into().unwrap());
@@ -43,7 +43,7 @@ impl HostCostMeasurement for ValSerMeasure {
     // interference of u32.
 
     fn new_worst_case(_host: &Host, rng: &mut StdRng, input: u64) -> (ScVal, Vec<u8>) {
-        let len = 1 + input * Self::STEP_SIZE;
+        let len = Self::INPUT_BASE_SIZE + input * Self::STEP_SIZE;
         let mut buf = vec![0; len as usize];
         rng.fill_bytes(buf.as_mut_slice());
         let scv_bytes = ScVal::Bytes(buf.try_into().unwrap());

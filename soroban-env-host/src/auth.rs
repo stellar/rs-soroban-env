@@ -148,32 +148,39 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{
-    ContractDataEntry, CreateContractArgs, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-    InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode,
-    ScErrorType, ScNonceKey, ScVal, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-    SorobanCredentials,
+use crate::{
+    budget::{AsBudget, Budget},
+    builtin_contracts::{
+        account_contract::{check_account_authentication, check_account_contract_auth},
+        invoker_contract_auth::invoker_contract_auth_to_authorized_invocation,
+    },
+    host::{
+        metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
+        metered_hash::{CountingHasher, MeteredHash},
+        Frame,
+    },
+    host_object::HostVec,
+    xdr::{
+        ContractDataEntry, CreateContractArgs, HashIdPreimage, HashIdPreimageSorobanAuthorization,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode,
+        ScErrorType, ScNonceKey, ScVal, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+        SorobanCredentials,
+    },
+    AddressObject, Compare, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val, VecObject,
 };
-use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
-
-use crate::budget::{AsBudget, Budget};
-use crate::builtin_contracts::account_contract::{
-    check_account_authentication, check_account_contract_auth,
-};
-use crate::builtin_contracts::invoker_contract_auth::invoker_contract_auth_to_authorized_invocation;
-use crate::host::metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator};
-use crate::host::Frame;
-use crate::host_object::HostVec;
-use crate::{Host, HostError};
 
 use super::xdr;
 use super::xdr::Hash;
 
-#[cfg(any(test, feature = "recording_auth"))]
-use crate::host::error::TryBorrowOrErr;
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
+use crate::{
+    builtin_contracts::{account_contract::AccountEd25519Signature, base_types::BytesN},
+    host::error::TryBorrowOrErr,
+    xdr::PublicKey,
+};
+#[cfg(any(test, feature = "recording_mode"))]
 use rand::Rng;
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 use std::collections::BTreeMap;
 
 // Authorization manager encapsulates host-based authentication & authorization
@@ -259,7 +266,7 @@ impl_checked_borrow_helpers!(
 
 // The authorization payload recorded for an address in the recording
 // authorization mode.
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 #[derive(Debug)]
 pub struct RecordedAuthPayload {
     pub address: Option<ScAddress>,
@@ -272,7 +279,7 @@ pub struct RecordedAuthPayload {
 pub struct AuthorizationManagerSnapshot {
     account_trackers_snapshot: AccountTrackersSnapshot,
     invoker_contract_tracker_root_snapshots: Vec<AuthorizedInvocationSnapshot>,
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     tracker_by_address_handle: Option<BTreeMap<u32, usize>>,
 }
 
@@ -286,20 +293,12 @@ enum AccountTrackersSnapshot {
     Enforcing(Vec<Option<AccountAuthorizationTrackerSnapshot>>),
     // In recording mode snapshot the whole vector, as we create trackers
     // lazily and hence the outer vector itself might change.
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     Recording(Vec<RefCell<AccountAuthorizationTracker>>),
 }
 
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
-enum AuthorizationMode {
-    Enforcing,
-    #[cfg(any(test, feature = "recording_auth"))]
-    Recording(RecordingAuthInfo),
-}
-
 // Additional AuthorizationManager fields needed only for the recording mode.
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 #[derive(Clone)]
 struct RecordingAuthInfo {
     // Maps the `Address` object identifiers to the respective tracker indices
@@ -313,7 +312,14 @@ struct RecordingAuthInfo {
     disable_non_root_auth: bool,
 }
 
-#[cfg(feature = "testutils")]
+#[derive(Clone, Hash)]
+enum AuthorizationMode {
+    Enforcing,
+    #[cfg(any(test, feature = "recording_mode"))]
+    Recording(RecordingAuthInfo),
+}
+
+#[cfg(any(test, feature = "recording_mode"))]
 impl std::hash::Hash for RecordingAuthInfo {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         if let Ok(tracker_by_address_handle) = self.tracker_by_address_handle.try_borrow() {
@@ -323,7 +329,7 @@ impl std::hash::Hash for RecordingAuthInfo {
     }
 }
 
-#[cfg(any(test, feature = "recording_auth"))]
+#[cfg(any(test, feature = "recording_mode"))]
 impl RecordingAuthInfo {
     fn try_borrow_tracker_by_address_handle(
         &self,
@@ -345,8 +351,7 @@ impl RecordingAuthInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum MatchState {
     Unmatched,
     RootMatch,
@@ -400,8 +405,7 @@ impl MatchState {
 /// the tracker stops being active when the root match is popped from the match
 /// stack. At this point the [`InvocationTracker::is_fully_processed`] flag is
 /// set.
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 struct InvocationTracker {
     // Root of the authorized invocation tree.
     // The authorized invocation tree only contains the contract invocations
@@ -436,8 +440,7 @@ struct InvocationTracker {
 // pre-authorized invocations can happen on behalf of the `address`.
 // In the recording mode this will record the invocations that are authorized
 // on behalf of the address.
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct AccountAuthorizationTracker {
     // Tracked address.
     address: AddressObject,
@@ -468,37 +471,32 @@ pub(crate) struct AccountAuthorizationTrackerSnapshot {
 }
 
 // Stores all the authorizations performed by contracts at runtime.
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct InvokerContractAuthorizationTracker {
     contract_address: AddressObject,
     invocation_tracker: InvocationTracker,
 }
 
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) enum AuthStackFrame {
     Contract(ContractInvocation),
     CreateContractHostFn(CreateContractArgs),
 }
 
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct ContractInvocation {
     pub(crate) contract_address: AddressObject,
     pub(crate) function_name: Symbol,
 }
 
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct ContractFunction {
     pub(crate) contract_address: AddressObject,
     pub(crate) function_name: Symbol,
     pub(crate) args: Vec<Val>,
 }
 
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) enum AuthorizedFunction {
     ContractFn(ContractFunction),
     CreateContractHostFn(CreateContractArgs),
@@ -506,8 +504,7 @@ pub(crate) enum AuthorizedFunction {
 
 // A single node in the authorized invocation tree.
 // This represents an invocation and all it's authorized sub-invocations.
-#[derive(Clone)]
-#[cfg_attr(feature = "testutils", derive(Hash))]
+#[derive(Clone, Hash)]
 pub(crate) struct AuthorizedInvocation {
     pub(crate) function: AuthorizedFunction,
     pub(crate) sub_invocations: Vec<AuthorizedInvocation>,
@@ -662,7 +659,7 @@ impl AuthorizedInvocation {
     }
 
     // metering: free
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn new_recording(function: AuthorizedFunction) -> Self {
         Self {
             function,
@@ -769,8 +766,10 @@ impl AuthorizationManager {
         host: &Host,
         auth_entries: Vec<SorobanAuthorizationEntry>,
     ) -> Result<Self, HostError> {
-        Vec::<AccountAuthorizationTracker>::charge_bulk_init_cpy(auth_entries.len() as u64, host)?;
-        let mut trackers = Vec::with_capacity(auth_entries.len());
+        let mut trackers = Vec::<RefCell<AccountAuthorizationTracker>>::with_metered_capacity(
+            auth_entries.len(),
+            host,
+        )?;
         for auth_entry in auth_entries {
             trackers.push(RefCell::new(
                 AccountAuthorizationTracker::from_authorization_entry(host, auth_entry)?,
@@ -801,7 +800,7 @@ impl AuthorizationManager {
     // All the authorization requirements will be recorded and can then be
     // retrieved using `get_recorded_auth_payloads`.
     // metering: free
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     pub(crate) fn new_recording(disable_non_root_auth: bool) -> Self {
         Self {
             mode: AuthorizationMode::Recording(RecordingAuthInfo {
@@ -852,7 +851,10 @@ impl AuthorizationManager {
         let auth_entries =
             host.visit_obj(auth_entries, |e: &HostVec| e.to_vec(host.budget_ref()))?;
         let mut trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
-        Vec::<Val>::charge_bulk_init_cpy(auth_entries.len() as u64, host)?;
+        Vec::<InvokerContractAuthorizationTracker>::charge_bulk_init_cpy(
+            auth_entries.len() as u64,
+            host,
+        )?;
         trackers.reserve(auth_entries.len());
         for e in auth_entries {
             trackers.push(
@@ -976,7 +978,7 @@ impl AuthorizationManager {
         ))
     }
 
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn require_auth_recording(
         &self,
         host: &Host,
@@ -1101,7 +1103,7 @@ impl AuthorizationManager {
         match &self.mode {
             AuthorizationMode::Enforcing => self.require_auth_enforcing(host, address, &function),
             // metering: free for recording
-            #[cfg(any(test, feature = "recording_auth"))]
+            #[cfg(any(test, feature = "recording_mode"))]
             AuthorizationMode::Recording(recording_info) => {
                 self.require_auth_recording(host, address, function, recording_info)
             }
@@ -1115,10 +1117,10 @@ impl AuthorizationManager {
         let account_trackers_snapshot = match &self.mode {
             AuthorizationMode::Enforcing => {
                 let len = self.try_borrow_account_trackers(host)?.len();
-                let mut snapshots = Vec::with_capacity(len);
-                Vec::<Option<AccountAuthorizationTrackerSnapshot>>::charge_bulk_init_cpy(
-                    len as u64, host,
-                )?;
+                let mut snapshots =
+                    Vec::<Option<AccountAuthorizationTrackerSnapshot>>::with_metered_capacity(
+                        len, host,
+                    )?;
                 for t in self.try_borrow_account_trackers(host)?.iter() {
                     let sp = if let Ok(tracker) = t.try_borrow() {
                         Some(tracker.snapshot(host.as_budget())?)
@@ -1132,7 +1134,7 @@ impl AuthorizationManager {
                 }
                 AccountTrackersSnapshot::Enforcing(snapshots)
             }
-            #[cfg(any(test, feature = "recording_auth"))]
+            #[cfg(any(test, feature = "recording_mode"))]
             AuthorizationMode::Recording(_) => {
                 // All trackers should be available to borrow for copy as in
                 // recording mode we can't have recursive authorization.
@@ -1145,7 +1147,7 @@ impl AuthorizationManager {
             .iter()
             .map(|t| t.invocation_tracker.snapshot(host.as_budget()))
             .metered_collect::<Result<Vec<AuthorizedInvocationSnapshot>, HostError>>(host)??;
-        #[cfg(any(test, feature = "recording_auth"))]
+        #[cfg(any(test, feature = "recording_mode"))]
         let tracker_by_address_handle = match &self.mode {
             AuthorizationMode::Enforcing => None,
             AuthorizationMode::Recording(recording_info) => Some(
@@ -1158,7 +1160,7 @@ impl AuthorizationManager {
         Ok(AuthorizationManagerSnapshot {
             account_trackers_snapshot,
             invoker_contract_tracker_root_snapshots,
-            #[cfg(any(test, feature = "recording_auth"))]
+            #[cfg(any(test, feature = "recording_mode"))]
             tracker_by_address_handle,
         })
     }
@@ -1206,7 +1208,7 @@ impl AuthorizationManager {
                     }
                 }
             }
-            #[cfg(any(test, feature = "recording_auth"))]
+            #[cfg(any(test, feature = "recording_mode"))]
             AccountTrackersSnapshot::Recording(s) => {
                 *self.try_borrow_account_trackers_mut(host)? = s;
             }
@@ -1228,7 +1230,7 @@ impl AuthorizationManager {
             tracker.invocation_tracker.rollback(snapshot)?;
         }
 
-        #[cfg(any(test, feature = "recording_auth"))]
+        #[cfg(any(test, feature = "recording_mode"))]
         if let Some(tracker_by_address_handle) = snapshot.tracker_by_address_handle {
             match &self.mode {
                 AuthorizationMode::Enforcing => (),
@@ -1374,7 +1376,7 @@ impl AuthorizationManager {
     // top-level contract function invocation in the enforcing mode.
     // Should only be called in the recording mode.
     // metering: free, recording mode
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     pub(crate) fn get_recorded_auth_payloads(
         &self,
         host: &Host,
@@ -1398,7 +1400,7 @@ impl AuthorizationManager {
     // meterting data for the recording mode.
     // No-op in the enforcing mode.
     // metering: covered
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     pub(crate) fn maybe_emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
         match &self.mode {
             AuthorizationMode::Enforcing => Ok(()),
@@ -1459,7 +1461,7 @@ impl AuthorizationManager {
 }
 
 // Some helper extensions to support test-observation.
-#[cfg(all(test, not(feature = "next"), feature = "testutils"))]
+#[allow(dead_code)]
 impl AuthorizationManager {
     pub(crate) fn stack_size(&self) -> usize {
         if let Ok(call_stack) = self.call_stack.try_borrow() {
@@ -1469,39 +1471,40 @@ impl AuthorizationManager {
         }
     }
 
-    pub(crate) fn stack_hash(&self) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+    pub(crate) fn stack_hash(&self, budget: &Budget) -> Result<u64, HostError> {
+        use std::hash::Hasher;
         if let Ok(call_stack) = self.call_stack.try_borrow() {
-            let mut state = DefaultHasher::new();
-            call_stack.hash(&mut state);
-            state.finish()
+            let mut state = CountingHasher::default();
+            call_stack.metered_hash(&mut state, budget)?;
+            Ok(state.finish())
         } else {
-            0
+            Ok(0)
         }
     }
 
-    pub(crate) fn trackers_hash_and_size(&self) -> (u64, usize) {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+    pub(crate) fn trackers_hash_and_size(
+        &self,
+        budget: &Budget,
+    ) -> Result<(u64, usize), HostError> {
+        use std::hash::Hasher;
         let mut size: usize = 0;
-        let mut state = DefaultHasher::new();
-        self.mode.hash(&mut state);
+        let mut state = CountingHasher::default();
+        self.mode.metered_hash(&mut state, budget)?;
         if let Ok(account_trackers) = self.account_trackers.try_borrow() {
             for tracker in account_trackers.iter() {
                 if let Ok(tracker) = tracker.try_borrow() {
                     size = size.saturating_add(1);
-                    tracker.hash(&mut state);
+                    tracker.metered_hash(&mut state, budget)?;
                 }
             }
         }
         if let Ok(invoker_contract_trackers) = self.invoker_contract_trackers.try_borrow() {
             for tracker in invoker_contract_trackers.iter() {
                 size = size.saturating_add(1);
-                tracker.hash(&mut state);
+                tracker.metered_hash(&mut state, budget)?;
             }
         }
-        (state.finish(), size)
+        Ok((state.finish(), size))
     }
 }
 
@@ -1530,7 +1533,7 @@ impl InvocationTracker {
     }
 
     // metering: free for recording
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn new_recording(function: AuthorizedFunction, current_stack_len: usize) -> Self {
         // Create the stack of `MatchState::Unmatched` leading to the current invocation to
         // represent invocations that didn't need authorization on behalf of
@@ -1665,7 +1668,7 @@ impl InvocationTracker {
     // This assumes that the address matching is correctly performed before
     // calling this.
     // metering: free for recording
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn record_invocation(
         &mut self,
         host: &Host,
@@ -1698,7 +1701,7 @@ impl InvocationTracker {
     }
 
     // metering: free
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn has_matched_invocations_in_stack(&self) -> bool {
         self.match_stack.iter().any(|i| i.is_matched())
     }
@@ -1764,7 +1767,7 @@ impl AccountAuthorizationTracker {
     }
 
     // metering: free, since this is recording mode only
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn new_recording(
         host: &Host,
         address: AddressObject,
@@ -1867,7 +1870,7 @@ impl AccountAuthorizationTracker {
     // This assumes that the address matching is correctly performed before
     // calling this.
     // metering: free for recording
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn record_invocation(
         &mut self,
         host: &Host,
@@ -1879,7 +1882,7 @@ impl AccountAuthorizationTracker {
     // Build the authorization payload from the invocations recorded in this
     // tracker.
     // metering: free for recording
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
         host.as_budget().with_observable_shadow_mode(|| {
             Ok(RecordedAuthPayload {
@@ -1900,7 +1903,7 @@ impl AccountAuthorizationTracker {
     // Checks if there is at least one authorized invocation in the current call
     // stack.
     // metering: free
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     fn has_authorized_invocations_in_stack(&self) -> bool {
         self.invocation_tracker.has_matched_invocations_in_stack()
     }
@@ -2020,21 +2023,45 @@ impl AccountAuthorizationTracker {
 
     // Emulates authentication for the recording mode.
     // metering: covered
-    #[cfg(any(test, feature = "recording_auth"))]
-    fn emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
+    #[cfg(any(test, feature = "recording_mode"))]
+    fn emulate_authentication(&mut self, host: &Host) -> Result<(), HostError> {
         if self.is_transaction_source_account {
             return Ok(());
         }
         let sc_addr = host.scaddress_from_address(self.address)?;
-        // Compute the real payload for the sake of metering, but don't use it.
-        let _payload = self.get_signature_payload(host)?;
         match sc_addr {
             ScAddress::Account(acc) => {
-                let _account = host.load_account(acc)?;
+                // Emulate verification of a single signature that belongs to this
+                // account.
+                // We could emulate more (up to 20) signature verifications, but
+                // since signature verification is a pretty expensive operation, while
+                // multisig in combination with Soroban auth is probably pretty rare,
+                // multisig users should either use enforcing auth simulation, or
+                // intentionally increase the instruction count on the recording result.
+                let key_bytes = match &acc.0 {
+                    PublicKey::PublicKeyTypeEd25519(k) => k.0,
+                };
+                let signature = AccountEd25519Signature {
+                    public_key: BytesN::from_slice(host, &key_bytes)?,
+                    signature: BytesN::from_slice(host, &[0_u8; 64])?,
+                };
+                let signatures = host_vec![host, signature]?;
+                self.signature = signatures.into();
+                // Authentication is expected to fail here after signature verification,
+                // so we suppress the error and diagnostics.
+                host.with_suppressed_diagnostic_events(|| {
+                    let _ = self.authenticate(host);
+                    Ok(())
+                })?;
+
+                // Emulate a clone of the account, which serves 2 purposes:
+                // - Account for metered clone in `get_signer_weight_from_account`
+                // - Return budget error in case if it was suppressed above.
+                let _ = acc.metered_clone(host.as_budget())?;
             }
             // Skip custom accounts for now - emulating authentication for
             // them requires a dummy signature.
-            ScAddress::Contract(_) => (),
+            ScAddress::Contract(_) => {}
         }
         Ok(())
     }
@@ -2187,7 +2214,7 @@ impl Host {
     // top-level contract function invocation in the enforcing mode.
     // This should only be called in the recording authorization mode, i.e. only
     // if `switch_to_recording_auth` has been called.
-    #[cfg(any(test, feature = "recording_auth"))]
+    #[cfg(any(test, feature = "recording_mode"))]
     pub fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         #[cfg(not(any(test, feature = "testutils")))]
         {
@@ -2196,7 +2223,8 @@ impl Host {
         }
         #[cfg(any(test, feature = "testutils"))]
         {
-            self.try_borrow_previous_authorization_manager()?
+            let payloads = self
+                .try_borrow_previous_authorization_manager()?
                 .as_ref()
                 .ok_or_else(|| {
                     self.err(
@@ -2206,7 +2234,8 @@ impl Host {
                         &[],
                     )
                 })?
-                .get_recorded_auth_payloads(self)
+                .get_recorded_auth_payloads(self)?;
+            Ok(payloads)
         }
     }
 }

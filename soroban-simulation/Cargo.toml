@@ -1,0 +1,25 @@
+[package]
+name = "soroban-simulation"
+description = "Soroban host invocation simulations."
+homepage = "https://github.com/stellar/rs-soroban-env"
+repository = "https://github.com/stellar/rs-soroban-env"
+authors = ["Stellar Development Foundation <info@stellar.org>"]
+license = "Apache-2.0"
+version.workspace = true
+readme = "../README.md"
+edition = "2021"
+rust-version.workspace = true
+
+# Temporary until we publish, to satisfy cargo-semver-checks
+publish = true
+
+[dependencies]
+# To be removed
+anyhow = { version = "1.0.75", features = [] }
+thiserror = "1.0.46"
+soroban-env-host = { workspace = true,  features = ["recording_mode"]}
+static_assertions = "1.1.0"
+rand = "0.8.5"
+
+[package.metadata.docs.rs]
+all-features = true
