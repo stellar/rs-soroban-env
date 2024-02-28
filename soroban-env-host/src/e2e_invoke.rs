@@ -79,6 +79,7 @@ pub struct InvokeHostFunctionRecordingModeResult {
     pub contract_events: Vec<ContractEvent>,
     /// Size of the encoded contract events and the return value.
     /// Non-zero only when invocation has succeeded.
+    #[cfg(any(test, feature = "unstable-next-api"))]
     pub contract_events_and_return_value_size: u32,
 }
 
@@ -634,6 +635,7 @@ pub fn invoke_host_function_in_recording_mode(
         auth: output_auth,
         ledger_changes,
         contract_events,
+        #[cfg(any(test, feature = "unstable-next-api"))]
         contract_events_and_return_value_size,
     })
 }
@@ -812,6 +814,7 @@ struct StorageMapSnapshotSource<'a> {
     map: &'a StorageMap,
 }
 
+#[cfg(any(test, feature = "unstable-next-api"))]
 impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
         if let Some(Some((entry, live_until_ledger))) =
@@ -820,6 +823,33 @@ impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
             Ok(Some((Rc::clone(entry), *live_until_ledger)))
         } else {
             Ok(None)
+        }
+    }
+}
+
+#[cfg(not(any(test, feature = "unstable-next-api")))]
+impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
+        if let Some(Some((entry, live_until_ledger))) =
+            self.map.get::<Rc<LedgerKey>>(key, self.budget)?
+        {
+            Ok((Rc::clone(entry), *live_until_ledger))
+        } else {
+            Err(HostError::from((
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+            )))
+        }
+    }
+
+    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
+        if let Some(maybe_value) = self.map.get::<Rc<LedgerKey>>(key, self.budget)? {
+            Ok(maybe_value.is_some())
+        } else {
+            Err(HostError::from((
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+            )))
         }
     }
 }

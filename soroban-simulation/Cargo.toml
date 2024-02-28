@@ -24,7 +24,7 @@ static_assertions = "1.1.0"
 rand = "0.8.5"
 
 [dev-dependencies]
-soroban-env-host = { workspace = true,  features = ["recording_mode", "testutils"]}
+soroban-env-host = { workspace = true,  features = ["recording_mode", "testutils", "unstable-next-api"]}
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 pretty_assertions = "1.4"
 tap = "1.0.1"
