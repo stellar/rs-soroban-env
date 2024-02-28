@@ -5,6 +5,7 @@
 use std::{cmp::max, rc::Rc};
 
 use crate::ledger_info::get_key_durability;
+#[cfg(any(test, feature = "unstable-next-api"))]
 use crate::storage::EntryWithLiveUntil;
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
@@ -159,7 +160,15 @@ pub fn get_ledger_changes(
                 new_live_until_ledger: 0,
             });
         }
-        if let Some((old_entry, old_live_until_ledger)) = init_storage_snapshot.get(key)? {
+        #[cfg(any(test, feature = "unstable-next-api"))]
+        let entry_with_live_until = init_storage_snapshot.get(key)?;
+        #[cfg(not(any(test, feature = "unstable-next-api")))]
+        let entry_with_live_until = if init_storage_snapshot.has(key)? {
+            Some(init_storage_snapshot.get(key)?)
+        } else {
+            None
+        };
+        if let Some((old_entry, old_live_until_ledger)) = entry_with_live_until {
             let mut buf = vec![];
             metered_write_xdr(budget, old_entry.as_ref(), &mut buf)?;
             entry_change.old_entry_size_bytes = buf.len() as u32;
@@ -558,7 +567,15 @@ pub fn invoke_host_function_in_recording_mode(
         let mut encoded_ttl_entries = Vec::with_capacity(storage.footprint.0.len());
         let mut read_bytes = 0_u32;
         for (lk, _) in &storage.footprint.0 {
-            if let Some((le, live_until)) = ledger_snapshot.get(lk)? {
+            #[cfg(any(test, feature = "unstable-next-api"))]
+            let entry_with_live_until = ledger_snapshot.get(lk)?;
+            #[cfg(not(any(test, feature = "unstable-next-api")))]
+            let entry_with_live_until = if ledger_snapshot.has(lk)? {
+                Some(ledger_snapshot.get(lk)?)
+            } else {
+                None
+            };
+            if let Some((le, live_until)) = entry_with_live_until {
                 let encoded_le = host.to_xdr_non_metered(&*le)?;
                 read_bytes = read_bytes.saturating_add(encoded_le.len() as u32);
                 encoded_ledger_entries.push(encoded_le);
