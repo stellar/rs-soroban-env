@@ -14,9 +14,11 @@ mod func_info;
 
 #[cfg(feature = "bench")]
 pub(crate) use dispatch::dummy0;
+#[cfg(test)]
+pub(crate) use dispatch::protocol_gated_dummy;
 
 use crate::{
-    budget::{AsBudget, Budget},
+    budget::{get_wasmi_config, AsBudget, Budget},
     err,
     host::{
         error::TryBorrowOrErr,
@@ -33,7 +35,7 @@ use std::{cell::RefCell, io::Cursor, rc::Rc, time::Instant};
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 
-use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store, Value};
+use wasmi::{Engine, Instance, Linker, Memory, Module, Store, Value};
 
 use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
@@ -151,7 +153,7 @@ impl Vm {
         Ok(())
     }
 
-    fn check_meta_section(host: &Host, m: &Module) -> Result<(), HostError> {
+    fn check_meta_section(host: &Host, m: &Module) -> Result<u64, HostError> {
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut limits = DEFAULT_XDR_RW_LIMITS;
             limits.len = env_meta.len();
@@ -159,7 +161,8 @@ impl Vm {
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;
-                Vm::check_contract_interface_version(host, v)
+                Vm::check_contract_interface_version(host, v)?;
+                Ok(v)
             } else {
                 Err(host.err(
                     ScErrorType::WasmVm,
@@ -208,21 +211,7 @@ impl Vm {
             Some(module_wasm_code.len() as u64),
         )?;
 
-        let mut config = wasmi::Config::default();
-        let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
-
-        // Turn off most optional wasm features, leaving on some
-        // post-MVP features commonly enabled by Rust and Clang.
-        config
-            .wasm_multi_value(false)
-            .wasm_mutable_global(true)
-            .wasm_saturating_float_to_int(false)
-            .wasm_sign_extension(true)
-            .floats(false)
-            .consume_fuel(true)
-            .fuel_consumption_mode(FuelConsumptionMode::Eager)
-            .set_fuel_costs(fuel_costs);
-
+        let config = get_wasmi_config(host)?;
         let engine = Engine::new(&config);
         let module = {
             let _span0 = tracy_span!("parse module");
@@ -230,7 +219,8 @@ impl Vm {
         };
 
         Self::check_max_args(host, &module)?;
-        Self::check_meta_section(host, &module)?;
+        let interface_version = Self::check_meta_section(host, &module)?;
+        let contract_proto = get_ledger_protocol_version(interface_version);
 
         let mut store = Store::new(&engine, host.clone());
         store.limiter(|host| host);
@@ -238,8 +228,39 @@ impl Vm {
         let mut linker = <Linker<Host>>::new(&engine);
 
         {
+            // We perform link-time protocol version gating here.
+            // Reasons for doing link-time instead of run-time check:
+            // 1. VM instantiation is performed in both contract upload and
+            //    execution, thus any errorous contract will be rejected at
+            //    upload time.
+            // 2. If a contract contains a call to an outdated host function,
+            //    i.e. `contract_protocol > hf.max_supported_protocol`, failing
+            //    early is preferred from resource usage perspective.
+            // 3. If a contract contains a call to an non-existent host
+            //    function, the current (correct) behavior is to return
+            //    `Wasmi::LinkerError::MissingDefinition` error (which gets
+            //    converted to a `(WasmVm, InvalidAction)`). If that host
+            //    function is defined in a later protocol, and we replay that
+            //    contract (in the earlier protocol where it belongs), not
+            //    linking the function preserves the right behavior and error
+            //    code.
             let _span0 = tracy_span!("define host functions");
+            let ledger_proto = host.with_ledger_info(|li| Ok(li.protocol_version))?;
             for hf in HOST_FUNCTIONS {
+                if let Some(min_proto) = hf.min_proto {
+                    if contract_proto < min_proto || ledger_proto < min_proto {
+                        // We skip linking this hf instead of returning an error
+                        // because we have to support old contracts during replay.
+                        continue;
+                    }
+                }
+                if let Some(max_proto) = hf.max_proto {
+                    if contract_proto > max_proto || ledger_proto > max_proto {
+                        // We skip linking this hf instead of returning an error
+                        // because we have to support old contracts during replay.
+                        continue;
+                    }
+                }
                 let func = (hf.wrap)(&mut store);
                 host.map_err(
                     linker

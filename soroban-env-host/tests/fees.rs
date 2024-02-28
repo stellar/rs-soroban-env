@@ -3,7 +3,7 @@ use soroban_env_host::{
     fees::{
         compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
         FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
-        WriteFeeConfiguration, TTL_ENTRY_SIZE,
+        WriteFeeConfiguration, MINIMUM_WRITE_FEE_PER_1KB, TTL_ENTRY_SIZE,
     },
     xdr::TtlEntry,
     DEFAULT_XDR_RW_LIMITS,
@@ -867,7 +867,10 @@ fn test_compute_write_fee() {
         bucket_list_write_fee_growth_factor: 50,
     };
     // Empty bucket list
-    assert_eq!(compute_write_fee_per_1kb(0, &fee_config), 100);
+    assert_eq!(
+        compute_write_fee_per_1kb(0, &fee_config),
+        MINIMUM_WRITE_FEE_PER_1KB
+    );
     // Partially filled bucket list
     assert_eq!(
         compute_write_fee_per_1kb(50_000, &fee_config),
@@ -902,5 +905,49 @@ fn test_compute_write_fee() {
     assert_eq!(
         compute_write_fee_per_1kb(150_000_000_000_000, &large_fee_config),
         1_000_000_000 + 50 * (1_000_000_000 - 1_000_000) / 2
+    );
+}
+
+#[test]
+fn test_compute_write_fee_with_negative_low() {
+    let fee_config = WriteFeeConfiguration {
+        bucket_list_target_size_bytes: 100_000,
+        write_fee_1kb_bucket_list_low: -1_000,
+        write_fee_1kb_bucket_list_high: 10_000,
+        bucket_list_write_fee_growth_factor: 50,
+    };
+
+    // clamping before target
+    assert_eq!(
+        compute_write_fee_per_1kb(18_181, &fee_config),
+        MINIMUM_WRITE_FEE_PER_1KB
+    );
+
+    //ceil(11_000 * 18_182 / 100_000) - 1000 = 1001
+    assert_eq!(
+        compute_write_fee_per_1kb(18_182, &fee_config),
+        MINIMUM_WRITE_FEE_PER_1KB + 1
+    );
+
+    // Bucket list bigger than target.
+    assert_eq!(
+        compute_write_fee_per_1kb(150_000, &fee_config),
+        10_000 + 50 * (10_000 + 1_000) / 2
+    );
+}
+
+#[test]
+fn test_compute_write_fee_clamp_after_target() {
+    let fee_config = WriteFeeConfiguration {
+        bucket_list_target_size_bytes: 100_000,
+        write_fee_1kb_bucket_list_low: 10,
+        write_fee_1kb_bucket_list_high: 20,
+        bucket_list_write_fee_growth_factor: 50,
+    };
+
+    // Bucket list bigger than target.
+    assert_eq!(
+        compute_write_fee_per_1kb(100_001, &fee_config),
+        MINIMUM_WRITE_FEE_PER_1KB
     );
 }

@@ -956,6 +956,38 @@ impl EnvBase for Host {
         call_trace_env_ret!(self, res);
         res
     }
+
+    fn check_protocol_version_lower_bound(&self, lower: u32) -> Result<(), Self::Error> {
+        self.with_ledger_info(|li| {
+            let proto = li.protocol_version;
+            if proto < lower {
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::IndexBounds,
+                    "ledger protocol {} is less than specified lower bound {}",
+                    &[Val::from_u32(proto).into(), Val::from_u32(lower).into()],
+                ))
+            } else {
+                Ok(())
+            }
+        })
+    }
+
+    fn check_protocol_version_upper_bound(&self, upper: u32) -> Result<(), Self::Error> {
+        self.with_ledger_info(|li| {
+            let proto = li.protocol_version;
+            if proto > upper {
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::IndexBounds,
+                    "ledger protocol {} is larger than specified upper bound {}",
+                    &[Val::from_u32(proto).into(), Val::from_u32(upper).into()],
+                ))
+            } else {
+                Ok(())
+            }
+        })
+    }
 }
 
 impl VmCallerEnv for Host {
@@ -1520,8 +1552,7 @@ impl VmCallerEnv for Host {
             pos: keys_pos,
             len,
         } = self.get_mem_fn_args(keys_pos, len)?;
-        Vec::<Symbol>::charge_bulk_init_cpy(len as u64, self)?;
-        let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
+        let mut key_syms = Vec::<Symbol>::with_metered_capacity(len as usize, self)?;
         self.metered_vm_scan_slices_in_linear_memory(
             vmcaller,
             &vm,
@@ -2515,8 +2546,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
-            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
             vnew.extend_from_slice(hv.as_slice());
             vnew.push(u);
             Ok(ScBytes(vnew.try_into()?))
@@ -2601,8 +2631,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the insert
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
-            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
             vnew.extend_from_slice(hv.as_slice());
             vnew.insert(i as usize, u);
             Ok(ScBytes(vnew.try_into()?))
@@ -2621,8 +2650,7 @@ impl VmCallerEnv for Host {
                 // we allocate large enough memory to hold the new combined vector, so that
                 // allocation only happens once, and charge for it upfront.
                 let len = self.validate_usize_sum_fits_in_u32(sb1.len(), sb2.len())?;
-                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
-                let mut vnew: Vec<u8> = Vec::with_capacity(len);
+                let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
                 vnew.extend_from_slice(sb1.as_slice());
                 vnew.extend_from_slice(sb2.as_slice());
                 Ok(vnew)
@@ -2707,6 +2735,13 @@ impl VmCallerEnv for Host {
     // region: "test" module functions
 
     fn dummy0(&self, _vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<Val, Self::Error> {
+        Ok(().into())
+    }
+
+    fn protocol_gated_dummy(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+    ) -> Result<Val, Self::Error> {
         Ok(().into())
     }
 

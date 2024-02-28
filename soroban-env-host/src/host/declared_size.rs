@@ -28,7 +28,7 @@ use crate::{
     U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val,
     VecObject, Void, I256, U256,
 };
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 use wasmi::Value;
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
@@ -184,6 +184,11 @@ impl_declared_size_type!(SorobanAuthorizedFunction, 104);
 // cloning 16 bytes.
 impl<T> DeclaredSizeForMetering for Rc<T> {
     const DECLARED_SIZE: u64 = 16;
+}
+
+// RefCell is the underlying data plus an `isize` flag
+impl<T: DeclaredSizeForMetering> DeclaredSizeForMetering for RefCell<T> {
+    const DECLARED_SIZE: u64 = T::DECLARED_SIZE + 8;
 }
 
 // Cloning a slice only clones the reference without deep cloning its contents.
@@ -371,7 +376,6 @@ mod test {
         expect!["32"].assert_eq(size_of::<PublicKey>().to_string().as_str());
         expect!["45"].assert_eq(size_of::<Asset>().to_string().as_str());
         expect!["45"].assert_eq(size_of::<TrustLineAsset>().to_string().as_str());
-        expect!["72"].assert_eq(size_of::<Signer>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<LedgerKeyAccount>().to_string().as_str());
         expect!["77"].assert_eq(size_of::<LedgerKeyTrustLine>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<LedgerKeyContractCode>().to_string().as_str());
@@ -380,7 +384,22 @@ mod test {
         expect!["128"].assert_eq(size_of::<TrustLineEntry>().to_string().as_str());
         expect!["56"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["36"].assert_eq(size_of::<TtlEntry>().to_string().as_str());
-        expect!["112"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
+
+        // NB: a couple structs shrank between rust 1.75 and 1.76 but this is harmless
+        // from a metering perspective -- we're just overcharging slightly.
+        #[rustversion::before(1.76)]
+        fn check_sizes_that_changed_at_rust_1_76() {
+            expect!["72"].assert_eq(size_of::<Signer>().to_string().as_str());
+            expect!["112"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
+        }
+        #[rustversion::since(1.76)]
+        fn check_sizes_that_changed_at_rust_1_76() {
+            expect!["64"].assert_eq(size_of::<Signer>().to_string().as_str());
+            expect!["104"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
+        }
+
+        check_sizes_that_changed_at_rust_1_76();
+
         expect!["256"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["128"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScBytes>().to_string().as_str());
@@ -403,6 +422,7 @@ mod test {
 
         // composite types
         expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());
+        expect!["72"].assert_eq(size_of::<RefCell<ScVal>>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
         expect!["72"].assert_eq(size_of::<(Val, ScVal)>().to_string().as_str());
         expect!["320"].assert_eq(size_of::<[ScVal; 5]>().to_string().as_str());
@@ -557,6 +577,7 @@ mod test {
 
         // composite types
         assert_mem_size_le_declared_size!(Rc<ScVal>);
+        assert_mem_size_le_declared_size!(RefCell<ScVal>);
         assert_mem_size_le_declared_size!(&[ScVal]);
         assert_mem_size_le_declared_size!((Val, ScVal));
         assert_mem_size_le_declared_size!([ScVal; 5]);

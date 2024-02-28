@@ -3,16 +3,15 @@ use crate::{
     host_object::HostVec,
     meta,
     storage::Storage,
-    testutils::{generate_account_id, generate_bytes_array, wasm as wasm_util},
-    xdr::{
-        AccountId, ContractCostType, Limited, Limits, PublicKey, ScEnvMetaEntry, ScErrorCode,
-        ScErrorType, Uint256, WriteXdr,
+    testutils::{
+        generate_account_id, generate_bytes_array, interface_meta_with_custom_versions,
+        wasm as wasm_util,
     },
-    DiagnosticLevel, Env, EnvBase, Error, Host, HostError, Symbol, SymbolSmall, Tag, Val,
-    VecObject,
+    xdr::{AccountId, ContractCostType, PublicKey, ScErrorCode, ScErrorType, Uint256},
+    DiagnosticLevel, Env, EnvBase, Error, Host, HostError, Symbol, SymbolSmall, Tag, TryIntoVal,
+    Val, VecObject,
 };
 use expect_test::expect;
-use soroban_env_common::TryIntoVal;
 use soroban_test_wasms::HOSTILE;
 
 #[test]
@@ -730,7 +729,6 @@ fn test_integer_overflow() -> Result<(), HostError> {
 
 #[test]
 fn test_corrupt_custom_section() -> Result<(), HostError> {
-    // let wasm = wasm_util::wasm_module_with_custom_section("custom", vec![24; 7].as_slice());
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     host.as_budget().reset_unlimited()?;
@@ -773,22 +771,13 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
     ));
 
     let ledger_protocol = meta::get_ledger_protocol_version(meta::INTERFACE_VERSION);
-    let ledger_pre = meta::get_ledger_protocol_version(meta::INTERFACE_VERSION);
-
-    let interface_meta = |proto: u32, pre: u32| -> Vec<u8> {
-        let iv = (proto as u64) << 32 | pre as u64;
-        let entry = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(iv);
-        let bytes = Vec::<u8>::new();
-        let mut w = Limited::new(bytes, Limits::none());
-        entry.write_xdr(&mut w).unwrap();
-        w.inner
-    };
+    let ledger_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
 
     // invalid: protocol is future
     let res = host.register_test_contract_wasm_from_source_account(
         wasm_util::wasm_module_with_custom_section(
             "contractenvmetav0",
-            interface_meta(ledger_protocol + 1, ledger_pre).as_slice(),
+            interface_meta_with_custom_versions(ledger_protocol + 1, ledger_pre).as_slice(),
         )
         .as_slice(),
         generate_account_id(&host),
@@ -804,7 +793,7 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
         let res = host.register_test_contract_wasm_from_source_account(
             wasm_util::wasm_module_with_custom_section(
                 "contractenvmetav0",
-                interface_meta(ledger_protocol - 1, 1).as_slice(),
+                interface_meta_with_custom_versions(ledger_protocol - 1, 1).as_slice(),
             )
             .as_slice(),
             generate_account_id(&host),
@@ -819,7 +808,7 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
         let res = host.register_test_contract_wasm_from_source_account(
             wasm_util::wasm_module_with_custom_section(
                 "contractenvmetav0",
-                interface_meta(ledger_protocol, ledger_pre + 1).as_slice(),
+                interface_meta_with_custom_versions(ledger_protocol, ledger_pre + 1).as_slice(),
             )
             .as_slice(),
             generate_account_id(&host),
@@ -1151,13 +1140,29 @@ fn test_large_globals() -> Result<(), HostError> {
 }
 
 #[test]
+fn test_extern_ref_not_allowed() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    // `ExternRef` is not allowed by disabling `wasmi_reference_type`
+    let wasm = wasm_util::wasm_module_with_extern_ref();
+    let res = host.register_test_contract_wasm_from_source_account(
+        wasm.as_slice(),
+        generate_account_id(&host),
+        generate_bytes_array(&host),
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+    Ok(())
+}
+
+#[test]
 fn test_large_number_of_tables() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
-    // even though we have enabled wasmi_reference_type, which makes multiple
-    // tables possible, we have explicitly set our table count limit to 1, in
-    // `WASMI_LIMITS_CONFIG`. Thus we essentially not allow multiple tables.
-    let wasm = wasm_util::wasm_module_with_many_tables(2);
+    // multiple tables are not allowed by disabling `wasmi_reference_type`
+    let wasm = wasm_util::wasm_module_with_additional_tables(1);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         generate_account_id(&host),

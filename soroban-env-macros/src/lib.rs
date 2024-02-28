@@ -99,6 +99,8 @@ pub(crate) struct Function {
     pub(crate) args: Vec<Arg>,
     pub(crate) r#return: String,
     pub(crate) docs: Option<String>,
+    pub(crate) min_supported_protocol: Option<u32>,
+    pub(crate) max_supported_protocol: Option<u32>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

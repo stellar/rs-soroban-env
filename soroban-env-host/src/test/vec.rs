@@ -424,11 +424,9 @@ fn instantiate_oversized_vec_from_slice() -> Result<(), HostError> {
     let vals = vec![bytes_val; 5];
     let vec = host.vec_new_from_slice(&vals.as_slice())?;
     let res = host.from_host_val(vec.to_val());
-    // This is actually Budget::ExceededLimit, but ScVal::try_from_val converts
-    // he error to a ConversionError. We have an issue for it https://github.com/stellar/rs-soroban-env/issues/1046
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
     Ok(())
 }

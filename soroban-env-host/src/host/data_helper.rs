@@ -95,11 +95,11 @@ impl Host {
         match &entry.data {
             LedgerEntryData::ContractData(e) => match &e.val {
                 ScVal::ContractInstance(instance) => instance.metered_clone(self),
-                other => Err(err!(
-                    self,
-                    (ScErrorType::Storage, ScErrorCode::InternalError),
+                _ => Err(self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
                     "ledger entry for contract instance does not contain contract instance",
-                    *other
+                    &[],
                 )),
             },
             _ => Err(self.err(

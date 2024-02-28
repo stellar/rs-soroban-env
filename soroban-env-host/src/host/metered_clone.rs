@@ -16,7 +16,7 @@
 //! pointers. The rest of each struct is considered its "shallow" part and
 //! charged based on its declared size (see [`DeclaredSizeForMetering`]).
 
-use std::{iter::FromIterator, mem, rc::Rc};
+use std::{cell::RefCell, iter::FromIterator, mem, rc::Rc};
 
 use crate::{
     budget::{AsBudget, DepthLimiter},
@@ -112,16 +112,32 @@ where
         charge_heap_alloc::<Self::Item>(len, budget.clone())?;
         charge_shallow_copy::<Self::Item>(len, budget)
     }
+
+    /// Metered version of the container's `with_capacity` method.
+    fn with_metered_capacity(capacity: usize, budget: impl AsBudget) -> Result<Self, HostError>;
 }
 
 impl<T: DeclaredSizeForMetering> MeteredContainer for Vec<T> {
     type Item = T;
+
+    fn with_metered_capacity(capacity: usize, budget: impl AsBudget) -> Result<Self, HostError> {
+        Self::charge_bulk_init_cpy(capacity as u64, budget)?;
+        Ok(Vec::with_capacity(capacity))
+    }
 }
 
+/// This is implemented in order `metered_collect` a `Vec<Result<T, E>>` into a
+/// `Result<Vec<T>, E>`. It is only supposed to exist for charging purpose.
 impl<T: DeclaredSizeForMetering, E: DeclaredSizeForMetering> MeteredContainer
     for Result<Vec<T>, E>
 {
     type Item = Result<T, E>;
+
+    /// This function will return an error. It is not expected to initialize a
+    /// `Result<Vec<T, E>>` with capacity.
+    fn with_metered_capacity(_capacity: usize, _budget: impl AsBudget) -> Result<Self, HostError> {
+        Err(Error::from_type_and_code(ScErrorType::Object, ScErrorCode::InvalidAction).into())
+    }
 }
 
 /// Represents an iterator which can collect its elements into a `MeteredContainer`
@@ -321,6 +337,15 @@ impl MeteredClone for Asset {}
 
 // cloning Rc is just a ref-count bump
 impl<T> MeteredClone for Rc<T> {}
+
+// cloning a RefCell clones its underlying data structure
+impl<T: MeteredClone> MeteredClone for RefCell<T> {
+    const IS_SHALLOW: bool = T::IS_SHALLOW;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.borrow().charge_for_substructure(budget)
+    }
+}
 
 impl<K, V> MeteredClone for (K, V)
 where

@@ -7,6 +7,7 @@ mod wasmi_helper;
 pub(crate) use limits::DepthLimiter;
 pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use model::{MeteredCostComponent, ScaledU64};
+pub(crate) use wasmi_helper::{get_wasmi_config, load_calibrated_fuel_costs};
 
 use std::{
     cell::{RefCell, RefMut},
@@ -21,7 +22,6 @@ use crate::{
 };
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
-use wasmi_helper::FuelConfig;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CostTracker {
@@ -137,7 +137,7 @@ pub(crate) struct BudgetImpl {
     /// For the purpose of calibration and reporting; not used for budget-limiting nor does it affect consensus
     tracker: BudgetTracker,
     is_in_shadow_mode: bool,
-    fuel_config: FuelConfig,
+    fuel_costs: wasmi::FuelCosts,
     depth_limit: u32,
 }
 
@@ -154,7 +154,7 @@ impl BudgetImpl {
             mem_bytes: BudgetDimension::try_from_config(mem_cost_params)?,
             tracker: Default::default(),
             is_in_shadow_mode: false,
-            fuel_config: Default::default(),
+            fuel_costs: load_calibrated_fuel_costs(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
@@ -246,7 +246,7 @@ impl Default for BudgetImpl {
             mem_bytes: BudgetDimension::default(),
             tracker: Default::default(),
             is_in_shadow_mode: false,
-            fuel_config: Default::default(),
+            fuel_costs: load_calibrated_fuel_costs(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
@@ -823,17 +823,5 @@ impl Budget {
 
     pub(crate) fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
         self.0.try_borrow_mut_or_err()?.get_wasmi_fuel_remaining()
-    }
-
-    // generate a wasmi fuel cost schedule based on our calibration
-    pub(crate) fn wasmi_fuel_costs(&self) -> Result<wasmi::FuelCosts, HostError> {
-        let config = &self.0.try_borrow_or_err()?.fuel_config;
-        let mut costs = wasmi::FuelCosts::default();
-        costs.base = config.base;
-        costs.entity = config.entity;
-        costs.load = config.load;
-        costs.store = config.store;
-        costs.call = config.call;
-        Ok(costs)
     }
 }

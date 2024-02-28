@@ -99,7 +99,7 @@ impl Budget {
     /// of a specific fuel category. In order to get the correct, unscaled fuel
     /// count, we have to preset all the `FuelConfig` entries to 1.
     pub fn reset_fuel_config(&self) -> Result<(), HostError> {
-        self.0.try_borrow_mut_or_err()?.fuel_config.reset();
+        self.0.try_borrow_mut_or_err()?.fuel_costs = wasmi::FuelCosts::default();
         Ok(())
     }
 
