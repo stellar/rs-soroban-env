@@ -1,4 +1,5 @@
 use crate::e2e_invoke::ledger_entry_to_ledger_key;
+#[cfg(any(test, feature = "unstable-next-api"))]
 use crate::storage::EntryWithLiveUntil;
 use crate::{
     budget::Budget,
@@ -150,7 +151,7 @@ impl SnapshotSource for MockSnapshotSource {
         if let Some(val) = self.0.get(key) {
             Ok((Rc::clone(&val.0), val.1))
         } else {
-            Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::MissingValue).into())
+            Err((ScErrorType::Storage, ScErrorCode::MissingValue).into())
         }
     }
 
