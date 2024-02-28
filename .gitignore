@@ -2,4 +2,3 @@
 .vscode
 /vendor
 lcov.info
-Cargo.lock
