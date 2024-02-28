@@ -145,6 +145,17 @@ impl SnapshotSource for MockSnapshotSource {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn interface_meta_with_custom_versions(proto: u32, pre: u32) -> Vec<u8> {
+    use crate::xdr::{Limited, Limits, ScEnvMetaEntry, WriteXdr};
+    let iv = (proto as u64) << 32 | pre as u64;
+    let entry = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(iv);
+    let bytes = Vec::<u8>::new();
+    let mut w = Limited::new(bytes, Limits::none());
+    entry.write_xdr(&mut w).unwrap();
+    w.inner
+}
+
 impl Host {
     pub const TEST_PRNG_SEED: &'static [u8; 32] = b"12345678901234567890123456789012";
 
@@ -525,7 +536,9 @@ impl Host {
 
 #[cfg(test)]
 pub(crate) mod wasm {
+    use super::interface_meta_with_custom_versions;
     use crate::{Symbol, Tag, U32Val, Val};
+    use soroban_env_common::meta::{get_pre_release_version, INTERFACE_VERSION};
     use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
     use wasm_encoder::{ConstExpr, Elements, RefType};
 
@@ -1061,6 +1074,21 @@ pub(crate) mod wasm {
         fe.i32x4_add();
         fe.v128_store(0, 0);
         fe.push(Symbol::try_from_small_str("pass").unwrap());
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_calling_protocol_gated_host_fn(wasm_proto: u32) -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        let pre = get_pre_release_version(INTERFACE_VERSION);
+        me.custom_section(
+            &"contractenvmetav0",
+            interface_meta_with_custom_versions(wasm_proto, pre).as_slice(),
+        );
+        // protocol_gated_dummy
+        let f0 = me.import_func("t", "0", Arity(0));
+        // the caller
+        let mut fe = me.func(Arity(0), 0);
+        fe.call_func(f0);
         fe.finish_and_export("test").finish()
     }
 }
