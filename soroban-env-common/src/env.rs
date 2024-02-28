@@ -225,6 +225,14 @@ pub trait EnvBase: Sized + Clone {
     /// events are enabled. When running on host, logs directly; when running on
     /// guest, redirects through log_from_linear_memory.
     fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, Self::Error>;
+
+    /// Check the current ledger protocol version against a provided lower
+    /// bound, error if protocol version is out-of-bound.
+    fn check_protocol_version_lower_bound(&self, lower_bound: u32) -> Result<(), Self::Error>;
+
+    /// Check the current ledger protocol version against a provided upper
+    /// bound, error if protocol version is out-of-bound.
+    fn check_protocol_version_upper_bound(&self, upper_bound: u32) -> Result<(), Self::Error>;
 }
 
 /// This trait is used by macro-generated dispatch and forwarding functions to
@@ -329,6 +337,7 @@ generate_call_macro_with_all_host_functions!("env.json");
 // trait.
 macro_rules! host_function_helper {
     {
+        $($min_proto:literal)?, $($max_proto:literal)?,
         $(#[$attr:meta])*
         fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
@@ -359,7 +368,7 @@ macro_rules! generate_env_trait {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
         )*
@@ -387,7 +396,7 @@ macro_rules! generate_env_trait {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the Env trait.
-                    host_function_helper!{$(#[$fn_attr])* fn $fn_id $args -> $ret}
+                    host_function_helper!{$($min_proto)?, $($max_proto)?, $(#[$fn_attr])* fn $fn_id $args -> $ret}
                 )*
             )*
         }

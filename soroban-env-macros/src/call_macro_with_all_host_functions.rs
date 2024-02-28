@@ -81,6 +81,8 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
             let docs = f.docs.as_deref().unwrap_or_default();
             let export = &f.export;
             let name = format_ident!("{}", &f.name);
+            let min_proto = f.min_supported_protocol;
+            let max_proto = f.max_supported_protocol;
 
             // Build the args for use within the 'fn'.
             let args = f.args.iter().map(|a| {
@@ -93,7 +95,7 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
 
             quote! {
                 #[doc = #docs]
-                { #export, fn #name(#(#args),*) -> #r#return }
+                { #export, #min_proto, #max_proto, fn #name(#(#args),*) -> #r#return }
             }
         });
 
@@ -120,7 +122,7 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
                     //
                     //  mod $mod_id:ident $mod_str:literal {
                     //     ...
-                    //     { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                    //     { $fn_str:literal, $min_proto:literal, $max_proto:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                     //     ...
                     //  }
                     //
