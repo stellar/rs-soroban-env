@@ -151,7 +151,11 @@ impl SnapshotSource for MockSnapshotSource {
         if let Some(val) = self.0.get(key) {
             Ok((Rc::clone(&val.0), val.1))
         } else {
-            Err((ScErrorType::Storage, ScErrorCode::MissingValue).into())
+            Err((
+                crate::xdr::ScErrorType::Storage,
+                crate::xdr::ScErrorCode::MissingValue,
+            )
+                .into())
         }
     }
 
