@@ -1,7 +1,7 @@
 // Note: ignoring error handling safety in these tests.
-use soroban_env_common::{AddressObject, Env, TryFromVal};
+use soroban_env_common::{AddressObject, Env};
 use soroban_test_wasms::CONTRACT_STORAGE;
-use stellar_xdr::next::{ContractExecutable, Hash, ScAddress, ScVal};
+use stellar_xdr::next::{ContractExecutable, Hash};
 
 use crate::Host;
 
@@ -17,16 +17,7 @@ impl InstanceCodeTest {
     fn setup() -> Self {
         let host = Host::test_host_with_recording_footprint();
         let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
-        let hash = if let ScVal::Address(addr) =
-            ScVal::try_from_val(&host, contract_id.as_val()).unwrap()
-        {
-            let ScAddress::Contract(hash) = addr else {
-                panic!("Expected contract")
-            };
-            hash
-        } else {
-            panic!("Expected address type")
-        };
+        let hash = host.contract_id_from_address(contract_id).unwrap();
 
         let code = if let ContractExecutable::Wasm(hash) = host
             .retrieve_contract_instance_from_storage(
@@ -37,18 +28,14 @@ impl InstanceCodeTest {
         {
             hash
         } else {
-            panic!("Expected WASM executable")
+            panic!("Expected Wasm executable")
         };
 
         host.set_ledger_info(crate::LedgerInfo {
             protocol_version: 21,
             sequence_number: 4090,
-            timestamp: Default::default(),
-            network_id: Default::default(),
-            base_reserve: Default::default(),
-            min_temp_entry_ttl: Default::default(),
-            min_persistent_entry_ttl: Default::default(),
             max_entry_ttl: 10000,
+            ..Default::default()
         })
         .unwrap();
 
@@ -82,7 +69,6 @@ mod separate_instance_code_extension {
                 host.contract_instance_ledger_key(&contract).unwrap()
             )
             .unwrap()
-            .unwrap()
             .1,
             Some(9090)
         );
@@ -102,7 +88,6 @@ mod separate_instance_code_extension {
             .is_ok());
         assert_eq!(
             host.retrieve_entry_with_lifetime(host.contract_code_ledger_key(&code).unwrap())
-                .unwrap()
                 .unwrap()
                 .1,
             Some(9090)

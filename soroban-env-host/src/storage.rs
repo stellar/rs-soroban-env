@@ -483,12 +483,12 @@ impl Storage {
     pub fn get_entry_with_lifetime(
         &self,
         key: Rc<LedgerKey>,
-    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+    ) -> Option<EntryWithLiveUntil> {
         let entry = self.map.map.iter().find(|e| e.0 == key);
 
         match entry {
-            None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
-            Some(pair_option) => Ok(pair_option.1.clone()),
+            None => None,
+            Some(pair_option) => pair_option.1.clone(),
         }
     }
 }

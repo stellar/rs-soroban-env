@@ -2071,9 +2071,7 @@ impl VmCallerEnv for Host {
         self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
-            None,
-            extend_to.into(),
-            None,
+            extend_to.into()
         )?;
         Ok(Val::VOID)
     }
@@ -2090,7 +2088,7 @@ impl VmCallerEnv for Host {
         self.try_borrow_storage_mut()?
             .extend_ttl(
                 self,
-                key.metered_clone(self)?,
+                key,
                 threshold.into(),
                 extend_to.into(),
             )
@@ -2110,9 +2108,7 @@ impl VmCallerEnv for Host {
         self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
-            None,
-            extend_to.into(),
-            None,
+            extend_to.into()
         )?;
         Ok(Val::VOID)
     }
@@ -3055,10 +3051,11 @@ impl Host {
         f(self.0.budget.clone())
     }
 
-    pub fn retrieve_entry_with_lifetime(
+    #[allow(dead_code)]
+    pub(crate) fn retrieve_entry_with_lifetime(
         &self,
         key: Rc<crate::xdr::LedgerKey>,
-    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+    ) -> Option<EntryWithLiveUntil> {
         self.0.storage.borrow().get_entry_with_lifetime(key)
     }
 }
