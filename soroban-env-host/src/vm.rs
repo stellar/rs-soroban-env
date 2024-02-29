@@ -26,11 +26,14 @@ use crate::{
         metered_hash::{CountingHasher, MeteredHash},
     },
     meta::{self, get_ledger_protocol_version},
-    xdr::{ContractCostType, Hash, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
+    xdr::{
+        ContractCodeCostInputs, ContractCostType, Hash, Limited, ReadXdr, ScEnvMetaEntry,
+        ScErrorCode, ScErrorType,
+    },
     ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
     DEFAULT_XDR_RW_LIMITS,
 };
-use std::{cell::RefCell, io::Cursor, rc::Rc, time::Instant};
+use std::{cell::RefCell, collections::BTreeSet, io::Cursor, rc::Rc, time::Instant};
 
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
@@ -60,6 +63,7 @@ pub struct Vm {
     // recycled across calls. Or possibly beyond, to be recycled across txs.
     // https://github.com/stellar/rs-soroban-env/issues/827
     module: Module,
+    cost_inputs: ContractCodeCostInputs,
     store: RefCell<Store<Host>>,
     instance: Instance,
     pub(crate) memory: Option<Memory>,
@@ -200,16 +204,82 @@ impl Vm {
         Ok(())
     }
 
+    #[cfg(feature = "testutils")]
+    pub fn get_all_host_functions() -> Vec<(&'static str, &'static str, u32)> {
+        HOST_FUNCTIONS
+            .iter()
+            .map(|hf| (hf.mod_str, hf.fn_str, hf.arity))
+            .collect()
+    }
+
     /// Instantiates a VM given the arguments provided in [`Self::new`]
     fn instantiate(
         host: &Host,
         contract_id: Hash,
         module_wasm_code: &[u8],
+        code_cost_inputs: Option<ContractCodeCostInputs>,
     ) -> Result<Rc<Self>, HostError> {
-        host.charge_budget(
-            ContractCostType::VmInstantiation,
-            Some(module_wasm_code.len() as u64),
-        )?;
+        match &code_cost_inputs {
+            // When we have a set of cost inputs, we charge each of them. This
+            // is the "cheap" path where we're going to charge a model cost that
+            // is much closer to the true cost of instantiating the contract,
+            // modeled as a variety of different linear terms.
+            Some(inputs) => {
+                host.charge_budget(
+                    ContractCostType::VmInstantiateInstructions,
+                    Some(inputs.n_instructions as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateFunctions,
+                    Some(inputs.n_functions as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateGlobals,
+                    Some(inputs.n_globals as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateTableEntries,
+                    Some(inputs.n_table_entries as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateTypes,
+                    Some(inputs.n_types as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateDataSegments,
+                    Some(inputs.n_data_segments as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateElemSegments,
+                    Some(inputs.n_elem_segments as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateImports,
+                    Some(inputs.n_imports as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateExports,
+                    Some(inputs.n_exports as u64),
+                )?;
+                host.charge_budget(
+                    ContractCostType::VmInstantiateMemoryPages,
+                    Some(inputs.n_memory_pages as u64),
+                )?;
+            }
+            None => {
+                // When we don't have a set of cost inputs, either because the
+                // contract predates storing cost inputs or because we're doing
+                // an upload-time analysis of an unknown contract, we charge
+                // based on the byte size and assume the worst-case cost for
+                // each byte. This is the "expensive" path, but we only have to
+                // charge it during upload, after which we'll store the cost
+                // inputs for use in future instantiations.
+                host.charge_budget(
+                    ContractCostType::VmInstantiation,
+                    Some(module_wasm_code.len() as u64),
+                )?;
+            }
+        }
 
         let config = get_wasmi_config(host)?;
         let engine = Engine::new(&config);
@@ -222,8 +292,23 @@ impl Vm {
         let interface_version = Self::check_meta_section(host, &module)?;
         let contract_proto = get_ledger_protocol_version(interface_version);
 
+        let cost_inputs = match code_cost_inputs {
+            Some(inputs) => inputs,
+            None => Self::extract_contract_cost_inputs(host.clone(), module_wasm_code)?,
+        };
+
         let mut store = Store::new(&engine, host.clone());
         store.limiter(|host| host);
+
+        let module_imports: BTreeSet<(&str, &str)> = module
+            .imports()
+            .filter(|i| i.ty().func().is_some())
+            .map(|i| {
+                let mod_str = i.module();
+                let fn_str = i.name();
+                (mod_str, fn_str)
+            })
+            .collect();
 
         let mut linker = <Linker<Host>>::new(&engine);
 
@@ -261,6 +346,11 @@ impl Vm {
                         continue;
                     }
                 }
+                // We only link the functions that are actually used by the
+                // contract. Linking is quite expensive.
+                if !module_imports.contains(&(hf.mod_str, hf.fn_str)) {
+                    continue;
+                }
                 let func = (hf.wrap)(&mut store);
                 host.map_err(
                     linker
@@ -293,6 +383,7 @@ impl Vm {
         Ok(Rc::new(Self {
             contract_id,
             module,
+            cost_inputs,
             store: RefCell::new(store),
             instance,
             memory,
@@ -321,12 +412,13 @@ impl Vm {
         host: &Host,
         contract_id: Hash,
         module_wasm_code: &[u8],
+        code_cost_inputs: Option<ContractCodeCostInputs>,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
 
         if cfg!(not(target_family = "wasm")) {
             let now = Instant::now();
-            let vm = Self::instantiate(host, contract_id, module_wasm_code)?;
+            let vm = Self::instantiate(host, contract_id, module_wasm_code, code_cost_inputs)?;
 
             host.as_budget().track_time(
                 ContractCostType::VmInstantiation,
@@ -335,8 +427,217 @@ impl Vm {
 
             Ok(vm)
         } else {
-            Self::instantiate(host, contract_id, module_wasm_code)
+            Self::instantiate(host, contract_id, module_wasm_code, code_cost_inputs)
         }
+    }
+
+    fn check_const_expr_simple(host: &Host, expr: &wasmparser::ConstExpr) -> Result<(), HostError> {
+        use wasmparser::Operator::*;
+        let mut op = expr.get_operators_reader();
+        while !op.eof() {
+            match host.map_err(op.read())? {
+                I32Const { .. } | I64Const { .. } | RefFunc { .. } | RefNull { .. } | End => (),
+                _ => {
+                    return Err(host.err(
+                        ScErrorType::WasmVm,
+                        ScErrorCode::InvalidInput,
+                        "unsupported complex wasm constant expression",
+                        &[],
+                    ))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn extract_contract_cost_inputs(
+        host: Host,
+        wasm: &[u8],
+    ) -> Result<ContractCodeCostInputs, HostError> {
+        use wasmparser::{ElementItems, ElementKind, Parser, Payload::*, TableInit};
+
+        if !Parser::is_core_wasm(wasm) {
+            return Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidInput,
+                "unsupported non-core wasm module",
+                &[],
+            ));
+        }
+
+        let mut costs = ContractCodeCostInputs {
+            n_instructions: 0,
+            n_functions: 0,
+            n_globals: 0,
+            n_table_entries: 0,
+            n_types: 0,
+            n_data_segments: 0,
+            n_elem_segments: 0,
+            n_imports: 0,
+            n_exports: 0,
+            n_memory_pages: 0,
+        };
+
+        let parser = Parser::new(0);
+        let mut elements: u32 = 0;
+        let mut data: u32 = 0;
+        for section in parser.parse_all(wasm) {
+            let section = host.map_err(section)?;
+            match section {
+                // Ignored sections.
+                Version { .. }
+                | DataCountSection { .. }
+                | CustomSection(_)
+                | CodeSectionStart { .. }
+                | End(_) => (),
+
+                // Component-model stuff or other unsupported sections. Error out.
+                StartSection { .. }
+                | ModuleSection { .. }
+                | InstanceSection(_)
+                | CoreTypeSection(_)
+                | ComponentSection { .. }
+                | ComponentInstanceSection(_)
+                | ComponentAliasSection(_)
+                | ComponentTypeSection(_)
+                | ComponentCanonicalSection(_)
+                | ComponentStartSection { .. }
+                | ComponentImportSection(_)
+                | ComponentExportSection(_)
+                | TagSection(_)
+                | UnknownSection { .. } => {
+                    return Err(host.err(
+                        ScErrorType::WasmVm,
+                        ScErrorCode::InvalidInput,
+                        "unsupported wasm section",
+                        &[],
+                    ))
+                }
+
+                MemorySection(s) => {
+                    for mem in s {
+                        let mem = host.map_err(mem)?;
+                        if mem.memory64 {
+                            return Err(host.err(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::InvalidInput,
+                                "unsupported 64-bit memory",
+                                &[],
+                            ));
+                        }
+                        if mem.shared {
+                            return Err(host.err(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::InvalidInput,
+                                "unsupported shared memory",
+                                &[],
+                            ));
+                        }
+                        if mem.initial > 0xffff {
+                            return Err(host.err(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::InvalidInput,
+                                "unsupported memory size",
+                                &[],
+                            ));
+                        }
+                        costs.n_memory_pages =
+                            costs.n_memory_pages.saturating_add(mem.initial as u32);
+                    }
+                }
+
+                TypeSection(s) => costs.n_types = costs.n_types.saturating_add(s.count()),
+                ImportSection(s) => costs.n_imports = costs.n_imports.saturating_add(s.count()),
+                FunctionSection(s) => {
+                    costs.n_functions = costs.n_functions.saturating_add(s.count())
+                }
+                TableSection(s) => {
+                    for table in s {
+                        let table = host.map_err(table)?;
+                        costs.n_table_entries =
+                            costs.n_table_entries.saturating_add(table.ty.initial);
+                        match table.init {
+                            TableInit::RefNull => (),
+                            TableInit::Expr(ref expr) => {
+                                Self::check_const_expr_simple(&host, &expr)?;
+                            }
+                        }
+                    }
+                }
+                GlobalSection(s) => {
+                    costs.n_globals = costs.n_globals.saturating_add(s.count());
+                    for global in s {
+                        let global = host.map_err(global)?;
+                        Self::check_const_expr_simple(&host, &global.init_expr)?;
+                    }
+                }
+                ExportSection(s) => costs.n_exports = costs.n_exports.saturating_add(s.count()),
+                ElementSection(s) => {
+                    costs.n_elem_segments = costs.n_elem_segments.saturating_add(1);
+                    elements = elements.saturating_add(s.count());
+                    for elem in s {
+                        let elem = host.map_err(elem)?;
+                        match elem.kind {
+                            ElementKind::Declared | ElementKind::Passive => (),
+                            ElementKind::Active { offset_expr, .. } => {
+                                Self::check_const_expr_simple(&host, &offset_expr)?
+                            }
+                        }
+                        match elem.items {
+                            ElementItems::Functions(_) => (),
+                            ElementItems::Expressions(_, exprs) => {
+                                for expr in exprs {
+                                    let expr = host.map_err(expr)?;
+                                    Self::check_const_expr_simple(&host, &expr)?;
+                                }
+                            }
+                        }
+                    }
+                }
+                DataSection(s) => {
+                    costs.n_data_segments = costs.n_data_segments.saturating_add(1);
+                    for d in s {
+                        let d = host.map_err(d)?;
+                        if d.data.len() > u32::MAX as usize {
+                            return Err(host.err(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::InvalidInput,
+                                "data segment too large",
+                                &[],
+                            ));
+                        }
+                        data = data.saturating_add(d.data.len() as u32);
+                        match d.kind {
+                            wasmparser::DataKind::Active { offset_expr, .. } => {
+                                Self::check_const_expr_simple(&host, &offset_expr)?
+                            }
+                            wasmparser::DataKind::Passive => (),
+                        }
+                    }
+                }
+                CodeSectionEntry(s) => {
+                    let ops = host.map_err(s.get_operators_reader())?;
+                    for _op in ops {
+                        costs.n_instructions = costs.n_instructions.saturating_add(1);
+                    }
+                }
+            }
+        }
+        if elements > costs.n_table_entries {
+            dbg!(elements);
+            dbg!(costs.n_table_entries);
+            return Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidInput,
+                "too many elements in wasm elem section(s)",
+                &[],
+            ));
+        }
+        Ok(costs)
+    }
+
+    pub fn get_contract_code_cost_inputs(&self) -> ContractCodeCostInputs {
+        self.cost_inputs.clone()
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {

@@ -2,6 +2,7 @@ use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{cost_runner::*, xdr::Hash, Host, Symbol, Vm};
 use soroban_synth_wasm::{Arity, GlobalRef, ModEmitter, Operand};
+use wasm_encoder::{ConstExpr, ExportKind, ValType};
 
 // These are fp numbers to minimize rounding during overhead calculation.
 // The fact they both turned out to be "whole" numbers is pure luck.
@@ -25,7 +26,9 @@ pub fn wasm_module_with_n_internal_funcs(n: usize) -> Vec<u8> {
     fe.finish_and_export("test").finish()
 }
 
-pub fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
+pub fn wasm_module_with_n_insns(n: usize) -> Vec<u8> {
+    // We actually emit 4 instructions per loop iteration, so we need to divide by 4.
+    let n = 1 + (n / 4);
     let mut fe = ModEmitter::default().func(Arity(1), 0);
     let arg = fe.args[0];
     fe.push(Operand::Const64(1));
@@ -38,6 +41,142 @@ pub fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     fe.drop();
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
+}
+pub fn wasm_module_with_n_globals(n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::default();
+    for i in 0..n {
+        me.global(ValType::I64, true, &ConstExpr::i64_const(i as i64));
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+pub fn wasm_module_with_n_imports(n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::default();
+    let names = Vm::get_all_host_functions();
+    for (module,name,arity) in names.iter().take(n) {
+        if *module == "t" {
+            continue;
+        }
+        me.import_func(module, name, Arity(*arity));
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+pub fn wasm_module_with_n_exports(n: usize) -> Vec<u8> {
+    let me = ModEmitter::default();
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    let (mut me, fid) = fe.finish();
+    for i in 0..n {
+        me.export(format!("_{i}").as_str(), ExportKind::Func, fid.0);
+    }
+    me.finish()
+}
+
+pub fn wasm_module_with_n_table_entries(n: usize) -> Vec<u8> {
+    let me = ModEmitter::from_configs(1, n as u32);
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    let (mut me, f) = fe.finish();
+    let funcs = vec![f; n];
+    me.define_elem_funcs(&funcs);
+    me.finish()
+}
+
+pub fn wasm_module_with_n_types(mut n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::default();
+    // There's a max of 1,000,000 types, so we just make a loop
+    // that covers more than that many combinations, and break when we've got
+    // to the requested number.
+    let val_types = &[ValType::I32, ValType::I64];
+
+    'top: for a in val_types {
+        for b in val_types {
+            for c in val_types {
+                for d in val_types {
+                    for e in val_types {
+                        for f in val_types {
+                            for g in val_types {
+                                for h in val_types {
+                                    for i in val_types {
+                                        for j in val_types {
+                                            for aa in val_types {
+                                                for bb in val_types {
+                                                    for cc in val_types {
+                                                        for dd in val_types {
+                                                            for ee in val_types {
+                                                                for ff in val_types {
+                                                                    for gg in val_types {
+                                                                        for hh in val_types {
+                                                                            for ii in val_types {
+                                                                                for jj in val_types
+                                                                                {
+                                                                                    if n == 0 {
+                                                                                        break 'top;
+                                                                                    }
+                                                                                    n -= 1;
+                                                                                    let params = &[
+                                                                                        *a, *b, *c,
+                                                                                        *d, *e, *f,
+                                                                                        *g, *h, *i,
+                                                                                        *j, *aa,
+                                                                                        *bb, *cc,
+                                                                                        *dd, *ee,
+                                                                                        *ff, *gg,
+                                                                                        *hh, *ii,
+                                                                                        *jj,
+                                                                                    ];
+                                                                                    me.add_raw_fn_type(params, &[]);
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+pub fn wasm_module_with_n_elem_segments(n: usize) -> Vec<u8> {
+    let me = ModEmitter::from_configs(1,n as u32);
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    let (mut me, f) = fe.finish();
+    for _ in 0..n {
+        me.define_elem_funcs(&[f]);
+    }
+    me.finish()
+}
+
+pub fn wasm_module_with_n_data_segments(n: usize) -> Vec<u8> {
+    let mem_offset = n as u32 * 1024;
+    let me = ModEmitter::from_configs(1 + mem_offset / 65536, 0);
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    let (mut me, _) = fe.finish();
+    for _ in 0..n {
+        me.define_data_segment(n as u32 * 1024, vec![1, 2, 3, 4]);
+    }
+    me.finish()
 }
 
 fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
@@ -401,7 +540,7 @@ macro_rules! impl_wasm_insn_measure_with_baseline_trap {
                 let insns = 1 + step * Self::STEP_SIZE;
                 let id: Hash = [0; 32].into();
                 let module = $wasm_gen(insns, rng);
-                let vm = Vm::new(&host, id, &module.wasm).unwrap();
+                let vm = Vm::new(&host, id, &module.wasm, None).unwrap();
                 WasmInsnSample {
                     vm,
                     insns,
@@ -412,7 +551,7 @@ macro_rules! impl_wasm_insn_measure_with_baseline_trap {
             fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
                 let module = wasm_module_baseline_trap();
                 let id: Hash = [0; 32].into();
-                let vm = Vm::new(&host, id, &module.wasm).unwrap();
+                let vm = Vm::new(&host, id, &module.wasm, None).unwrap();
                 WasmInsnSample {
                     vm,
                     insns: 0,
@@ -439,14 +578,14 @@ macro_rules! impl_wasm_insn_measure_with_baseline_pass {
                 let insns = 1 + step * Self::STEP_SIZE $(* $grow / $shrink)?;
                 let id: Hash = [0; 32].into();
                 let module = $wasm_gen(insns, rng);
-                let vm = Vm::new(&host, id, &module.wasm).unwrap();
+                let vm = Vm::new(&host, id, &module.wasm, None).unwrap();
                 WasmInsnSample { vm, insns, overhead: module.overhead }
             }
 
             fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
                 let module = wasm_module_baseline_pass();
                 let id: Hash = [0; 32].into();
-                let vm = Vm::new(&host, id, &module.wasm).unwrap();
+                let vm = Vm::new(&host, id, &module.wasm, None).unwrap();
                 WasmInsnSample { vm, insns: 0, overhead: module.overhead }
             }
 

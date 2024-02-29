@@ -6,7 +6,8 @@ use crate::{
         metered_write_xdr, ContractReentryMode, CreateContractArgs,
     },
     xdr::{
-        Asset, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractIdPreimage,
+        Asset, ContractCodeCostInputs, ContractCodeEntry, ContractCodeEntryExt,
+        ContractCodeEntryV1, ContractDataDurability, ContractExecutable, ContractIdPreimage,
         ContractIdPreimageFromAddress, ExtensionPoint, Hash, LedgerKey, LedgerKeyContractCode,
         ScAddress, ScErrorCode, ScErrorType,
     },
@@ -164,6 +165,8 @@ impl Host {
             )
         })?;
 
+        let cost_inputs: ContractCodeCostInputs;
+
         // Instantiate a temporary / throwaway VM using this wasm. This will do
         // both quick checks like "does this wasm have the right protocol number
         // to run on this network" and also a full parse-and-link pass to check
@@ -176,12 +179,26 @@ impl Host {
             // Allow a zero-byte contract when testing, as this is used to make
             // native test contracts behave like wasm. They will never be
             // instantiated, this is just to exercise their storage logic.
+            cost_inputs = ContractCodeCostInputs {
+                n_instructions: 0,
+                n_functions: 0,
+                n_globals: 0,
+                n_table_entries: 0,
+                n_types: 0,
+                n_data_segments: 0,
+                n_elem_segments: 0,
+                n_imports: 0,
+                n_exports: 0,
+                n_memory_pages: 0,
+            };
         } else {
-            let _check_vm = Vm::new(
+            let check_vm = Vm::new(
                 self,
                 Hash(hash_bytes.metered_clone(self)?),
                 wasm_bytes_m.as_slice(),
+                None,
             )?;
+            cost_inputs = check_vm.get_contract_code_cost_inputs();
         }
 
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
@@ -199,7 +216,10 @@ impl Host {
             self.with_mut_storage(|storage| {
                 let data = ContractCodeEntry {
                     hash: Hash(hash_bytes),
-                    ext: ExtensionPoint::V0,
+                    ext: ContractCodeEntryExt::V1(ContractCodeEntryV1 {
+                        ext: ExtensionPoint::V0,
+                        cost_inputs,
+                    }),
                     code: wasm_bytes_m,
                 };
                 storage.put(

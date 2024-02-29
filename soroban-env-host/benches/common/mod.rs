@@ -82,6 +82,17 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, Int256PowMeasure>(&mut params)?;
     call_bench::<B, Int256ShiftMeasure>(&mut params)?;
     call_bench::<B, ChaCha20DrawBytesMeasure>(&mut params)?;
+
+    call_bench::<B, VmInstantiationInstructionsMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationFunctionsMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationGlobalsMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationTableEntriesMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationTypesMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationDataSegmentsMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationElemSegmentsMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationImportsMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationExportsMeasure>(&mut params)?;
+
     // These three mem ones are derived analytically, we do not calibrate them typically
     if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {
         call_bench::<B, MemAllocMeasure>(&mut params)?;

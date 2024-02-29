@@ -17,6 +17,7 @@ crate-git-revision = "=0.0.6"
 soroban-env-macros = { workspace = true }
 stellar-xdr = { workspace = true, default-features = false, features = [ "curr" ] }
 wasmi = { workspace = true, optional = true }
+wasmparser = { workspace = true, optional = true}
 serde = { version = "=1.0.192", features = ["derive"], optional = true }
 static_assertions = "=1.1.0"
 ethnum = "=1.5.0"
@@ -34,7 +35,7 @@ num-traits = "=0.2.17"
 [features]
 std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["dep:serde", "stellar-xdr/serde"]
-wasmi = ["dep:wasmi"]
+wasmi = ["dep:wasmi", "dep:wasmparser"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
 next = ["stellar-xdr/next", "soroban-env-macros/next"]
 tracy = ["dep:tracy-client"]

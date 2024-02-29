@@ -295,22 +295,24 @@ fn process_tier(
     params_wasm: &BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
     insn_tier: &[WasmInsnType],
 ) -> u64 {
-    println!("\n");
-    println!("\n{:=<100}", "");
-    println!("\"{:?}\" tier", tier);
-
     let (params_tier, ave_cpu_per_fuel) = extract_tier(params_wasm, insn_tier);
 
-    let mut tw = TabWriter::new(vec![])
-        .padding(5)
-        .alignment(Alignment::Right);
-    write_cost_params_table::<WasmInsnType>(&mut tw, &params_tier).unwrap();
-    eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
-    println!(
-        "average cpu insns per fuel for \"{:?}\" tier: {}",
-        tier, ave_cpu_per_fuel
-    );
-    println!("{:=<100}\n", "");
+    if !params_tier.is_empty() {
+        println!("\n");
+        println!("\n{:=<100}", "");
+        println!("\"{:?}\" tier", tier);
+
+        let mut tw = TabWriter::new(vec![])
+            .padding(5)
+            .alignment(Alignment::Right);
+        write_cost_params_table::<WasmInsnType>(&mut tw, &params_tier).unwrap();
+        eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
+        println!(
+            "average cpu insns per fuel for \"{:?}\" tier: {}",
+            tier, ave_cpu_per_fuel
+        );
+        println!("{:=<100}\n", "");
+    }
     ave_cpu_per_fuel
 }
 

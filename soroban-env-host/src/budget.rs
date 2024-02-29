@@ -23,7 +23,7 @@ use crate::{
 
 use dimension::{BudgetDimension, IsCpu, IsShadowMode};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CostTracker {
     pub iterations: u64,
     pub inputs: Option<u64>,
@@ -46,11 +46,11 @@ struct BudgetTracker {
 impl Default for BudgetTracker {
     fn default() -> Self {
         let mut mt = Self {
-            cost_tracker: Default::default(),
+            cost_tracker: [CostTracker::default(); ContractCostType::variants().len()],
             meter_count: Default::default(),
             #[cfg(any(test, feature = "testutils", feature = "bench"))]
             wasm_memory: Default::default(),
-            time_tracker: Default::default(),
+            time_tracker: [0_u64; ContractCostType::variants().len()],
         };
         for (ct, tracker) in ContractCostType::variants()
             .iter()
@@ -92,6 +92,17 @@ impl Default for BudgetTracker {
                 ContractCostType::Int256Pow => (),
                 ContractCostType::Int256Shift => (),
                 ContractCostType::ChaCha20DrawBytes => init_input(), // number of random bytes to draw
+                ContractCostType::VmInstantiateUnknownBytes => init_input(),
+                ContractCostType::VmInstantiateInstructions => init_input(),
+                ContractCostType::VmInstantiateFunctions => init_input(),
+                ContractCostType::VmInstantiateGlobals => init_input(),
+                ContractCostType::VmInstantiateTableEntries => init_input(),
+                ContractCostType::VmInstantiateTypes => init_input(),
+                ContractCostType::VmInstantiateDataSegments => init_input(),
+                ContractCostType::VmInstantiateElemSegments => init_input(),
+                ContractCostType::VmInstantiateImports => init_input(),
+                ContractCostType::VmInstantiateExports => init_input(),
+                ContractCostType::VmInstantiateMemoryPages => init_input(),
             }
         }
         mt
@@ -368,6 +379,50 @@ impl Default for BudgetImpl {
                     cpu.const_term = 1058;
                     cpu.lin_term = ScaledU64(501);
                 }
+                ContractCostType::VmInstantiateUnknownBytes => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateInstructions => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateFunctions => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateGlobals => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateTableEntries => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateTypes => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateDataSegments => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateElemSegments => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateImports => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateExports => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateMemoryPages => {
+                    cpu.const_term = 0;
+                    cpu.lin_term = ScaledU64(1);
+                }
             }
 
             // define the memory cost model parameters
@@ -470,6 +525,50 @@ impl Default for BudgetImpl {
                 ContractCostType::ChaCha20DrawBytes => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VmInstantiateUnknownBytes => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateInstructions => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateFunctions => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateGlobals => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateTableEntries => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateTypes => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateDataSegments => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateElemSegments => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateImports => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateExports => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
+                }
+                ContractCostType::VmInstantiateMemoryPages => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(1);
                 }
             }
         }
@@ -790,7 +889,7 @@ impl Budget {
             .tracker
             .cost_tracker
             .get(ty as usize)
-            .map(|x| x.clone())
+            .map(|x| *x)
             .ok_or_else(|| (ScErrorType::Budget, ScErrorCode::InternalError).into())
     }
 
