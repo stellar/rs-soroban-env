@@ -96,6 +96,14 @@ next = ["soroban-env-common/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_mode = []
 bench = []
+# This feature guards the work-in-progress changes in soroban-env-host
+# API. Its main purpose is to be able to make API changes without bumping
+# the crate version.
+# These changes may be used by the 'Soroban-owned' crates, such as
+# stellar-core, soroban-simulation, and soroban-sdk.
+# When bumping the major version of soroban-env-host all the code guarded
+# by this feature should be enabled unconditionally.
+unstable-next-api = []
 
 [[bench]]
 required-features = ["bench"]

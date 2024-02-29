@@ -17,6 +17,9 @@ members = [
 exclude = ["soroban-test-wasms/wasm-workspace"]
 
 [workspace.package]
+# NB: When bumping the major version make sure to clean up the
+# code guarded by `unstable-*` features to make it enabled
+# unconditionally.
 version = "20.2.2"
 rust-version = "1.74.0"
 

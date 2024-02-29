@@ -1,22 +1,24 @@
-use crate::builtin_contracts::testutils::TestSigner;
-use crate::e2e_invoke::{
-    invoke_host_function_in_recording_mode, ledger_entry_to_ledger_key, LedgerEntryLiveUntilChange,
-};
-use crate::testutils::MockSnapshotSource;
+use crate::e2e_testutils::{account_entry, bytes_sc_val, upload_wasm_host_fn};
 use crate::{
     budget::Budget,
-    e2e_invoke::{invoke_host_function, LedgerEntryChange},
+    builtin_contracts::testutils::TestSigner,
+    e2e_invoke::{
+        invoke_host_function, invoke_host_function_in_recording_mode, ledger_entry_to_ledger_key,
+        LedgerEntryChange, LedgerEntryLiveUntilChange,
+    },
+    e2e_testutils::{
+        auth_contract_invocation, create_contract_auth, default_ledger_info, get_account_id,
+        get_contract_id_preimage, get_wasm_hash, get_wasm_key, ledger_entry, wasm_entry,
+        AuthContractInvocationNode, CreateContractData,
+    },
+    testutils::MockSnapshotSource,
     xdr::{
-        AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractDataDurability,
-        ContractDataEntry, ContractEvent, ContractExecutable, ContractIdPreimage,
-        ContractIdPreimageFromAddress, CreateContractArgs, DiagnosticEvent, ExtensionPoint,
-        HashIdPreimage, HashIdPreimageContractId, HashIdPreimageSorobanAuthorization, HostFunction,
-        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerFootprint,
-        LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, PublicKey, ReadXdr,
-        ScAddress, ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMapEntry, ScVal,
-        SequenceNumber, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, Thresholds, TtlEntry,
-        Uint256, WriteXdr,
+        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, DiagnosticEvent,
+        ExtensionPoint, HashIdPreimage, HashIdPreimageSorobanAuthorization, HostFunction,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
+        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScErrorCode,
+        ScErrorType, ScVal, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
+        TtlEntry, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -28,9 +30,6 @@ use sha2::{Digest, Sha256};
 use soroban_test_wasms::{ADD_F32, ADD_I32, AUTH_TEST_CONTRACT, CONTRACT_STORAGE};
 use std::rc::Rc;
 
-const DEFAULT_LEDGER_SEQ: u32 = 1_000_000;
-const DEFAULT_NETWORK_ID: [u8; 32] = [5; 32];
-
 // It's tricky to get exactly the same instruction consumption
 // in the recording storage/auth mode vs the enforcing mode. For
 // example, frame snapshots in enforcing mode contain all the auths and
@@ -40,93 +39,12 @@ const DEFAULT_NETWORK_ID: [u8; 32] = [5; 32];
 // is why this coefficient should be low.
 const RECORDING_MODE_INSTRUCTIONS_COEFFICIENT: f64 = 1.01;
 
-fn default_ledger_info() -> LedgerInfo {
-    LedgerInfo {
-        protocol_version: 20,
-        sequence_number: DEFAULT_LEDGER_SEQ,
-        timestamp: 12345678,
-        network_id: DEFAULT_NETWORK_ID,
-        base_reserve: 5_000_000,
-        min_temp_entry_ttl: 16,
-        min_persistent_entry_ttl: 100_000,
-        max_entry_ttl: 10_000_000,
-    }
-}
-
-fn upload_wasm_host_fn(wasm: &[u8]) -> HostFunction {
-    HostFunction::UploadContractWasm(wasm.try_into().unwrap())
-}
-
-fn get_wasm_hash(wasm: &[u8]) -> [u8; 32] {
-    Sha256::digest(wasm).into()
-}
-
-fn get_wasm_key(wasm: &[u8]) -> LedgerKey {
-    LedgerKey::ContractCode(LedgerKeyContractCode {
-        hash: get_wasm_hash(wasm).try_into().unwrap(),
-    })
-}
-
-fn get_contract_id_preimage(account_id: &AccountId, salt: &[u8; 32]) -> ContractIdPreimage {
-    ContractIdPreimage::Address(ContractIdPreimageFromAddress {
-        address: ScAddress::Account(account_id.clone()),
-        salt: Uint256(salt.clone().try_into().unwrap()),
-    })
-}
-
-fn get_contract_id_hash(id_preimage: &ContractIdPreimage) -> [u8; 32] {
-    let preimage = HashIdPreimage::ContractId(HashIdPreimageContractId {
-        network_id: DEFAULT_NETWORK_ID.clone().try_into().unwrap(),
-        contract_id_preimage: id_preimage.clone(),
-    });
-    Sha256::digest(&preimage.to_xdr(Limits::none()).unwrap()).into()
-}
-
-fn ledger_entry(le_data: LedgerEntryData) -> LedgerEntry {
-    LedgerEntry {
-        last_modified_ledger_seq: 0,
-        data: le_data,
-        ext: LedgerEntryExt::V0,
-    }
-}
-
-fn account_entry(account_id: &AccountId) -> LedgerEntry {
-    ledger_entry(LedgerEntryData::Account(AccountEntry {
-        account_id: account_id.clone(),
-        balance: 10_000_000,
-        seq_num: SequenceNumber(0),
-        num_sub_entries: 0,
-        inflation_dest: None,
-        flags: 0,
-        home_domain: Default::default(),
-        thresholds: Thresholds([1, 0, 0, 0]),
-        signers: Default::default(),
-        ext: AccountEntryExt::V0,
-    }))
-}
-
-fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
-    ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
-        ext: ExtensionPoint::V0,
-        hash: get_wasm_hash(wasm).try_into().unwrap(),
-        code: wasm.try_into().unwrap(),
-    }))
-}
-
 fn wasm_entry_size(wasm: &[u8]) -> u32 {
     wasm_entry(wasm).to_xdr(Limits::none()).unwrap().len() as u32
 }
 
-fn get_account_id(pub_key: [u8; 32]) -> AccountId {
-    AccountId(PublicKey::PublicKeyTypeEd25519(pub_key.try_into().unwrap()))
-}
-
 fn prng_seed() -> [u8; 32] {
     [0; 32]
-}
-
-fn bytes_sc_val(bytes: &[u8]) -> ScVal {
-    ScVal::Bytes(ScBytes(bytes.try_into().unwrap()))
 }
 
 fn resources(
@@ -169,72 +87,6 @@ fn u64_sc_val(v: u64) -> ScVal {
 
 fn u32_sc_val(v: u32) -> ScVal {
     ScVal::U32(v)
-}
-
-fn create_contract_auth(
-    contract_id_preimage: &ContractIdPreimage,
-    wasm: &[u8],
-) -> SorobanAuthorizationEntry {
-    SorobanAuthorizationEntry {
-        credentials: SorobanCredentials::SourceAccount,
-        root_invocation: SorobanAuthorizedInvocation {
-            function: SorobanAuthorizedFunction::CreateContractHostFn(CreateContractArgs {
-                contract_id_preimage: contract_id_preimage.clone(),
-                executable: ContractExecutable::Wasm(get_wasm_hash(wasm).try_into().unwrap()),
-            }),
-            sub_invocations: Default::default(),
-        },
-    }
-}
-
-struct AuthContractInvocationNode {
-    address: ScAddress,
-    children: Vec<AuthContractInvocationNode>,
-}
-
-fn sc_struct_field(key: &str, val: ScVal) -> ScMapEntry {
-    ScMapEntry {
-        key: ScVal::Symbol(key.try_into().unwrap()),
-        val,
-    }
-}
-
-impl AuthContractInvocationNode {
-    fn into_scval(self, address_count: usize) -> ScVal {
-        let children: Vec<ScVal> = self
-            .children
-            .into_iter()
-            .map(|c| c.into_scval(address_count))
-            .collect();
-        let fields = vec![
-            sc_struct_field("children", ScVal::Vec(Some(children.try_into().unwrap()))),
-            sc_struct_field("contract", ScVal::Address(self.address)),
-            sc_struct_field(
-                "need_auth",
-                ScVal::Vec(Some(
-                    vec![ScVal::Bool(true); address_count].try_into().unwrap(),
-                )),
-            ),
-            sc_struct_field("try_call", ScVal::Bool(false)),
-        ];
-        ScVal::Map(Some(fields.try_into().unwrap()))
-    }
-}
-
-fn auth_contract_invocation(
-    addresses: Vec<ScAddress>,
-    tree: AuthContractInvocationNode,
-) -> HostFunction {
-    let address_count = addresses.len();
-    let address_vals: Vec<ScVal> = addresses.into_iter().map(|a| ScVal::Address(a)).collect();
-    let addresses_val = ScVal::Vec(Some(address_vals.try_into().unwrap()));
-    HostFunction::InvokeContract(InvokeContractArgs {
-        contract_address: tree.address.clone(),
-        function_name: "tree_fn".try_into().unwrap(),
-        args: vec![addresses_val, tree.into_scval(address_count)]
-            .try_into()
-            .unwrap(),
-    })
 }
 
 fn sign_auth_entry(
@@ -344,6 +196,7 @@ struct InvokeHostFunctionRecordingHelperResult {
     ledger_changes: Vec<LedgerEntryChangeHelper>,
     contract_events: Vec<ContractEvent>,
     diagnostic_events: Vec<DiagnosticEvent>,
+    contract_events_and_return_value_size: u32,
 }
 
 fn invoke_host_function_helper(
@@ -461,6 +314,7 @@ fn invoke_host_function_recording_helper(
         ledger_changes: res.ledger_changes.into_iter().map(|c| c.into()).collect(),
         contract_events: res.contract_events,
         diagnostic_events,
+        contract_events_and_return_value_size: res.contract_events_and_return_value_size,
     })
 }
 
@@ -530,6 +384,10 @@ fn invoke_host_function_using_simulation_with_signers(
         recording_result.diagnostic_events,
         recording_result_with_enforcing_auth.diagnostic_events
     );
+    assert_eq!(
+        recording_result.contract_events_and_return_value_size,
+        recording_result_with_enforcing_auth.contract_events_and_return_value_size
+    );
 
     // Instructions are expected to be slightly different between recording and
     // enforcing modes, so just make sure that the estimation is within the small
@@ -568,6 +426,19 @@ fn invoke_host_function_using_simulation_with_signers(
         recording_result.diagnostic_events,
         enforcing_result.diagnostic_events
     );
+    if let Ok(res) = &enforcing_result.invoke_result {
+        let mut enforcing_events_size = res.to_xdr(Limits::none()).unwrap().len();
+        for e in &enforcing_result.contract_events {
+            enforcing_events_size += e.to_xdr(Limits::none()).unwrap().len();
+        }
+        assert_eq!(
+            recording_result.contract_events_and_return_value_size,
+            enforcing_events_size as u32
+        );
+    } else {
+        assert_eq!(recording_result.contract_events_and_return_value_size, 0);
+    }
+
     Ok(enforcing_result)
 }
 
@@ -588,62 +459,6 @@ fn invoke_host_function_using_simulation(
         prng_seed,
         &vec![],
     )
-}
-
-struct CreateContractData {
-    deployer: AccountId,
-    wasm_key: LedgerKey,
-    wasm_entry: LedgerEntry,
-    contract_key: LedgerKey,
-    contract_entry: LedgerEntry,
-    contract_address: ScAddress,
-    auth_entry: SorobanAuthorizationEntry,
-    host_fn: HostFunction,
-}
-
-impl CreateContractData {
-    fn new(salt: [u8; 32], wasm: &[u8]) -> Self {
-        let deployer = get_account_id([123; 32]);
-        let contract_id_preimage = get_contract_id_preimage(&deployer, &salt);
-
-        let host_fn = HostFunction::CreateContract(CreateContractArgs {
-            contract_id_preimage: contract_id_preimage.clone(),
-            executable: ContractExecutable::Wasm(get_wasm_hash(wasm).try_into().unwrap()),
-        });
-        let contract_address = ScAddress::Contract(
-            get_contract_id_hash(&contract_id_preimage)
-                .try_into()
-                .unwrap(),
-        );
-        let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
-            contract: contract_address.clone(),
-            key: ScVal::LedgerKeyContractInstance,
-            durability: ContractDataDurability::Persistent,
-        });
-        let auth_entry = create_contract_auth(&contract_id_preimage, wasm);
-
-        let contract_entry = ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
-            ext: ExtensionPoint::V0,
-            contract: contract_address.clone(),
-            key: ScVal::LedgerKeyContractInstance,
-            durability: ContractDataDurability::Persistent,
-            val: ScVal::ContractInstance(ScContractInstance {
-                executable: ContractExecutable::Wasm(get_wasm_hash(wasm).try_into().unwrap()),
-                storage: None,
-            }),
-        }));
-
-        Self {
-            deployer,
-            wasm_key: get_wasm_key(wasm),
-            wasm_entry: wasm_entry(wasm),
-            contract_key,
-            contract_entry,
-            contract_address,
-            auth_entry,
-            host_fn,
-        }
-    }
 }
 
 fn invoke_contract_host_fn(contract: &ScAddress, fn_name: &str, args: Vec<ScVal>) -> HostFunction {
