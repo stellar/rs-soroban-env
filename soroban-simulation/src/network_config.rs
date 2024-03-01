@@ -1,9 +1,9 @@
+use crate::SnapshotSourceWithArchive;
 use anyhow::{anyhow, bail, Context, Result};
 use soroban_env_host::budget::Budget;
 use soroban_env_host::fees::{
     compute_write_fee_per_1kb, FeeConfiguration, RentFeeConfiguration, WriteFeeConfiguration,
 };
-use soroban_env_host::storage::SnapshotSource;
 use soroban_env_host::xdr::{
     ConfigSettingEntry, ConfigSettingId, ContractCostParams, LedgerEntry, LedgerEntryData,
     LedgerKey, LedgerKeyConfigSetting,
@@ -29,14 +29,14 @@ pub struct NetworkConfig {
 }
 
 fn load_configuration_setting(
-    snapshot: &impl SnapshotSource,
+    snapshot: &impl SnapshotSourceWithArchive,
     setting_id: ConfigSettingId,
 ) -> Result<ConfigSettingEntry> {
     let key = Rc::new(LedgerKey::ConfigSetting(LedgerKeyConfigSetting {
         config_setting_id: setting_id,
     }));
     let (entry, _) = snapshot
-        .get(&key)?
+        .get_including_archived(&key)?
         .ok_or_else(|| anyhow!("setting {setting_id:?} is not present in the snapshot"))?;
     if let LedgerEntry {
         data: LedgerEntryData::ConfigSetting(cs),
@@ -66,7 +66,7 @@ impl NetworkConfig {
     ///
     /// This may only fail in case when provided snapshot doesn't contain
     /// all the necessary entries or when these entries are mis-configured.
-    pub fn load_from_snapshot(snapshot: &impl SnapshotSource) -> Result<Self> {
+    pub fn load_from_snapshot(snapshot: &impl SnapshotSourceWithArchive) -> Result<Self> {
         let compute = load_setting!(snapshot, ContractComputeV0);
         let ledger_cost = load_setting!(snapshot, ContractLedgerCostV0);
         let historical_data = load_setting!(snapshot, ContractHistoricalDataV0);
@@ -134,7 +134,7 @@ impl NetworkConfig {
     /// This should normally be used to populate TTL-related fields in
     /// `LedgerInfo`, so that config loading logic can be encapsulated
     /// just in `NetworkConfig`.
-    pub fn fill_config_fields_in_ledger_info(self, ledger_info: &mut LedgerInfo) {
+    pub fn fill_config_fields_in_ledger_info(&self, ledger_info: &mut LedgerInfo) {
         ledger_info.min_persistent_entry_ttl = self.min_persistent_entry_ttl;
         ledger_info.min_temp_entry_ttl = self.min_temp_entry_ttl;
         ledger_info.max_entry_ttl = self.max_entry_ttl;
