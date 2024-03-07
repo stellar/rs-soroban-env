@@ -78,6 +78,6 @@ fn f32_does_not_work() -> Result<(), HostError> {
     use soroban_env_common::xdr::Hash;
     let host = observe_host!(Host::default());
     let hash = Hash::from([0; 32]);
-    assert!(crate::vm::Vm::new(&host, hash, soroban_test_wasms::ADD_F32, None).is_err());
+    assert!(crate::vm::Vm::new(&host, hash, soroban_test_wasms::ADD_F32).is_err());
     Ok(())
 }

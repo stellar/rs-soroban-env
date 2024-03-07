@@ -28,7 +28,7 @@ impl HostCostMeasurement for InvokeVmFunctionMeasure {
     fn new_random_case(host: &Host, _rng: &mut StdRng, _input: u64) -> (Rc<Vm>, Vec<Value>) {
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_empty_invoke();
-        let vm = Vm::new(&host, id, &code, None).unwrap();
+        let vm = Vm::new(&host, id, &code).unwrap();
         let args = vec![Value::I64(0); MAX_VM_ARGS];
         (vm, args)
     }

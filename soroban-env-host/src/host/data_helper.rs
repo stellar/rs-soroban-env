@@ -6,14 +6,14 @@ use crate::{
     err,
     host::metered_clone::{MeteredAlloc, MeteredClone},
     storage::{InstanceStorageMap, Storage},
+    vm::VersionedContractCodeCostInputs,
     xdr::{
-        AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
-        ContractCodeEntryExt, ContractDataDurability, ContractDataEntry, ContractExecutable,
-        ContractIdPreimage, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
-        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScVal, Signer, SignerKey,
-        ThresholdIndexes, TrustLineAsset, Uint256,
+        AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
+        ContractDataEntry, ContractExecutable, ContractIdPreimage, ExtensionPoint, Hash,
+        HashIdPreimage, HashIdPreimageContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt,
+        LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+        LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
+        ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
     },
     AddressObject, Env, Host, HostError, StorageType, U32Val, Val,
 };
@@ -126,7 +126,7 @@ impl Host {
     pub(crate) fn retrieve_wasm_from_storage(
         &self,
         wasm_hash: &Hash,
-    ) -> Result<(BytesM, Option<ContractCodeCostInputs>), HostError> {
+    ) -> Result<(BytesM, VersionedContractCodeCostInputs), HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
         match &self
             .try_borrow_storage_mut()?
@@ -136,9 +136,16 @@ impl Host {
         {
             LedgerEntryData::ContractCode(e) => {
                 let code = e.code.metered_clone(self)?;
-                let costs = match &e.ext {
-                    ContractCodeEntryExt::V0 => None,
-                    ContractCodeEntryExt::V1(v1) => Some(v1.cost_inputs.clone()),
+                #[allow(unused_mut)]
+                let mut costs = VersionedContractCodeCostInputs::V0 {
+                    wasm_bytes: code.len(),
+                };
+                #[cfg(feature = "next")]
+                match &e.ext {
+                    crate::xdr::ContractCodeEntryExt::V0 => (),
+                    crate::xdr::ContractCodeEntryExt::V1(v1) => {
+                        costs = VersionedContractCodeCostInputs::V1(v1.cost_inputs.clone())
+                    }
                 };
                 Ok((code, costs))
             }

@@ -18,7 +18,7 @@ impl HostCostMeasurement for VmMemReadMeasure {
         let buf = vec![0; input as usize];
         let id: xdr::Hash = [0; 32].into();
         let code = soroban_test_wasms::ADD_I32;
-        let vm = Vm::new(&host, id, &code, None).unwrap();
+        let vm = Vm::new(&host, id, &code).unwrap();
         VmMemRunSample { vm, buf }
     }
 }
@@ -36,7 +36,7 @@ impl HostCostMeasurement for VmMemWriteMeasure {
         rng.fill_bytes(buf.as_mut_slice());
         let id: xdr::Hash = [0; 32].into();
         let code = soroban_test_wasms::ADD_I32;
-        let vm = Vm::new(&host, id, &code, None).unwrap();
+        let vm = Vm::new(&host, id, &code).unwrap();
         VmMemRunSample { vm, buf }
     }
 }

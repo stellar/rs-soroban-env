@@ -55,7 +55,7 @@ pub fn wasm_module_with_n_globals(n: usize) -> Vec<u8> {
 pub fn wasm_module_with_n_imports(n: usize) -> Vec<u8> {
     let mut me = ModEmitter::default();
     let names = Vm::get_all_host_functions();
-    for (module,name,arity) in names.iter().take(n) {
+    for (module, name, arity) in names.iter().take(n) {
         if *module == "t" {
             continue;
         }
@@ -157,7 +157,7 @@ pub fn wasm_module_with_n_types(mut n: usize) -> Vec<u8> {
 }
 
 pub fn wasm_module_with_n_elem_segments(n: usize) -> Vec<u8> {
-    let me = ModEmitter::from_configs(1,n as u32);
+    let me = ModEmitter::from_configs(1, n as u32);
     let mut fe = me.func(Arity(0), 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     let (mut me, f) = fe.finish();
@@ -177,6 +177,14 @@ pub fn wasm_module_with_n_data_segments(n: usize) -> Vec<u8> {
         me.define_data_segment(n as u32 * 1024, vec![1, 2, 3, 4]);
     }
     me.finish()
+}
+
+pub fn wasm_module_with_n_memory_pages(n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::from_configs(n as u32, 0);
+    me.define_data_segment(0, vec![0xff; n * 0x10000]);
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
 }
 
 fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
@@ -540,7 +548,7 @@ macro_rules! impl_wasm_insn_measure_with_baseline_trap {
                 let insns = 1 + step * Self::STEP_SIZE;
                 let id: Hash = [0; 32].into();
                 let module = $wasm_gen(insns, rng);
-                let vm = Vm::new(&host, id, &module.wasm, None).unwrap();
+                let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample {
                     vm,
                     insns,
@@ -551,7 +559,7 @@ macro_rules! impl_wasm_insn_measure_with_baseline_trap {
             fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
                 let module = wasm_module_baseline_trap();
                 let id: Hash = [0; 32].into();
-                let vm = Vm::new(&host, id, &module.wasm, None).unwrap();
+                let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample {
                     vm,
                     insns: 0,
@@ -578,14 +586,14 @@ macro_rules! impl_wasm_insn_measure_with_baseline_pass {
                 let insns = 1 + step * Self::STEP_SIZE $(* $grow / $shrink)?;
                 let id: Hash = [0; 32].into();
                 let module = $wasm_gen(insns, rng);
-                let vm = Vm::new(&host, id, &module.wasm, None).unwrap();
+                let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample { vm, insns, overhead: module.overhead }
             }
 
             fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
                 let module = wasm_module_baseline_pass();
                 let id: Hash = [0; 32].into();
-                let vm = Vm::new(&host, id, &module.wasm, None).unwrap();
+                let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample { vm, insns: 0, overhead: module.overhead }
             }
 

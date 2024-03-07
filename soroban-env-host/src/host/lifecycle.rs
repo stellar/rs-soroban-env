@@ -5,13 +5,13 @@ use crate::{
         metered_clone::{MeteredAlloc, MeteredClone},
         metered_write_xdr, ContractReentryMode, CreateContractArgs,
     },
+    vm::Vm,
     xdr::{
-        Asset, ContractCodeCostInputs, ContractCodeEntry, ContractCodeEntryExt,
-        ContractCodeEntryV1, ContractDataDurability, ContractExecutable, ContractIdPreimage,
+        Asset, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractIdPreimage,
         ContractIdPreimageFromAddress, ExtensionPoint, Hash, LedgerKey, LedgerKeyContractCode,
         ScAddress, ScErrorCode, ScErrorType,
     },
-    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, Vm,
+    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal,
 };
 use std::rc::Rc;
 
@@ -165,7 +165,15 @@ impl Host {
             )
         })?;
 
-        let cost_inputs: ContractCodeCostInputs;
+        // We're going to make a code entry with an ext field which, if zero,
+        // can be read as either a protocol v20 ExtensionPoint::V0 value, or a
+        // protocol v21 ContractCodeEntryExt::V0 value, depending on which
+        // protocol we were compiled with.
+        #[cfg(not(feature = "next"))]
+        let ext = ExtensionPoint::V0;
+
+        #[cfg(feature = "next")]
+        let mut ext = crate::xdr::ContractCodeEntryExt::V0;
 
         // Instantiate a temporary / throwaway VM using this wasm. This will do
         // both quick checks like "does this wasm have the right protocol number
@@ -179,26 +187,26 @@ impl Host {
             // Allow a zero-byte contract when testing, as this is used to make
             // native test contracts behave like wasm. They will never be
             // instantiated, this is just to exercise their storage logic.
-            cost_inputs = ContractCodeCostInputs {
-                n_instructions: 0,
-                n_functions: 0,
-                n_globals: 0,
-                n_table_entries: 0,
-                n_types: 0,
-                n_data_segments: 0,
-                n_elem_segments: 0,
-                n_imports: 0,
-                n_exports: 0,
-                n_memory_pages: 0,
-            };
         } else {
-            let check_vm = Vm::new(
+            let _check_vm = Vm::new(
                 self,
                 Hash(hash_bytes.metered_clone(self)?),
                 wasm_bytes_m.as_slice(),
-                None,
             )?;
-            cost_inputs = check_vm.get_contract_code_cost_inputs();
+            #[cfg(feature = "next")]
+            if self.get_ledger_protocol_version()? >= super::ModuleCache::MIN_LEDGER_VERSION {
+                // At this point we do a secondary parse on what we've checked to be a valid
+                // module in order to extract a refined cost model, which we'll store in the
+                // code entry's ext field, for future parsing and instantiations.
+                _check_vm.module.cost_inputs.charge_for_parsing(self)?;
+                ext = crate::xdr::ContractCodeEntryExt::V1(crate::xdr::ContractCodeEntryV1 {
+                    ext: ExtensionPoint::V0,
+                    cost_inputs: crate::vm::ParsedModule::extract_refined_contract_cost_inputs(
+                        self,
+                        wasm_bytes_m.as_slice(),
+                    )?,
+                });
+            }
         }
 
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
@@ -216,10 +224,7 @@ impl Host {
             self.with_mut_storage(|storage| {
                 let data = ContractCodeEntry {
                     hash: Hash(hash_bytes),
-                    ext: ContractCodeEntryExt::V1(ContractCodeEntryV1 {
-                        ext: ExtensionPoint::V0,
-                        cost_inputs,
-                    }),
+                    ext,
                     code: wasm_bytes_m,
                 };
                 storage.put(
