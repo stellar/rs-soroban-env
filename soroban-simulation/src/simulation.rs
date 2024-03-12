@@ -3,7 +3,9 @@ use crate::resources::{
     compute_adjusted_transaction_resources, compute_resource_fee, simulate_extend_ttl_op_resources,
     simulate_invoke_host_function_op_resources, simulate_restore_op_resources,
 };
-use crate::snapshot_source::SnapshotSourceWithArchive;
+use crate::snapshot_source::{
+    SimulationSnapshotSource, SimulationSnapshotSourceWithArchive, SnapshotSourceWithArchive,
+};
 use anyhow::Result;
 use soroban_env_host::{
     e2e_invoke::invoke_host_function_in_recording_mode,
@@ -125,6 +127,7 @@ pub fn simulate_invoke_host_function_op(
     base_prng_seed: [u8; 32],
     enable_diagnostics: bool,
 ) -> Result<InvokeHostFunctionSimulationResult> {
+    let snapshot_source = Rc::new(SimulationSnapshotSource::new_from_rc(snapshot_source));
     let budget = network_config.create_budget()?;
     let mut diagnostic_events = vec![];
     let recording_result = invoke_host_function_in_recording_mode(
@@ -219,9 +222,10 @@ pub fn simulate_extend_ttl_op(
     keys_to_extend: &[LedgerKey],
     extend_to: u32,
 ) -> Result<ExtendTtlOpSimulationResult> {
+    let snapshot_source = SimulationSnapshotSource::new(snapshot_source);
     let (mut resources, rent_changes) = simulate_extend_ttl_op_resources(
         keys_to_extend,
-        snapshot_source,
+        &snapshot_source,
         ledger_info.sequence_number,
         extend_to,
     )?;
@@ -266,8 +270,9 @@ pub fn simulate_restore_op(
     ledger_info: &LedgerInfo,
     keys_to_restore: &[LedgerKey],
 ) -> Result<RestoreOpSimulationResult> {
+    let snapshot_source = SimulationSnapshotSourceWithArchive::new(snapshot_source);
     let (mut resources, rent_changes) =
-        simulate_restore_op_resources(keys_to_restore, snapshot_source, ledger_info)?;
+        simulate_restore_op_resources(keys_to_restore, &snapshot_source, ledger_info)?;
     let operation = OperationBody::RestoreFootprint(RestoreFootprintOp {
         ext: ExtensionPoint::V0,
     });

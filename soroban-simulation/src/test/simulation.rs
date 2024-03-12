@@ -481,15 +481,15 @@ fn test_simulate_invoke_contract_with_auth() {
                     .try_into()
                     .unwrap()
                 },
-                instructions: 38139496,
-                read_bytes: 7440,
+                instructions: 38210172,
+                read_bytes: 7492,
                 write_bytes: 76,
             },
-            resource_fee: 39290,
+            resource_fee: 39363,
         })
     );
-    assert_eq!(res.simulated_instructions, 38139496);
-    assert_eq!(res.simulated_memory, 19069620);
+    assert_eq!(res.simulated_instructions, 38210172);
+    assert_eq!(res.simulated_memory, 19104958);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
