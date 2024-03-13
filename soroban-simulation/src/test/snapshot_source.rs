@@ -1,13 +1,17 @@
 use crate::network_config::NetworkConfig;
 use crate::simulation::{RestoreOpSimulationResult, SimulationAdjustmentConfig};
-use crate::snapshot_source::AutoRestoringSnapshotSource;
+use crate::snapshot_source::{AutoRestoringSnapshotSource, SimulationSnapshotSource};
 use crate::testutils::{ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource};
 use pretty_assertions::assert_eq;
-use soroban_env_host::e2e_testutils::wasm_entry;
+use soroban_env_host::e2e_testutils::{account_entry, get_account_id, ledger_entry, wasm_entry};
 use soroban_env_host::fees::{FeeConfiguration, RentFeeConfiguration};
 use soroban_env_host::storage::SnapshotSource;
 use soroban_env_host::xdr::{
-    ExtensionPoint, LedgerFootprint, SorobanResources, SorobanTransactionData,
+    AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
+    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountEntryExtensionV3, ExtensionPoint,
+    LedgerEntryData, LedgerFootprint, Liabilities, SequenceNumber, Signer, SignerKey,
+    SorobanResources, SorobanTransactionData, SponsorshipDescriptor, Thresholds, TimePoint,
+    Uint256,
 };
 use soroban_env_host::LedgerInfo;
 use std::rc::Rc;
@@ -174,5 +178,195 @@ fn test_automatic_restoration() {
             )
             .unwrap(),
         None
+    );
+}
+
+#[test]
+fn test_simulation_snapshot_source_creates_account_extensions() {
+    let account_1 = get_account_id([111; 32]);
+    let account_2 = get_account_id([222; 32]);
+    let account_3 = get_account_id([33; 32]);
+    let mut account_without_extensions = account_entry(&account_1);
+    match &mut account_without_extensions.data {
+        LedgerEntryData::Account(acc) => {
+            acc.signers = vec![
+                Signer {
+                    key: SignerKey::Ed25519(Uint256([1; 32])),
+                    weight: 1,
+                },
+                Signer {
+                    key: SignerKey::Ed25519(Uint256([2; 32])),
+                    weight: 2,
+                },
+            ]
+            .try_into()
+            .unwrap();
+        }
+        _ => (),
+    }
+    let mut account_with_ext_v2 = account_entry(&account_2);
+    match &mut account_with_ext_v2.data {
+        LedgerEntryData::Account(acc) => {
+            acc.signers = vec![Signer {
+                key: SignerKey::Ed25519(Uint256([1; 32])),
+                weight: 1,
+            }]
+            .try_into()
+            .unwrap();
+            acc.ext = AccountEntryExt::V1(AccountEntryExtensionV1 {
+                liabilities: Liabilities {
+                    buying: 123,
+                    selling: 456,
+                },
+                ext: AccountEntryExtensionV1Ext::V2(AccountEntryExtensionV2 {
+                    num_sponsored: 5,
+                    num_sponsoring: 6,
+                    signer_sponsoring_i_ds: Default::default(),
+                    ext: AccountEntryExtensionV2Ext::V0,
+                }),
+            });
+        }
+        _ => (),
+    }
+    let mut account_with_ext_v3 = account_entry(&account_3);
+    match &mut account_with_ext_v3.data {
+        LedgerEntryData::Account(acc) => {
+            acc.ext = AccountEntryExt::V1(AccountEntryExtensionV1 {
+                liabilities: Liabilities {
+                    buying: 789,
+                    selling: 987,
+                },
+                ext: AccountEntryExtensionV1Ext::V2(AccountEntryExtensionV2 {
+                    num_sponsored: 2,
+                    num_sponsoring: 3,
+                    signer_sponsoring_i_ds: Default::default(),
+                    ext: AccountEntryExtensionV2Ext::V3(AccountEntryExtensionV3 {
+                        ext: ExtensionPoint::V0,
+                        seq_ledger: 150,
+                        seq_time: TimePoint(111),
+                    }),
+                }),
+            });
+        }
+        _ => (),
+    };
+    let inner_snapshot = MockSnapshotSource::from_entries(
+        vec![
+            (account_without_extensions.clone(), None),
+            (account_with_ext_v2.clone(), None),
+            (account_with_ext_v3.clone(), None),
+        ],
+        300,
+    )
+    .unwrap();
+    let snapshot = SimulationSnapshotSource::new(&inner_snapshot);
+    assert_eq!(
+        snapshot
+            .get(&Rc::new(
+                ledger_entry_to_ledger_key(&account_entry(&get_account_id([0; 32]))).unwrap()
+            ))
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        snapshot
+            .get(&Rc::new(
+                ledger_entry_to_ledger_key(&account_without_extensions).unwrap()
+            ))
+            .unwrap(),
+        Some((
+            Rc::new(ledger_entry(LedgerEntryData::Account(AccountEntry {
+                account_id: get_account_id([111; 32]),
+                balance: 10_000_000,
+                seq_num: SequenceNumber(0),
+                num_sub_entries: 0,
+                inflation_dest: None,
+                flags: 0,
+                home_domain: Default::default(),
+                thresholds: Thresholds([1, 0, 0, 0]),
+                signers: vec![
+                    Signer {
+                        key: SignerKey::Ed25519(Uint256([1; 32])),
+                        weight: 1,
+                    },
+                    Signer {
+                        key: SignerKey::Ed25519(Uint256([2; 32])),
+                        weight: 2,
+                    },
+                ]
+                .try_into()
+                .unwrap(),
+                ext: AccountEntryExt::V1(AccountEntryExtensionV1 {
+                    liabilities: Liabilities {
+                        buying: 0,
+                        selling: 0,
+                    },
+                    ext: AccountEntryExtensionV1Ext::V2(AccountEntryExtensionV2 {
+                        num_sponsored: 0,
+                        num_sponsoring: 0,
+                        signer_sponsoring_i_ds: vec![SponsorshipDescriptor(None); 2]
+                            .try_into()
+                            .unwrap(),
+                        ext: AccountEntryExtensionV2Ext::V3(AccountEntryExtensionV3 {
+                            ext: ExtensionPoint::V0,
+                            seq_ledger: 0,
+                            seq_time: TimePoint(0),
+                        }),
+                    }),
+                }),
+            }))),
+            None
+        ))
+    );
+
+    assert_eq!(
+        snapshot
+            .get(&Rc::new(
+                ledger_entry_to_ledger_key(&account_with_ext_v2).unwrap()
+            ))
+            .unwrap(),
+        Some((
+            Rc::new(ledger_entry(LedgerEntryData::Account(AccountEntry {
+                account_id: get_account_id([222; 32]),
+                balance: 10_000_000,
+                seq_num: SequenceNumber(0),
+                num_sub_entries: 0,
+                inflation_dest: None,
+                flags: 0,
+                home_domain: Default::default(),
+                thresholds: Thresholds([1, 0, 0, 0]),
+                signers: vec![Signer {
+                    key: SignerKey::Ed25519(Uint256([1; 32])),
+                    weight: 1,
+                }]
+                .try_into()
+                .unwrap(),
+                ext: AccountEntryExt::V1(AccountEntryExtensionV1 {
+                    liabilities: Liabilities {
+                        buying: 123,
+                        selling: 456,
+                    },
+                    ext: AccountEntryExtensionV1Ext::V2(AccountEntryExtensionV2 {
+                        num_sponsored: 5,
+                        num_sponsoring: 6,
+                        signer_sponsoring_i_ds: Default::default(),
+                        ext: AccountEntryExtensionV2Ext::V3(AccountEntryExtensionV3 {
+                            ext: ExtensionPoint::V0,
+                            seq_ledger: 0,
+                            seq_time: TimePoint(0),
+                        }),
+                    }),
+                }),
+            }))),
+            None
+        ))
+    );
+    assert_eq!(
+        snapshot
+            .get(&Rc::new(
+                ledger_entry_to_ledger_key(&account_with_ext_v3).unwrap()
+            ))
+            .unwrap(),
+        Some((Rc::new(account_with_ext_v3), None))
     );
 }
