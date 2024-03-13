@@ -9,8 +9,9 @@ use soroban_env_host::storage::SnapshotSource;
 use soroban_env_host::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountEntryExtensionV3, ExtensionPoint,
-    LedgerEntryData, LedgerFootprint, Liabilities, SequenceNumber, SorobanResources,
-    SorobanTransactionData, Thresholds, TimePoint,
+    LedgerEntryData, LedgerFootprint, Liabilities, SequenceNumber, Signer, SignerKey,
+    SorobanResources, SorobanTransactionData, SponsorshipDescriptor, Thresholds, TimePoint,
+    Uint256,
 };
 use soroban_env_host::LedgerInfo;
 use std::rc::Rc;
@@ -185,10 +186,33 @@ fn test_simulation_snapshot_source_creates_account_extensions() {
     let account_1 = get_account_id([111; 32]);
     let account_2 = get_account_id([222; 32]);
     let account_3 = get_account_id([33; 32]);
-    let account_without_extensions = account_entry(&account_1);
+    let mut account_without_extensions = account_entry(&account_1);
+    match &mut account_without_extensions.data {
+        LedgerEntryData::Account(acc) => {
+            acc.signers = vec![
+                Signer {
+                    key: SignerKey::Ed25519(Uint256([1; 32])),
+                    weight: 1,
+                },
+                Signer {
+                    key: SignerKey::Ed25519(Uint256([2; 32])),
+                    weight: 2,
+                },
+            ]
+            .try_into()
+            .unwrap();
+        }
+        _ => (),
+    }
     let mut account_with_ext_v2 = account_entry(&account_2);
     match &mut account_with_ext_v2.data {
         LedgerEntryData::Account(acc) => {
+            acc.signers = vec![Signer {
+                key: SignerKey::Ed25519(Uint256([1; 32])),
+                weight: 1,
+            }]
+            .try_into()
+            .unwrap();
             acc.ext = AccountEntryExt::V1(AccountEntryExtensionV1 {
                 liabilities: Liabilities {
                     buying: 123,
@@ -260,7 +284,18 @@ fn test_simulation_snapshot_source_creates_account_extensions() {
                 flags: 0,
                 home_domain: Default::default(),
                 thresholds: Thresholds([1, 0, 0, 0]),
-                signers: Default::default(),
+                signers: vec![
+                    Signer {
+                        key: SignerKey::Ed25519(Uint256([1; 32])),
+                        weight: 1,
+                    },
+                    Signer {
+                        key: SignerKey::Ed25519(Uint256([2; 32])),
+                        weight: 2,
+                    },
+                ]
+                .try_into()
+                .unwrap(),
                 ext: AccountEntryExt::V1(AccountEntryExtensionV1 {
                     liabilities: Liabilities {
                         buying: 0,
@@ -269,7 +304,9 @@ fn test_simulation_snapshot_source_creates_account_extensions() {
                     ext: AccountEntryExtensionV1Ext::V2(AccountEntryExtensionV2 {
                         num_sponsored: 0,
                         num_sponsoring: 0,
-                        signer_sponsoring_i_ds: Default::default(),
+                        signer_sponsoring_i_ds: vec![SponsorshipDescriptor(None); 2]
+                            .try_into()
+                            .unwrap(),
                         ext: AccountEntryExtensionV2Ext::V3(AccountEntryExtensionV3 {
                             ext: ExtensionPoint::V0,
                             seq_ledger: 0,
@@ -298,7 +335,12 @@ fn test_simulation_snapshot_source_creates_account_extensions() {
                 flags: 0,
                 home_domain: Default::default(),
                 thresholds: Thresholds([1, 0, 0, 0]),
-                signers: Default::default(),
+                signers: vec![Signer {
+                    key: SignerKey::Ed25519(Uint256([1; 32])),
+                    weight: 1,
+                }]
+                .try_into()
+                .unwrap(),
                 ext: AccountEntryExt::V1(AccountEntryExtensionV1 {
                     liabilities: Liabilities {
                         buying: 123,

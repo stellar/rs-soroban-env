@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use soroban_env_host::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountEntryExtensionV3, ExtensionPoint,
-    LedgerEntryData, Liabilities, TimePoint,
+    LedgerEntryData, Liabilities, SponsorshipDescriptor, TimePoint,
 };
 use soroban_env_host::{
     ledger_info::get_key_durability,
@@ -249,22 +249,24 @@ fn update_account_entry(account_entry: &mut AccountEntry) {
                 },
                 ext: AccountEntryExtensionV1Ext::V0,
             };
-            fill_account_ext_v2(&mut ext);
+            fill_account_ext_v2(&mut ext, account_entry.signers.len());
             account_entry.ext = AccountEntryExt::V1(ext);
         }
         AccountEntryExt::V1(ext) => {
-            fill_account_ext_v2(ext);
+            fill_account_ext_v2(ext, account_entry.signers.len());
         }
     }
 }
 
-fn fill_account_ext_v2(account_ext_v1: &mut AccountEntryExtensionV1) {
+fn fill_account_ext_v2(account_ext_v1: &mut AccountEntryExtensionV1, signers_count: usize) {
     match &mut account_ext_v1.ext {
         AccountEntryExtensionV1Ext::V0 => {
             let mut ext = AccountEntryExtensionV2 {
                 num_sponsored: 0,
                 num_sponsoring: 0,
-                signer_sponsoring_i_ds: Default::default(),
+                signer_sponsoring_i_ds: vec![SponsorshipDescriptor(None); signers_count]
+                    .try_into()
+                    .unwrap_or_default(),
                 ext: AccountEntryExtensionV2Ext::V0,
             };
             fill_account_ext_v3(&mut ext);
