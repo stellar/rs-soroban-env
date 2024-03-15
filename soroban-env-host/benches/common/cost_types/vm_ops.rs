@@ -11,8 +11,8 @@ use std::rc::Rc;
 // Protocol 20 coarse cost model.
 pub(crate) struct VmInstantiationMeasure;
 
-// This measures the cost of parsing wasm and/or instantiating a host::Vm on a
-// variety of possible wasm modules, of different sizes.
+// This measures the cost of parsing Wasm and/or instantiating a host::Vm on a
+// variety of possible Wasm modules, of different sizes.
 macro_rules! impl_measurement_for_instantiation_cost_type {
     ($RUNNER:ty, $MEASURE:ty, $BUILD:ident, $USE_REFINED_INPUTS:expr, $MAGNITUDE:expr) => {
         impl HostCostMeasurement for $MEASURE {

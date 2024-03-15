@@ -1,6 +1,7 @@
 use crate::{
     err,
     meta::{self, get_ledger_protocol_version},
+    vm::WASM_STD_MEM_PAGE_SIZE_IN_BYTES,
     xdr::{ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };
@@ -134,7 +135,7 @@ impl VersionedContractCodeCostInputs {
     }
 }
 
-/// A [ParsedModule] contains the parsed [wasmi::Module] for a given wasm blob,
+/// A [ParsedModule] contains the parsed [wasmi::Module] for a given Wasm blob,
 /// as well as a protocol number and set of [ContractCodeCostInputs] extracted
 /// from the module when it was parsed.
 pub struct ParsedModule {
@@ -177,7 +178,7 @@ impl ParsedModule {
         })
     }
 
-    /// Parse the wasm blob into a [Module] and its protocol number, checking check its interface version
+    /// Parse the Wasm blob into a [Module] and its protocol number, checking its interface version
     fn parse_wasm(host: &Host, engine: &Engine, wasm: &[u8]) -> Result<(Module, u32), HostError> {
         let module = {
             let _span0 = tracy_span!("parse module");
@@ -224,7 +225,7 @@ impl ParsedModule {
             //
             // Note that we only enable this check if the "next" feature isn't enabled
             // because a "next" stellar-core can still run a "curr" test using non-finalized
-            // test wasms. The "next" feature isn't safe for production and is meant to
+            // test Wasms. The "next" feature isn't safe for production and is meant to
             // simulate the protocol version after the one currently supported in
             // stellar-core, so bypassing this check for "next" is safe.
             #[cfg(not(feature = "next"))]
@@ -282,7 +283,7 @@ impl ParsedModule {
         })
     }
 
-    /// Returns the raw bytes content of a named custom section from the WASM
+    /// Returns the raw bytes content of a named custom section from the Wasm
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     #[allow(dead_code)]
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
@@ -321,12 +322,20 @@ impl ParsedModule {
         for e in m.exports() {
             match e.ty() {
                 wasmi::ExternType::Func(f) => {
-                    if f.params().len() > MAX_VM_ARGS || f.results().len() > MAX_VM_ARGS {
-                        return Err(host.err(
-                            ScErrorType::WasmVm,
-                            ScErrorCode::InvalidInput,
-                            "Too many arguments or results in wasm export",
-                            &[],
+                    if f.results().len() > MAX_VM_ARGS {
+                        return Err(err!(
+                            host,
+                            (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                            "Too many return values in Wasm export",
+                            f.results().len()
+                        ));
+                    }
+                    if f.params().len() > MAX_VM_ARGS {
+                        return Err(err!(
+                            host,
+                            (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                            "Too many arguments Wasm export",
+                            f.params().len()
                         ));
                     }
                 }
@@ -336,7 +345,7 @@ impl ParsedModule {
         Ok(())
     }
 
-    // Do a second, manual parse of the wasm blob to extract cost parameters we're
+    // Do a second, manual parse of the Wasm blob to extract cost parameters we're
     // interested in.
     #[cfg(feature = "next")]
     pub fn extract_refined_contract_cost_inputs(
@@ -355,6 +364,7 @@ impl ParsedModule {
         }
 
         let mut costs = crate::xdr::ContractCodeCostInputs {
+            ext: crate::xdr::ExtensionPoint::V0,
             n_instructions: 0,
             n_functions: 0,
             n_globals: 0,
@@ -398,7 +408,7 @@ impl ParsedModule {
                     return Err(host.err(
                         ScErrorType::WasmVm,
                         ScErrorCode::InvalidInput,
-                        "unsupported wasm section",
+                        "unsupported wasm section type",
                         &[],
                     ))
                 }
@@ -491,7 +501,7 @@ impl ParsedModule {
                             return Err(host.err(
                                 ScErrorType::WasmVm,
                                 ScErrorCode::InvalidInput,
-                                "data segment too large",
+                                "data segment exceeds u32::MAX",
                                 &[],
                             ));
                         }
@@ -512,20 +522,25 @@ impl ParsedModule {
                 }
             }
         }
-        if data > costs.n_memory_pages.saturating_mul(0x10000) {
-            return Err(host.err(
-                ScErrorType::WasmVm,
-                ScErrorCode::InvalidInput,
+        let available_memory = costs
+            .n_memory_pages
+            .saturating_mul(WASM_STD_MEM_PAGE_SIZE_IN_BYTES);
+        if data > available_memory {
+            return Err(err!(
+                host,
+                (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
                 "data segments exceed memory size",
-                &[],
+                data,
+                available_memory
             ));
         }
         if elements > costs.n_table_entries {
-            return Err(host.err(
-                ScErrorType::WasmVm,
-                ScErrorCode::InvalidInput,
-                "too many elements in wasm elem section(s)",
-                &[],
+            return Err(err!(
+                host,
+                (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                "too many elements in Wasm elem section(s)",
+                elements,
+                costs.n_table_entries
             ));
         }
         Ok(costs)
@@ -542,7 +557,7 @@ impl ParsedModule {
                     return Err(host.err(
                         ScErrorType::WasmVm,
                         ScErrorCode::InvalidInput,
-                        "unsupported complex wasm constant expression",
+                        "unsupported complex Wasm constant expression",
                         &[],
                     ))
                 }

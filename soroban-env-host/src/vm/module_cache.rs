@@ -1,13 +1,14 @@
 use super::parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
 use crate::{
     budget::{get_wasmi_config, AsBudget},
+    host::metered_clone::MeteredClone,
     xdr::{Hash, ScErrorCode, ScErrorType},
-    Host, HostError,
+    Host, HostError, MeteredOrdMap,
 };
-use std::{collections::BTreeMap, rc::Rc};
+use std::rc::Rc;
 use wasmi::Engine;
 
-/// A [ModuleCache] is a cache of a set of WASM modules that have been parsed
+/// A [ModuleCache] is a cache of a set of Wasm modules that have been parsed
 /// but not yet instantiated, along with a shared and reusable [Engine] storing
 /// their code. The cache must be populated eagerly with all the contracts in a
 /// single [Host]'s lifecycle (at least) added all at once, since each wasmi
@@ -15,7 +16,7 @@ use wasmi::Engine;
 #[derive(Clone, Default)]
 pub struct ModuleCache {
     pub(crate) engine: Engine,
-    modules: BTreeMap<Hash, Rc<ParsedModule>>,
+    modules: MeteredOrdMap<Hash, Rc<ParsedModule>, Host>,
 }
 
 impl ModuleCache {
@@ -25,7 +26,7 @@ impl ModuleCache {
     pub fn new(host: &Host) -> Result<Self, HostError> {
         let config = get_wasmi_config(host.as_budget())?;
         let engine = Engine::new(&config);
-        let modules = BTreeMap::new();
+        let modules = MeteredOrdMap::new();
         #[allow(unused_mut)]
         let mut cache = Self { engine, modules };
         #[cfg(feature = "next")]
@@ -65,7 +66,7 @@ impl ModuleCache {
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<(), HostError> {
-        if self.modules.contains_key(contract_id) {
+        if self.modules.contains_key(contract_id, host)? {
             return Err(host.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -74,7 +75,9 @@ impl ModuleCache {
             ));
         }
         let parsed_module = Rc::new(ParsedModule::new(host, &self.engine, &wasm, cost_inputs)?);
-        self.modules.insert(contract_id.clone(), parsed_module);
+        self.modules =
+            self.modules
+                .insert(contract_id.metered_clone(host)?, parsed_module, host)?;
         Ok(())
     }
 
@@ -83,7 +86,7 @@ impl ModuleCache {
         host: &Host,
         contract_id: &Hash,
     ) -> Result<Rc<ParsedModule>, HostError> {
-        if let Some(m) = self.modules.get(contract_id) {
+        if let Some(m) = self.modules.get(contract_id, host)? {
             return Ok(m.clone());
         } else {
             Err(host.err(
