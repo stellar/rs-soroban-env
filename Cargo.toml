@@ -20,15 +20,15 @@ exclude = ["soroban-test-wasms/wasm-workspace"]
 # NB: When bumping the major version make sure to clean up the
 # code guarded by `unstable-*` features to make it enabled
 # unconditionally.
-version = "20.2.2"
+version = "20.3.0"
 rust-version = "1.74.0"
 
 [workspace.dependencies]
-soroban-env-common = { version = "=20.2.2", path = "soroban-env-common", default-features = false }
-soroban-env-guest = { version = "=20.2.2", path = "soroban-env-guest" }
-soroban-env-host = { version = "=20.2.2", path = "soroban-env-host" }
-soroban-env-macros = { version = "=20.2.2", path = "soroban-env-macros" }
-soroban-builtin-sdk-macros = { version = "=20.2.2", path = "soroban-builtin-sdk-macros" }
+soroban-env-common = { version = "=20.3.0", path = "soroban-env-common", default-features = false }
+soroban-env-guest = { version = "=20.3.0", path = "soroban-env-guest" }
+soroban-env-host = { version = "=20.3.0", path = "soroban-env-host" }
+soroban-env-macros = { version = "=20.3.0", path = "soroban-env-macros" }
+soroban-builtin-sdk-macros = { version = "=20.3.0", path = "soroban-builtin-sdk-macros" }
 
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]
