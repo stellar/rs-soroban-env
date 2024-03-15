@@ -6,8 +6,6 @@ use crate::{
 };
 use std::{hint::black_box, rc::Rc};
 
-pub struct VmInstantiationRun;
-
 #[derive(Clone)]
 pub struct VmInstantiationSample {
     pub id: Option<Hash>,
@@ -15,55 +13,44 @@ pub struct VmInstantiationSample {
     pub module: Rc<ParsedModule>,
 }
 
-macro_rules! impl_costrunner_for_instantiation_cost_type {
-    ($RUNNER:ty, $COST:ident) => {
-        impl CostRunner for $RUNNER {
-            const COST_TYPE: CostType = CostType::Contract($COST);
+// Protocol 20 coarse and unified cost model
+#[cfg(not(feature = "next"))]
+pub struct VmInstantiationRun;
 
-            const RUN_ITERATIONS: u64 = 10;
+#[cfg(not(feature = "next"))]
+impl CostRunner for VmInstantiationRun {
+    const COST_TYPE: CostType = CostType::Contract(VmInstantiation);
 
-            type SampleType = VmInstantiationSample;
+    const RUN_ITERATIONS: u64 = 10;
 
-            type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
+    type SampleType = VmInstantiationSample;
 
-            fn run_iter(
-                host: &crate::Host,
-                _iter: u64,
-                sample: Self::SampleType,
-            ) -> Self::RecycledType {
-                #[cfg(feature = "next")]
-                let vm = black_box(
-                    Vm::from_parsed_module(host, sample.id.unwrap(), sample.module).unwrap(),
-                );
-                #[cfg(not(feature = "next"))]
-                let vm = black_box(
-                    Vm::new_with_cost_inputs(
-                        host,
-                        sample.id.unwrap(),
-                        &sample.wasm[..],
-                        sample.module.cost_inputs,
-                    )
-                    .unwrap(),
-                );
-                (Some(vm), sample.wasm)
-            }
+    type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
 
-            fn run_baseline_iter(
-                host: &crate::Host,
-                _iter: u64,
-                sample: Self::SampleType,
-            ) -> Self::RecycledType {
-                black_box(host.charge_budget($COST, Some(0)).unwrap());
-                black_box((None, sample.wasm))
-            }
-        }
-    };
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let vm = black_box(
+            Vm::new_with_cost_inputs(
+                host,
+                sample.id.unwrap(),
+                &sample.wasm[..],
+                sample.module.cost_inputs.clone(),
+            )
+            .unwrap(),
+        );
+        (Some(vm), sample.wasm)
+    }
+
+    fn run_baseline_iter(
+        host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box(host.charge_budget(VmInstantiation, Some(0)).unwrap());
+        black_box((None, sample.wasm))
+    }
 }
 
-// Protocol 20 coarse cost model
-impl_costrunner_for_instantiation_cost_type!(VmInstantiationRun, VmInstantiation);
-
-// Protocol 21 refined cost model.
+// Protocol 21 refined and split/caching cost model.
 #[cfg(feature = "next")]
 pub use v21::*;
 #[cfg(feature = "next")]
@@ -76,7 +63,7 @@ mod v21 {
         InstantiateWasmInstructions, InstantiateWasmMemoryPages, InstantiateWasmTableEntries,
         InstantiateWasmTypes, ParseWasmDataSegments, ParseWasmElemSegments, ParseWasmExports,
         ParseWasmFunctions, ParseWasmGlobals, ParseWasmImports, ParseWasmInstructions,
-        ParseWasmMemoryPages, ParseWasmTableEntries, ParseWasmTypes,
+        ParseWasmMemoryPages, ParseWasmTableEntries, ParseWasmTypes, VmCachedInstantiation,
     };
 
     macro_rules! impl_costrunner_for_parse_cost_type {
@@ -119,6 +106,45 @@ mod v21 {
         };
     }
 
+    macro_rules! impl_costrunner_for_instantiation_cost_type {
+        ($RUNNER:ty, $COST:ident) => {
+            impl CostRunner for $RUNNER {
+                const COST_TYPE: CostType = CostType::Contract($COST);
+
+                const RUN_ITERATIONS: u64 = 10;
+
+                type SampleType = VmInstantiationSample;
+
+                type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
+
+                fn run_iter(
+                    host: &crate::Host,
+                    _iter: u64,
+                    sample: Self::SampleType,
+                ) -> Self::RecycledType {
+                    let vm = black_box(
+                        Vm::from_parsed_module(host, sample.id.unwrap(), sample.module).unwrap(),
+                    );
+                    (Some(vm), sample.wasm)
+                }
+
+                fn run_baseline_iter(
+                    host: &crate::Host,
+                    _iter: u64,
+                    sample: Self::SampleType,
+                ) -> Self::RecycledType {
+                    black_box(host.charge_budget($COST, Some(0)).unwrap());
+                    black_box((None, sample.wasm))
+                }
+            }
+        };
+    }
+
+    // This cost-type is recycled as unrefined-model, parse-only phase.
+    pub struct VmInstantiationRun;
+    // This cost-type is recycled as unrefined-model, instantiate-only phase.
+    pub struct VmCachedInstantiationRun;
+
     pub struct ParseWasmInstructionsRun;
     pub struct ParseWasmFunctionsRun;
     pub struct ParseWasmGlobalsRun;
@@ -141,6 +167,7 @@ mod v21 {
     pub struct InstantiateWasmExportsRun;
     pub struct InstantiateWasmMemoryPagesRun;
 
+    impl_costrunner_for_parse_cost_type!(VmInstantiationRun, VmInstantiation);
     impl_costrunner_for_parse_cost_type!(ParseWasmInstructionsRun, ParseWasmInstructions);
     impl_costrunner_for_parse_cost_type!(ParseWasmFunctionsRun, ParseWasmFunctions);
     impl_costrunner_for_parse_cost_type!(ParseWasmGlobalsRun, ParseWasmGlobals);
@@ -152,6 +179,7 @@ mod v21 {
     impl_costrunner_for_parse_cost_type!(ParseWasmExportsRun, ParseWasmExports);
     impl_costrunner_for_parse_cost_type!(ParseWasmMemoryPagesRun, ParseWasmMemoryPages);
 
+    impl_costrunner_for_instantiation_cost_type!(VmCachedInstantiationRun, VmCachedInstantiation);
     impl_costrunner_for_instantiation_cost_type!(
         InstantiateWasmInstructionsRun,
         InstantiateWasmInstructions

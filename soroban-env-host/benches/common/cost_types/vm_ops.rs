@@ -1,6 +1,6 @@
 use super::wasm_insn_exec::wasm_module_with_n_internal_funcs;
-use crate::common::{util, HostCostMeasurement};
-use rand::{rngs::StdRng, Rng};
+use crate::common::HostCostMeasurement;
+use rand::rngs::StdRng;
 use soroban_env_host::{
     cost_runner::{VmInstantiationRun, VmInstantiationSample},
     vm::{ParsedModule, VersionedContractCodeCostInputs},
@@ -18,24 +18,7 @@ macro_rules! impl_measurement_for_instantiation_cost_type {
         impl HostCostMeasurement for $MEASURE {
             type Runner = $RUNNER;
 
-            fn new_best_case(_host: &Host, _rng: &mut StdRng) -> VmInstantiationSample {
-                let id: xdr::Hash = [0; 32].into();
-                let wasm: Vec<u8> = soroban_test_wasms::ADD_I32.into();
-                let cost_inputs = VersionedContractCodeCostInputs::V0 {
-                    wasm_bytes: wasm.len(),
-                };
-                let module = Rc::new(
-                    ParsedModule::new_with_isolated_engine(_host, &wasm, cost_inputs.clone())
-                        .unwrap(),
-                );
-                VmInstantiationSample {
-                    id: Some(id),
-                    wasm,
-                    module,
-                }
-            }
-
-            fn new_worst_case(
+            fn new_random_case(
                 _host: &Host,
                 _rng: &mut StdRng,
                 input: u64,
@@ -67,44 +50,11 @@ macro_rules! impl_measurement_for_instantiation_cost_type {
                     module,
                 }
             }
-
-            fn new_random_case(
-                _host: &Host,
-                rng: &mut StdRng,
-                _input: u64,
-            ) -> VmInstantiationSample {
-                let id: xdr::Hash = [0; 32].into();
-                let idx = rng.gen_range(0..=10) % util::TEST_WASMS.len();
-                let wasm: Vec<u8> = util::TEST_WASMS[idx].into();
-                #[allow(unused_mut)]
-                let mut cost_inputs = VersionedContractCodeCostInputs::V0 {
-                    wasm_bytes: wasm.len(),
-                };
-                #[cfg(feature = "next")]
-                if $USE_REFINED_INPUTS {
-                    cost_inputs = VersionedContractCodeCostInputs::V1(
-                        soroban_env_host::vm::ParsedModule::extract_refined_contract_cost_inputs(
-                            _host,
-                            &wasm[..],
-                        )
-                        .unwrap(),
-                    );
-                }
-                let module = Rc::new(
-                    ParsedModule::new_with_isolated_engine(_host, &wasm, cost_inputs.clone())
-                        .unwrap(),
-                );
-                VmInstantiationSample {
-                    id: Some(id),
-                    wasm,
-                    module,
-                }
-            }
         }
     };
 }
 
-// Protocol 20 coarse cost model
+// Protocol 20 coarse unified, or protocol 21 coarse parse-phase cost model
 impl_measurement_for_instantiation_cost_type!(
     VmInstantiationRun,
     VmInstantiationMeasure,
@@ -113,7 +63,7 @@ impl_measurement_for_instantiation_cost_type!(
     30
 );
 
-// Protocol 21 refined cost model.
+// Protocol 21 cost models.
 #[cfg(feature = "next")]
 pub(crate) use v21::*;
 #[cfg(feature = "next")]
@@ -135,10 +85,12 @@ mod v21 {
             ParseWasmDataSegmentsRun, ParseWasmElemSegmentsRun, ParseWasmExportsRun,
             ParseWasmFunctionsRun, ParseWasmGlobalsRun, ParseWasmImportsRun,
             ParseWasmInstructionsRun, ParseWasmMemoryPagesRun, ParseWasmTableEntriesRun,
-            ParseWasmTypesRun, VmInstantiationSample,
+            ParseWasmTypesRun, VmCachedInstantiationRun, VmInstantiationSample,
         },
         xdr, Host,
     };
+
+    pub(crate) struct VmCachedInstantiationMeasure;
 
     pub(crate) struct ParseWasmInstructionsMeasure;
     pub(crate) struct ParseWasmFunctionsMeasure;
@@ -161,6 +113,15 @@ mod v21 {
     pub(crate) struct InstantiateWasmImportsMeasure;
     pub(crate) struct InstantiateWasmExportsMeasure;
     pub(crate) struct InstantiateWasmMemoryPagesMeasure;
+
+    // Protocol 21 coarse instantiation-phase cost model
+    impl_measurement_for_instantiation_cost_type!(
+        VmCachedInstantiationRun,
+        VmCachedInstantiationMeasure,
+        wasm_module_with_n_internal_funcs,
+        false,
+        30
+    );
 
     // Protocol 21 refined cost model
     impl_measurement_for_instantiation_cost_type!(

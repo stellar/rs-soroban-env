@@ -80,8 +80,11 @@ impl VersionedContractCodeCostInputs {
     }
     pub fn charge_for_instantiation(&self, _host: &Host) -> Result<(), HostError> {
         match self {
-            Self::V0 { .. } => {
-                // No-op, already charged when parsing
+            Self::V0 { wasm_bytes } => {
+                _host.charge_budget(
+                    ContractCostType::VmCachedInstantiation,
+                    Some(*wasm_bytes as u64),
+                )?;
             }
             #[cfg(feature = "next")]
             Self::V1(inputs) => {

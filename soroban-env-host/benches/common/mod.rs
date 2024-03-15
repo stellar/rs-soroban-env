@@ -85,6 +85,8 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
 
     #[cfg(feature = "next")]
     {
+        call_bench::<B, VmCachedInstantiationMeasure>(&mut params)?;
+
         call_bench::<B, ParseWasmInstructionsMeasure>(&mut params)?;
         call_bench::<B, ParseWasmFunctionsMeasure>(&mut params)?;
         call_bench::<B, ParseWasmGlobalsMeasure>(&mut params)?;
