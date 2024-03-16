@@ -47,9 +47,9 @@ impl ModuleCache {
                             ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
                                 wasm_bytes: code.len(),
                             },
-                            ContractCodeEntryExt::V1(v1) => {
-                                VersionedContractCodeCostInputs::V1(v1.cost_inputs.clone())
-                            }
+                            ContractCodeEntryExt::V1(v1) => VersionedContractCodeCostInputs::V1(
+                                v1.cost_inputs.metered_clone(host.as_budget())?,
+                            ),
                         };
                         self.parse_and_cache_module(host, hash, code, code_cost_inputs)?;
                     }

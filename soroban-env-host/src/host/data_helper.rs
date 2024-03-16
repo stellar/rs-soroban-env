@@ -144,7 +144,9 @@ impl Host {
                 match &e.ext {
                     crate::xdr::ContractCodeEntryExt::V0 => (),
                     crate::xdr::ContractCodeEntryExt::V1(v1) => {
-                        costs = VersionedContractCodeCostInputs::V1(v1.cost_inputs.clone())
+                        costs = VersionedContractCodeCostInputs::V1(
+                            v1.cost_inputs.metered_clone(self.as_budget())?,
+                        )
                     }
                 };
                 Ok((code, costs))

@@ -18,6 +18,8 @@
 
 use std::{cell::RefCell, iter::FromIterator, mem, rc::Rc};
 
+#[cfg(feature = "next")]
+use crate::xdr::{ContractCodeCostInputs, ContractCodeEntryExt, ContractCodeEntryV1};
 use crate::{
     budget::{AsBudget, DepthLimiter},
     builtin_contracts::base_types::Address,
@@ -314,6 +316,10 @@ impl MeteredClone for TimePoint {}
 impl MeteredClone for Duration {}
 impl MeteredClone for Hash {}
 impl MeteredClone for Uint256 {}
+#[cfg(feature = "next")]
+impl MeteredClone for ContractCodeCostInputs {}
+#[cfg(feature = "next")]
+impl MeteredClone for ContractCodeEntryV1 {}
 impl MeteredClone for ContractExecutable {}
 impl MeteredClone for AccountId {}
 impl MeteredClone for ScAddress {}
@@ -557,6 +563,12 @@ impl MeteredClone for ContractCodeEntry {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        #[cfg(feature = "next")]
+        // self.ext is a former ExtensionEntry; see note on ExtensionEntry in declared_size.rs
+        match &self.ext {
+            ContractCodeEntryExt::V0 => (),
+            ContractCodeEntryExt::V1(v1) => v1.charge_for_substructure(budget.clone())?,
+        }
         self.code.charge_for_substructure(budget)
     }
 }
