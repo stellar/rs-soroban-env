@@ -432,7 +432,10 @@ impl ParsedModule {
                                 &[],
                             ));
                         }
-                        if mem.initial > 0xffff {
+                        if (mem.initial as u64)
+                            .saturating_mul(crate::vm::WASM_STD_MEM_PAGE_SIZE_IN_BYTES as u64)
+                            > u32::MAX as u64
+                        {
                             return Err(host.err(
                                 ScErrorType::WasmVm,
                                 ScErrorCode::InvalidInput,
