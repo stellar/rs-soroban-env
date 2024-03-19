@@ -1364,7 +1364,7 @@ dependencies = [
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",
- "stellar-xdr",
+ "stellar-xdr 20.1.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=8febe921e0b9c157bb7505e0e3149c08771129a5)",
  "tracy-client",
 ]
 
@@ -1414,7 +1414,7 @@ dependencies = [
  "soroban-wasmi",
  "static_assertions",
  "stellar-strkey",
- "stellar-xdr",
+ "stellar-xdr 20.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tabwriter",
  "textplots",
  "thousands",
@@ -1432,7 +1432,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "stellar-xdr",
+ "stellar-xdr 20.1.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=8febe921e0b9c157bb7505e0e3149c08771129a5)",
  "syn",
 ]
 
@@ -1517,6 +1517,18 @@ name = "stellar-xdr"
 version = "20.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e59cdf3eb4467fb5a4b00b52e7de6dca72f67fac6f9b700f55c95a5d86f09c9d"
+dependencies = [
+ "arbitrary",
+ "crate-git-revision",
+ "escape-bytes",
+ "hex",
+ "stellar-strkey",
+]
+
+[[package]]
+name = "stellar-xdr"
+version = "20.1.0"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=8febe921e0b9c157bb7505e0e3149c08771129a5#8febe921e0b9c157bb7505e0e3149c08771129a5"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
