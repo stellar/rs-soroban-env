@@ -1,14 +1,13 @@
 use crate::{
     err,
     meta::{self, get_ledger_protocol_version},
-    vm::WASM_STD_MEM_PAGE_SIZE_IN_BYTES,
     xdr::{ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };
 
 use wasmi::{Engine, Module};
 
-use super::MAX_VM_ARGS;
+use super::{ModuleCache, MAX_VM_ARGS};
 use std::io::Cursor;
 
 #[derive(Debug, Clone)]
@@ -72,8 +71,8 @@ impl VersionedContractCodeCostInputs {
                     Some(inputs.n_exports as u64),
                 )?;
                 host.charge_budget(
-                    ContractCostType::ParseWasmMemoryPages,
-                    Some(inputs.n_memory_pages as u64),
+                    ContractCostType::ParseWasmDataSegmentBytes,
+                    Some(inputs.n_data_segment_bytes as u64),
                 )?;
             }
         }
@@ -82,17 +81,24 @@ impl VersionedContractCodeCostInputs {
     pub fn charge_for_instantiation(&self, _host: &Host) -> Result<(), HostError> {
         match self {
             Self::V0 { wasm_bytes } => {
-                _host.charge_budget(
-                    ContractCostType::VmCachedInstantiation,
-                    Some(*wasm_bytes as u64),
-                )?;
+                // Before soroban supported cached instantiation, the full cost
+                // of parsing-and-instantiation was charged to the
+                // VmInstantiation cost type and we already charged it by the
+                // time we got here, in `charge_for_parsing` above. At-and-after
+                // the protocol that enabled cached instantiation, the
+                // VmInstantiation cost type was repurposed to only cover the
+                // cost of parsing, so we have to charge the "second half" cost
+                // of instantiaiton separately here.
+                if _host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+                    _host.charge_budget(
+                        ContractCostType::VmCachedInstantiation,
+                        Some(*wasm_bytes as u64),
+                    )?;
+                }
             }
             #[cfg(feature = "next")]
             Self::V1(inputs) => {
-                _host.charge_budget(
-                    ContractCostType::InstantiateWasmInstructions,
-                    Some(inputs.n_instructions as u64),
-                )?;
+                _host.charge_budget(ContractCostType::InstantiateWasmInstructions, None)?;
                 _host.charge_budget(
                     ContractCostType::InstantiateWasmFunctions,
                     Some(inputs.n_functions as u64),
@@ -105,10 +111,7 @@ impl VersionedContractCodeCostInputs {
                     ContractCostType::InstantiateWasmTableEntries,
                     Some(inputs.n_table_entries as u64),
                 )?;
-                _host.charge_budget(
-                    ContractCostType::InstantiateWasmTypes,
-                    Some(inputs.n_types as u64),
-                )?;
+                _host.charge_budget(ContractCostType::InstantiateWasmTypes, None)?;
                 _host.charge_budget(
                     ContractCostType::InstantiateWasmDataSegments,
                     Some(inputs.n_data_segments as u64),
@@ -126,8 +129,8 @@ impl VersionedContractCodeCostInputs {
                     Some(inputs.n_exports as u64),
                 )?;
                 _host.charge_budget(
-                    ContractCostType::InstantiateWasmMemoryPages,
-                    Some(inputs.n_memory_pages as u64),
+                    ContractCostType::InstantiateWasmDataSegmentBytes,
+                    Some(inputs.n_data_segment_bytes as u64),
                 )?;
             }
         }
@@ -374,12 +377,12 @@ impl ParsedModule {
             n_elem_segments: 0,
             n_imports: 0,
             n_exports: 0,
-            n_memory_pages: 0,
+            n_data_segment_bytes: 0,
         };
 
         let parser = Parser::new(0);
         let mut elements: u32 = 0;
-        let mut data: u32 = 0;
+        let mut available_memory: u32 = 0;
         for section in parser.parse_all(wasm) {
             let section = host.map_err(section)?;
             match section {
@@ -443,8 +446,10 @@ impl ParsedModule {
                                 &[],
                             ));
                         }
-                        costs.n_memory_pages =
-                            costs.n_memory_pages.saturating_add(mem.initial as u32);
+                        available_memory = available_memory.saturating_add(
+                            (mem.initial as u32)
+                                .saturating_mul(crate::vm::WASM_STD_MEM_PAGE_SIZE_IN_BYTES),
+                        );
                     }
                 }
 
@@ -475,8 +480,7 @@ impl ParsedModule {
                 }
                 ExportSection(s) => costs.n_exports = costs.n_exports.saturating_add(s.count()),
                 ElementSection(s) => {
-                    costs.n_elem_segments = costs.n_elem_segments.saturating_add(1);
-                    elements = elements.saturating_add(s.count());
+                    costs.n_elem_segments = costs.n_elem_segments.saturating_add(s.count());
                     for elem in s {
                         let elem = host.map_err(elem)?;
                         match elem.kind {
@@ -486,8 +490,11 @@ impl ParsedModule {
                             }
                         }
                         match elem.items {
-                            ElementItems::Functions(_) => (),
+                            ElementItems::Functions(fs) => {
+                                elements = elements.saturating_add(fs.count());
+                            }
                             ElementItems::Expressions(_, exprs) => {
+                                elements = elements.saturating_add(exprs.count());
                                 for expr in exprs {
                                     let expr = host.map_err(expr)?;
                                     Self::check_const_expr_simple(&host, &expr)?;
@@ -497,7 +504,7 @@ impl ParsedModule {
                     }
                 }
                 DataSection(s) => {
-                    costs.n_data_segments = costs.n_data_segments.saturating_add(1);
+                    costs.n_data_segments = costs.n_data_segments.saturating_add(s.count());
                     for d in s {
                         let d = host.map_err(d)?;
                         if d.data.len() > u32::MAX as usize {
@@ -508,7 +515,9 @@ impl ParsedModule {
                                 &[],
                             ));
                         }
-                        data = data.saturating_add(d.data.len() as u32);
+                        costs.n_data_segment_bytes = costs
+                            .n_data_segment_bytes
+                            .saturating_add(d.data.len() as u32);
                         match d.kind {
                             wasmparser::DataKind::Active { offset_expr, .. } => {
                                 Self::check_const_expr_simple(&host, &offset_expr)?
@@ -525,15 +534,12 @@ impl ParsedModule {
                 }
             }
         }
-        let available_memory = costs
-            .n_memory_pages
-            .saturating_mul(WASM_STD_MEM_PAGE_SIZE_IN_BYTES);
-        if data > available_memory {
+        if costs.n_data_segment_bytes > available_memory {
             return Err(err!(
                 host,
                 (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                "data segments exceed memory size",
-                data,
+                "data segment(s) content exceeds memory size",
+                costs.n_data_segment_bytes,
                 available_memory
             ));
         }
@@ -541,7 +547,7 @@ impl ParsedModule {
             return Err(err!(
                 host,
                 (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                "too many elements in Wasm elem section(s)",
+                "elem segments(s) content exceeds table size",
                 elements,
                 costs.n_table_entries
             ));

@@ -96,7 +96,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
         call_bench::<B, ParseWasmElemSegmentsMeasure>(&mut params)?;
         call_bench::<B, ParseWasmImportsMeasure>(&mut params)?;
         call_bench::<B, ParseWasmExportsMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmMemoryPagesMeasure>(&mut params)?;
+        call_bench::<B, ParseWasmDataSegmentBytesMeasure>(&mut params)?;
 
         call_bench::<B, InstantiateWasmInstructionsMeasure>(&mut params)?;
         call_bench::<B, InstantiateWasmFunctionsMeasure>(&mut params)?;
@@ -107,7 +107,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
         call_bench::<B, InstantiateWasmElemSegmentsMeasure>(&mut params)?;
         call_bench::<B, InstantiateWasmImportsMeasure>(&mut params)?;
         call_bench::<B, InstantiateWasmExportsMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmMemoryPagesMeasure>(&mut params)?;
+        call_bench::<B, InstantiateWasmDataSegmentBytesMeasure>(&mut params)?;
     }
     // These three mem ones are derived analytically, we do not calibrate them typically
     if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {

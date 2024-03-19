@@ -112,9 +112,9 @@ impl Default for BudgetTracker {
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmExports => init_input(),
                 #[cfg(feature = "next")]
-                ContractCostType::ParseWasmMemoryPages => init_input(),
+                ContractCostType::ParseWasmDataSegmentBytes => init_input(),
                 #[cfg(feature = "next")]
-                ContractCostType::InstantiateWasmInstructions => init_input(),
+                ContractCostType::InstantiateWasmInstructions => (),
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmFunctions => init_input(),
                 #[cfg(feature = "next")]
@@ -122,7 +122,7 @@ impl Default for BudgetTracker {
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTableEntries => init_input(),
                 #[cfg(feature = "next")]
-                ContractCostType::InstantiateWasmTypes => init_input(),
+                ContractCostType::InstantiateWasmTypes => (),
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegments => init_input(),
                 #[cfg(feature = "next")]
@@ -132,7 +132,7 @@ impl Default for BudgetTracker {
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmExports => init_input(),
                 #[cfg(feature = "next")]
-                ContractCostType::InstantiateWasmMemoryPages => init_input(),
+                ContractCostType::InstantiateWasmDataSegmentBytes => init_input(),
             }
         }
         mt
@@ -409,106 +409,106 @@ impl Default for BudgetImpl {
                     cpu.const_term = 1058;
                     cpu.lin_term = ScaledU64(501);
                 }
+
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmInstructions => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.const_term = 72736;
+                    cpu.lin_term = ScaledU64(25420);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmFunctions => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(536688);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmGlobals => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(176902);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTableEntries => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(29639);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTypes => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(1048891);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegments => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(236970);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmElemSegments => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(317249);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmImports => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(694667);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmExports => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(427037);
                 }
                 #[cfg(feature = "next")]
-                ContractCostType::ParseWasmMemoryPages => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                ContractCostType::ParseWasmDataSegmentBytes => {
+                    cpu.const_term = 66075;
+                    cpu.lin_term = ScaledU64(28);
                 }
-
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmInstructions => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.const_term = 25059;
+                    cpu.lin_term = ScaledU64(0);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmFunctions => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(7503);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmGlobals => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(10761);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTableEntries => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(3211);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTypes => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(0);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegments => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(16370);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmElemSegments => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(28309);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmImports => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(683461);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmExports => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                    cpu.lin_term = ScaledU64(297065);
                 }
                 #[cfg(feature = "next")]
-                ContractCostType::InstantiateWasmMemoryPages => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1);
+                ContractCostType::InstantiateWasmDataSegmentBytes => {
+                    cpu.const_term = 25191;
+                    cpu.lin_term = ScaledU64(14);
                 }
             }
 
@@ -613,106 +613,107 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
+
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmInstructions => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.const_term = 17564;
+                    mem.lin_term = ScaledU64(6457);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmFunctions => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(47464);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmGlobals => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(13420);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTableEntries => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(6285);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTypes => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(64670);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegments => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(29074);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmElemSegments => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(48095);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmImports => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(102890);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmExports => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(36394);
                 }
                 #[cfg(feature = "next")]
-                ContractCostType::ParseWasmMemoryPages => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                ContractCostType::ParseWasmDataSegmentBytes => {
+                    mem.const_term = 17580;
+                    mem.lin_term = ScaledU64(257);
                 }
 
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmInstructions => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.const_term = 70192;
+                    mem.lin_term = ScaledU64(0);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmFunctions => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(14613);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmGlobals => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(6833);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTableEntries => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(1025);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTypes => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(0);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegments => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(129632);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmElemSegments => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(13665);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmImports => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(77273);
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmExports => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                    mem.lin_term = ScaledU64(9176);
                 }
                 #[cfg(feature = "next")]
-                ContractCostType::InstantiateWasmMemoryPages => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(1);
+                ContractCostType::InstantiateWasmDataSegmentBytes => {
+                    mem.const_term = 69256;
+                    mem.lin_term = ScaledU64(126);
                 }
             }
         }

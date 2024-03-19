@@ -45,6 +45,7 @@ use wasmi::{Caller, StoreContextMut};
 impl wasmi::core::HostError for HostError {}
 
 const MAX_VM_ARGS: usize = 32;
+#[cfg(feature = "next")]
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
 
 struct VmInstantiationTimer {

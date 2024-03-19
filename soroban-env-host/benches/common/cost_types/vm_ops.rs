@@ -69,23 +69,22 @@ pub(crate) use v21::*;
 #[cfg(feature = "next")]
 mod v21 {
     use super::super::wasm_insn_exec::{
-        wasm_module_with_n_data_segments, wasm_module_with_n_elem_segments,
-        wasm_module_with_n_exports, wasm_module_with_n_globals, wasm_module_with_n_imports,
-        wasm_module_with_n_insns, wasm_module_with_n_internal_funcs,
-        wasm_module_with_n_memory_pages, wasm_module_with_n_table_entries,
-        wasm_module_with_n_types,
+        wasm_module_with_n_data_segment_bytes, wasm_module_with_n_data_segments,
+        wasm_module_with_n_elem_segments, wasm_module_with_n_exports, wasm_module_with_n_globals,
+        wasm_module_with_n_imports, wasm_module_with_n_insns, wasm_module_with_n_internal_funcs,
+        wasm_module_with_n_table_entries, wasm_module_with_n_types,
     };
     use super::*;
     use soroban_env_host::{
         cost_runner::{
-            InstantiateWasmDataSegmentsRun, InstantiateWasmElemSegmentsRun,
-            InstantiateWasmExportsRun, InstantiateWasmFunctionsRun, InstantiateWasmGlobalsRun,
-            InstantiateWasmImportsRun, InstantiateWasmInstructionsRun,
-            InstantiateWasmMemoryPagesRun, InstantiateWasmTableEntriesRun, InstantiateWasmTypesRun,
+            InstantiateWasmDataSegmentBytesRun, InstantiateWasmDataSegmentsRun,
+            InstantiateWasmElemSegmentsRun, InstantiateWasmExportsRun, InstantiateWasmFunctionsRun,
+            InstantiateWasmGlobalsRun, InstantiateWasmImportsRun, InstantiateWasmInstructionsRun,
+            InstantiateWasmTableEntriesRun, InstantiateWasmTypesRun, ParseWasmDataSegmentBytesRun,
             ParseWasmDataSegmentsRun, ParseWasmElemSegmentsRun, ParseWasmExportsRun,
             ParseWasmFunctionsRun, ParseWasmGlobalsRun, ParseWasmImportsRun,
-            ParseWasmInstructionsRun, ParseWasmMemoryPagesRun, ParseWasmTableEntriesRun,
-            ParseWasmTypesRun, VmCachedInstantiationRun, VmInstantiationSample,
+            ParseWasmInstructionsRun, ParseWasmTableEntriesRun, ParseWasmTypesRun,
+            VmCachedInstantiationRun, VmInstantiationSample,
         },
         xdr, Host,
     };
@@ -101,7 +100,7 @@ mod v21 {
     pub(crate) struct ParseWasmElemSegmentsMeasure;
     pub(crate) struct ParseWasmImportsMeasure;
     pub(crate) struct ParseWasmExportsMeasure;
-    pub(crate) struct ParseWasmMemoryPagesMeasure;
+    pub(crate) struct ParseWasmDataSegmentBytesMeasure;
 
     pub(crate) struct InstantiateWasmInstructionsMeasure;
     pub(crate) struct InstantiateWasmFunctionsMeasure;
@@ -112,7 +111,7 @@ mod v21 {
     pub(crate) struct InstantiateWasmElemSegmentsMeasure;
     pub(crate) struct InstantiateWasmImportsMeasure;
     pub(crate) struct InstantiateWasmExportsMeasure;
-    pub(crate) struct InstantiateWasmMemoryPagesMeasure;
+    pub(crate) struct InstantiateWasmDataSegmentBytesMeasure;
 
     // Protocol 21 coarse instantiation-phase cost model
     impl_measurement_for_instantiation_cost_type!(
@@ -188,11 +187,11 @@ mod v21 {
         30
     );
     impl_measurement_for_instantiation_cost_type!(
-        ParseWasmMemoryPagesRun,
-        ParseWasmMemoryPagesMeasure,
-        wasm_module_with_n_memory_pages,
+        ParseWasmDataSegmentBytesRun,
+        ParseWasmDataSegmentBytesMeasure,
+        wasm_module_with_n_data_segment_bytes,
         true,
-        30
+        200000
     );
 
     impl_measurement_for_instantiation_cost_type!(
@@ -259,10 +258,10 @@ mod v21 {
         30
     );
     impl_measurement_for_instantiation_cost_type!(
-        InstantiateWasmMemoryPagesRun,
-        InstantiateWasmMemoryPagesMeasure,
-        wasm_module_with_n_memory_pages,
+        InstantiateWasmDataSegmentBytesRun,
+        InstantiateWasmDataSegmentBytesMeasure,
+        wasm_module_with_n_data_segment_bytes,
         true,
-        30
+        200000
     );
 }

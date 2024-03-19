@@ -58,12 +58,13 @@ mod v21 {
     use super::*;
     use crate::vm::ParsedModule;
     use crate::xdr::ContractCostType::{
-        InstantiateWasmDataSegments, InstantiateWasmElemSegments, InstantiateWasmExports,
-        InstantiateWasmFunctions, InstantiateWasmGlobals, InstantiateWasmImports,
-        InstantiateWasmInstructions, InstantiateWasmMemoryPages, InstantiateWasmTableEntries,
-        InstantiateWasmTypes, ParseWasmDataSegments, ParseWasmElemSegments, ParseWasmExports,
-        ParseWasmFunctions, ParseWasmGlobals, ParseWasmImports, ParseWasmInstructions,
-        ParseWasmMemoryPages, ParseWasmTableEntries, ParseWasmTypes, VmCachedInstantiation,
+        InstantiateWasmDataSegmentBytes, InstantiateWasmDataSegments, InstantiateWasmElemSegments,
+        InstantiateWasmExports, InstantiateWasmFunctions, InstantiateWasmGlobals,
+        InstantiateWasmImports, InstantiateWasmInstructions, InstantiateWasmTableEntries,
+        InstantiateWasmTypes, ParseWasmDataSegmentBytes, ParseWasmDataSegments,
+        ParseWasmElemSegments, ParseWasmExports, ParseWasmFunctions, ParseWasmGlobals,
+        ParseWasmImports, ParseWasmInstructions, ParseWasmTableEntries, ParseWasmTypes,
+        VmCachedInstantiation,
     };
 
     macro_rules! impl_costrunner_for_parse_cost_type {
@@ -107,7 +108,7 @@ mod v21 {
     }
 
     macro_rules! impl_costrunner_for_instantiation_cost_type {
-        ($RUNNER:ty, $COST:ident) => {
+        ($RUNNER:ty, $COST:ident, $IS_CONST:expr) => {
             impl CostRunner for $RUNNER {
                 const COST_TYPE: CostType = CostType::Contract($COST);
 
@@ -133,7 +134,11 @@ mod v21 {
                     _iter: u64,
                     sample: Self::SampleType,
                 ) -> Self::RecycledType {
-                    black_box(host.charge_budget($COST, Some(0)).unwrap());
+                    if $IS_CONST {
+                        black_box(host.charge_budget($COST, None).unwrap());
+                    } else {
+                        black_box(host.charge_budget($COST, Some(0)).unwrap());
+                    }
                     black_box((None, sample.wasm))
                 }
             }
@@ -154,7 +159,7 @@ mod v21 {
     pub struct ParseWasmElemSegmentsRun;
     pub struct ParseWasmImportsRun;
     pub struct ParseWasmExportsRun;
-    pub struct ParseWasmMemoryPagesRun;
+    pub struct ParseWasmDataSegmentBytesRun;
 
     pub struct InstantiateWasmInstructionsRun;
     pub struct InstantiateWasmFunctionsRun;
@@ -165,7 +170,7 @@ mod v21 {
     pub struct InstantiateWasmElemSegmentsRun;
     pub struct InstantiateWasmImportsRun;
     pub struct InstantiateWasmExportsRun;
-    pub struct InstantiateWasmMemoryPagesRun;
+    pub struct InstantiateWasmDataSegmentBytesRun;
 
     impl_costrunner_for_parse_cost_type!(VmInstantiationRun, VmInstantiation);
     impl_costrunner_for_parse_cost_type!(ParseWasmInstructionsRun, ParseWasmInstructions);
@@ -177,35 +182,61 @@ mod v21 {
     impl_costrunner_for_parse_cost_type!(ParseWasmElemSegmentsRun, ParseWasmElemSegments);
     impl_costrunner_for_parse_cost_type!(ParseWasmImportsRun, ParseWasmImports);
     impl_costrunner_for_parse_cost_type!(ParseWasmExportsRun, ParseWasmExports);
-    impl_costrunner_for_parse_cost_type!(ParseWasmMemoryPagesRun, ParseWasmMemoryPages);
+    impl_costrunner_for_parse_cost_type!(ParseWasmDataSegmentBytesRun, ParseWasmDataSegmentBytes);
 
-    impl_costrunner_for_instantiation_cost_type!(VmCachedInstantiationRun, VmCachedInstantiation);
+    impl_costrunner_for_instantiation_cost_type!(
+        VmCachedInstantiationRun,
+        VmCachedInstantiation,
+        false
+    );
     impl_costrunner_for_instantiation_cost_type!(
         InstantiateWasmInstructionsRun,
-        InstantiateWasmInstructions
+        InstantiateWasmInstructions,
+        true
     );
     impl_costrunner_for_instantiation_cost_type!(
         InstantiateWasmFunctionsRun,
-        InstantiateWasmFunctions
+        InstantiateWasmFunctions,
+        false
     );
-    impl_costrunner_for_instantiation_cost_type!(InstantiateWasmGlobalsRun, InstantiateWasmGlobals);
+    impl_costrunner_for_instantiation_cost_type!(
+        InstantiateWasmGlobalsRun,
+        InstantiateWasmGlobals,
+        false
+    );
     impl_costrunner_for_instantiation_cost_type!(
         InstantiateWasmTableEntriesRun,
-        InstantiateWasmTableEntries
+        InstantiateWasmTableEntries,
+        false
     );
-    impl_costrunner_for_instantiation_cost_type!(InstantiateWasmTypesRun, InstantiateWasmTypes);
+    impl_costrunner_for_instantiation_cost_type!(
+        InstantiateWasmTypesRun,
+        InstantiateWasmTypes,
+        true
+    );
     impl_costrunner_for_instantiation_cost_type!(
         InstantiateWasmDataSegmentsRun,
-        InstantiateWasmDataSegments
+        InstantiateWasmDataSegments,
+        false
     );
     impl_costrunner_for_instantiation_cost_type!(
         InstantiateWasmElemSegmentsRun,
-        InstantiateWasmElemSegments
+        InstantiateWasmElemSegments,
+        false
     );
-    impl_costrunner_for_instantiation_cost_type!(InstantiateWasmImportsRun, InstantiateWasmImports);
-    impl_costrunner_for_instantiation_cost_type!(InstantiateWasmExportsRun, InstantiateWasmExports);
     impl_costrunner_for_instantiation_cost_type!(
-        InstantiateWasmMemoryPagesRun,
-        InstantiateWasmMemoryPages
+        InstantiateWasmImportsRun,
+        InstantiateWasmImports,
+        false
+    );
+    impl_costrunner_for_instantiation_cost_type!(
+        InstantiateWasmExportsRun,
+        InstantiateWasmExports,
+        false
+    );
+    impl_costrunner_for_instantiation_cost_type!(
+        InstantiateWasmDataSegmentBytesRun,
+        InstantiateWasmDataSegmentBytes,
+        false
     );
 }
