@@ -1,7 +1,7 @@
 // Note: ignoring error handling safety in these tests.
+use crate::xdr::{ContractExecutable, Hash};
 use soroban_env_common::{AddressObject, Env};
 use soroban_test_wasms::CONTRACT_STORAGE;
-use stellar_xdr::next::{ContractExecutable, Hash};
 
 use crate::Host;
 
@@ -48,10 +48,12 @@ impl InstanceCodeTest {
     }
 }
 
-#[cfg(feature = "next")]
 mod separate_instance_code_extension {
+    use crate::budget::AsBudget;
+
     use super::*;
 
+    #[cfg(feature = "next")]
     #[test]
     fn extend_only_instance() {
         let InstanceCodeTest {
@@ -64,16 +66,19 @@ mod separate_instance_code_extension {
         assert!(host
             .extend_contract_instance_ttl(contract_id, 5.into(), 5000.into())
             .is_ok());
-        assert_eq!(
-            host.retrieve_entry_with_lifetime(
-                host.contract_instance_ledger_key(&contract).unwrap()
-            )
+        let entry_with_live_until = host
+            .try_borrow_storage_mut()
             .unwrap()
-            .1,
-            Some(9090)
-        );
+            .get_with_live_until_ledger(
+                &host.contract_instance_ledger_key(&contract).unwrap(),
+                host.as_budget(),
+            )
+            .unwrap();
+
+        assert_eq!(entry_with_live_until.1, Some(9090));
     }
 
+    #[cfg(feature = "next")]
     #[test]
     fn extend_only_code() {
         let InstanceCodeTest {
@@ -86,11 +91,50 @@ mod separate_instance_code_extension {
         assert!(host
             .extend_contract_code_ttl(contract_id, 5.into(), 5000.into())
             .is_ok());
-        assert_eq!(
-            host.retrieve_entry_with_lifetime(host.contract_code_ledger_key(&code).unwrap())
-                .unwrap()
-                .1,
-            Some(9090)
-        );
+        let entry_with_live_until = host
+            .try_borrow_storage_mut()
+            .unwrap()
+            .get_with_live_until_ledger(
+                &host.contract_code_ledger_key(&code).unwrap(),
+                host.as_budget(),
+            )
+            .unwrap();
+
+        assert_eq!(entry_with_live_until.1, Some(9090));
+    }
+
+    #[test]
+    fn extend_code_and_instance() {
+        let InstanceCodeTest {
+            host,
+            contract_id,
+            code,
+            contract,
+        } = InstanceCodeTest::setup();
+
+        assert!(host
+            .extend_contract_instance_and_code_ttl(contract_id, 5.into(), 5000.into())
+            .is_ok());
+        let code_entry_with_live_until = host
+            .try_borrow_storage_mut()
+            .unwrap()
+            .get_with_live_until_ledger(
+                &host.contract_code_ledger_key(&code).unwrap(),
+                host.as_budget(),
+            )
+            .unwrap();
+
+        assert_eq!(code_entry_with_live_until.1, Some(9090));
+
+        let instance_entry_with_live_until = host
+            .try_borrow_storage_mut()
+            .unwrap()
+            .get_with_live_until_ledger(
+                &host.contract_instance_ledger_key(&contract).unwrap(),
+                host.as_budget(),
+            )
+            .unwrap();
+
+        assert_eq!(instance_entry_with_live_until.1, Some(9090));
     }
 }

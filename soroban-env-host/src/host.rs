@@ -9,7 +9,7 @@ use crate::{
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num,
     impl_wrapping_obj_to_num,
     num::*,
-    storage::{EntryWithLiveUntil, Storage},
+    storage::Storage,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, Duration, Hash,
@@ -3032,14 +3032,6 @@ impl Host {
         F: FnOnce(Budget) -> Result<T, HostError>,
     {
         f(self.0.budget.clone())
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn retrieve_entry_with_lifetime(
-        &self,
-        key: Rc<crate::xdr::LedgerKey>,
-    ) -> Option<EntryWithLiveUntil> {
-        self.0.storage.borrow().get_entry_with_lifetime(key)
     }
 }
 
