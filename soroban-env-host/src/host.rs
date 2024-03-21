@@ -2071,7 +2071,7 @@ impl VmCallerEnv for Host {
         self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
-            extend_to.into()
+            extend_to.into(),
         )?;
         Ok(Val::VOID)
     }
@@ -2086,12 +2086,7 @@ impl VmCallerEnv for Host {
         let contract_id = self.contract_id_from_address(contract)?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .extend_ttl(
-                self,
-                key,
-                threshold.into(),
-                extend_to.into(),
-            )
+            .extend_ttl(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
 
         Ok(Val::VOID)
@@ -2108,7 +2103,7 @@ impl VmCallerEnv for Host {
         self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
-            extend_to.into()
+            extend_to.into(),
         )?;
         Ok(Val::VOID)
     }

@@ -480,10 +480,7 @@ impl Storage {
 #[cfg(any(test, feature = "testutils"))]
 impl Storage {
     /// Unmetered function to access entry with lifetimes to test lifetime extensions.
-    pub fn get_entry_with_lifetime(
-        &self,
-        key: Rc<LedgerKey>,
-    ) -> Option<EntryWithLiveUntil> {
+    pub fn get_entry_with_lifetime(&self, key: Rc<LedgerKey>) -> Option<EntryWithLiveUntil> {
         let entry = self.map.map.iter().find(|e| e.0 == key);
 
         match entry {
