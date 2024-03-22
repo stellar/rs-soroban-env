@@ -33,7 +33,7 @@ where
     C: FnOnce() -> R + UnwindSafe,
 {
     thread_local! {
-        static TEST_CONTRACT_CALL_COUNT: Cell<u64> = Cell::new(0);
+        static TEST_CONTRACT_CALL_COUNT: Cell<u64> = const { Cell::new(0) };
     }
 
     static WRAP_PANIC_HOOK: Once = Once::new();
