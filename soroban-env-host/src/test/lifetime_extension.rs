@@ -1,0 +1,96 @@
+// Note: ignoring error handling safety in these tests.
+use soroban_env_common::{AddressObject, Env};
+use soroban_test_wasms::CONTRACT_STORAGE;
+use stellar_xdr::next::{ContractExecutable, Hash};
+
+use crate::Host;
+
+struct InstanceCodeTest {
+    host: Host,
+    contract_id: AddressObject,
+    contract: Hash,
+    code: Hash,
+}
+
+impl InstanceCodeTest {
+    // We can potentially add some customizability for the ledger here.
+    fn setup() -> Self {
+        let host = Host::test_host_with_recording_footprint();
+        let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+        let hash = host.contract_id_from_address(contract_id).unwrap();
+
+        let code = if let ContractExecutable::Wasm(hash) = host
+            .retrieve_contract_instance_from_storage(
+                &host.contract_instance_ledger_key(&hash).unwrap(),
+            )
+            .unwrap()
+            .executable
+        {
+            hash
+        } else {
+            panic!("Expected Wasm executable")
+        };
+
+        host.set_ledger_info(crate::LedgerInfo {
+            protocol_version: 21,
+            sequence_number: 4090,
+            max_entry_ttl: 10000,
+            ..Default::default()
+        })
+        .unwrap();
+
+        Self {
+            host,
+            contract_id,
+            contract: hash,
+            code,
+        }
+    }
+}
+
+#[cfg(feature = "next")]
+mod separate_instance_code_extension {
+    use super::*;
+
+    #[test]
+    fn extend_only_instance() {
+        let InstanceCodeTest {
+            host,
+            contract_id,
+            contract,
+            ..
+        } = InstanceCodeTest::setup();
+
+        assert!(host
+            .extend_contract_instance_ttl(contract_id, 5.into(), 5000.into())
+            .is_ok());
+        assert_eq!(
+            host.retrieve_entry_with_lifetime(
+                host.contract_instance_ledger_key(&contract).unwrap()
+            )
+            .unwrap()
+            .1,
+            Some(9090)
+        );
+    }
+
+    #[test]
+    fn extend_only_code() {
+        let InstanceCodeTest {
+            host,
+            contract_id,
+            code,
+            ..
+        } = InstanceCodeTest::setup();
+
+        assert!(host
+            .extend_contract_code_ttl(contract_id, 5.into(), 5000.into())
+            .is_ok());
+        assert_eq!(
+            host.retrieve_entry_with_lifetime(host.contract_code_ledger_key(&code).unwrap())
+                .unwrap()
+                .1,
+            Some(9090)
+        );
+    }
+}

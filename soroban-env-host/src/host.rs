@@ -9,7 +9,7 @@ use crate::{
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num,
     impl_wrapping_obj_to_num,
     num::*,
-    storage::Storage,
+    storage::{EntryWithLiveUntil, Storage},
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, Duration, Hash,
@@ -2059,8 +2059,29 @@ impl VmCallerEnv for Host {
         self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
-            extend_to.into(),
+            extend_to.into()
         )?;
+        Ok(Val::VOID)
+    }
+
+    fn extend_contract_instance_ttl(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        threshold: U32Val,
+        extend_to: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.try_borrow_storage_mut()?
+            .extend_ttl(
+                self,
+                key,
+                threshold.into(),
+                extend_to.into(),
+            )
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+
         Ok(Val::VOID)
     }
 
@@ -2075,8 +2096,34 @@ impl VmCallerEnv for Host {
         self.extend_contract_instance_and_code_ttl_from_contract_id(
             &contract_id,
             threshold.into(),
-            extend_to.into(),
+            extend_to.into()
         )?;
+        Ok(Val::VOID)
+    }
+
+    fn extend_contract_code_ttl(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        threshold: U32Val,
+        extend_to: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+
+        match self
+            .retrieve_contract_instance_from_storage(&key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.try_borrow_storage_mut()?
+                    .extend_ttl(self, key, threshold.into(), extend_to.into())
+                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
+            }
+            ContractExecutable::StellarAsset => {}
+        }
+
         Ok(Val::VOID)
     }
 
@@ -2990,6 +3037,14 @@ impl Host {
         F: FnOnce(Budget) -> Result<T, HostError>,
     {
         f(self.0.budget.clone())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn retrieve_entry_with_lifetime(
+        &self,
+        key: Rc<crate::xdr::LedgerKey>,
+    ) -> Option<EntryWithLiveUntil> {
+        self.0.storage.borrow().get_entry_with_lifetime(key)
     }
 }
 

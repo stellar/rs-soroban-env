@@ -241,7 +241,12 @@ impl Host {
     ) -> Result<(), HostError> {
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .extend_ttl(self, key.metered_clone(self)?, threshold, extend_to)
+            .extend_ttl(
+                self,
+                key.metered_clone(self)?,
+                threshold,
+                extend_to,
+            )
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
