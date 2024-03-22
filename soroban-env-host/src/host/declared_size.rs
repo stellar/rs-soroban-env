@@ -312,8 +312,7 @@ mod test {
         expect!["8"].assert_eq(size_of::<SymbolSmallIter>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<U256>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<I256>().to_string().as_str());
-        #[cfg(target_arch = "x86_64")]
-        expect!["40"].assert_eq(size_of::<HostObject>().to_string().as_str());
+
         #[cfg(target_arch = "aarch64")]
         expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<HostError>().to_string().as_str());
@@ -398,7 +397,19 @@ mod test {
             expect!["104"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
         }
 
+        #[rustversion::before(1.77)]
+        fn check_sizes_that_changed_at_rust_1_77() {
+            #[cfg(target_arch = "x86_64")]
+            expect!["40"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        }
+        #[rustversion::since(1.77)]
+        fn check_sizes_that_changed_at_rust_1_77() {
+            #[cfg(target_arch = "x86_64")]
+            expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        }
+
         check_sizes_that_changed_at_rust_1_76();
+        check_sizes_that_changed_at_rust_1_77();
 
         expect!["256"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["128"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
