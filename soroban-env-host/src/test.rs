@@ -20,6 +20,7 @@ mod hostile_opt;
 mod invocation;
 mod ledger;
 mod lifecycle;
+mod lifetime_extension;
 mod linear_memory;
 mod map;
 #[cfg(feature = "testutils")]

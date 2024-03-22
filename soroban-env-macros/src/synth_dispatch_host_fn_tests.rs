@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Error, LitStr};
 
-use crate::Function;
+use crate::{Function, LEDGER_PROTOCOL_VERSION};
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -220,11 +220,20 @@ pub fn generate_hostfn_call_with_wrong_types(file_lit: LitStr) -> Result<TokenSt
     let mut type_to_fn_arg: BTreeMap<String, Vec<(Function, usize)>> = BTreeMap::new();
     for m in root.modules.clone() {
         for f in m.functions.clone() {
-            for (i, a) in f.args.iter().enumerate() {
-                type_to_fn_arg
-                    .entry(a.r#type.clone())
-                    .or_default()
-                    .push((f.clone(), i));
+            // checks if the current ledger protocol version falls between
+            // supported protocol versions of this function
+            if !(f
+                .min_supported_protocol
+                .is_some_and(|v| v > LEDGER_PROTOCOL_VERSION)
+                || f.max_supported_protocol
+                    .is_some_and(|v| v < LEDGER_PROTOCOL_VERSION))
+            {
+                for (i, a) in f.args.iter().enumerate() {
+                    type_to_fn_arg
+                        .entry(a.r#type.clone())
+                        .or_default()
+                        .push((f.clone(), i));
+                }
             }
         }
     }
@@ -324,6 +333,14 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
         .modules
         .iter()
         .flat_map(|m| m.functions.clone().into_iter())
+        .filter(|f| {
+            // checks if the current ledger protocol version falls between
+            // supported protocol versions of this function
+            !(f.min_supported_protocol
+                .is_some_and(|v| v > LEDGER_PROTOCOL_VERSION)
+                || f.max_supported_protocol
+                    .is_some_and(|v| v < LEDGER_PROTOCOL_VERSION))
+        })
         .flat_map(|f| {
             f.args
                 .clone()
