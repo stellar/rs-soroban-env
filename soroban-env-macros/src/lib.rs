@@ -46,6 +46,7 @@ impl Parse for MetaInput {
                 input.parse::<Token![,]>()?;
                 assert!(pre <= 0xffff_ffff);
                 assert!(proto <= 0xffff_ffff);
+                assert_eq!(proto, LEDGER_PROTOCOL_VERSION as u64);
                 proto << 32 | pre
             },
         })
