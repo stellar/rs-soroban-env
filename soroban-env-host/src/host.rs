@@ -2073,11 +2073,14 @@ impl VmCallerEnv for Host {
         extend_to: U32Val,
     ) -> Result<Void, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        self.extend_contract_instance_and_code_ttl_from_contract_id(
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.extend_contract_instance_ttl_from_contract_id(
             &contract_id,
+            key.clone(),
             threshold.into(),
             extend_to.into(),
         )?;
+        self.extend_contract_code_ttl_from_contract_id(key, threshold.into(), extend_to.into())?;
         Ok(Val::VOID)
     }
 
@@ -2090,9 +2093,13 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
-        self.try_borrow_storage_mut()?
-            .extend_ttl(self, key, threshold.into(), extend_to.into())
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+
+        self.extend_contract_instance_ttl_from_contract_id(
+            &contract_id,
+            key,
+            threshold.into(),
+            extend_to.into(),
+        )?;
 
         Ok(Val::VOID)
     }
@@ -2105,11 +2112,14 @@ impl VmCallerEnv for Host {
         extend_to: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
-        self.extend_contract_instance_and_code_ttl_from_contract_id(
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.extend_contract_instance_ttl_from_contract_id(
             &contract_id,
+            key.clone(),
             threshold.into(),
             extend_to.into(),
         )?;
+        self.extend_contract_code_ttl_from_contract_id(key, threshold.into(), extend_to.into())?;
         Ok(Val::VOID)
     }
 
@@ -2123,18 +2133,7 @@ impl VmCallerEnv for Host {
         let contract_id = self.contract_id_from_address(contract)?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
 
-        match self
-            .retrieve_contract_instance_from_storage(&key)?
-            .executable
-        {
-            ContractExecutable::Wasm(wasm_hash) => {
-                let key = self.contract_code_ledger_key(&wasm_hash)?;
-                self.try_borrow_storage_mut()?
-                    .extend_ttl(self, key, threshold.into(), extend_to.into())
-                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
-            }
-            ContractExecutable::StellarAsset => {}
-        }
+        self.extend_contract_code_ttl_from_contract_id(key, threshold.into(), extend_to.into())?;
 
         Ok(Val::VOID)
     }
