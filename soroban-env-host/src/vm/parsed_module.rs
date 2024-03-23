@@ -435,7 +435,8 @@ impl ParsedModule {
                                 &[],
                             ));
                         }
-                        if (mem.initial as u64)
+                        if mem
+                            .initial
                             .saturating_mul(crate::vm::WASM_STD_MEM_PAGE_SIZE_IN_BYTES as u64)
                             > u32::MAX as u64
                         {

@@ -29,7 +29,7 @@ use crate::{
     xdr::{ContractCostType, Hash, ScErrorCode, ScErrorType},
     ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
 };
-use std::{cell::RefCell, collections::BTreeSet, rc::Rc, time::Instant};
+use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
@@ -49,16 +49,18 @@ const MAX_VM_ARGS: usize = 32;
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
 
 struct VmInstantiationTimer {
+    #[cfg(not(target_family = "wasm"))]
     host: Host,
     #[cfg(not(target_family = "wasm"))]
-    start: Instant,
+    start: std::time::Instant,
 }
 impl VmInstantiationTimer {
-    fn new(host: Host) -> Self {
+    fn new(_host: Host) -> Self {
         VmInstantiationTimer {
-            host,
             #[cfg(not(target_family = "wasm"))]
-            start: Instant::now(),
+            host: _host,
+            #[cfg(not(target_family = "wasm"))]
+            start: std::time::Instant::now(),
         }
     }
 }
