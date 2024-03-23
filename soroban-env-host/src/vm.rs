@@ -406,6 +406,12 @@ impl Vm {
         self.metered_func_call(host, func_sym, wasm_args.as_slice())
     }
 
+    /// Returns the raw bytes content of a named custom section from the WASM
+    /// module loaded into the [Vm], or `None` if no such custom section exists.
+    pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
+        self.module.custom_section(name)
+    }
+
     /// Utility function that synthesizes a `VmCaller<Host>` configured to point
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.

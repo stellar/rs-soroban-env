@@ -288,7 +288,6 @@ impl ParsedModule {
 
     /// Returns the raw bytes content of a named custom section from the Wasm
     /// module loaded into the [Vm], or `None` if no such custom section exists.
-    #[allow(dead_code)]
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
         Self::module_custom_section(&self.module, name)
     }
