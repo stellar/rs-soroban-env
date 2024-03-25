@@ -80,6 +80,16 @@ fn dfs(edges: &BTreeMap<String, BTreeSet<String>>, ty: &String, set: &mut BTreeS
     }
 }
 
+fn check_function_protocol_is_in_range(func: &Function) -> bool {
+    let min_supported_proto_is_too_new = func
+        .min_supported_protocol
+        .is_some_and(|v| v > LEDGER_PROTOCOL_VERSION);
+    let max_supported_proto_is_too_old = func
+        .max_supported_protocol
+        .is_some_and(|v| v < LEDGER_PROTOCOL_VERSION);
+    !min_supported_proto_is_too_new && !max_supported_proto_is_too_old
+}
+
 // This requires the input to be a valid signature
 const SPECIAL_CASES: [&str; 1] = ["recover_key_ecdsa_secp256k1"];
 
@@ -222,12 +232,7 @@ pub fn generate_hostfn_call_with_wrong_types(file_lit: LitStr) -> Result<TokenSt
         for f in m.functions.clone() {
             // checks if the current ledger protocol version falls between
             // supported protocol versions of this function
-            if !(f
-                .min_supported_protocol
-                .is_some_and(|v| v > LEDGER_PROTOCOL_VERSION)
-                || f.max_supported_protocol
-                    .is_some_and(|v| v < LEDGER_PROTOCOL_VERSION))
-            {
+            if check_function_protocol_is_in_range(&f) {
                 for (i, a) in f.args.iter().enumerate() {
                     type_to_fn_arg
                         .entry(a.r#type.clone())
@@ -333,14 +338,7 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
         .modules
         .iter()
         .flat_map(|m| m.functions.clone().into_iter())
-        .filter(|f| {
-            // checks if the current ledger protocol version falls between
-            // supported protocol versions of this function
-            !(f.min_supported_protocol
-                .is_some_and(|v| v > LEDGER_PROTOCOL_VERSION)
-                || f.max_supported_protocol
-                    .is_some_and(|v| v < LEDGER_PROTOCOL_VERSION))
-        })
+        .filter(check_function_protocol_is_in_range)
         .flat_map(|f| {
             f.args
                 .clone()
