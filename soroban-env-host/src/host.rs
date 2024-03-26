@@ -2081,6 +2081,22 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
+    fn extend_contract_instance_ttl(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        threshold: U32Val,
+        extend_to: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.try_borrow_storage_mut()?
+            .extend_ttl(self, key, threshold.into(), extend_to.into())
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+
+        Ok(Val::VOID)
+    }
+
     fn extend_contract_instance_and_code_ttl(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
@@ -2094,6 +2110,32 @@ impl VmCallerEnv for Host {
             threshold.into(),
             extend_to.into(),
         )?;
+        Ok(Val::VOID)
+    }
+
+    fn extend_contract_code_ttl(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        threshold: U32Val,
+        extend_to: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+
+        match self
+            .retrieve_contract_instance_from_storage(&key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.try_borrow_storage_mut()?
+                    .extend_ttl(self, key, threshold.into(), extend_to.into())
+                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
+            }
+            ContractExecutable::StellarAsset => {}
+        }
+
         Ok(Val::VOID)
     }
 
