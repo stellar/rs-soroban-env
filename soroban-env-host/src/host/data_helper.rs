@@ -253,18 +253,14 @@ impl Host {
         Ok(())
     }
 
-    pub(crate) fn extend_contract_instance_and_code_ttl_from_contract_id(
+    pub(crate) fn extend_contract_code_ttl_from_contract_id(
         &self,
-        contract_id: &Hash,
+        instance_key: Rc<LedgerKey>,
         threshold: u32,
         extend_to: u32,
     ) -> Result<(), HostError> {
-        let key = self.contract_instance_ledger_key(&contract_id)?;
-        self.try_borrow_storage_mut()?
-            .extend_ttl(self, key.metered_clone(self)?, threshold, extend_to)
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
-            .retrieve_contract_instance_from_storage(&key)?
+            .retrieve_contract_instance_from_storage(&instance_key)?
             .executable
         {
             ContractExecutable::Wasm(wasm_hash) => {
@@ -275,6 +271,24 @@ impl Host {
             }
             ContractExecutable::StellarAsset => {}
         }
+        Ok(())
+    }
+
+    pub(crate) fn extend_contract_instance_ttl_from_contract_id(
+        &self,
+        contract_id: &Hash,
+        instance_key: Rc<LedgerKey>,
+        threshold: u32,
+        extend_to: u32,
+    ) -> Result<(), HostError> {
+        self.try_borrow_storage_mut()?
+            .extend_ttl(
+                self,
+                instance_key.metered_clone(self)?,
+                threshold,
+                extend_to,
+            )
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         Ok(())
     }
 
