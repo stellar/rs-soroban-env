@@ -226,6 +226,12 @@ impl ModEmitter {
     }
 
     #[cfg(feature = "adversarial")]
+    pub fn add_raw_fn_type(&mut self, params: &[ValType], results: &[ValType]) {
+        self.types
+            .function(params.iter().cloned(), results.iter().cloned());
+    }
+
+    #[cfg(feature = "adversarial")]
     pub fn add_fn_type_no_check(&mut self, arity: Arity, ret: Arity) -> TypeRef {
         let params: Vec<_> = std::iter::repeat(ValType::I64)
             .take(arity.0 as usize)

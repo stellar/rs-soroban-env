@@ -10,6 +10,9 @@ pub(crate) fn test_host() -> Host {
     .unwrap();
     host.as_budget().reset_unlimited().unwrap();
     host.as_budget().reset_fuel_config().unwrap();
+    if std::env::var("DEBUG_BENCH_HOST").is_ok() {
+        host.enable_debug().unwrap();
+    }
     host
 }
 

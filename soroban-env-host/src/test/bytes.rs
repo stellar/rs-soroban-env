@@ -490,8 +490,12 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
         U32Val::from(100).to_val().get_payload()
     );
 
-    // constructing a big map will cause budget limit exceeded error
-    let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(480000, 7);
+    // constructing a big bytes will cause budget limit exceeded error
+    #[cfg(not(feature = "next"))]
+    const TOO_BIG: u32 = 480000;
+    #[cfg(feature = "next")]
+    const TOO_BIG: u32 = 8_000_000;
+    let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(TOO_BIG, 7);
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
     host.budget_ref().reset_default()?;

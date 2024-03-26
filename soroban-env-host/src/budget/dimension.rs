@@ -8,7 +8,7 @@ use core::fmt::Debug;
 pub(crate) struct IsCpu(pub(crate) bool);
 pub(crate) struct IsShadowMode(pub(crate) bool);
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct BudgetDimension {
     /// A set of cost models that map input values (eg. event counts, object
     /// sizes) from some CostType to whatever concrete resource type is being
@@ -34,6 +34,18 @@ pub(crate) struct BudgetDimension {
 
     /// Similar to `total_count`, but towards the `shadow_limit`
     pub(crate) shadow_total_count: u64,
+}
+
+impl Default for BudgetDimension {
+    fn default() -> Self {
+        Self {
+            cost_models: [MeteredCostComponent::default(); ContractCostType::variants().len()],
+            limit: Default::default(),
+            total_count: Default::default(),
+            shadow_limit: Default::default(),
+            shadow_total_count: Default::default(),
+        }
+    }
 }
 
 impl Debug for BudgetDimension {

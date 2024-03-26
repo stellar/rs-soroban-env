@@ -566,3 +566,380 @@ fn test_large_contract() {
     assert!(err.error.is_type(ScErrorType::Budget));
     assert!(err.error.is_code(ScErrorCode::ExceededLimit));
 }
+
+#[cfg(feature = "next")]
+#[allow(dead_code)]
+mod cap_54_55_56 {
+
+    use super::*;
+    use crate::{
+        storage::{FootprintMap, StorageMap},
+        test::observe::ObservedHost,
+        testutils::wasm::wasm_module_with_a_bit_of_everything,
+        vm::ModuleCache,
+        xdr::{
+            ContractCostType::{self, *},
+            LedgerEntry, LedgerKey,
+        },
+        AddressObject, HostError,
+    };
+    use std::rc::Rc;
+
+    const V_NEW: u32 = ModuleCache::MIN_LEDGER_VERSION;
+    const V_OLD: u32 = V_NEW - 1;
+    const NEW_COST_TYPES: &'static [ContractCostType] = &[
+        ParseWasmInstructions,
+        ParseWasmFunctions,
+        ParseWasmGlobals,
+        ParseWasmTableEntries,
+        ParseWasmTypes,
+        ParseWasmDataSegments,
+        ParseWasmElemSegments,
+        ParseWasmImports,
+        ParseWasmExports,
+        ParseWasmDataSegmentBytes,
+        InstantiateWasmInstructions,
+        InstantiateWasmFunctions,
+        InstantiateWasmGlobals,
+        InstantiateWasmTableEntries,
+        InstantiateWasmTypes,
+        InstantiateWasmDataSegments,
+        InstantiateWasmElemSegments,
+        InstantiateWasmImports,
+        InstantiateWasmExports,
+        InstantiateWasmDataSegmentBytes,
+    ];
+
+    fn new_host_with_protocol_and_uploaded_contract(
+        hostname: &'static str,
+        proto: u32,
+    ) -> Result<(ObservedHost, AddressObject), HostError> {
+        let host = Host::test_host_with_recording_footprint();
+        let host = ObservedHost::new(hostname, host);
+        host.with_mut_ledger_info(|ledger_info| ledger_info.protocol_version = proto)?;
+        let contract_addr_obj =
+            host.register_test_contract_wasm(&wasm_module_with_a_bit_of_everything(proto));
+        Ok((host, contract_addr_obj))
+    }
+
+    struct ContractAndWasmEntries {
+        contract_key: Rc<LedgerKey>,
+        contract_entry: Rc<LedgerEntry>,
+        wasm_key: Rc<LedgerKey>,
+        wasm_entry: Rc<LedgerEntry>,
+    }
+
+    impl ContractAndWasmEntries {
+        fn from_contract_addr(
+            host: &Host,
+            contract_addr_obj: AddressObject,
+        ) -> Result<Self, HostError> {
+            let contract_id = host.contract_id_from_address(contract_addr_obj)?;
+            Self::from_contract_id(host, contract_id)
+        }
+        fn reload(self, host: &Host) -> Result<Self, HostError> {
+            host.with_mut_storage(|storage| {
+                let budget = host.budget_cloned();
+                let contract_entry = storage.get(&self.contract_key, &budget)?;
+                let wasm_entry = storage.get(&self.wasm_key, &budget)?;
+                Ok(ContractAndWasmEntries {
+                    contract_key: self.contract_key,
+                    contract_entry,
+                    wasm_key: self.wasm_key,
+                    wasm_entry,
+                })
+            })
+        }
+        fn from_contract_id(host: &Host, contract_id: Hash) -> Result<Self, HostError> {
+            let contract_key = host.contract_instance_ledger_key(&contract_id)?;
+            let wasm_hash = get_contract_wasm_ref(host, contract_id);
+            let wasm_key = host.contract_code_ledger_key(&wasm_hash)?;
+
+            host.with_mut_storage(|storage| {
+                let budget = host.budget_cloned();
+                let contract_entry = storage.get(&contract_key, &budget)?;
+                let wasm_entry = storage.get(&wasm_key, &budget)?;
+                Ok(ContractAndWasmEntries {
+                    contract_key,
+                    contract_entry,
+                    wasm_key,
+                    wasm_entry,
+                })
+            })
+        }
+        fn read_only_footprint(&self, budget: &Budget) -> Footprint {
+            Footprint(
+                FootprintMap::new()
+                    .insert(self.contract_key.clone(), AccessType::ReadOnly, budget)
+                    .unwrap()
+                    .insert(self.wasm_key.clone(), AccessType::ReadOnly, budget)
+                    .unwrap(),
+            )
+        }
+        fn wasm_writing_footprint(&self, budget: &Budget) -> Footprint {
+            Footprint(
+                FootprintMap::new()
+                    .insert(self.contract_key.clone(), AccessType::ReadOnly, budget)
+                    .unwrap()
+                    .insert(self.wasm_key.clone(), AccessType::ReadWrite, budget)
+                    .unwrap(),
+            )
+        }
+        fn storage_map(&self, budget: &Budget) -> StorageMap {
+            StorageMap::new()
+                .insert(
+                    self.contract_key.clone(),
+                    Some((self.contract_entry.clone(), Some(99999))),
+                    budget,
+                )
+                .unwrap()
+                .insert(
+                    self.wasm_key.clone(),
+                    Some((self.wasm_entry.clone(), Some(99999))),
+                    budget,
+                )
+                .unwrap()
+        }
+        fn read_only_storage(&self, budget: &Budget) -> Storage {
+            Storage::with_enforcing_footprint_and_map(
+                self.read_only_footprint(budget),
+                self.storage_map(budget),
+            )
+        }
+        fn wasm_writing_storage(&self, budget: &Budget) -> Storage {
+            Storage::with_enforcing_footprint_and_map(
+                self.wasm_writing_footprint(budget),
+                self.storage_map(budget),
+            )
+        }
+    }
+
+    fn upload_and_get_contract_and_wasm_entries(
+        upload_hostname: &'static str,
+        upload_proto: u32,
+    ) -> Result<ContractAndWasmEntries, HostError> {
+        let (host, contract) =
+            new_host_with_protocol_and_uploaded_contract(upload_hostname, upload_proto)?;
+        ContractAndWasmEntries::from_contract_addr(&host, contract)
+    }
+
+    fn upload_and_call(
+        upload_hostname: &'static str,
+        upload_proto: u32,
+        call_hostname: &'static str,
+        call_proto: u32,
+    ) -> Result<(Budget, Storage), HostError> {
+        // Phase 1: upload contract, tear down host, "close the ledger" and possibly change protocol.
+        let (host, contract) =
+            new_host_with_protocol_and_uploaded_contract(upload_hostname, upload_proto)?;
+        let contract_id = host.contract_id_from_address(contract)?;
+        let realhost = host.clone();
+        drop(host);
+        let (storage, _events) = realhost.try_finish()?;
+
+        // Phase 2: build new host with previous ledger output as storage, call contract. Possibly on new protocol.
+        let host = Host::with_storage_and_budget(storage, Budget::default());
+        host.enable_debug()?;
+        let host = ObservedHost::new(call_hostname, host);
+        host.set_ledger_info(LedgerInfo {
+            protocol_version: call_proto,
+            ..Default::default()
+        })?;
+        let contract = host.add_host_object(crate::xdr::ScAddress::Contract(contract_id))?;
+        let _ = host.call(
+            contract,
+            Symbol::try_from_small_str("test").unwrap(),
+            host.vec_new()?,
+        )?;
+        let realhost = host.clone();
+        drop(host);
+        let budget = realhost.budget_cloned();
+        let (storage, _events) = realhost.try_finish()?;
+        Ok((budget, storage))
+    }
+
+    fn code_entry_has_cost_inputs(entry: &Rc<LedgerEntry>) -> bool {
+        match &entry.data {
+            LedgerEntryData::ContractCode(cce) => match &cce.ext {
+                crate::xdr::ContractCodeEntryExt::V1(_v1) => return true,
+                _ => (),
+            },
+            _ => panic!("expected LedgerEntryData::ContractCode"),
+        }
+        false
+    }
+
+    // Test that running on protocol vOld only charges the VmInstantiation cost
+    // type.
+    #[test]
+    fn test_v_old_only_charges_vm_instantiation() -> Result<(), HostError> {
+        let (budget, _storage) = upload_and_call(
+            "test_v_old_only_charges_vminstantiation_upload",
+            V_OLD,
+            "test_v_old_only_charges_vm_instantiation_call",
+            V_OLD,
+        )?;
+        assert_ne!(budget.get_tracker(VmInstantiation)?.cpu, 0);
+        assert_eq!(budget.get_tracker(VmCachedInstantiation)?.cpu, 0);
+        for ct in NEW_COST_TYPES {
+            assert_eq!(budget.get_tracker(*ct)?.cpu, 0);
+        }
+        Ok(())
+    }
+
+    // Test that running on protocol vNew on a ContractCode LE that does not have
+    // ContractCodeCostInputs charges the VmInstantiation and VmCachedInstantiation
+    // cost types.
+    #[test]
+    fn test_v_new_no_contract_code_cost_inputs() -> Result<(), HostError> {
+        let (budget, _storage) = upload_and_call(
+            "test_v_new_no_contract_code_cost_inputs_upload",
+            V_OLD,
+            "test_v_new_no_contract_code_cost_inputs_call",
+            V_NEW,
+        )?;
+        assert_ne!(budget.get_tracker(VmInstantiation)?.cpu, 0);
+        assert_ne!(budget.get_tracker(VmCachedInstantiation)?.cpu, 0);
+        for ct in NEW_COST_TYPES {
+            assert_eq!(budget.get_tracker(*ct)?.cpu, 0);
+        }
+        Ok(())
+    }
+
+    // Test that running on protocol vNew does add ContractCodeCostInputs to a
+    // newly uploaded ContractCode LE.
+    #[test]
+    fn test_v_new_gets_contract_code_cost_inputs() -> Result<(), HostError> {
+        let entries = upload_and_get_contract_and_wasm_entries(
+            "test_v_new_gets_contract_code_cost_inputs_upload",
+            V_NEW,
+        )?;
+        assert!(code_entry_has_cost_inputs(&entries.wasm_entry));
+        Ok(())
+    }
+
+    // Test that running on protocol vNew on a ContractCode LE that does have
+    // ContractCodeCostInputs charges the new cost model types nonzero costs
+    // (both parsing and instantiation).
+    #[test]
+    fn test_v_new_with_contract_code_cost_inputs_causes_nonzero_costs() -> Result<(), HostError> {
+        let (budget, _storage) = upload_and_call(
+            "test_v_new_with_contract_code_cost_inputs_causes_nonzero_costs_upload",
+            V_NEW,
+            "test_v_new_with_contract_code_cost_inputs_causes_nonzero_costs_call",
+            V_NEW,
+        )?;
+        assert_eq!(budget.get_tracker(VmInstantiation)?.cpu, 0);
+        assert_eq!(budget.get_tracker(VmCachedInstantiation)?.cpu, 0);
+        for ct in NEW_COST_TYPES {
+            if *ct == InstantiateWasmTypes {
+                // This is a zero-cost type in the current calibration of the
+                // new model -- and exceptional case in this test -- though we
+                // keep it in case it becomes nonzero at some point (it's
+                // credible that it would).
+                continue;
+            }
+            assert_ne!(budget.get_tracker(*ct)?.cpu, 0);
+        }
+        Ok(())
+    }
+
+    // Test that running on protocol vOld does not add ContractCodeCostInputs to a
+    // newly uploaded ContractCode LE.
+    #[test]
+    fn test_v_old_no_contract_code_cost_inputs() -> Result<(), HostError> {
+        let entries = upload_and_get_contract_and_wasm_entries(
+            "test_v_old_no_contract_code_cost_inputs_upload",
+            V_OLD,
+        )?;
+        assert!(!code_entry_has_cost_inputs(&entries.wasm_entry));
+        Ok(())
+    }
+
+    // Test that running on protocol vOld does not rewrite a ContractCode LE when it
+    // already exists.
+    #[test]
+    fn test_v_old_no_rewrite() -> Result<(), HostError> {
+        let entries =
+            upload_and_get_contract_and_wasm_entries("test_v_old_no_rewrite_upload", V_OLD)?;
+        // make a new storage map for a new run
+        let budget = Budget::default();
+        let storage = entries.read_only_storage(&budget);
+        let host = Host::with_storage_and_budget(storage, budget);
+        let host = ObservedHost::new("test_v_old_no_rewrite_call", host);
+        host.set_ledger_info(LedgerInfo {
+            protocol_version: V_OLD,
+            ..Default::default()
+        })?;
+        host.upload_contract_wasm(wasm_module_with_a_bit_of_everything(V_OLD))?;
+        Ok(())
+    }
+
+    // Test that running on protocol vNew does rewrite a ContractCode LE when it
+    // already exists but doesn't yet have ContractCodeCostInputs.
+    #[test]
+    fn test_v_new_rewrite() -> Result<(), HostError> {
+        let entries = upload_and_get_contract_and_wasm_entries("test_v_new_rewrite_upload", V_OLD)?;
+        assert!(!code_entry_has_cost_inputs(&entries.wasm_entry));
+
+        // make a new storage map for a new upload but with read-only footprint -- this should fail
+        let budget = Budget::default();
+        let storage = entries.read_only_storage(&budget);
+        let host = Host::with_storage_and_budget(storage, budget);
+        let host = ObservedHost::new("test_v_new_rewrite_call_fail", host);
+        host.set_ledger_info(LedgerInfo {
+            protocol_version: V_NEW,
+            ..Default::default()
+        })?;
+        let wasm_blob = match &entries.wasm_entry.data {
+            LedgerEntryData::ContractCode(cce) => cce.code.to_vec(),
+            _ => panic!("expected ContractCode"),
+        };
+        assert!(host.upload_contract_wasm(wasm_blob.clone()).is_err());
+        let entries = entries.reload(&host)?;
+        assert!(!code_entry_has_cost_inputs(&entries.wasm_entry));
+
+        // make a new storage map for a new upload but with read-write footprint -- this should pass
+        let budget = Budget::default();
+        let storage = entries.wasm_writing_storage(&budget);
+        let host = Host::with_storage_and_budget(storage, budget);
+        let host = ObservedHost::new("test_v_new_rewrite_call_succeed", host);
+        host.set_ledger_info(LedgerInfo {
+            protocol_version: V_NEW,
+            ..Default::default()
+        })?;
+        host.upload_contract_wasm(wasm_blob)?;
+        let entries = entries.reload(&host)?;
+        assert!(code_entry_has_cost_inputs(&entries.wasm_entry));
+
+        Ok(())
+    }
+
+    // Test that running on protocol vNew does not rewrite a ContractCode LE when it
+    // already exists and already has ContractCodeCostInputs.
+    #[test]
+    fn test_v_new_no_rewrite() -> Result<(), HostError> {
+        let entries =
+            upload_and_get_contract_and_wasm_entries("test_v_new_no_rewrite_upload", V_NEW)?;
+        assert!(code_entry_has_cost_inputs(&entries.wasm_entry));
+
+        // make a new storage map for a new upload but with read-only footprint -- this should pass
+        let budget = Budget::default();
+        let storage = entries.read_only_storage(&budget);
+        let host = Host::with_storage_and_budget(storage, budget);
+        let host = ObservedHost::new("test_v_new_no_rewrite_call_pass", host);
+        host.set_ledger_info(LedgerInfo {
+            protocol_version: V_NEW,
+            ..Default::default()
+        })?;
+        let wasm_blob = match &entries.wasm_entry.data {
+            LedgerEntryData::ContractCode(cce) => cce.code.to_vec(),
+            _ => panic!("expected ContractCode"),
+        };
+        host.upload_contract_wasm(wasm_blob.clone())?;
+        let entries = entries.reload(&host)?;
+        assert!(code_entry_has_cost_inputs(&entries.wasm_entry));
+
+        Ok(())
+    }
+}

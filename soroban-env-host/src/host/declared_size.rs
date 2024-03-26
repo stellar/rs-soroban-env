@@ -1,3 +1,5 @@
+#[cfg(feature = "next")]
+use crate::xdr::{ContractCodeCostInputs, ContractCodeEntryV1};
 use crate::{
     auth::{
         AccountAuthorizationTracker, AccountAuthorizationTrackerSnapshot, AuthorizedInvocation,
@@ -157,7 +159,11 @@ impl_declared_size_type!(LedgerKeyContractCode, 36);
 impl_declared_size_type!(LedgerEntryExt, 33);
 impl_declared_size_type!(AccountEntry, 216);
 impl_declared_size_type!(TrustLineEntry, 128);
+#[cfg(feature = "next")]
+impl_declared_size_type!(ContractCodeCostInputs, 40);
 impl_declared_size_type!(ContractCodeEntry, 64);
+#[cfg(feature = "next")]
+impl_declared_size_type!(ContractCodeEntryV1, 40);
 // TtlEntry must be declared as it's used in e2e to build
 // The TtlEntryMap, but is not otherwise cloned anywhere.
 impl_declared_size_type!(TtlEntry, 36);
@@ -172,7 +178,80 @@ impl_declared_size_type!(CreateContractArgs, 98);
 impl_declared_size_type!(InvokeContractArgs, 88);
 impl_declared_size_type!(ContractIdPreimage, 65);
 impl_declared_size_type!(ContractDataDurability, 4);
+
+// NB: ExtensionPoint is a 1-variant enum with no payload, which Rust optimizes
+// to take zero bytes of memroy -- but in XDR it's a 4-byte type like any other
+// union.
+//
+// It exists to help allow the protocol to evolve, as a placeholder type in XDR.
+// ExtensionPoints are sprinkled around the XDR definitions where we expect to
+// need to add stuff in the future. Any field with ExtensionPoint as its type
+// can be _replaced_ in subsequent protocols with some _other_ union type that
+// has a variant with a zero discriminant, and some other non-zero-discriminant
+// variants with new payloads. If old data (written when the field was
+// ExtensionPoint) is read by new code (which knows about the new union type),
+// the new code will just interpret the zero-discriminant old value as the zero
+// case in the new type. All well and good!
+//
+// But none of this works in Rust, because Rust doesn't treat unions (enums) as
+// variable size: it allocates space for the largest variant that can occupy the
+// enum, and it allocates zero bytes for ExtensionPoints. So when you upgrade a
+// union field in XDR, if the new variant is bigger than all existing variants,
+// the Rust size of the field will just change (and since ExtensionPoint is
+// zero-sized, this happens _any_ time you replace an ExtensionPoint with some
+// nonempty type). There's no real getting around this.
+//
+// "Luckily" (from the perspective of deterministic replay) we don't charge the
+// cost model based on Rust's "real sizes" of anything; we charge the cost model
+// based on stable _declared_ sizes we write down explicitly here. So what
+// happens when you upgrade a union field in a way that changes the Rust size of
+// a type is that the Rust size _diverges a bit_ from the declared size: in
+// other words the metering based on declared sizes gets a bit inaccurate, and
+// the test below (`test_declared_size`) that checks real sizes are less than or
+// equal to declared sizes needs to have an exception written into it to handle
+// this divergence.
+//
+// This is not ideal. It means in some cases the metering will be off, at least
+// when reading old data into the new enum (and, say, cloning it) we'll treat it
+// as small when really it is a bit bigger.
+//
+// We can recover a degree of correctness at least in the cases where we're
+// writing new data (occupying the new variants of the extended enum) by
+// essentially pretending that the ext field is a sort of magical smart pointer
+// that occupies zero bytes of its own but points to the new variant as "deep
+// substructure" (the same way we do with real pointer fields).
+//
+// In other words, we can use the following idiom:
+//
+//  - Assume the enclosing struct was `S`, and it previously had an
+//    `ExtensionPoint` `S.ext`, and now it has some other type in `S.ext`. Let's
+//    call the new type we want to add `T` and say we added it by replacing the
+//    `ExtensionPoint` with an enum `E` with variants `V0` (covering the old
+//    `ExtensionPoint`) and `V1(T)`.
+//
+//  - Previously we charged nothing to clone `S.ext`, because it was zero-sized.
+//    So we have to continue to charge nothing when cloning the new field when
+//    it is in its `E::V0` state: that's what the old `ExtensionPoint` data will
+//    be interpreted as when it's deserialized, so we have to treat it as we did
+//    before. This is the case where metering has become incorrect, because `E`
+//    is larger than `ExtensionPoint` but we can't acknowledge that fact.
+//
+//  - To charge nothing for `E::V0`, we actually have to _not_ declare `E` as a
+//    `MeteredClone` / `declared_size` type itself. Rather, inside the body of
+//    `S::charge_for_substructure` we match on `S.ext` and do nothing in the
+//    `E::V0` case, only do nonzero work in the `E::V1` case.
+//
+//  - In the `E::V1` case we can call through to `T::charge_for_substructure`,
+//    treating it almost like it was a separate heap allocation. It still gets
+//    charged for, just "as if" it were out-of-line, rather than inline with `S`
+//    where it happens to be located.
+//
+// This is all a bit weird and awful. It's a mistake that we only noticed after
+// we finalized the metering system of Soroban. We're stuck with it at this
+// point. Hopefully most instances will be fairly benign (and if types get
+// upgraded to their new variants, hopefully also transient!)
 impl_declared_size_type!(ExtensionPoint, 0);
+
 impl_declared_size_type!(ScContractInstance, 64);
 impl_declared_size_type!(SorobanAuthorizationEntry, 240);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
@@ -312,8 +391,21 @@ mod test {
         expect!["8"].assert_eq(size_of::<SymbolSmallIter>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<U256>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<I256>().to_string().as_str());
+
+        #[rustversion::before(1.77)]
         #[cfg(target_arch = "x86_64")]
-        expect!["40"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        fn check_x64_host_object_size_that_changed_at_rust_1_77() {
+            expect!["40"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        }
+        #[rustversion::since(1.77)]
+        #[cfg(target_arch = "x86_64")]
+        fn check_x64_host_object_size_that_changed_at_rust_1_77() {
+            expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        }
+
+        #[cfg(target_arch = "x86_64")]
+        check_x64_host_object_size_that_changed_at_rust_1_77();
+
         #[cfg(target_arch = "aarch64")]
         expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<HostError>().to_string().as_str());
@@ -382,7 +474,17 @@ mod test {
         expect!["33"].assert_eq(size_of::<LedgerEntryExt>().to_string().as_str());
         expect!["216"].assert_eq(size_of::<AccountEntry>().to_string().as_str());
         expect!["128"].assert_eq(size_of::<TrustLineEntry>().to_string().as_str());
+        #[cfg(feature = "next")]
+        expect!["40"].assert_eq(size_of::<ContractCodeCostInputs>().to_string().as_str());
+        #[cfg(not(feature = "next"))]
         expect!["56"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
+        // ContractCodeEntry had an ExtensionPoint added to it and is now 40
+        // bytes larger than its original size (and for some reason its declared
+        // size was 64 bytes, even though its original size wasonly 56 bytes)
+        #[cfg(feature = "next")]
+        expect!["104"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
+        #[cfg(feature = "next")]
+        expect!["40"].assert_eq(size_of::<ContractCodeEntryV1>().to_string().as_str());
         expect!["36"].assert_eq(size_of::<TtlEntry>().to_string().as_str());
 
         // NB: a couple structs shrank between rust 1.75 and 1.76 but this is harmless
@@ -446,6 +548,19 @@ mod test {
                 ma::assert_le!(
                     size_of::<$t>() as u64,
                     <$t as DeclaredSizeForMetering>::DECLARED_SIZE
+                );
+            };
+            // This variant allows accounting for the case where an
+            // ExtensionPoint has been upgraded to some other type, causing the
+            // enclosing type to exceed its declared size: you can include an
+            // extension type as a second argument and it will be added to the
+            // declared size for the sake of retaining _some_ check here.
+            // Unfortunately this is kinda the best we can do. See the long
+            // comment above around the zero declared_size of ExtensionPoint.
+            ($t:ty, $ext:ty) => {
+                ma::assert_le!(
+                    size_of::<$t>() as u64,
+                    <$t as DeclaredSizeForMetering>::DECLARED_SIZE + (size_of::<$ext>() as u64)
                 );
             };
         }
@@ -556,7 +671,14 @@ mod test {
         assert_mem_size_le_declared_size!(LedgerEntryExt);
         assert_mem_size_le_declared_size!(AccountEntry);
         assert_mem_size_le_declared_size!(TrustLineEntry);
+        #[cfg(feature = "next")]
+        assert_mem_size_le_declared_size!(ContractCodeCostInputs);
+        #[cfg(not(feature = "next"))]
         assert_mem_size_le_declared_size!(ContractCodeEntry);
+        #[cfg(feature = "next")]
+        assert_mem_size_le_declared_size!(ContractCodeEntry, ContractCodeEntryV1);
+        #[cfg(feature = "next")]
+        assert_mem_size_le_declared_size!(ContractCodeEntryV1);
         assert_mem_size_le_declared_size!(TtlEntry);
         assert_mem_size_le_declared_size!(LedgerKey);
         assert_mem_size_le_declared_size!(LedgerEntry);

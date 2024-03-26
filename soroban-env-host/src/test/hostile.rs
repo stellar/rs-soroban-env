@@ -527,6 +527,61 @@ fn excessive_logging() -> Result<(), HostError> {
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
+    #[cfg(feature = "next")]
+    let expected_budget = expect![[r#"
+        =======================================================
+        Cpu limit: 2000000; used: 284819
+        Mem limit: 500000; used: 252830
+        =======================================================
+        CostType                 cpu_insns      mem_bytes      
+        WasmInsnExec             300            0              
+        MemAlloc                 15750          67248          
+        MemCpy                   2345           0              
+        MemCmp                   696            0              
+        DispatchHostFunction     310            0              
+        VisitObject              244            0              
+        ValSer                   0              0              
+        ValDeser                 0              0              
+        ComputeSha256Hash        3738           0              
+        ComputeEd25519PubKey     0              0              
+        VerifyEd25519Sig         0              0              
+        VmInstantiation          0              0              
+        VmCachedInstantiation    0              0              
+        InvokeVmFunction         1948           14             
+        ComputeKeccak256Hash     0              0              
+        ComputeEcdsaSecp256k1Sig 0              0              
+        RecoverEcdsaSecp256k1Key 0              0              
+        Int256AddSub             0              0              
+        Int256Mul                0              0              
+        Int256Div                0              0              
+        Int256Pow                0              0              
+        Int256Shift              0              0              
+        ChaCha20DrawBytes        0              0              
+        ParseWasmInstructions    74324          17967          
+        ParseWasmFunctions       4192           370            
+        ParseWasmGlobals         1382           104            
+        ParseWasmTableEntries    29639          6285           
+        ParseWasmTypes           8194           505            
+        ParseWasmDataSegments    0              0              
+        ParseWasmElemSegments    0              0              
+        ParseWasmImports         5427           803            
+        ParseWasmExports         6672           568            
+        ParseWasmDataSegmentBytes66075          17580          
+        InstantiateWasmInstructions25059          70192          
+        InstantiateWasmFunctions 58             114            
+        InstantiateWasmGlobals   84             53             
+        InstantiateWasmTableEntries3211           1025           
+        InstantiateWasmTypes     0              0              
+        InstantiateWasmDataSegments0              0              
+        InstantiateWasmElemSegments0              0              
+        InstantiateWasmImports   5339           603            
+        InstantiateWasmExports   4641           143            
+        InstantiateWasmDataSegmentBytes25191          69256          
+        =======================================================
+
+    "#]];
+
+    #[cfg(not(feature = "next"))]
     let expected_budget = expect![[r#"
         =======================================================
         Cpu limit: 2000000; used: 522315

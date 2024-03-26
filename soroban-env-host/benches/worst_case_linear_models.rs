@@ -68,6 +68,87 @@ fn write_cost_params_table<T: Display>(
     tw.flush()
 }
 
+fn correct_multi_variable_models(
+    params: &mut BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
+) {
+    // Several cost types actually represent additional terms a cost model that
+    // we're decomposing into multiple variables, such as the cost of VM
+    // instantiation. When we charge these costs, we charge each variable
+    // separately, i.e. to charge a 5-variable cost we'll make 5 calls to the
+    // budget. Only the first of these 5 calls should have a constant factor,
+    // the rest should have zero as their constant (since they only contribute a
+    // new linear term), but the calibration code will have put the same (or
+    // nearly-the-same) nonzero constant term in each `CostComponent`. We
+    // correct this here by zeroing out the constant term in all but the first
+    // `CostComponent` of each set, (and attempting to confirm that they all
+    // have roughly-the-same constant term).
+    use ContractCostType::*;
+    const MULTI_VARIABLE_COST_GROUPS: &[&[ContractCostType]] = &[
+        &[
+            ParseWasmInstructions,
+            ParseWasmFunctions,
+            ParseWasmGlobals,
+            ParseWasmTableEntries,
+            ParseWasmTypes,
+            ParseWasmDataSegments,
+            ParseWasmElemSegments,
+            ParseWasmImports,
+            ParseWasmExports,
+            ParseWasmDataSegmentBytes,
+        ],
+        &[
+            InstantiateWasmInstructions,
+            InstantiateWasmFunctions,
+            InstantiateWasmGlobals,
+            InstantiateWasmTableEntries,
+            InstantiateWasmTypes,
+            InstantiateWasmDataSegments,
+            InstantiateWasmElemSegments,
+            InstantiateWasmImports,
+            InstantiateWasmExports,
+            InstantiateWasmDataSegmentBytes,
+        ],
+    ];
+    for group in MULTI_VARIABLE_COST_GROUPS {
+        let mut iter = group.iter();
+        if let Some(first) = iter.next() {
+            let Some((first_cpu, first_mem)) = params.get(&CostType::Contract(*first)).cloned()
+            else {
+                continue;
+            };
+            for ty in iter {
+                let Some((cpu, mem)) = params.get_mut(&CostType::Contract(*ty)) else {
+                    continue;
+                };
+                let cpu_const_diff_ratio = (cpu.const_term as f64 - first_cpu.const_term as f64)
+                    / first_cpu.const_term as f64;
+                let mem_const_diff_ratio = (mem.const_term as f64 - first_mem.const_term as f64)
+                    / first_mem.const_term as f64;
+                assert!(
+                    cpu_const_diff_ratio < 0.25,
+                    "cost type {:?} has too large a constant CPU term over {:?}: {:?} vs. {:?} ({:?} diff)",
+                    ty,
+                    first,
+                    cpu.const_term,
+                    first_cpu.const_term,
+                    cpu_const_diff_ratio
+                );
+                assert!(
+                    mem_const_diff_ratio < 0.25,
+                    "cost type {:?} has too large a constant memory term over {:?}: {:?} vs. {:?} ({:?} diff)",
+                    ty,
+                    first,
+                    mem.const_term,
+                    first_mem.const_term,
+                    mem_const_diff_ratio
+                );
+                cpu.const_term = 0;
+                mem.const_term = 0;
+            }
+        }
+    }
+}
+
 fn write_budget_params_code(
     params: &BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
     wasm_tier_cost: &BTreeMap<WasmInsnTier, u64>,
@@ -295,22 +376,24 @@ fn process_tier(
     params_wasm: &BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)>,
     insn_tier: &[WasmInsnType],
 ) -> u64 {
-    println!("\n");
-    println!("\n{:=<100}", "");
-    println!("\"{:?}\" tier", tier);
-
     let (params_tier, ave_cpu_per_fuel) = extract_tier(params_wasm, insn_tier);
 
-    let mut tw = TabWriter::new(vec![])
-        .padding(5)
-        .alignment(Alignment::Right);
-    write_cost_params_table::<WasmInsnType>(&mut tw, &params_tier).unwrap();
-    eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
-    println!(
-        "average cpu insns per fuel for \"{:?}\" tier: {}",
-        tier, ave_cpu_per_fuel
-    );
-    println!("{:=<100}\n", "");
+    if !params_tier.is_empty() {
+        println!("\n");
+        println!("\n{:=<100}", "");
+        println!("\"{:?}\" tier", tier);
+
+        let mut tw = TabWriter::new(vec![])
+            .padding(5)
+            .alignment(Alignment::Right);
+        write_cost_params_table::<WasmInsnType>(&mut tw, &params_tier).unwrap();
+        eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
+        println!(
+            "average cpu insns per fuel for \"{:?}\" tier: {}",
+            tier, ave_cpu_per_fuel
+        );
+        println!("{:=<100}\n", "");
+    }
     ave_cpu_per_fuel
 }
 
@@ -333,12 +416,18 @@ fn extract_wasmi_fuel_costs(
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 fn main() -> std::io::Result<()> {
-    let params = if std::env::var("RUN_EXPERIMENT").is_err() {
+    let mut params = if std::env::var("RUN_EXPERIMENT").is_err() {
         for_each_host_cost_measurement::<WorstCaseLinearModels>()?
     } else {
         for_each_experimental_cost_measurement::<WorstCaseLinearModels>()?
     };
-    let params_wasm = for_each_wasm_insn_measurement::<WorstCaseLinearModels>()?;
+    let params_wasm = if std::env::var("SKIP_WASM_INSNS").is_err() {
+        for_each_wasm_insn_measurement::<WorstCaseLinearModels>()?
+    } else {
+        BTreeMap::new()
+    };
+
+    correct_multi_variable_models(&mut params);
 
     let mut tw = TabWriter::new(vec![])
         .padding(5)

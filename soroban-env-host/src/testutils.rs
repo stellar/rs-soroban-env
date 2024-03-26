@@ -33,7 +33,7 @@ where
     C: FnOnce() -> R + UnwindSafe,
 {
     thread_local! {
-        static TEST_CONTRACT_CALL_COUNT: Cell<u64> = Cell::new(0);
+        static TEST_CONTRACT_CALL_COUNT: Cell<u64> = const { Cell::new(0) };
     }
 
     static WRAP_PANIC_HOOK: Once = Once::new();
@@ -1109,5 +1109,31 @@ pub(crate) mod wasm {
         let mut fe = me.func(Arity(0), 0);
         fe.call_func(f0);
         fe.finish_and_export("test").finish()
+    }
+
+    #[cfg(feature = "next")]
+    pub(crate) fn wasm_module_with_a_bit_of_everything(wasm_proto: u32) -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        let pre = get_pre_release_version(INTERFACE_VERSION);
+        me.custom_section(
+            &"contractenvmetav0",
+            interface_meta_with_custom_versions(wasm_proto, pre).as_slice(),
+        );
+        me.table(RefType::FUNCREF, 128, None);
+        me.memory(1, None, false, false);
+        me.global(wasm_encoder::ValType::I64, true, &ConstExpr::i64_const(42));
+        me.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        let _f0 = me.import_func("t", "_", Arity(0));
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Operand::Const64(1));
+        fe.push(Operand::Const64(2));
+        fe.i64_add();
+        fe.drop();
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (mut me, fid) = fe.finish();
+        me.export_func(fid, "test");
+        me.define_elem_funcs(&[fid]);
+        me.define_data_segment(0x1234, vec![0; 8]);
+        me.finish()
     }
 }

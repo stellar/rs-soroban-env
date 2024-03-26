@@ -640,8 +640,14 @@ impl Host {
         let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
-                let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
-                let vm = Vm::new(self, id.metered_clone(self)?, code_entry.as_slice())?;
+                let contract_id = id.metered_clone(self)?;
+                let vm = if let Some(cache) = &*self.try_borrow_module_cache()? {
+                    let module = cache.get_module(self, wasm_hash)?;
+                    Vm::from_parsed_module(self, contract_id, module)?
+                } else {
+                    let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
+                    Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs)?
+                };
                 let relative_objects = Vec::new();
                 self.with_frame(
                     Frame::ContractVM {

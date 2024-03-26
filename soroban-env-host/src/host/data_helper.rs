@@ -6,6 +6,7 @@ use crate::{
     err,
     host::metered_clone::{MeteredAlloc, MeteredClone},
     storage::{InstanceStorageMap, Storage},
+    vm::VersionedContractCodeCostInputs,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
         ContractDataEntry, ContractExecutable, ContractIdPreimage, ExtensionPoint, Hash,
@@ -122,7 +123,10 @@ impl Host {
         )
     }
 
-    pub(crate) fn retrieve_wasm_from_storage(&self, wasm_hash: &Hash) -> Result<BytesM, HostError> {
+    pub(crate) fn retrieve_wasm_from_storage(
+        &self,
+        wasm_hash: &Hash,
+    ) -> Result<(BytesM, VersionedContractCodeCostInputs), HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
         match &self
             .try_borrow_storage_mut()?
@@ -130,7 +134,23 @@ impl Host {
             .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))?
             .data
         {
-            LedgerEntryData::ContractCode(e) => e.code.metered_clone(self),
+            LedgerEntryData::ContractCode(e) => {
+                let code = e.code.metered_clone(self)?;
+                #[allow(unused_mut)]
+                let mut costs = VersionedContractCodeCostInputs::V0 {
+                    wasm_bytes: code.len(),
+                };
+                #[cfg(feature = "next")]
+                match &e.ext {
+                    crate::xdr::ContractCodeEntryExt::V0 => (),
+                    crate::xdr::ContractCodeEntryExt::V1(v1) => {
+                        costs = VersionedContractCodeCostInputs::V1(
+                            v1.cost_inputs.metered_clone(self.as_budget())?,
+                        )
+                    }
+                };
+                Ok((code, costs))
+            }
             _ => Err(err!(
                 self,
                 (ScErrorType::Storage, ScErrorCode::InternalError),

@@ -68,10 +68,11 @@ impl Measurements {
             .iter()
             .map(|m| {
                 let mut e = m.clone();
-                e.inputs = e.inputs.map(|i| i / e.iterations);
-                e.cpu_insns = e.cpu_insns.saturating_sub(self.baseline.cpu_insns) / e.iterations;
-                e.mem_bytes = e.mem_bytes.saturating_sub(self.baseline.mem_bytes) / e.iterations;
-                e.time_nsecs = e.time_nsecs.saturating_sub(self.baseline.time_nsecs) / e.iterations;
+                let iterations = e.iterations.max(1);
+                e.inputs = e.inputs.map(|i| i / iterations);
+                e.cpu_insns = e.cpu_insns.saturating_sub(self.baseline.cpu_insns) / iterations;
+                e.mem_bytes = e.mem_bytes.saturating_sub(self.baseline.mem_bytes) / iterations;
+                e.time_nsecs = e.time_nsecs.saturating_sub(self.baseline.time_nsecs) / iterations;
                 e
             })
             .collect()

@@ -1,5 +1,8 @@
 use crate::{
-    budget::AsBudget, host::error::TryBorrowOrErr, xdr::ContractCostType, Host, HostError,
+    budget::{AsBudget, Budget},
+    host::error::TryBorrowOrErr,
+    xdr::ContractCostType,
+    Host, HostError,
 };
 use wasmi::{errors, FuelConsumptionMode, FuelCosts, ResourceLimiter};
 
@@ -110,9 +113,9 @@ pub(crate) fn load_calibrated_fuel_costs() -> FuelCosts {
     fuel_costs
 }
 
-pub(crate) fn get_wasmi_config(host: &Host) -> Result<wasmi::Config, HostError> {
+pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<wasmi::Config, HostError> {
     let mut config = wasmi::Config::default();
-    let fuel_costs = host.as_budget().0.try_borrow_or_err()?.fuel_costs;
+    let fuel_costs = budget.0.try_borrow_or_err()?.fuel_costs;
 
     // Turn off most optional wasm features, leaving on some post-MVP features
     // commonly enabled by Rust and Clang. Make sure all unused features are

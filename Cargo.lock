@@ -1366,6 +1366,7 @@ dependencies = [
  "static_assertions",
  "stellar-xdr",
  "tracy-client",
+ "wasmparser",
 ]
 
 [[package]]
@@ -1420,6 +1421,7 @@ dependencies = [
  "thousands",
  "tracy-client",
  "wasm-encoder",
+ "wasmparser",
  "wasmprinter",
 ]
 
@@ -1515,7 +1517,7 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "20.1.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=2e0f7f7d42fcd6c3c42eb0d65570fba9f5193d7e#2e0f7f7d42fcd6c3c42eb0d65570fba9f5193d7e"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=44b7e2d4cdf27a3611663e82828de56c5274cba0#44b7e2d4cdf27a3611663e82828de56c5274cba0"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
