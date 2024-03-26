@@ -11,6 +11,8 @@
 mod dispatch;
 mod fuel_refillable;
 mod func_info;
+mod module_cache;
+mod parsed_module;
 
 #[cfg(feature = "bench")]
 pub(crate) use dispatch::dummy0;
@@ -19,29 +21,58 @@ pub(crate) use dispatch::protocol_gated_dummy;
 
 use crate::{
     budget::{get_wasmi_config, AsBudget, Budget},
-    err,
     host::{
         error::TryBorrowOrErr,
         metered_clone::MeteredContainer,
         metered_hash::{CountingHasher, MeteredHash},
     },
-    meta::{self, get_ledger_protocol_version},
-    xdr::{ContractCostType, Hash, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
+    xdr::{ContractCostType, Hash, ScErrorCode, ScErrorType},
     ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
-    DEFAULT_XDR_RW_LIMITS,
 };
-use std::{cell::RefCell, io::Cursor, rc::Rc, time::Instant};
+use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 
-use wasmi::{Engine, Instance, Linker, Memory, Module, Store, Value};
+pub use module_cache::ModuleCache;
+pub use parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
+
+use wasmi::{Instance, Linker, Memory, Store, Value};
 
 use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
+
 impl wasmi::core::HostError for HostError {}
 
 const MAX_VM_ARGS: usize = 32;
+#[cfg(feature = "next")]
+const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
+
+struct VmInstantiationTimer {
+    #[cfg(not(target_family = "wasm"))]
+    host: Host,
+    #[cfg(not(target_family = "wasm"))]
+    start: std::time::Instant,
+}
+impl VmInstantiationTimer {
+    fn new(_host: Host) -> Self {
+        VmInstantiationTimer {
+            #[cfg(not(target_family = "wasm"))]
+            host: _host,
+            #[cfg(not(target_family = "wasm"))]
+            start: std::time::Instant::now(),
+        }
+    }
+}
+#[cfg(not(target_family = "wasm"))]
+impl Drop for VmInstantiationTimer {
+    fn drop(&mut self) {
+        let _ = self.host.as_budget().track_time(
+            ContractCostType::VmInstantiation,
+            self.start.elapsed().as_nanos() as u64,
+        );
+    }
+}
 
 /// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
 /// [Vm]s may be held in a single [Host], and each contains a single WASM module
@@ -56,10 +87,8 @@ const MAX_VM_ARGS: usize = 32;
 /// will fail.
 pub struct Vm {
     pub(crate) contract_id: Hash,
-    // TODO: consider moving store and possibly module to Host so they can be
-    // recycled across calls. Or possibly beyond, to be recycled across txs.
-    // https://github.com/stellar/rs-soroban-env/issues/827
-    module: Module,
+    #[allow(dead_code)]
+    pub(crate) module: Rc<ParsedModule>,
     store: RefCell<Store<Host>>,
     instance: Instance,
     pub(crate) memory: Option<Memory>,
@@ -72,160 +101,41 @@ impl std::hash::Hash for Vm {
 }
 
 impl Vm {
-    fn check_contract_interface_version(
-        host: &Host,
-        interface_version: u64,
-    ) -> Result<(), HostError> {
-        let want_proto = {
-            let ledger_proto = host.get_ledger_protocol_version()?;
-            let env_proto = get_ledger_protocol_version(meta::INTERFACE_VERSION);
-            if ledger_proto <= env_proto {
-                // ledger proto should be before or equal to env proto
-                ledger_proto
-            } else {
-                return Err(err!(
-                    host,
-                    (ScErrorType::Context, ScErrorCode::InternalError),
-                    "ledger protocol number is ahead of supported env protocol number",
-                    ledger_proto,
-                    env_proto
-                ));
-            }
-        };
-
-        // Not used when "next" is enabled
-        #[cfg(not(feature = "next"))]
-        let got_pre = meta::get_pre_release_version(interface_version);
-
-        let got_proto = get_ledger_protocol_version(interface_version);
-
-        if got_proto < want_proto {
-            // Old protocols are finalized, we only support contracts
-            // with similarly finalized (zero) prerelease numbers.
-            //
-            // Note that we only enable this check if the "next" feature isn't enabled
-            // because a "next" stellar-core can still run a "curr" test using non-finalized
-            // test wasms. The "next" feature isn't safe for production and is meant to
-            // simulate the protocol version after the one currently supported in
-            // stellar-core, so bypassing this check for "next" is safe.
-            #[cfg(not(feature = "next"))]
-            if got_pre != 0 {
-                return Err(err!(
-                    host,
-                    (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                    "contract pre-release number for old protocol is nonzero",
-                    got_pre
-                ));
-            }
-        } else if got_proto == want_proto {
-            // Relax this check as well for the "next" feature to allow for flexibility while testing.
-            // stellar-core can pass in an older protocol version, in which case the pre-release version
-            // will not match up with the "next" feature (The "next" pre-release version is always 1).
-            #[cfg(not(feature = "next"))]
-            {
-                // Current protocol might have a nonzero prerelease number; we will
-                // allow it only if it matches the current prerelease exactly.
-                let want_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
-                if want_pre != got_pre {
-                    return Err(err!(
-                        host,
-                        (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                        "contract pre-release number for current protocol does not match host",
-                        got_pre,
-                        want_pre
-                    ));
-                }
-            }
-        } else {
-            // Future protocols we don't allow. It might be nice (in the sense
-            // of "allowing uploads of a future-protocol contract that will go
-            // live as soon as the network upgrades to it") but there's a risk
-            // that the "future" protocol semantics baked in to a contract
-            // differ from the final semantics chosen by the network, so to be
-            // conservative we avoid even allowing this.
-            return Err(err!(
-                host,
-                (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                "contract protocol number is newer than host",
-                got_proto
-            ));
-        }
-        Ok(())
+    #[cfg(feature = "testutils")]
+    pub fn get_all_host_functions() -> Vec<(&'static str, &'static str, u32)> {
+        HOST_FUNCTIONS
+            .iter()
+            .map(|hf| (hf.mod_str, hf.fn_str, hf.arity))
+            .collect()
     }
 
-    fn check_meta_section(host: &Host, m: &Module) -> Result<u64, HostError> {
-        if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
-            let mut limits = DEFAULT_XDR_RW_LIMITS;
-            limits.len = env_meta.len();
-            let mut cursor = Limited::new(Cursor::new(env_meta), limits);
-            if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
-                let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
-                    host.map_err(env_meta_entry)?;
-                Vm::check_contract_interface_version(host, v)?;
-                Ok(v)
-            } else {
-                Err(host.err(
-                    ScErrorType::WasmVm,
-                    ScErrorCode::InvalidInput,
-                    "contract missing environment interface version",
-                    &[],
-                ))
-            }
-        } else {
-            Err(host.err(
-                ScErrorType::WasmVm,
-                ScErrorCode::InvalidInput,
-                "contract missing metadata section",
-                &[],
-            ))
-        }
-    }
-
-    fn check_max_args(host: &Host, m: &Module) -> Result<(), HostError> {
-        for e in m.exports() {
-            match e.ty() {
-                wasmi::ExternType::Func(f) => {
-                    if f.params().len() > MAX_VM_ARGS || f.results().len() > MAX_VM_ARGS {
-                        return Err(host.err(
-                            ScErrorType::WasmVm,
-                            ScErrorCode::InvalidInput,
-                            "Too many arguments or results in wasm export",
-                            &[],
-                        ));
-                    }
-                }
-                _ => (),
-            }
-        }
-        Ok(())
-    }
-
-    /// Instantiates a VM given the arguments provided in [`Self::new`]
+    /// Instantiates a VM given the arguments provided in [`Self::new`],
+    /// or [`Self::new_from_module_cache`]
     fn instantiate(
         host: &Host,
         contract_id: Hash,
-        module_wasm_code: &[u8],
+        parsed_module: Rc<ParsedModule>,
     ) -> Result<Rc<Self>, HostError> {
-        host.charge_budget(
-            ContractCostType::VmInstantiation,
-            Some(module_wasm_code.len() as u64),
-        )?;
+        let _span = tracy_span!("Vm::instantiate");
 
-        let config = get_wasmi_config(host)?;
-        let engine = Engine::new(&config);
-        let module = {
-            let _span0 = tracy_span!("parse module");
-            host.map_err(Module::new(&engine, module_wasm_code))?
-        };
+        let engine = parsed_module.module.engine();
+        let mut linker = <Linker<Host>>::new(engine);
+        let mut store = Store::new(engine, host.clone());
 
-        Self::check_max_args(host, &module)?;
-        let interface_version = Self::check_meta_section(host, &module)?;
-        let contract_proto = get_ledger_protocol_version(interface_version);
+        parsed_module.cost_inputs.charge_for_instantiation(host)?;
 
-        let mut store = Store::new(&engine, host.clone());
         store.limiter(|host| host);
 
-        let mut linker = <Linker<Host>>::new(&engine);
+        let module_imports: BTreeSet<(&str, &str)> = parsed_module
+            .module
+            .imports()
+            .filter(|i| i.ty().func().is_some())
+            .map(|i| {
+                let mod_str = i.module();
+                let fn_str = i.name();
+                (mod_str, fn_str)
+            })
+            .collect();
 
         {
             // We perform link-time protocol version gating here.
@@ -248,18 +158,23 @@ impl Vm {
             let ledger_proto = host.with_ledger_info(|li| Ok(li.protocol_version))?;
             for hf in HOST_FUNCTIONS {
                 if let Some(min_proto) = hf.min_proto {
-                    if contract_proto < min_proto || ledger_proto < min_proto {
+                    if parsed_module.proto_version < min_proto || ledger_proto < min_proto {
                         // We skip linking this hf instead of returning an error
                         // because we have to support old contracts during replay.
                         continue;
                     }
                 }
                 if let Some(max_proto) = hf.max_proto {
-                    if contract_proto > max_proto || ledger_proto > max_proto {
+                    if parsed_module.proto_version > max_proto || ledger_proto > max_proto {
                         // We skip linking this hf instead of returning an error
                         // because we have to support old contracts during replay.
                         continue;
                     }
+                }
+                // We only link the functions that are actually used by the
+                // contract. Linking is quite expensive.
+                if !module_imports.contains(&(hf.mod_str, hf.fn_str)) {
+                    continue;
                 }
                 let func = (hf.wrap)(&mut store);
                 host.map_err(
@@ -272,7 +187,7 @@ impl Vm {
 
         let not_started_instance = {
             let _span0 = tracy_span!("instantiate module");
-            host.map_err(linker.instantiate(&mut store, &module))?
+            host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
         };
 
         let instance = host.map_err(
@@ -292,11 +207,21 @@ impl Vm {
         // boundary.
         Ok(Rc::new(Self {
             contract_id,
-            module,
+            module: parsed_module,
             store: RefCell::new(store),
             instance,
             memory,
         }))
+    }
+
+    pub fn from_parsed_module(
+        host: &Host,
+        contract_id: Hash,
+        parsed_module: Rc<ParsedModule>,
+    ) -> Result<Rc<Self>, HostError> {
+        let _span = tracy_span!("Vm::from_parsed_module");
+        VmInstantiationTimer::new(host.clone());
+        Self::instantiate(host, contract_id, parsed_module)
     }
 
     /// Constructs a new instance of a [Vm] within the provided [Host],
@@ -317,26 +242,26 @@ impl Vm {
     ///
     /// This method is called automatically as part of [Host::invoke_function]
     /// and does not usually need to be called from outside the crate.
-    pub fn new(
+
+    pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Rc<Self>, HostError> {
+        let cost_inputs = VersionedContractCodeCostInputs::V0 {
+            wasm_bytes: wasm.len(),
+        };
+        Self::new_with_cost_inputs(host, contract_id, wasm, cost_inputs)
+    }
+
+    pub fn new_with_cost_inputs(
         host: &Host,
         contract_id: Hash,
-        module_wasm_code: &[u8],
+        wasm: &[u8],
+        cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
-
-        if cfg!(not(target_family = "wasm")) {
-            let now = Instant::now();
-            let vm = Self::instantiate(host, contract_id, module_wasm_code)?;
-
-            host.as_budget().track_time(
-                ContractCostType::VmInstantiation,
-                now.elapsed().as_nanos() as u64,
-            )?;
-
-            Ok(vm)
-        } else {
-            Self::instantiate(host, contract_id, module_wasm_code)
-        }
+        VmInstantiationTimer::new(host.clone());
+        let config = get_wasmi_config(host.as_budget())?;
+        let engine = wasmi::Engine::new(&config);
+        let parsed_module = Rc::new(ParsedModule::new(host, &engine, wasm, cost_inputs)?);
+        Self::instantiate(host, contract_id, parsed_module)
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {
@@ -481,20 +406,10 @@ impl Vm {
         self.metered_func_call(host, func_sym, wasm_args.as_slice())
     }
 
-    fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {
-        m.custom_sections().iter().find_map(|s| {
-            if &*s.name == name.as_ref() {
-                Some(&*s.data)
-            } else {
-                None
-            }
-        })
-    }
-
     /// Returns the raw bytes content of a named custom section from the WASM
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
-        Self::module_custom_section(&self.module, name)
+        self.module.custom_section(name)
     }
 
     /// Utility function that synthesizes a `VmCaller<Host>` configured to point

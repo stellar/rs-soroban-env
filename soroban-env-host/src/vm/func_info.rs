@@ -11,6 +11,10 @@ pub(crate) struct HostFuncInfo {
     /// as.
     pub(crate) fn_str: &'static str,
 
+    /// Number of I64-typed wasm arguments the function takes.
+    #[allow(dead_code)]
+    pub(crate) arity: u32,
+
     /// Function that takes a wasmi::Store and _wraps_ a dispatch function
     /// for this host function, with the specific type of the dispatch function,
     /// into a Func in the Store.
@@ -23,38 +27,54 @@ pub(crate) struct HostFuncInfo {
     pub(crate) max_proto: Option<u32>,
 }
 
+macro_rules! fn_arity {
+    (($($args:ident : $tys:ident),*)) => {
+        fn_arity!(@count_args 0, $($args:$tys)*)
+    };
+    (@count_args $n:expr, ) => {
+        $n
+    };
+    (@count_args $n:expr, $arg:ident:$ty:ident $($args:ident:$tys:ident)*) => {
+        fn_arity!(@count_args $n+1, $($args:$tys)*)
+    };
+}
+
 macro_rules! host_function_info_helper {
-    {$mod_str:literal, $fn_id:literal, $func_id:ident, $min_proto:literal, $max_proto:literal} => {
+    {$mod_str:literal, $fn_id:literal, $args:tt, $func_id:ident, $min_proto:literal, $max_proto:literal} => {
         HostFuncInfo {
             mod_str: $mod_str,
             fn_str: $fn_id,
+            arity: fn_arity!($args),
             wrap: |store| Func::wrap(store, dispatch::$func_id),
             min_proto: Some($min_proto),
             max_proto: Some($max_proto),
         }
     };
-    {$mod_str:literal, $fn_id:literal, $func_id:ident, $min_proto:literal, } => {
+    {$mod_str:literal, $fn_id:literal, $args:tt, $func_id:ident, $min_proto:literal, } => {
         HostFuncInfo {
             mod_str: $mod_str,
             fn_str: $fn_id,
+            arity: fn_arity!($args),
             wrap: |store| Func::wrap(store, dispatch::$func_id),
             min_proto: Some($min_proto),
             max_proto: None,
         }
     };
-    {$mod_str:literal, $fn_id:literal, $func_id:ident, , $max_proto:literal} => {
+    {$mod_str:literal, $fn_id:literal, $args:tt, $func_id:ident, , $max_proto:literal} => {
         HostFuncInfo {
             mod_str: $mod_str,
             fn_str: $fn_id,
+            arity: fn_arity!($args),
             wrap: |store| Func::wrap(store, dispatch::$func_id),
             min_proto: None,
             max_proto: Some($max_proto),
         }
     };
-    {$mod_str:literal, $fn_id:literal, $func_id:ident, , } => {
+    {$mod_str:literal, $fn_id:literal, $args:tt, $func_id:ident, , } => {
         HostFuncInfo {
             mod_str: $mod_str,
             fn_str: $fn_id,
+            arity: fn_arity!($args),
             wrap: |store| Func::wrap(store, dispatch::$func_id),
             min_proto: None,
             max_proto: None,
@@ -119,7 +139,7 @@ macro_rules! generate_host_function_infos {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the a single array of HostFuncInfo structs.
-                    host_function_info_helper!{$mod_str, $fn_id, $func_id, $($min_proto)?, $($max_proto)?},
+                    host_function_info_helper!{$mod_str, $fn_id, $args, $func_id, $($min_proto)?, $($max_proto)?},
                 )*
             )*
         ];

@@ -111,10 +111,10 @@ mod cpu {
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod cpu {
-    pub struct InstructionCounter(());
+    pub struct InstructionCounter;
     impl InstructionCounter {
         pub fn new() -> Self {
-            InstructionCounter(())
+            InstructionCounter
         }
         pub fn begin(&mut self) {}
         pub fn end_and_count(&mut self) -> u64 {

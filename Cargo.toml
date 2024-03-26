@@ -29,12 +29,14 @@ soroban-env-guest = { version = "=20.3.0", path = "soroban-env-guest" }
 soroban-env-host = { version = "=20.3.0", path = "soroban-env-host" }
 soroban-env-macros = { version = "=20.3.0", path = "soroban-env-macros" }
 soroban-builtin-sdk-macros = { version = "=20.3.0", path = "soroban-builtin-sdk-macros" }
+# NB: this must match the wasmparser version wasmi is using
+wasmparser = "=0.116.1"
 
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]
 version = "=20.1.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "2e0f7f7d42fcd6c3c42eb0d65570fba9f5193d7e"
+rev = "44b7e2d4cdf27a3611663e82828de56c5274cba0"
 default-features = false
 
 [workspace.dependencies.wasmi]

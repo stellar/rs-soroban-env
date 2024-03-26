@@ -67,9 +67,9 @@ fn invoke_alloc() -> Result<(), HostError> {
     // pages or about 1.3 MiB, plus the initial 17 pages (1.1MiB) plus some more
     // slop from general host machinery allocations, plus allocating a VM once
     // during upload and once during execution we get around 2.5MiB. Call
-    // is "less than 4MiB".
+    // is "less than 5MiB".
     assert!(used_bytes > (128 * 4096));
-    assert!(used_bytes < 0x40_0000);
+    assert!(used_bytes < 0x50_0000);
     Ok(())
 }
 

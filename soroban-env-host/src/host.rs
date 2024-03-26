@@ -10,6 +10,7 @@ use crate::{
     impl_wrapping_obj_to_num,
     num::*,
     storage::Storage,
+    vm::ModuleCache,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, Duration, Hash,
@@ -79,6 +80,7 @@ pub struct CoverageScoreboard {
 
 #[derive(Clone, Default)]
 struct HostImpl {
+    module_cache: RefCell<Option<ModuleCache>>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
@@ -186,7 +188,12 @@ macro_rules! impl_checked_borrow_helpers {
         }
     };
 }
-
+impl_checked_borrow_helpers!(
+    module_cache,
+    Option<ModuleCache>,
+    try_borrow_module_cache,
+    try_borrow_module_cache_mut
+);
 impl_checked_borrow_helpers!(
     source_account,
     Option<AccountId>,
@@ -315,6 +322,7 @@ impl Host {
         #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
         let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
+            module_cache: RefCell::new(None),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
@@ -343,6 +351,15 @@ impl Host {
             #[cfg(any(test, feature = "recording_mode"))]
             suppress_diagnostic_events: RefCell::new(false),
         }))
+    }
+
+    pub fn maybe_add_module_cache(&self) -> Result<(), HostError> {
+        if cfg!(feature = "next")
+            && self.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
+        {
+            *self.try_borrow_module_cache_mut()? = Some(ModuleCache::new(self)?);
+        }
+        Ok(())
     }
 
     pub fn set_source_account(&self, source_account: AccountId) -> Result<(), HostError> {

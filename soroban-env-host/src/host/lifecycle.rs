@@ -5,12 +5,13 @@ use crate::{
         metered_clone::{MeteredAlloc, MeteredClone},
         metered_write_xdr, ContractReentryMode, CreateContractArgs,
     },
+    vm::Vm,
     xdr::{
         Asset, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractIdPreimage,
         ContractIdPreimageFromAddress, ExtensionPoint, Hash, LedgerKey, LedgerKeyContractCode,
         ScAddress, ScErrorCode, ScErrorType,
     },
-    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, Vm,
+    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal,
 };
 use std::rc::Rc;
 
@@ -164,6 +165,16 @@ impl Host {
             )
         })?;
 
+        // We're going to make a code entry with an ext field which, if zero,
+        // can be read as either a protocol v20 ExtensionPoint::V0 value, or a
+        // protocol v21 ContractCodeEntryExt::V0 value, depending on which
+        // protocol we were compiled with.
+        #[cfg(not(feature = "next"))]
+        let ext = ExtensionPoint::V0;
+
+        #[cfg(feature = "next")]
+        let mut ext = crate::xdr::ContractCodeEntryExt::V0;
+
         // Instantiate a temporary / throwaway VM using this wasm. This will do
         // both quick checks like "does this wasm have the right protocol number
         // to run on this network" and also a full parse-and-link pass to check
@@ -182,6 +193,20 @@ impl Host {
                 Hash(hash_bytes.metered_clone(self)?),
                 wasm_bytes_m.as_slice(),
             )?;
+            #[cfg(feature = "next")]
+            if self.get_ledger_protocol_version()? >= super::ModuleCache::MIN_LEDGER_VERSION {
+                // At this point we do a secondary parse on what we've checked to be a valid
+                // module in order to extract a refined cost model, which we'll store in the
+                // code entry's ext field, for future parsing and instantiations.
+                _check_vm.module.cost_inputs.charge_for_parsing(self)?;
+                ext = crate::xdr::ContractCodeEntryExt::V1(crate::xdr::ContractCodeEntryV1 {
+                    ext: ExtensionPoint::V0,
+                    cost_inputs: crate::vm::ParsedModule::extract_refined_contract_cost_inputs(
+                        self,
+                        wasm_bytes_m.as_slice(),
+                    )?,
+                });
+            }
         }
 
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
@@ -191,24 +216,46 @@ impl Host {
             }),
             self,
         )?;
-        if !self
-            .try_borrow_storage_mut()?
+
+        let mut storage = self.try_borrow_storage_mut()?;
+
+        // We will definitely put the contract in the ledger if it isn't there yet.
+        #[allow(unused_mut)]
+        let mut should_put_contract = !storage
             .has(&code_key, self.as_budget())
-            .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?
+            .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?;
+
+        // We may also, in the cache-supporting protocol, overwrite the contract if its ext field changed.
+        #[cfg(feature = "next")]
+        if !should_put_contract
+            && self.get_ledger_protocol_version()? >= super::ModuleCache::MIN_LEDGER_VERSION
         {
-            self.with_mut_storage(|storage| {
-                let data = ContractCodeEntry {
-                    hash: Hash(hash_bytes),
-                    ext: ExtensionPoint::V0,
-                    code: wasm_bytes_m,
-                };
-                storage.put(
+            let entry = storage
+                .get(&code_key, self.as_budget())
+                .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?;
+            if let crate::xdr::LedgerEntryData::ContractCode(ContractCodeEntry {
+                ext: old_ext,
+                ..
+            }) = &entry.data
+            {
+                should_put_contract = *old_ext != ext;
+            }
+        }
+
+        if should_put_contract {
+            let data = ContractCodeEntry {
+                hash: Hash(hash_bytes),
+                ext,
+                code: wasm_bytes_m,
+            };
+            storage
+                .put(
                     &code_key,
                     &Host::new_contract_code(self, data)?,
                     Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
-            })?;
+                .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?;
         }
         Ok(hash_obj)
     }

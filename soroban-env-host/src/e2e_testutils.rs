@@ -1,3 +1,5 @@
+#[cfg(feature = "next")]
+use crate::xdr::ContractCodeEntryExt;
 use crate::xdr::{
     AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractDataDurability,
     ContractDataEntry, ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress,
@@ -47,7 +49,10 @@ pub fn bytes_sc_val(bytes: &[u8]) -> ScVal {
 
 pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
     ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
+        #[cfg(not(feature = "next"))]
         ext: ExtensionPoint::V0,
+        #[cfg(feature = "next")]
+        ext: ContractCodeEntryExt::V0,
         hash: get_wasm_hash(wasm).try_into().unwrap(),
         code: wasm.try_into().unwrap(),
     }))

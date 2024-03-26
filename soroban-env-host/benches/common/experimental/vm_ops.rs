@@ -1,5 +1,4 @@
 #[allow(unused)]
-use super::wasm_insn_exec::{wasm_module_with_4n_insns, wasm_module_with_n_internal_funcs};
 use crate::common::{util, HostCostMeasurement};
 use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{

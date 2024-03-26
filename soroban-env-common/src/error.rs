@@ -277,6 +277,13 @@ impl From<wasmi::Error> for Error {
     }
 }
 
+#[cfg(feature = "wasmi")]
+impl From<wasmparser::BinaryReaderError> for Error {
+    fn from(_: wasmparser::BinaryReaderError) -> Self {
+        Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidInput)
+    }
+}
+
 impl Error {
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScErrorType. Instead we provide an "is_type" to check any specific
