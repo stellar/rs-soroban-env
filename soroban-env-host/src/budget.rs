@@ -84,7 +84,10 @@ impl Default for BudgetTracker {
                 ContractCostType::VmCachedInstantiation => init_input(), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ComputeKeccak256Hash => init_input(), // number of bytes in the buffer
+                #[cfg(not(feature = "next"))]
                 ContractCostType::ComputeEcdsaSecp256k1Sig => (),
+                #[cfg(feature = "next")]
+                ContractCostType::DecodeEcdsaCurve256Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
                 ContractCostType::Int256AddSub => (),
                 ContractCostType::Int256Mul => (),
@@ -133,6 +136,10 @@ impl Default for BudgetTracker {
                 ContractCostType::InstantiateWasmExports => init_input(),
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegmentBytes => init_input(),
+                #[cfg(feature = "next")]
+                ContractCostType::Sec1DecodePointUncompressed => (),
+                #[cfg(feature = "next")]
+                ContractCostType::VerifyEcdsaSecp256r1Sig => (),
             }
         }
         mt
@@ -377,7 +384,13 @@ impl Default for BudgetImpl {
                     cpu.const_term = 3766;
                     cpu.lin_term = ScaledU64(5969);
                 }
+                #[cfg(not(feature = "next"))]
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
+                    cpu.const_term = 710;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::DecodeEcdsaCurve256Sig => {
                     cpu.const_term = 710;
                     cpu.lin_term = ScaledU64(0);
                 }
@@ -510,6 +523,16 @@ impl Default for BudgetImpl {
                     cpu.const_term = 25191;
                     cpu.lin_term = ScaledU64(14);
                 }
+                #[cfg(feature = "next")]
+                ContractCostType::Sec1DecodePointUncompressed => {
+                    cpu.const_term = 1882;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::VerifyEcdsaSecp256r1Sig => {
+                    cpu.const_term = 3000906;
+                    cpu.lin_term = ScaledU64(0);
+                }
             }
 
             // define the memory cost model parameters
@@ -581,7 +604,13 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
+                #[cfg(not(feature = "next"))]
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::DecodeEcdsaCurve256Sig => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
@@ -714,6 +743,16 @@ impl Default for BudgetImpl {
                 ContractCostType::InstantiateWasmDataSegmentBytes => {
                     mem.const_term = 69256;
                     mem.lin_term = ScaledU64(126);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::Sec1DecodePointUncompressed => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::VerifyEcdsaSecp256r1Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
                 }
             }
         }
