@@ -1,4 +1,4 @@
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
 use soroban_env_host::{
     budget::{AsBudget, CostTracker, MeteredCostComponent},
@@ -82,15 +82,22 @@ impl Measurements {
     where
         F: Fn(&Measurement) -> u64,
     {
+        // data must be preprocessed
+        assert_eq!(
+            self.measurements.len(),
+            self.averaged_net_measurements.len()
+        );
+
         use thousands::Separable;
         let points: Vec<(f32, f32)> = self
-            .measurements
+            .averaged_net_measurements
             .iter()
             .enumerate()
             .map(|(i, m)| (i as f32, get_output(m) as f32))
             .collect();
         let ymin = points.iter().map(|(_, y)| *y).reduce(f32::min).unwrap();
         let ymax = points.iter().map(|(_, y)| *y).reduce(f32::max).unwrap();
+        let ymean = points.iter().map(|(_, y)| *y).sum::<f32>() / points.len().max(1) as f32;
 
         if ymin == ymax {
             return;
@@ -98,13 +105,13 @@ impl Measurements {
         let hist = textplots::utils::histogram(&points, ymin, ymax, 30);
 
         let in_min = self
-            .measurements
+            .averaged_net_measurements
             .iter()
             .map(|m| m.inputs.unwrap_or(0) as f32)
             .reduce(f32::min)
             .unwrap();
         let in_max = self
-            .measurements
+            .averaged_net_measurements
             .iter()
             .map(|m| m.inputs.unwrap_or(0) as f32)
             .reduce(f32::max)
@@ -118,11 +125,13 @@ impl Measurements {
             in_max / in_min.max(1.0)
         );
         println!(
-            "{} output: min {}; max {}; max/min = {}",
+            "{} output: min {}; max {}; max/min = {}; mean = {}; count = {}",
             out_name,
             ymin.separate_with_commas(),
             ymax.separate_with_commas(),
-            ymax / ymin.max(1.0)
+            ymax / ymin.max(1.0),
+            ymean.separate_with_commas(),
+            points.len()
         );
         Chart::new(180, 60, ymin - 100.0, ymax + 100.0)
             .lineplot(&Shape::Bars(&hist))
@@ -442,19 +451,20 @@ pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
     })
 }
 
-/// Measure the cost variation of a HCM. `sweep_input` specifies whether the input
-/// is fixed or randomized.
-///     if true - input is randomized, with `large_input` specifying the upperbound
-///               of the input size
-///     if false - input size is fixed at `large_input`
-/// `iteration` specifies number of iterations to run the measurement
-/// `include_best_case` specifies whether best case is included. Often the best case
-/// is a trivial case that isn't too relevant (and never hit). So if one is more
-/// interested in the worst/average analysis, it might be useful to throw it away.
+/// Measure the cost variation of a HCM.
+///
+/// - `iteration` specifies number of iterations to run the measurement for
+/// - `get_rand_input` is called to generate an input for the `new_random_case`
+///   at each iteration
+/// - `get_worst_input` gets the input corresponding to the `new_worst_case`
+/// - `include_best_case` specifies whether best case is included. Often the
+/// best case is a trivial case that isn't too relevant (and never hit). So if
+/// one is more interested in the worst/average analysis, set this to `false`.
+
 pub fn measure_cost_variation<HCM: HostCostMeasurement>(
-    large_input: u64,
     iterations: u64,
-    sweep_input: bool,
+    get_rand_input: fn() -> u64,
+    get_worst_input: fn() -> u64,
     include_best_case: bool,
 ) -> Result<Measurements, std::io::Error> {
     let mut i = 0;
@@ -478,21 +488,18 @@ pub fn measure_cost_variation<HCM: HostCostMeasurement>(
     let measurements = measure_costs_inner::<HCM, _, _>(
         |host| {
             i += 1;
-            let input = if sweep_input {
-                rng.gen_range(1..=2 + large_input)
-            } else {
-                large_input
-            };
             match i {
                 1 => {
                     if include_best_case {
                         Some(HCM::new_best_case(host, &mut rng))
                     } else {
-                        Some(HCM::new_random_case(host, &mut rng, input))
+                        Some(HCM::new_random_case(host, &mut rng, get_rand_input()))
                     }
                 }
-                2 => Some(HCM::new_worst_case(host, &mut rng, large_input)),
-                n if n < iterations => Some(HCM::new_random_case(host, &mut rng, input)),
+                2 => Some(HCM::new_worst_case(host, &mut rng, get_worst_input())),
+                n if n <= iterations => {
+                    Some(HCM::new_random_case(host, &mut rng, get_rand_input()))
+                }
                 _ => None,
             }
         },
