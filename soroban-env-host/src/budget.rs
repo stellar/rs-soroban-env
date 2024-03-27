@@ -457,7 +457,7 @@ impl Default for BudgetImpl {
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegmentBytes => {
-                    cpu.const_term = 66075;
+                    cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(28);
                 }
                 #[cfg(feature = "next")]
@@ -507,7 +507,7 @@ impl Default for BudgetImpl {
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegmentBytes => {
-                    cpu.const_term = 25191;
+                    cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(14);
                 }
             }
@@ -661,7 +661,7 @@ impl Default for BudgetImpl {
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegmentBytes => {
-                    mem.const_term = 17580;
+                    mem.const_term = 0;
                     mem.lin_term = ScaledU64(257);
                 }
 
@@ -712,7 +712,7 @@ impl Default for BudgetImpl {
                 }
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegmentBytes => {
-                    mem.const_term = 69256;
+                    mem.const_term = 0;
                     mem.lin_term = ScaledU64(126);
                 }
             }
