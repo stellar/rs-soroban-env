@@ -551,6 +551,19 @@ impl Host {
 
         val
     }
+
+    pub(crate) fn compute_hash_from_slice(
+        host: &Host,
+        input_bytes: &[u8],
+    ) -> Result<Vec<u8>, HostError> {
+        let bytes_obj = host.bytes_new_from_slice(input_bytes).unwrap();
+        let hash_obj = host.compute_hash_sha256(bytes_obj)?;
+        Ok(host
+            .hash_from_bytesobj_input("hash", hash_obj)
+            .unwrap()
+            .0
+            .to_vec())
+    }
 }
 
 #[cfg(test)]

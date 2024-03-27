@@ -1,7 +1,7 @@
 use crate::xdr::{ScErrorCode, ScErrorType};
 use crate::{Env, Host, HostError};
 use hex::ToHex;
-use soroban_env_common::{EnvBase, U32Val};
+use soroban_env_common::{xdr::Hash, EnvBase, U32Val};
 
 fn is_budget_exceeded(err: HostError) -> bool {
     err.error.is_type(ScErrorType::Budget) && err.error.is_code(ScErrorCode::ExceededLimit)
@@ -255,3 +255,81 @@ fn recover_ecdsa_secp256k1_key_test() {
     )
         .err().unwrap()));
 }
+
+#[test]
+fn test_secp256r1_signature_verification() -> Result<(), HostError> {
+    use elliptic_curve::sec1::FromEncodedPoint;
+    use generic_array::GenericArray;
+    use p256::{
+        ecdsa::{Signature, VerifyingKey},
+        AffinePoint, EncodedPoint,
+    };
+
+    let host = observe_host!(Host::default());
+
+    let msg_hash = Host::compute_hash_from_slice(&host, hex::decode("e1130af6a38ccb412a9c8d13e15dbfc9e69a16385af3c3f1e5da954fd5e7c45fd75e2b8c36699228e92840c0562fbf3772f07e17f1add56588dd45f7450e1217ad239922dd9c32695dc71ff2424ca0dec1321aa47064a044b7fe3c2b97d03ce470a592304c5ef21eed9f93da56bb232d1eeb0035f9bf0dfafdcc4606272b20a3").unwrap().as_slice())?;
+
+    let encoded_pt = EncodedPoint::from_affine_coordinates(
+        &GenericArray::from_slice(
+            hex::decode("e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c")
+                .unwrap()
+                .as_slice(),
+        ),
+        &GenericArray::from_slice(
+            hex::decode("970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927")
+                .unwrap()
+                .as_slice(),
+        ),
+        false,
+    );
+
+    let verifier =
+        VerifyingKey::from_affine(AffinePoint::from_encoded_point(&encoded_pt).unwrap()).unwrap();
+
+    let signature = Signature::from_scalars(
+        GenericArray::clone_from_slice(
+            hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f")
+                .unwrap()
+                .as_slice(),
+        ),
+        GenericArray::clone_from_slice(
+            hex::decode("17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c")
+                .unwrap()
+                .as_slice(),
+        ),
+    )
+    .unwrap();
+
+    let res =
+        host.secp256r1_verify_signature(&verifier, &Hash::try_from(msg_hash).unwrap(), &signature);
+    assert!(res.is_ok());
+
+    // TODO:
+    // signature has the wrong length
+    // r or s is zero
+    // signature r or s is out of range (> n)
+    // s is in the upper half
+
+    // pubkey is compressed, or compact, or unit, or any other not allowed format
+    // pubkey does not belong on the curve
+
+    Ok(())
+}
+
+// #[test]
+// fn secp256r1_sig_ver_roundtrip() -> Result<(), HostError> {
+//     let key_bytes = hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721");
+//     let mut signer = p256::ecdsa::SigningKey::from_bytes(&key_bytes.into()).unwrap();
+//     let verifying_key = signer.verifying_key().clone();
+//     let mut msg_hash = [0u8; 32];
+//     rng.fill_bytes(&mut msg_hash);
+//     let sig = signer.sign_prehash(&msg_hash).unwrap();
+//     println!("{signer:?}");
+//     println!("{verifying_key:?}");
+//     // println!("{:?}", sig.to_vec());
+
+//     let host = Host::default();
+//     let res = host.ecdsa_p256_verify_signature(&verifying_key, &Hash(msg_hash), &sig);
+//     println!("{res:?}");
+//     Ok(())
+// }
