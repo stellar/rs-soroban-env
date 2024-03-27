@@ -260,7 +260,7 @@ impl Vm {
         VmInstantiationTimer::new(host.clone());
         let config = get_wasmi_config(host.as_budget())?;
         let engine = wasmi::Engine::new(&config);
-        let parsed_module = Rc::new(ParsedModule::new(host, &engine, wasm, cost_inputs)?);
+        let parsed_module = ParsedModule::new(host, &engine, wasm, cost_inputs)?;
         Self::instantiate(host, contract_id, parsed_module)
     }
 

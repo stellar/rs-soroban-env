@@ -74,7 +74,7 @@ impl ModuleCache {
                 &[],
             ));
         }
-        let parsed_module = Rc::new(ParsedModule::new(host, &self.engine, &wasm, cost_inputs)?);
+        let parsed_module = ParsedModule::new(host, &self.engine, &wasm, cost_inputs)?;
         self.modules =
             self.modules
                 .insert(contract_id.metered_clone(host)?, parsed_module, host)?;
