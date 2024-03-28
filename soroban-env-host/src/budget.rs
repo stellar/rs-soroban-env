@@ -1107,4 +1107,9 @@ impl Budget {
     pub(crate) fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
         self.0.try_borrow_mut_or_err()?.get_wasmi_fuel_remaining()
     }
+
+    pub fn reset_default(&self) -> Result<(), HostError> {
+        *self.0.try_borrow_mut_or_err()? = BudgetImpl::default();
+        Ok(())
+    }
 }

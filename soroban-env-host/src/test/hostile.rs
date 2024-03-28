@@ -549,7 +549,7 @@ fn excessive_logging() -> Result<(), HostError> {
         VmCachedInstantiation    0              0              
         InvokeVmFunction         1948           14             
         ComputeKeccak256Hash     0              0              
-        ComputeEcdsaSecp256k1Sig 0              0              
+        DecodeEcdsaCurve256Sig   0              0              
         RecoverEcdsaSecp256k1Key 0              0              
         Int256AddSub             0              0              
         Int256Mul                0              0              
@@ -577,6 +577,8 @@ fn excessive_logging() -> Result<(), HostError> {
         InstantiateWasmImports   5339           603            
         InstantiateWasmExports   4641           143            
         InstantiateWasmDataSegmentBytes25191          69256          
+        Sec1DecodePointUncompressed0              0              
+        VerifyEcdsaSecp256r1Sig  0              0              
         =======================================================
 
     "#]];
