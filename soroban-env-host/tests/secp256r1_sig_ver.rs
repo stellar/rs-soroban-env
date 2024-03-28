@@ -8,15 +8,18 @@ use p256::{
     ecdsa::{Signature, VerifyingKey},
     AffinePoint, EncodedPoint,
 };
-use soroban_env_common::{Env, EnvBase};
-use soroban_env_host::{Host, HostError, VmCaller, VmCallerEnv};
+use soroban_env_common::EnvBase;
+use soroban_env_host::{budget::AsBudget, Host, HostError, VmCaller, VmCallerEnv};
 
 #[test]
 fn test_secp256r1_sig_ver_with_sha256_on_msg() -> Result<(), HostError> {
     let host = Host::default();
+    // we use call the host function via the `VmCaller` interface to get through
+    // protocol gating, since the secp256r1 host function is added in v21
+    let mut vmcaller = VmCaller::none();
     for test_vector in FIPS186_ECDSA_TEST_VECTORS {
         let msg = host.bytes_new_from_slice(&hex::decode(test_vector.msg).unwrap())?;
-        let msg_hash = <Host as Env>::compute_hash_sha256(&host, msg)?;
+        let msg_hash = host.compute_hash_sha256(&mut vmcaller, msg)?;
         let verifier = VerifyingKey::from_affine(
             AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
                 &GenericArray::from_slice(hex::decode(test_vector.qx).unwrap().as_slice()),
@@ -36,7 +39,7 @@ fn test_secp256r1_sig_ver_with_sha256_on_msg() -> Result<(), HostError> {
 
         let res = <Host as VmCallerEnv>::verify_sig_ecdsa_secp256r1(
             &host,
-            &mut VmCaller::none(),
+            &mut vmcaller,
             public_key,
             msg_hash,
             sig_obj,
@@ -191,3 +194,46 @@ const FIPS186_ECDSA_TEST_VECTORS: &[Fips186EcdsaTestVector; 15] = &[
         result: &SigVerResult::Ok
     },
 ];
+
+#[test]
+fn wycheproof_test() -> Result<(), HostError> {
+    use wycheproof::ecdsa::{TestName::EcdsaSecp256r1Sha256, TestSet};
+    use wycheproof::TestResult;
+
+    let test_set = TestSet::load(EcdsaSecp256r1Sha256).unwrap();
+    let host = Host::default();
+    host.as_budget().reset_unlimited()?;
+    let mut vmcaller = VmCaller::none();
+    for test_group in test_set.test_groups {
+        let public_key = host.bytes_new_from_slice(&test_group.key.key).unwrap();
+
+        for test in test_group.tests {
+            let msg = host.bytes_new_from_slice(test.msg.as_slice())?;
+            let msg_digest = host.compute_hash_sha256(&mut vmcaller, msg)?;
+
+            let mut sig = match Signature::from_der(&test.sig) {
+                Ok(s) => s.normalize_s().unwrap_or(s),
+                Err(_) => {
+                    // If the signature is not a valid DER-encoded one, we skip
+                    // it. Since our host function expects signatures to be
+                    // fixed-witdh bytes encoded, we don't have to validate it.
+                    assert_ne!(test.result, TestResult::Valid);
+                    continue;
+                }
+            };
+            // Wycheproof tests do not enforce low s but we do, so we need to normalize
+            sig = sig.normalize_s().unwrap_or(sig);
+            let signature = host.bytes_new_from_slice(&sig.to_bytes())?;
+
+            match host.verify_sig_ecdsa_secp256r1(&mut vmcaller, public_key, msg_digest, signature)
+            {
+                Ok(_) => assert_eq!(test.result, TestResult::Valid),
+                // we treat `TestResult::Acceptable` as invalid
+                Err(_) => {
+                    assert_ne!(test.result, TestResult::Valid)
+                }
+            }
+        }
+    }
+    Ok(())
+}

@@ -88,6 +88,7 @@ lstsq = "=0.5.0"
 nalgebra = { version = "=0.32.3", default-features = false, features = ["std"]}
 wasm-encoder = "=0.36.2"
 rustversion = "1.0"
+wycheproof = "=0.5.1"
 
 [dev-dependencies.stellar-xdr]
 version = "=20.1.0"
