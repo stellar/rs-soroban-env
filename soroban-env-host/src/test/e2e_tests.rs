@@ -1737,3 +1737,119 @@ fn test_classic_account_auth_using_simulation() {
     .unwrap();
     assert!(res.invoke_result.is_ok());
 }
+
+#[cfg(feature = "next")]
+mod cap_54_55_56 {
+
+    use super::*;
+    use crate::xdr::ScVec;
+    use more_asserts::assert_lt;
+    use pretty_assertions::assert_eq;
+    use soroban_test_wasms::SUM_I32;
+
+    // Test that when running on a protocol that supports the ModuleCache, when
+    // doing work that would be significantly different under cached instantiation,
+    // we get a cost estimate from recording mode that still matches the cost of the
+    // actual execution.
+    #[test]
+    fn test_module_cache_recording_fidelity() {
+        const V_NEW: u32 = crate::vm::ModuleCache::MIN_LEDGER_VERSION;
+        const V_OLD: u32 = V_NEW - 1;
+
+        for (proto, refined_cost_inputs) in
+            [(V_OLD, false), (V_OLD, true), (V_NEW, false), (V_NEW, true)]
+        {
+            let add_cd = CreateContractData::new_with_refined_contract_cost_inputs(
+                [111; 32],
+                ADD_I32,
+                refined_cost_inputs,
+            );
+            let sum_cd = CreateContractData::new_with_refined_contract_cost_inputs(
+                [222; 32],
+                SUM_I32,
+                refined_cost_inputs,
+            );
+            let mut ledger_info = default_ledger_info();
+            ledger_info.protocol_version = proto;
+            let host_fn = invoke_contract_host_fn(
+                &sum_cd.contract_address,
+                "sum",
+                vec![
+                    ScVal::Address(add_cd.contract_address.clone()),
+                    ScVal::Vec(Some(ScVec(
+                        vec![
+                            ScVal::I32(1),
+                            ScVal::I32(2),
+                            ScVal::I32(3),
+                            ScVal::I32(4),
+                            ScVal::I32(5),
+                        ]
+                        .try_into()
+                        .unwrap(),
+                    ))),
+                ],
+            );
+            let ledger_entries_with_ttl = vec![
+                (
+                    add_cd.wasm_entry.clone(),
+                    Some(ledger_info.sequence_number + 100),
+                ),
+                (
+                    add_cd.contract_entry.clone(),
+                    Some(ledger_info.sequence_number + 1000),
+                ),
+                (
+                    sum_cd.wasm_entry.clone(),
+                    Some(ledger_info.sequence_number + 100),
+                ),
+                (
+                    sum_cd.contract_entry.clone(),
+                    Some(ledger_info.sequence_number + 1000),
+                ),
+            ];
+            let res = invoke_host_function_recording_helper(
+                true,
+                &host_fn,
+                &sum_cd.deployer,
+                None,
+                &ledger_info,
+                ledger_entries_with_ttl.clone(),
+                &prng_seed(),
+                None,
+            )
+            .unwrap();
+            assert_eq!(res.invoke_result.unwrap(), ScVal::I32(15));
+
+            let resources = res.resources;
+            let auth_entries = res.auth;
+
+            let res = invoke_host_function_helper(
+                true,
+                &host_fn,
+                &resources,
+                &sum_cd.deployer,
+                auth_entries,
+                &ledger_info,
+                ledger_entries_with_ttl,
+                &prng_seed(),
+            )
+            .unwrap();
+            assert_eq!(res.invoke_result.unwrap(), ScVal::I32(15));
+
+            let insns_recording = resources.instructions as f64;
+            let insns_enforcing = res.budget.get_cpu_insns_consumed().unwrap() as f64;
+            let insns_delta = (insns_recording - insns_enforcing).abs();
+            let rel_delta_pct = 100.0 * (insns_delta / insns_enforcing);
+
+            dbg!(proto);
+            dbg!(refined_cost_inputs);
+            dbg!(insns_recording);
+            dbg!(insns_enforcing);
+            dbg!(rel_delta_pct);
+
+            // Check that the recording-mode module cache hack puts us within 1%
+            // of the right number.
+            assert_lt!(rel_delta_pct, 1.0);
+        }
+    }
+}

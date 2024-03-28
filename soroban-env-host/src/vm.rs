@@ -100,6 +100,21 @@ impl std::hash::Hash for Vm {
     }
 }
 
+impl Host {
+    pub(crate) fn make_linker(
+        engine: &wasmi::Engine,
+        symbols: &BTreeSet<(&str, &str)>,
+    ) -> Result<Linker<Host>, HostError> {
+        let mut linker = Linker::new(&engine);
+        for hf in HOST_FUNCTIONS {
+            if symbols.contains(&(hf.mod_str, hf.fn_str)) {
+                (hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le))?;
+            }
+        }
+        Ok(linker)
+    }
+}
+
 impl Vm {
     #[cfg(feature = "testutils")]
     pub fn get_all_host_functions() -> Vec<(&'static str, &'static str, u32)> {
@@ -119,26 +134,15 @@ impl Vm {
         let _span = tracy_span!("Vm::instantiate");
 
         let engine = parsed_module.module.engine();
-        let mut linker = <Linker<Host>>::new(engine);
         let mut store = Store::new(engine, host.clone());
 
         parsed_module.cost_inputs.charge_for_instantiation(host)?;
 
         store.limiter(|host| host);
 
-        let module_imports: BTreeSet<(&str, &str)> = parsed_module
-            .module
-            .imports()
-            .filter(|i| i.ty().func().is_some())
-            .map(|i| {
-                let mod_str = i.module();
-                let fn_str = i.name();
-                (mod_str, fn_str)
-            })
-            .collect();
-
         {
-            // We perform link-time protocol version gating here.
+            // We perform instantiation-time protocol version gating of
+            // all module-imported symbols here.
             // Reasons for doing link-time instead of run-time check:
             // 1. VM instantiation is performed in both contract upload and
             //    execution, thus any errorous contract will be rejected at
@@ -148,46 +152,51 @@ impl Vm {
             //    early is preferred from resource usage perspective.
             // 3. If a contract contains a call to an non-existent host
             //    function, the current (correct) behavior is to return
-            //    `Wasmi::LinkerError::MissingDefinition` error (which gets
+            //    `Wasmi::errors::LinkerError::MissingDefinition` error (which gets
             //    converted to a `(WasmVm, InvalidAction)`). If that host
             //    function is defined in a later protocol, and we replay that
-            //    contract (in the earlier protocol where it belongs), not
-            //    linking the function preserves the right behavior and error
-            //    code.
+            //    contract (in the earlier protocol where it belongs), we need
+            //    to return the same error.
             let _span0 = tracy_span!("define host functions");
             let ledger_proto = host.with_ledger_info(|li| Ok(li.protocol_version))?;
-            for hf in HOST_FUNCTIONS {
-                if let Some(min_proto) = hf.min_proto {
-                    if parsed_module.proto_version < min_proto || ledger_proto < min_proto {
-                        // We skip linking this hf instead of returning an error
-                        // because we have to support old contracts during replay.
+            parsed_module.with_import_symbols(|module_symbols| {
+                for hf in HOST_FUNCTIONS {
+                    if !module_symbols.contains(&(hf.mod_str, hf.fn_str)) {
                         continue;
                     }
-                }
-                if let Some(max_proto) = hf.max_proto {
-                    if parsed_module.proto_version > max_proto || ledger_proto > max_proto {
-                        // We skip linking this hf instead of returning an error
-                        // because we have to support old contracts during replay.
-                        continue;
+                    if let Some(min_proto) = hf.min_proto {
+                        if parsed_module.proto_version < min_proto || ledger_proto < min_proto {
+                            return Err(host.err(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::InvalidAction,
+                                "contract calls a host function not yet supported by current protocol",
+                                &[],
+                            ));
+                        }
+                    }
+                    if let Some(max_proto) = hf.max_proto {
+                        if parsed_module.proto_version > max_proto || ledger_proto > max_proto {
+                            return Err(host.err(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::InvalidAction,
+                                "contract calls a host function no longer supported in the current protocol",
+                                &[],
+                            ));
+                        }
                     }
                 }
-                // We only link the functions that are actually used by the
-                // contract. Linking is quite expensive.
-                if !module_imports.contains(&(hf.mod_str, hf.fn_str)) {
-                    continue;
-                }
-                let func = (hf.wrap)(&mut store);
-                host.map_err(
-                    linker
-                        .define(hf.mod_str, hf.fn_str, func)
-                        .map_err(|le| wasmi::Error::Linker(le)),
-                )?;
-            }
+                Ok(())
+            })?;
         }
 
         let not_started_instance = {
             let _span0 = tracy_span!("instantiate module");
-            host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
+            if let Some(linker) = &*host.try_borrow_linker()? {
+                host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
+            } else {
+                let linker = parsed_module.make_linker()?;
+                host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
+            }
         };
 
         let instance = host.map_err(
@@ -260,8 +269,75 @@ impl Vm {
         VmInstantiationTimer::new(host.clone());
         let config = get_wasmi_config(host.as_budget())?;
         let engine = wasmi::Engine::new(&config);
-        let parsed_module = ParsedModule::new(host, &engine, wasm, cost_inputs)?;
+        let parsed_module = Self::parse_module(host, &engine, wasm, cost_inputs)?;
         Self::instantiate(host, contract_id, parsed_module)
+    }
+
+    #[cfg(not(any(test, feature = "recording_mode")))]
+    fn parse_module(
+        host: &Host,
+        engine: &wasmi::Engine,
+        wasm: &[u8],
+        cost_inputs: VersionedContractCodeCostInputs,
+    ) -> Result<Rc<ParsedModule>, HostError> {
+        ParsedModule::new(host, engine, wasm, cost_inputs)
+    }
+
+    /// This method exists to support [crate::storage::FootprintMode::Recording]
+    /// when running in protocol versions that feature the [ModuleCache].
+    ///
+    /// There are two ways we can get to here:
+    ///
+    ///   1. When we're running in a protocol that doesn't support the
+    ///   [ModuleCache] at all. In this case, we just parse the module and
+    ///   charge for it as normal.
+    ///
+    ///   2. When we're in a protocol that _does_ support the [ModuleCache] but
+    ///   are _also_ in [crate::storage::FootprintMode::Recording] mode. Then
+    ///   the [ModuleCache] _does not get built_ during host setup (because we
+    ///   have no footprint yet to buid the cache from), so our caller
+    ///   [Host::call_contract_fn] sees no module cache, and so each call winds
+    ///   up calling us here, reparsing each module as it's called, and then
+    ///   throwing it away.
+    ///
+    /// When we are in case 2, we don't want to charge for all those reparses:
+    /// we want to charge only for the post-parse instantiations _as if_ we had
+    /// had the cache. The cache will actually be added in [Host::pop_context]
+    /// _after_ a top-level recording-mode invocation completes, by reading the
+    /// storage and parsing all the modules in it, in order to charge for
+    /// parsing each used module _once_ and thereby produce a mostly-correct
+    /// total cost.
+    ///
+    /// We still charge the reparses to the shadow budget, to avoid a DoS risk,
+    /// and we still charge the instantiations to the real budget, to behave the
+    /// same as if we had a cache.
+    ///
+    /// Note that this will only produce "mostly correct" costs for recording in
+    /// the case of normal completion of the contract. If the contract traps or
+    /// otherwise fails to complete, the cost will be incorrect, because the
+    /// cache will not be built and the parse costs will never be charged.
+    ///
+    /// Finally, for those scratching their head about the overall structure:
+    /// all of this happens as a result of the "module cache" not being
+    /// especially cache-like (i.e. not being populated lazily, on-access). It's
+    /// populated all at once, up front, because wasmi does not allow adding
+    /// modules to an engine that's currently running.
+    #[cfg(any(test, feature = "recording_mode"))]
+    fn parse_module(
+        host: &Host,
+        engine: &wasmi::Engine,
+        wasm: &[u8],
+        cost_inputs: VersionedContractCodeCostInputs,
+    ) -> Result<Rc<ParsedModule>, HostError> {
+        use crate::storage::FootprintMode;
+        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+            if let FootprintMode::Recording(_) = host.try_borrow_storage()?.mode {
+                return host.budget_ref().with_observable_shadow_mode(|| {
+                    ParsedModule::new(host, engine, wasm, cost_inputs)
+                });
+            }
+        }
+        ParsedModule::new(host, engine, wasm, cost_inputs)
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {

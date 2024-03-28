@@ -40,7 +40,8 @@ members = [
     "sac_reentry_account",
     "recursive_account",
     "hostile_large_val",
-    "contract_sac_transfer"
+    "contract_sac_transfer",
+    "sum_i32"
 ]
 [profile.release]
 opt-level = "z"
@@ -56,11 +57,11 @@ lto = true
 rust-version = "1.74.0"
 
 [workspace.dependencies.soroban-sdk]
-version = "=20.2.0"
+version = "=20.3.0"
 git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]
-version = "=20.1.1"
+version = "=20.3.0"
 git = "https://github.com/stellar/rs-soroban-env"
 
 # Always build from the local instance of env as we need to rebuild test WASMs

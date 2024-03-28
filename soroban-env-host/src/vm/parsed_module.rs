@@ -9,7 +9,7 @@ use crate::{
 use wasmi::{Engine, Module};
 
 use super::{ModuleCache, MAX_VM_ARGS};
-use std::{io::Cursor, rc::Rc};
+use std::{collections::BTreeSet, io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum VersionedContractCodeCostInputs {
@@ -165,6 +165,36 @@ impl ParsedModule {
             },
             host,
         )
+    }
+
+    pub fn with_import_symbols<T>(
+        &self,
+        callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
+        // Cap symbols we're willing to import at 10 characters for each of
+        // module and function name. in practice they are all 1-2 chars, but
+        // we'll leave some future-proofing room here. The important point
+        // is to not be introducing a DoS vector.
+        const SYM_LEN_LIMIT: usize = 10;
+        let symbols: BTreeSet<(&str, &str)> = self
+            .module
+            .imports()
+            .filter_map(|i| {
+                if i.ty().func().is_some() {
+                    let mod_str = i.module();
+                    let fn_str = i.name();
+                    if mod_str.len() < SYM_LEN_LIMIT && fn_str.len() < SYM_LEN_LIMIT {
+                        return Some((mod_str, fn_str));
+                    }
+                }
+                None
+            })
+            .collect();
+        callback(&symbols)
+    }
+
+    pub fn make_linker(&self) -> Result<wasmi::Linker<Host>, HostError> {
+        self.with_import_symbols(|symbols| Host::make_linker(self.module.engine(), symbols))
     }
 
     #[cfg(any(test, feature = "testutils"))]

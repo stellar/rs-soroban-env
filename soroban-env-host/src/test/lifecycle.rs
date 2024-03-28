@@ -72,6 +72,7 @@ fn test_host() -> Host {
         ..Default::default()
     })
     .unwrap();
+    host.maybe_add_module_cache().unwrap();
 
     host
 }
@@ -571,6 +572,8 @@ fn test_large_contract() {
 #[allow(dead_code)]
 mod cap_54_55_56 {
 
+    use more_asserts::assert_gt;
+
     use super::*;
     use crate::{
         storage::{FootprintMap, StorageMap},
@@ -609,6 +612,22 @@ mod cap_54_55_56 {
         InstantiateWasmExports,
         InstantiateWasmDataSegmentBytes,
     ];
+
+    fn is_instantiation_cost(ct: ContractCostType) -> bool {
+        match ct {
+            InstantiateWasmInstructions
+            | InstantiateWasmFunctions
+            | InstantiateWasmGlobals
+            | InstantiateWasmTableEntries
+            | InstantiateWasmTypes
+            | InstantiateWasmDataSegments
+            | InstantiateWasmElemSegments
+            | InstantiateWasmImports
+            | InstantiateWasmExports
+            | InstantiateWasmDataSegmentBytes => true,
+            _ => false,
+        }
+    }
 
     fn new_host_with_protocol_and_uploaded_contract(
         hostname: &'static str,
@@ -723,12 +742,29 @@ mod cap_54_55_56 {
         ContractAndWasmEntries::from_contract_addr(&host, contract)
     }
 
-    fn upload_and_call(
+    fn observed_test_host_with_storage_and_budget(
+        hostname: &'static str,
+        proto: u32,
+        storage: Storage,
+        budget: Budget,
+    ) -> Result<ObservedHost, HostError> {
+        let host = Host::with_storage_and_budget(storage, budget);
+        let host = ObservedHost::new(hostname, host);
+        host.enable_debug()?;
+        host.set_ledger_info(LedgerInfo {
+            protocol_version: proto,
+            ..Default::default()
+        })?;
+        host.maybe_add_module_cache()?;
+        Ok(host)
+    }
+
+    fn upload_and_make_host_for_next_ledger(
         upload_hostname: &'static str,
         upload_proto: u32,
-        call_hostname: &'static str,
-        call_proto: u32,
-    ) -> Result<(Budget, Storage), HostError> {
+        second_hostname: &'static str,
+        second_proto: u32,
+    ) -> Result<(ObservedHost, Hash), HostError> {
         // Phase 1: upload contract, tear down host, "close the ledger" and possibly change protocol.
         let (host, contract) =
             new_host_with_protocol_and_uploaded_contract(upload_hostname, upload_proto)?;
@@ -738,17 +774,31 @@ mod cap_54_55_56 {
         let (storage, _events) = realhost.try_finish()?;
 
         // Phase 2: build new host with previous ledger output as storage, call contract. Possibly on new protocol.
-        let host = Host::with_storage_and_budget(storage, Budget::default());
-        host.enable_debug()?;
-        let host = ObservedHost::new(call_hostname, host);
-        host.set_ledger_info(LedgerInfo {
-            protocol_version: call_proto,
-            ..Default::default()
-        })?;
+        let host = observed_test_host_with_storage_and_budget(
+            second_hostname,
+            second_proto,
+            storage,
+            Budget::default(),
+        )?;
+        Ok((host, contract_id))
+    }
+
+    fn upload_and_call(
+        upload_hostname: &'static str,
+        upload_proto: u32,
+        call_hostname: &'static str,
+        call_proto: u32,
+    ) -> Result<(Budget, Storage), HostError> {
+        let (host, contract_id) = upload_and_make_host_for_next_ledger(
+            upload_hostname,
+            upload_proto,
+            call_hostname,
+            call_proto,
+        )?;
         let contract = host.add_host_object(crate::xdr::ScAddress::Contract(contract_id))?;
         let _ = host.call(
             contract,
-            Symbol::try_from_small_str("test").unwrap(),
+            Symbol::try_from_small_str("test")?,
             host.vec_new()?,
         )?;
         let realhost = host.clone();
@@ -768,6 +818,8 @@ mod cap_54_55_56 {
         }
         false
     }
+
+    // region: CAP-0054 refined cost model
 
     // Test that running on protocol vOld only charges the VmInstantiation cost
     // type.
@@ -865,12 +917,12 @@ mod cap_54_55_56 {
         // make a new storage map for a new run
         let budget = Budget::default();
         let storage = entries.read_only_storage(&budget);
-        let host = Host::with_storage_and_budget(storage, budget);
-        let host = ObservedHost::new("test_v_old_no_rewrite_call", host);
-        host.set_ledger_info(LedgerInfo {
-            protocol_version: V_OLD,
-            ..Default::default()
-        })?;
+        let host = observed_test_host_with_storage_and_budget(
+            "test_v_old_no_rewrite_call",
+            V_OLD,
+            storage,
+            budget,
+        )?;
         host.upload_contract_wasm(wasm_module_with_a_bit_of_everything(V_OLD))?;
         Ok(())
     }
@@ -885,12 +937,12 @@ mod cap_54_55_56 {
         // make a new storage map for a new upload but with read-only footprint -- this should fail
         let budget = Budget::default();
         let storage = entries.read_only_storage(&budget);
-        let host = Host::with_storage_and_budget(storage, budget);
-        let host = ObservedHost::new("test_v_new_rewrite_call_fail", host);
-        host.set_ledger_info(LedgerInfo {
-            protocol_version: V_NEW,
-            ..Default::default()
-        })?;
+        let host = observed_test_host_with_storage_and_budget(
+            "test_v_new_rewrite_call_fail",
+            V_NEW,
+            storage,
+            budget,
+        )?;
         let wasm_blob = match &entries.wasm_entry.data {
             LedgerEntryData::ContractCode(cce) => cce.code.to_vec(),
             _ => panic!("expected ContractCode"),
@@ -902,12 +954,12 @@ mod cap_54_55_56 {
         // make a new storage map for a new upload but with read-write footprint -- this should pass
         let budget = Budget::default();
         let storage = entries.wasm_writing_storage(&budget);
-        let host = Host::with_storage_and_budget(storage, budget);
-        let host = ObservedHost::new("test_v_new_rewrite_call_succeed", host);
-        host.set_ledger_info(LedgerInfo {
-            protocol_version: V_NEW,
-            ..Default::default()
-        })?;
+        let host = observed_test_host_with_storage_and_budget(
+            "test_v_new_rewrite_call_succeed",
+            V_NEW,
+            storage,
+            budget,
+        )?;
         host.upload_contract_wasm(wasm_blob)?;
         let entries = entries.reload(&host)?;
         assert!(code_entry_has_cost_inputs(&entries.wasm_entry));
@@ -926,12 +978,12 @@ mod cap_54_55_56 {
         // make a new storage map for a new upload but with read-only footprint -- this should pass
         let budget = Budget::default();
         let storage = entries.read_only_storage(&budget);
-        let host = Host::with_storage_and_budget(storage, budget);
-        let host = ObservedHost::new("test_v_new_no_rewrite_call_pass", host);
-        host.set_ledger_info(LedgerInfo {
-            protocol_version: V_NEW,
-            ..Default::default()
-        })?;
+        let host = observed_test_host_with_storage_and_budget(
+            "test_v_new_no_rewrite_call_pass",
+            V_NEW,
+            storage,
+            budget,
+        )?;
         let wasm_blob = match &entries.wasm_entry.data {
             LedgerEntryData::ContractCode(cce) => cce.code.to_vec(),
             _ => panic!("expected ContractCode"),
@@ -942,4 +994,148 @@ mod cap_54_55_56 {
 
         Ok(())
     }
+    // endregion: CAP-0054 refined cost model
+
+    // region: CAP-0056 ModuleCache related tests
+
+    // Test that running on protocol vOld does not make a ModuleCache at all.
+    #[test]
+    fn test_v_old_no_module_cache() -> Result<(), HostError> {
+        let host = upload_and_make_host_for_next_ledger(
+            "test_v_old_no_module_cache_upload",
+            V_OLD,
+            "test_v_old_no_module_cache_check",
+            V_OLD,
+        )?
+        .0;
+        let module_cache = host.try_borrow_module_cache()?;
+        assert!(module_cache.is_none());
+        Ok(())
+    }
+
+    // Test that running on protocol vNew does add ModuleCache entries.
+    #[test]
+    fn test_v_new_module_cache() -> Result<(), HostError> {
+        let (host, contract_id) = upload_and_make_host_for_next_ledger(
+            "test_v_new_module_cache_upload",
+            V_OLD,
+            "test_v_new_module_cache_check",
+            V_NEW,
+        )?;
+        let wasm = get_contract_wasm_ref(&host, contract_id);
+        let module_cache = host.try_borrow_module_cache()?;
+        if let Some(module_cache) = &*module_cache {
+            assert!(module_cache.get_module(&*host, &wasm).is_ok());
+        } else {
+            panic!("expected module cache");
+        }
+        Ok(())
+    }
+
+    // Test that, when running on protocol vNew instantiating a contract without
+    // ContractCodeCostInputs, repeated invocations of the same contract
+    // increase the VmCachedInstantiation costs but do not increase the
+    // VmInstantiation costs.
+    #[test]
+    fn test_v_new_no_contract_code_cost_inputs_cached_instantiation() -> Result<(), HostError> {
+        let (host, contract_id) = upload_and_make_host_for_next_ledger(
+            "test_v_new_no_contract_code_cost_inputs_cached_instantiation_upload",
+            V_OLD,
+            "test_v_new_no_contract_code_cost_inputs_cached_instantiation_call",
+            V_NEW,
+        )?;
+
+        let contract = host.add_host_object(crate::xdr::ScAddress::Contract(contract_id))?;
+        let test_symbol = Symbol::try_from_small_str("test")?;
+        let args = host.vec_new()?;
+        let _ = host.call(contract, test_symbol, args)?;
+
+        let budget = host.budget_cloned();
+
+        // Double check we're not charging the new cost types
+        for ct in NEW_COST_TYPES {
+            assert_eq!(budget.get_tracker(*ct)?.cpu, 0);
+        }
+
+        // Check that we're charging both the old cost types
+        let first_call_vm_instantiation = budget.get_tracker(VmInstantiation)?.cpu;
+        let first_call_vm_cached_instantiation = budget.get_tracker(VmCachedInstantiation)?.cpu;
+
+        assert_ne!(first_call_vm_instantiation, 0);
+        assert_ne!(first_call_vm_cached_instantiation, 0);
+
+        // Do a second call and check that it only increased the cached cost type.
+        let _ = host.call(contract, test_symbol, args)?;
+
+        assert_eq!(
+            budget.get_tracker(VmInstantiation)?.cpu,
+            first_call_vm_instantiation
+        );
+        assert_gt!(
+            budget.get_tracker(VmCachedInstantiation)?.cpu,
+            first_call_vm_cached_instantiation
+        );
+
+        Ok(())
+    }
+
+    // Test that, when running on protocol vNew instantiating a contract with
+    // ContractCodeCostInputs, repeated invocations of the same contract
+    // increase the new refined cost model InstantiateWasm* cost types but
+    // do not increase the ParseWasm* cost types.
+
+    #[test]
+    fn test_v_new_with_contract_code_cost_inputs_cached_instantiation() -> Result<(), HostError> {
+        let (host, contract_id) = upload_and_make_host_for_next_ledger(
+            "test_v_new_with_contract_code_cost_inputs_cached_instantiation_upload",
+            V_NEW,
+            "test_v_new_with_contract_code_cost_inputs_cached_instantiation_call",
+            V_NEW,
+        )?;
+
+        let contract = host.add_host_object(crate::xdr::ScAddress::Contract(contract_id))?;
+        let test_symbol = Symbol::try_from_small_str("test")?;
+        let args = host.vec_new()?;
+        let _ = host.call(contract, test_symbol, args)?;
+
+        let budget = host.budget_cloned();
+
+        // Check that we're not charging the old cost types
+        assert_eq!(budget.get_tracker(VmInstantiation)?.cpu, 0);
+        assert_eq!(budget.get_tracker(VmCachedInstantiation)?.cpu, 0);
+
+        let mut first_costs = Vec::new();
+
+        for ct in NEW_COST_TYPES {
+            let cost = budget.get_tracker(*ct)?.cpu;
+            first_costs.push(cost);
+            if *ct == InstantiateWasmTypes {
+                // This is a zero-cost type in the current calibration of the
+                // new model -- and exceptional case in this test -- though we
+                // keep it in case it becomes nonzero at some point (it's
+                // credible that it would).
+                continue;
+            }
+            assert_ne!(cost, 0);
+        }
+
+        // Do a second call and check that it only increased the cached cost type.
+        let _ = host.call(contract, test_symbol, args)?;
+
+        for (ct, first_cost) in NEW_COST_TYPES.iter().zip(first_costs.iter()) {
+            if *ct == InstantiateWasmTypes {
+                continue;
+            }
+            let cost = budget.get_tracker(*ct)?.cpu;
+            if is_instantiation_cost(*ct) {
+                assert_gt!(cost, *first_cost);
+            } else {
+                assert_eq!(cost, *first_cost);
+            }
+        }
+
+        Ok(())
+    }
+
+    // endregion: CAP-0056 ModuleCache related tests
 }

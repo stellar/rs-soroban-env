@@ -193,6 +193,9 @@ impl Host {
             // recording auth mode. This is a no-op for the enforcing mode.
             self.try_borrow_authorization_manager()?
                 .maybe_emulate_authentication(self)?;
+            // See explanation for this line in [crate::vm::Vm::parse_module] -- it exists
+            // to add-back module-parsing costs that were suppressed during the invocation.
+            self.maybe_add_module_cache()?;
         }
         let mut auth_snapshot = None;
         if let Some(rp) = orp {

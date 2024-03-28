@@ -448,7 +448,10 @@ mod test {
         );
         expect!["64"].assert_eq(size_of::<InternalDiagnosticArg>().to_string().as_str());
         expect!["88"].assert_eq(size_of::<InternalDiagnosticEvent>().to_string().as_str());
-        expect!["304"].assert_eq(size_of::<ParsedModule>().to_string().as_str());
+
+        // NB: ParsedModule changes size depending on release or debug builds,
+        // which is impossible to conditionalize on. We should figure out how to
+        // check it someday but until we do we'll leaveit out.
 
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
