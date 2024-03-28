@@ -1,7 +1,6 @@
 use crate::xdr::{ScErrorCode, ScErrorType};
-use crate::{Env, Host, HostError};
+use crate::{Env, EnvBase, Host, HostError, U32Val, Void};
 use hex::ToHex;
-use soroban_env_common::{xdr::Hash, EnvBase, U32Val};
 
 fn is_budget_exceeded(err: HostError) -> bool {
     err.error.is_type(ScErrorType::Budget) && err.error.is_code(ScErrorCode::ExceededLimit)
@@ -258,78 +257,171 @@ fn recover_ecdsa_secp256k1_key_test() {
 
 #[test]
 fn test_secp256r1_signature_verification() -> Result<(), HostError> {
-    use elliptic_curve::sec1::FromEncodedPoint;
-    use generic_array::GenericArray;
-    use p256::{
-        ecdsa::{Signature, VerifyingKey},
-        AffinePoint, EncodedPoint,
-    };
+    use crate::{VmCaller, VmCallerEnv};
 
     let host = observe_host!(Host::default());
 
-    let msg_hash = Host::compute_hash_from_slice(&host, hex::decode("e1130af6a38ccb412a9c8d13e15dbfc9e69a16385af3c3f1e5da954fd5e7c45fd75e2b8c36699228e92840c0562fbf3772f07e17f1add56588dd45f7450e1217ad239922dd9c32695dc71ff2424ca0dec1321aa47064a044b7fe3c2b97d03ce470a592304c5ef21eed9f93da56bb232d1eeb0035f9bf0dfafdcc4606272b20a3").unwrap().as_slice())?;
+    let verify_sig =
+        |public_key: Vec<u8>, msg_digest: Vec<u8>, signature: Vec<u8>| -> Result<Void, HostError> {
+            let public_key_obj = host.bytes_new_from_slice(&public_key)?;
+            let msg_digest_obj = host.bytes_new_from_slice(&msg_digest)?;
+            let signature_obj = host.bytes_new_from_slice(&signature)?;
+            // Make sure we always verify with the fresh budget to make large payload tests
+            // independent of each other.
+            host.budget_ref().reset_default().unwrap();
+            <Host as VmCallerEnv>::verify_sig_ecdsa_secp256r1(
+                &host,
+                &mut VmCaller::none(),
+                public_key_obj,
+                msg_digest_obj,
+                signature_obj,
+            )
+        };
 
-    let encoded_pt = EncodedPoint::from_affine_coordinates(
-        &GenericArray::from_slice(
-            hex::decode("e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c")
-                .unwrap()
-                .as_slice(),
-        ),
-        &GenericArray::from_slice(
-            hex::decode("970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927")
-                .unwrap()
-                .as_slice(),
-        ),
-        false,
+    // 0. Valid
+    assert!(verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest, computed from sha256(e1130af../* see NIST for full message */) */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    ).is_ok());
+
+    // 1. invalid message digest
+    // a) delete one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a").unwrap() /* msg digest, deleted one byte */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
     );
+    HostError::result_matches_err(
+        res,
+        (ScErrorType::Object, ScErrorCode::UnexpectedSize), /* this error comes from `xdr::Hash::try_from` */
+    );
+    // b) append one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a9400").unwrap() /* msg digest, padded one extra byte */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Object, ScErrorCode::UnexpectedSize));
+    // c) modify one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a95").unwrap() /* msg digest, padded one extra byte */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
 
-    let verifier =
-        VerifyingKey::from_affine(AffinePoint::from_encoded_point(&encoded_pt).unwrap()).unwrap();
+    // 2. invalid public key
+    // a) delete one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee9").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // b) append one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee92700").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // c) modify one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee928").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // d) wrong compression format: compressed, y is even (tag = 0x02)
+    let res = verify_sig(
+        hex::decode("02e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // e) wrong compression format: compressed, y is odd (tag = 0x03)
+    let res = verify_sig(
+        hex::decode("03e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // f) wrong compression format: y is zero element (tag = 0x00)
+    let res = verify_sig(
+        hex::decode("00").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // g) invalid tag
+    let res = verify_sig(
+        hex::decode("09e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // h) correct compression, invalid point (flip y and x coordinates)
+    let res = verify_sig(
+        hex::decode("04970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
 
-    let signature = Signature::from_scalars(
-        GenericArray::clone_from_slice(
-            hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f")
-                .unwrap()
-                .as_slice(),
-        ),
-        GenericArray::clone_from_slice(
-            hex::decode("17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c")
-                .unwrap()
-                .as_slice(),
-        ),
-    )
-    .unwrap();
-
-    let res =
-        host.secp256r1_verify_signature(&verifier, &Hash::try_from(msg_hash).unwrap(), &signature);
-    assert!(res.is_ok());
-
-    // TODO:
-    // signature has the wrong length
-    // r or s is zero
-    // signature r or s is out of range (> n)
-    // s is in the upper half
-
-    // pubkey is compressed, or compact, or unit, or any other not allowed format
-    // pubkey does not belong on the curve
+    // 3. signature
+    // a) delete one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec87" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // b) append one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c00" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // c) modify one byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871d" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // d) r is 0
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("000000000000000000000000000000000000000000000000000000000000000017c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871c" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // e) s is 0
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f0000000000000000000000000000000000000000000000000000000000000000" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // f) s is in the upper half
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        /* this signature is produced by inverting the `s` of the signature
+         above, thus it is still a mathematically correct one, but since it's not
+         normalized it will get rejected by us */
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4fe83aaf697e6f763e1fc4632bea5420ed7898c87d313e0f5361ae2cb3a4769e35" ).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
+    // g) invalid signature, change a byte
+    let res = verify_sig(
+        hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap() /* public key */, 
+        hex::decode("d1b8ef21eb4182ee270638061063a3f3c16c114e33937f69fb232cc833965a94").unwrap() /* msg digest */, 
+        hex::decode("bf96b99aa49c705c910be33142017c642ff540c76349b9dab72f981fd9347f4f17c55095819089c2e03b9cd415abdf12444e323075d98f31920b9e0f57ec871d" /* signature */).unwrap()
+    );
+    HostError::result_matches_err(res, (ScErrorType::Crypto, ScErrorCode::InvalidInput));
 
     Ok(())
 }
-
-// #[test]
-// fn secp256r1_sig_ver_roundtrip() -> Result<(), HostError> {
-//     let key_bytes = hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721");
-//     let mut signer = p256::ecdsa::SigningKey::from_bytes(&key_bytes.into()).unwrap();
-//     let verifying_key = signer.verifying_key().clone();
-//     let mut msg_hash = [0u8; 32];
-//     rng.fill_bytes(&mut msg_hash);
-//     let sig = signer.sign_prehash(&msg_hash).unwrap();
-//     println!("{signer:?}");
-//     println!("{verifying_key:?}");
-//     // println!("{:?}", sig.to_vec());
-
-//     let host = Host::default();
-//     let res = host.ecdsa_p256_verify_signature(&verifying_key, &Hash(msg_hash), &sig);
-//     println!("{res:?}");
-//     Ok(())
-// }

@@ -37,13 +37,7 @@ fn test_secp256r1_sig_ver_with_sha256_on_msg() -> Result<(), HostError> {
         .unwrap();
         let sig_obj = host.bytes_new_from_slice(&signature.to_bytes())?;
 
-        let res = <Host as VmCallerEnv>::verify_sig_ecdsa_secp256r1(
-            &host,
-            &mut vmcaller,
-            public_key,
-            msg_hash,
-            sig_obj,
-        );
+        let res = host.verify_sig_ecdsa_secp256r1(&mut vmcaller, public_key, msg_hash, sig_obj);
 
         if test_vector.result == &SigVerResult::Ok {
             assert!(res.is_ok())
