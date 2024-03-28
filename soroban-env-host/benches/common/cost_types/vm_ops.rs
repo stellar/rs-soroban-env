@@ -6,7 +6,6 @@ use soroban_env_host::{
     vm::{ParsedModule, VersionedContractCodeCostInputs},
     xdr, Host,
 };
-use std::rc::Rc;
 
 // Protocol 20 coarse cost model.
 pub(crate) struct VmInstantiationMeasure;
@@ -40,10 +39,9 @@ macro_rules! impl_measurement_for_instantiation_cost_type {
                         .unwrap(),
                     )
                 }
-                let module = Rc::new(
+                let module =
                     ParsedModule::new_with_isolated_engine(_host, &wasm, cost_inputs.clone())
-                        .unwrap(),
-                );
+                        .unwrap();
                 VmInstantiationSample {
                     id: Some(id),
                     wasm,

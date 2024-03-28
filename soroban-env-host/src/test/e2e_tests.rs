@@ -1737,3 +1737,69 @@ fn test_classic_account_auth_using_simulation() {
     .unwrap();
     assert!(res.invoke_result.is_ok());
 }
+
+#[cfg(feature = "next")]
+mod cap_54_55_56 {
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    // Test that when running on a protocol that supports the ModuleCache, when
+    // doing work that would be significantly different under cached instantiation,
+    // we get a cost estimate from recording mode that still matches the cost of the
+    // actual execution.
+    #[test]
+    fn test_module_cache_recording_fidelity() {
+        let cd = CreateContractData::new([111; 32], ADD_I32);
+        let mut ledger_info = default_ledger_info();
+        ledger_info.protocol_version = crate::vm::ModuleCache::MIN_LEDGER_VERSION;
+        let host_fn = invoke_contract_host_fn(
+            &cd.contract_address,
+            "add",
+            vec![ScVal::I32(1), ScVal::I32(2)],
+        );
+        let ledger_entries_with_ttl = vec![
+            (
+                cd.wasm_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                cd.contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+        ];
+        let res = invoke_host_function_recording_helper(
+            true,
+            &host_fn,
+            &cd.deployer,
+            None,
+            &ledger_info,
+            ledger_entries_with_ttl.clone(),
+            &prng_seed(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(res.invoke_result.unwrap(), ScVal::I32(3));
+
+        let resources = res.resources;
+        dbg!(&resources);
+        let auth_entries = res.auth;
+
+        let res = invoke_host_function_helper(
+            true,
+            &host_fn,
+            &resources,
+            &cd.deployer,
+            auth_entries,
+            &ledger_info,
+            ledger_entries_with_ttl,
+            &prng_seed(),
+        )
+        .unwrap();
+        assert_eq!(res.invoke_result.unwrap(), ScVal::I32(3));
+        assert_eq!(
+            res.budget.get_cpu_insns_consumed().unwrap(),
+            resources.instructions as u64
+        );
+    }
+}

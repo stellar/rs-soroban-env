@@ -1,5 +1,6 @@
 use crate::{
     err,
+    host::metered_clone::MeteredAlloc,
     meta::{self, get_ledger_protocol_version},
     xdr::{ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
@@ -8,7 +9,7 @@ use crate::{
 use wasmi::{Engine, Module};
 
 use super::{ModuleCache, MAX_VM_ARGS};
-use std::io::Cursor;
+use std::{io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum VersionedContractCodeCostInputs {
@@ -148,19 +149,40 @@ pub struct ParsedModule {
 }
 
 impl ParsedModule {
+    fn should_charge_for_parsing(host: &Host, populating_cache: bool) -> Result<bool, HostError> {
+        // If we _should_ have a module cache, and are in recording mode, and
+        // are instantiating a ParsedModule _outside_ of cache population, then
+        // we should not charge for parsing _yet_. We'll charge later, when the
+        // cache is populated at the end of recording in a fixup pass.
+        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+            if let crate::storage::FootprintMode::Recording(_) = host.try_borrow_storage()?.mode {
+                if populating_cache {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+
     pub fn new(
         host: &Host,
         engine: &Engine,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
-    ) -> Result<Self, HostError> {
-        cost_inputs.charge_for_parsing(host)?;
+        populating_cache: bool,
+    ) -> Result<Rc<Self>, HostError> {
+        if ParsedModule::should_charge_for_parsing(host, populating_cache)? {
+            cost_inputs.charge_for_parsing(host)?;
+        }
         let (module, proto_version) = Self::parse_wasm(host, engine, wasm)?;
-        Ok(Self {
-            module,
-            proto_version,
-            cost_inputs,
-        })
+        Rc::metered_new(
+            Self {
+                module,
+                proto_version,
+                cost_inputs,
+            },
+            host,
+        )
     }
 
     #[cfg(any(test, feature = "testutils"))]
@@ -168,17 +190,20 @@ impl ParsedModule {
         host: &Host,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
-    ) -> Result<Self, HostError> {
+    ) -> Result<Rc<Self>, HostError> {
         use crate::budget::AsBudget;
         let config = crate::vm::get_wasmi_config(host.as_budget())?;
         let engine = Engine::new(&config);
         cost_inputs.charge_for_parsing(host)?;
         let (module, proto_version) = Self::parse_wasm(host, &engine, wasm)?;
-        Ok(Self {
-            module,
-            proto_version,
-            cost_inputs,
-        })
+        Rc::metered_new(
+            Self {
+                module,
+                proto_version,
+                cost_inputs,
+            },
+            host,
+        )
     }
 
     /// Parse the Wasm blob into a [Module] and its protocol number, checking its interface version
