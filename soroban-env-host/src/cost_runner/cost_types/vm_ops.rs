@@ -89,6 +89,7 @@ mod v21 {
                             sample.module.module.engine(),
                             &sample.wasm[..],
                             sample.module.cost_inputs.clone(),
+                            true,
                         )
                         .unwrap(),
                     );

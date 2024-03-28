@@ -337,6 +337,7 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     let source_account: AccountId = host.metered_from_xdr(encoded_source_account.as_ref())?;
     host.set_source_account(source_account)?;
     host.set_ledger_info(ledger_info)?;
+    host.maybe_add_module_cache()?;
     host.set_authorization_entries(auth_entries)?;
     let seed32: [u8; 32] = base_prng_seed.as_ref().try_into().map_err(|_| {
         host.err(
@@ -533,6 +534,19 @@ pub fn invoke_host_function_in_recording_mode(
     let invoke_result = host.invoke_function(host_function);
     let mut contract_events_and_return_value_size = 0_u32;
     if let Ok(res) = &invoke_result {
+        // In "real" enforcing mode, the module cache gets populated before
+        // invocation and then every access is a hit. In recording mode, we
+        // don't know what contracts will be accessed -- to populate the cache
+        // with -- until after invocation, so we still treat every access as a
+        // hit while the invocation is running and then we charge the population
+        // here _after_ the invocation. It's a bit of a hack but produces the
+        // right cost (on success), just in the wrong order. The main
+        // disadvantage is that invocations that return errors will have
+        // observably-different costs than their real invocations would have;
+        // but we assume people don't care a lot about the cost accuracy of
+        // invocations that return errors.
+        host.maybe_add_module_cache()?;
+
         let mut encoded_result_sc_val = vec![];
         metered_write_xdr(&budget, res, &mut encoded_result_sc_val)?;
         contract_events_and_return_value_size = contract_events_and_return_value_size

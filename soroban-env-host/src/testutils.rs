@@ -202,6 +202,7 @@ impl Host {
             max_entry_ttl: 6_312_000,
         })
         .unwrap();
+        host.maybe_add_module_cache().unwrap();
         host
     }
 
@@ -1133,7 +1134,7 @@ pub(crate) mod wasm {
         let (mut me, fid) = fe.finish();
         me.export_func(fid, "test");
         me.define_elem_funcs(&[fid]);
-        me.define_data_segment(0x1234, vec![0; 8]);
+        me.define_data_segment(0x1234, vec![0; 512]);
         me.finish()
     }
 }

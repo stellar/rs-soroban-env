@@ -149,13 +149,31 @@ pub struct ParsedModule {
 }
 
 impl ParsedModule {
+    fn should_charge_for_parsing(host: &Host, populating_cache: bool) -> Result<bool, HostError> {
+        // If we _should_ have a module cache, and are in recording mode, and
+        // are instantiating a ParsedModule _outside_ of cache population, then
+        // we should not charge for parsing _yet_. We'll charge later, when the
+        // cache is populated at the end of recording in a fixup pass.
+        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+            if let crate::storage::FootprintMode::Recording(_) = host.try_borrow_storage()?.mode {
+                if populating_cache {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+
     pub fn new(
         host: &Host,
         engine: &Engine,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
+        populating_cache: bool,
     ) -> Result<Rc<Self>, HostError> {
-        cost_inputs.charge_for_parsing(host)?;
+        if ParsedModule::should_charge_for_parsing(host, populating_cache)? {
+            cost_inputs.charge_for_parsing(host)?;
+        }
         let (module, proto_version) = Self::parse_wasm(host, engine, wasm)?;
         Rc::metered_new(
             Self {
