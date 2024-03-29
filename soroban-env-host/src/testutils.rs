@@ -202,7 +202,6 @@ impl Host {
             max_entry_ttl: 6_312_000,
         })
         .unwrap();
-        host.maybe_add_module_cache().unwrap();
         host
     }
 

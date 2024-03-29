@@ -72,7 +72,6 @@ fn test_host() -> Host {
         ..Default::default()
     })
     .unwrap();
-    host.maybe_add_module_cache().unwrap();
 
     host
 }
@@ -219,6 +218,8 @@ fn create_contract_using_parent_id_test() {
         get_bytes_from_sc_val(&wasm_hash_sc_val).as_slice()
     );
     assert_eq!(child_wasm, get_contract_wasm(&host, wasm_hash.clone()));
+
+    host.maybe_add_module_cache().unwrap();
 
     // Now successfully create the child contract itself.
     host.call(

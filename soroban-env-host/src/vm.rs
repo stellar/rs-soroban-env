@@ -130,6 +130,7 @@ impl Vm {
         host: &Host,
         contract_id: Hash,
         parsed_module: Rc<ParsedModule>,
+        linker: &Linker<Host>,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::instantiate");
 
@@ -191,12 +192,7 @@ impl Vm {
 
         let not_started_instance = {
             let _span0 = tracy_span!("instantiate module");
-            if let Some(linker) = &*host.try_borrow_linker()? {
-                host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
-            } else {
-                let linker = parsed_module.make_linker()?;
-                host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
-            }
+            host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
         };
 
         let instance = host.map_err(
@@ -230,7 +226,12 @@ impl Vm {
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::from_parsed_module");
         VmInstantiationTimer::new(host.clone());
-        Self::instantiate(host, contract_id, parsed_module)
+        if let Some(linker) = &*host.try_borrow_linker()? {
+            Self::instantiate(host, contract_id, parsed_module, linker)
+        } else {
+            let linker = parsed_module.make_linker()?;
+            Self::instantiate(host, contract_id, parsed_module, &linker)
+        }
     }
 
     /// Constructs a new instance of a [Vm] within the provided [Host],
@@ -270,7 +271,8 @@ impl Vm {
         let config = get_wasmi_config(host.as_budget())?;
         let engine = wasmi::Engine::new(&config);
         let parsed_module = Self::parse_module(host, &engine, wasm, cost_inputs)?;
-        Self::instantiate(host, contract_id, parsed_module)
+        let linker = parsed_module.make_linker()?;
+        Self::instantiate(host, contract_id, parsed_module, &linker)
     }
 
     #[cfg(not(any(test, feature = "recording_mode")))]
