@@ -1,6 +1,5 @@
 use crate::{
     err,
-    host::metered_clone::MeteredAlloc,
     meta::{self, get_ledger_protocol_version},
     xdr::{ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
@@ -157,14 +156,11 @@ impl ParsedModule {
     ) -> Result<Rc<Self>, HostError> {
         cost_inputs.charge_for_parsing(host)?;
         let (module, proto_version) = Self::parse_wasm(host, engine, wasm)?;
-        Rc::metered_new(
-            Self {
-                module,
-                proto_version,
-                cost_inputs,
-            },
-            host,
-        )
+        Ok(Rc::new(Self {
+            module,
+            proto_version,
+            cost_inputs,
+        }))
     }
 
     pub fn with_import_symbols<T>(
@@ -197,7 +193,7 @@ impl ParsedModule {
         self.with_import_symbols(|symbols| Host::make_linker(self.module.engine(), symbols))
     }
 
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(feature = "bench")]
     pub fn new_with_isolated_engine(
         host: &Host,
         wasm: &[u8],
@@ -208,14 +204,11 @@ impl ParsedModule {
         let engine = Engine::new(&config);
         cost_inputs.charge_for_parsing(host)?;
         let (module, proto_version) = Self::parse_wasm(host, &engine, wasm)?;
-        Rc::metered_new(
-            Self {
-                module,
-                proto_version,
-                cost_inputs,
-            },
-            host,
-        )
+        Ok(Rc::new(Self {
+            module,
+            proto_version,
+            cost_inputs,
+        }))
     }
 
     /// Parse the Wasm blob into a [Module] and its protocol number, checking its interface version
