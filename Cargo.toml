@@ -35,9 +35,8 @@ wasmparser = "=0.116.1"
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]
 version = "=20.1.0"
-path = "../rs-stellar-xdr"
-# git = "https://github.com/stellar/rs-stellar-xdr"
-# rev = "44b7e2d4cdf27a3611663e82828de56c5274cba0"
+git = "https://github.com/stellar/rs-stellar-xdr"
+rev = "3a001b1fbb20e4cfa2cef2c0cc450564e8528057"
 default-features = false
 
 [workspace.dependencies.wasmi]
