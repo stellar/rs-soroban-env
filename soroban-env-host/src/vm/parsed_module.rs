@@ -84,7 +84,7 @@ impl VersionedContractCodeCostInputs {
                 // the protocol that enabled cached instantiation, the
                 // VmInstantiation cost type was repurposed to only cover the
                 // cost of parsing, so we have to charge the "second half" cost
-                // of instantiaiton separately here.
+                // of instantiation separately here.
                 if _host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
                     _host.charge_budget(
                         ContractCostType::VmCachedInstantiation,

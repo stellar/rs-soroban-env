@@ -3,13 +3,16 @@ use crate::simulation::{
     ExtendTtlOpSimulationResult, LedgerEntryDiff, RestoreOpSimulationResult,
     SimulationAdjustmentConfig, SimulationAdjustmentFactor,
 };
-use crate::testutils::{ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource};
+use crate::testutils::{
+    ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource, CURRENT_PROTOCOL_VERSION,
+};
 use crate::NetworkConfig;
 use pretty_assertions::assert_eq;
 use soroban_env_host::e2e_testutils::{
     account_entry, auth_contract_invocation, bytes_sc_val, create_contract_auth,
     default_ledger_info, get_account_id, get_contract_id_preimage, get_wasm_hash, get_wasm_key,
-    ledger_entry, upload_wasm_host_fn, wasm_entry, AuthContractInvocationNode, CreateContractData,
+    ledger_entry, upload_wasm_host_fn, wasm_entry, wasm_entry_non_validated,
+    AuthContractInvocationNode, CreateContractData,
 };
 use soroban_env_host::fees::{FeeConfiguration, RentFeeConfiguration};
 use soroban_env_host::xdr::{
@@ -125,6 +128,12 @@ fn test_simulate_upload_wasm() {
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
 
+    let (expected_instructions, expected_write_bytes, expected_resource_fee, expected_mem_bytes) =
+        if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
+            (1505493, 636, 33063, 752745)
+        } else {
+            (1644789, 684, 35548, 822393)
+        };
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -134,15 +143,15 @@ fn test_simulate_upload_wasm() {
                     read_only: Default::default(),
                     read_write: vec![get_wasm_key(ADD_I32)].try_into().unwrap()
                 },
-                instructions: 1505493,
+                instructions: expected_instructions,
                 read_bytes: 0,
-                write_bytes: 636,
+                write_bytes: expected_write_bytes,
             },
-            resource_fee: 33063,
+            resource_fee: expected_resource_fee,
         })
     );
-    assert_eq!(res.simulated_instructions, 1505493);
-    assert_eq!(res.simulated_memory, 752745);
+    assert_eq!(res.simulated_instructions, expected_instructions);
+    assert_eq!(res.simulated_memory, expected_mem_bytes);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -179,6 +188,12 @@ fn test_simulate_upload_wasm() {
         res.simulated_instructions
     );
     assert_eq!(res_with_adjustments.simulated_memory, res.simulated_memory);
+    let expected_adjusted_resource_fee = if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION
+    {
+        133367
+    } else {
+        135867
+    };
     assert_eq!(
         res_with_adjustments.transaction_data,
         Some(SorobanTransactionData {
@@ -188,11 +203,11 @@ fn test_simulate_upload_wasm() {
                     read_only: Default::default(),
                     read_write: vec![get_wasm_key(ADD_I32)].try_into().unwrap()
                 },
-                instructions: (1505493.0 * 1.1) as u32,
+                instructions: (expected_instructions as f64 * 1.1) as u32,
                 read_bytes: 0,
-                write_bytes: 636 + 300,
+                write_bytes: expected_write_bytes + 300,
             },
-            resource_fee: 133367,
+            resource_fee: expected_adjusted_resource_fee,
         })
     );
 }
@@ -311,7 +326,12 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-
+    let (expected_instructions, expected_read_bytes, expected_resource_fee, expected_mem_bytes) =
+        if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
+            (929703, 636, 6490, 464846)
+        } else {
+            (1014327, 684, 6577, 507158)
+        };
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -321,15 +341,15 @@ fn test_simulate_create_contract() {
                     read_only: vec![contract.wasm_key.clone()].try_into().unwrap(),
                     read_write: vec![contract.contract_key.clone()].try_into().unwrap()
                 },
-                instructions: 929703,
-                read_bytes: 636,
+                instructions: expected_instructions,
+                read_bytes: expected_read_bytes,
                 write_bytes: 104,
             },
-            resource_fee: 6490,
+            resource_fee: expected_resource_fee,
         })
     );
-    assert_eq!(res.simulated_instructions, 929703);
-    assert_eq!(res.simulated_memory, 464846);
+    assert_eq!(res.simulated_instructions, expected_instructions);
+    assert_eq!(res.simulated_memory, expected_mem_bytes);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -457,6 +477,13 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
+    let (expected_instructions, expected_read_bytes, expected_resource_fee, expected_mem_bytes) =
+        if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
+            (38210172, 7492, 39363, 19104958)
+        } else {
+            (41268119, 7540, 42423, 20633919)
+        };
+
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -481,15 +508,15 @@ fn test_simulate_invoke_contract_with_auth() {
                     .try_into()
                     .unwrap()
                 },
-                instructions: 38210172,
-                read_bytes: 7492,
+                instructions: expected_instructions,
+                read_bytes: expected_read_bytes,
                 write_bytes: 76,
             },
-            resource_fee: 39363,
+            resource_fee: expected_resource_fee,
         })
     );
-    assert_eq!(res.simulated_instructions, 38210172);
-    assert_eq!(res.simulated_memory, 19104958);
+    assert_eq!(res.simulated_instructions, expected_instructions);
+    assert_eq!(res.simulated_memory, expected_mem_bytes);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -515,7 +542,7 @@ fn test_simulate_extend_ttl_op() {
         ),
         (contract_entry, Some(ledger_info.sequence_number + 500_000)),
         (
-            wasm_entry(b"123"),
+            wasm_entry_non_validated(b"123"),
             Some(ledger_info.sequence_number + 1_000_000),
         ),
         (temp_entry(b"321"), Some(ledger_info.sequence_number + 100)),
@@ -572,6 +599,12 @@ fn test_simulate_extend_ttl_op() {
         100_001,
     )
     .unwrap();
+    let (expected_read_bytes, expected_resource_fee) =
+        if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
+            (7712, 339313)
+        } else {
+            (7808, 341657)
+        };
     assert_eq!(
         extension_for_some_entries,
         ExtendTtlOpSimulationResult {
@@ -591,10 +624,10 @@ fn test_simulate_extend_ttl_op() {
                         read_write: Default::default()
                     },
                     instructions: 0,
-                    read_bytes: 7712,
+                    read_bytes: expected_read_bytes,
                     write_bytes: 0,
                 },
-                resource_fee: 339313,
+                resource_fee: expected_resource_fee,
             }
         }
     );
@@ -608,6 +641,12 @@ fn test_simulate_extend_ttl_op() {
         1_000_001,
     )
     .unwrap();
+    let (expected_read_bytes, expected_resource_fee) =
+        if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
+            (7944, 3697000)
+        } else {
+            (8040, 3741533)
+        };
     assert_eq!(
         extension_for_all_entries,
         ExtendTtlOpSimulationResult {
@@ -619,10 +658,10 @@ fn test_simulate_extend_ttl_op() {
                         read_write: Default::default()
                     },
                     instructions: 0,
-                    read_bytes: 7944,
+                    read_bytes: expected_read_bytes,
                     write_bytes: 0,
                 },
-                resource_fee: 3697000,
+                resource_fee: expected_resource_fee,
             }
         }
     );
@@ -652,6 +691,11 @@ fn test_simulate_extend_ttl_op() {
         1_000_001,
     )
     .unwrap();
+    let expected_resource_fee = if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
+        5545310
+    } else {
+        5612108
+    };
     assert_eq!(
         extension_for_all_entries_with_adjustment,
         ExtendTtlOpSimulationResult {
@@ -663,10 +707,10 @@ fn test_simulate_extend_ttl_op() {
                         .resources
                         .footprint,
                     instructions: 0,
-                    read_bytes: (7944.0 * 1.2) as u32,
+                    read_bytes: (expected_read_bytes as f64 * 1.2) as u32,
                     write_bytes: 0,
                 },
-                resource_fee: 5545310,
+                resource_fee: expected_resource_fee,
             }
         }
     );
@@ -688,7 +732,7 @@ fn test_simulate_restore_op() {
         ),
         (contract_entry, Some(ledger_info.sequence_number + 500_000)),
         (
-            wasm_entry(b"123"),
+            wasm_entry_non_validated(b"123"),
             Some(ledger_info.sequence_number + 1_000_000),
         ),
     ];
@@ -707,6 +751,7 @@ fn test_simulate_restore_op() {
         &keys,
     )
     .unwrap();
+
     assert_eq!(
         no_op_restoration,
         RestoreOpSimulationResult {
@@ -736,6 +781,12 @@ fn test_simulate_restore_op() {
         &keys,
     )
     .unwrap();
+    let (expected_rw_bytes, expected_resource_fee) =
+        if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
+            (7568, 370692)
+        } else {
+            (7664, 375389)
+        };
     assert_eq!(
         restoration_for_some_entries,
         RestoreOpSimulationResult {
@@ -750,10 +801,10 @@ fn test_simulate_restore_op() {
                             .unwrap()
                     },
                     instructions: 0,
-                    read_bytes: 7568,
-                    write_bytes: 7568,
+                    read_bytes: expected_rw_bytes,
+                    write_bytes: expected_rw_bytes,
                 },
-                resource_fee: 370692,
+                resource_fee: expected_resource_fee,
             }
         }
     );
@@ -767,6 +818,12 @@ fn test_simulate_restore_op() {
         &keys,
     )
     .unwrap();
+    let (expected_rw_bytes, expected_resource_fee) =
+        if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
+            (7728, 378736)
+        } else {
+            (7824, 383433)
+        };
     assert_eq!(
         extension_for_all_entries,
         RestoreOpSimulationResult {
@@ -778,10 +835,10 @@ fn test_simulate_restore_op() {
                         read_write: keys.clone().tap_mut(|v| v.sort()).try_into().unwrap()
                     },
                     instructions: 0,
-                    read_bytes: 7728,
-                    write_bytes: 7728,
+                    read_bytes: expected_rw_bytes,
+                    write_bytes: expected_rw_bytes,
                 },
-                resource_fee: 378736,
+                resource_fee: expected_resource_fee,
             }
         }
     );
@@ -794,6 +851,12 @@ fn test_simulate_restore_op() {
         &keys,
     )
     .unwrap();
+    let expected_adjusted_resource_fee = if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION
+    {
+        567785
+    } else {
+        574827
+    };
     assert_eq!(
         extension_for_all_entries_with_adjustment,
         RestoreOpSimulationResult {
@@ -805,10 +868,10 @@ fn test_simulate_restore_op() {
                         read_write: keys.clone().tap_mut(|v| v.sort()).try_into().unwrap()
                     },
                     instructions: 0,
-                    read_bytes: (7728.0 * 1.2) as u32,
-                    write_bytes: (7728.0 * 1.3) as u32,
+                    read_bytes: (expected_rw_bytes as f64 * 1.2) as u32,
+                    write_bytes: (expected_rw_bytes as f64 * 1.3) as u32,
                 },
-                resource_fee: 567785,
+                resource_fee: expected_adjusted_resource_fee,
             }
         }
     );

@@ -14,6 +14,14 @@ use soroban_env_host::{
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+/// Returns the 'current' protocol for the simulation.
+/// Unlike the Soroban host that has to keep the logic compatible with
+/// every ledger protocol version, simulation is only concerned about
+/// the current ledger protocol and the next one. Thus, the code that
+/// depends on the certain behavior of the current version can be
+/// safely removed as soon as the current protocol has been bumped.
+pub const CURRENT_PROTOCOL_VERSION: u32 = 20;
+
 pub struct MockSnapshotSource {
     map: BTreeMap<Rc<LedgerKey>, EntryWithLiveUntil>,
     current_ledger_seq: u32,

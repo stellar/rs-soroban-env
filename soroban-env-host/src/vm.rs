@@ -246,11 +246,11 @@ impl Vm {
 
     /// Constructs a new instance of a [Vm] within the provided [Host],
     /// establishing a new execution context for a contract identified by
-    /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
+    /// `contract_id` with Wasm bytecode provided in `module_wasm_code`.
     ///
     /// This function performs several steps:
     ///
-    ///   - Parses and performs WASM validation on the module.
+    ///   - Parses and performs Wasm validation on the module.
     ///   - Checks that the module contains an [meta::INTERFACE_VERSION] that
     ///     matches the host.
     ///   - Checks that the module has no floating point code or `start`
@@ -260,8 +260,9 @@ impl Vm {
     ///   - Looks up and caches its linear memory export named `memory`
     ///     if it exists.
     ///
-    /// This method is called automatically as part of [Host::invoke_function]
-    /// and does not usually need to be called from outside the crate.
+    /// With the introduction of the granular cost inputs this method
+    /// should only be used for the one-off full parses of the new Wasms
+    /// during the initial upload verification.
 
     pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Rc<Self>, HostError> {
         let cost_inputs = VersionedContractCodeCostInputs::V0 {

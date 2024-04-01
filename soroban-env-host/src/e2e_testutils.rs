@@ -1,4 +1,5 @@
-use crate::xdr::ContractCodeEntryExt;
+use crate::vm::ModuleCache;
+use crate::vm::ParsedModule;
 use crate::xdr::{
     AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractDataDurability,
     ContractDataEntry, ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress,
@@ -9,8 +10,11 @@ use crate::xdr::{
     SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Thresholds,
     Uint256, WriteXdr,
 };
+use crate::xdr::{ContractCodeEntryExt, ContractCodeEntryV1};
 use crate::LedgerInfo;
 use sha2::{Digest, Sha256};
+use std::env;
+use std::str::FromStr;
 
 pub const DEFAULT_LEDGER_SEQ: u32 = 1_000_000;
 pub const DEFAULT_NETWORK_ID: [u8; 32] = [5; 32];
@@ -46,31 +50,60 @@ pub fn bytes_sc_val(bytes: &[u8]) -> ScVal {
     ScVal::Bytes(ScBytes(bytes.try_into().unwrap()))
 }
 
-pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
+/// Helper for creating a non-validated Wasm entry without refined
+/// cost inputs.
+/// Useful for tests that don't care about the Wasm entry contents.
+pub fn wasm_entry_non_validated(wasm: &[u8]) -> LedgerEntry {
+    let ext = ContractCodeEntryExt::V0;
+
     ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
-        ext: ContractCodeEntryExt::V0,
+        ext,
         hash: get_wasm_hash(wasm).try_into().unwrap(),
         code: wasm.try_into().unwrap(),
     }))
 }
 
-pub fn wasm_entry_with_refined_contract_cost_inputs(wasm: &[u8]) -> LedgerEntry {
-    use crate::xdr::ContractCodeEntryV1;
-    let host = crate::Host::default();
-    ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
-        ext: ContractCodeEntryExt::V1(ContractCodeEntryV1 {
-            ext: ExtensionPoint::V0,
-            cost_inputs: crate::vm::ParsedModule::extract_refined_contract_cost_inputs(&host, wasm)
+/// Creates a ContractCode ledger entry containing the provided Wasm blob.
+/// The entry has the most 'up-to-date' contents possible (such as refined costs
+/// in protocol 21).
+pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
+    wasm_entry_with_refined_contract_cost_inputs(
+        wasm,
+        e2e_test_protocol_version() >= ModuleCache::MIN_LEDGER_VERSION,
+    )
+}
+
+pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
+    wasm: &[u8],
+    _add_refined_cost_inputs: bool,
+) -> LedgerEntry {
+    let ext = if !_add_refined_cost_inputs {
+        ContractCodeEntryExt::V0
+    } else {
+        let dummy_host = crate::Host::test_host();
+        dummy_host.set_ledger_info(default_ledger_info()).unwrap();
+        ContractCodeEntryExt::V1(ContractCodeEntryV1 {
+            cost_inputs: ParsedModule::extract_refined_contract_cost_inputs(&dummy_host, wasm)
                 .unwrap(),
-        }),
+            ext: ExtensionPoint::V0,
+        })
+    };
+    ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
+        ext,
         hash: get_wasm_hash(wasm).try_into().unwrap(),
         code: wasm.try_into().unwrap(),
     }))
+}
+
+pub fn e2e_test_protocol_version() -> u32 {
+    env::var("TEST_PROTOCOL")
+        .map(|v| u32::from_str(&v).unwrap())
+        .unwrap_or(20)
 }
 
 pub fn default_ledger_info() -> LedgerInfo {
     LedgerInfo {
-        protocol_version: 20,
+        protocol_version: e2e_test_protocol_version(),
         sequence_number: DEFAULT_LEDGER_SEQ,
         timestamp: 12345678,
         network_id: DEFAULT_NETWORK_ID,
@@ -94,7 +127,11 @@ pub struct CreateContractData {
 
 impl CreateContractData {
     pub fn new(salt: [u8; 32], wasm: &[u8]) -> Self {
-        Self::new_with_refined_contract_cost_inputs(salt, wasm, false)
+        Self::new_with_refined_contract_cost_inputs(
+            salt,
+            wasm,
+            e2e_test_protocol_version() >= ModuleCache::MIN_LEDGER_VERSION,
+        )
     }
     pub fn new_with_refined_contract_cost_inputs(
         salt: [u8; 32],
@@ -131,11 +168,7 @@ impl CreateContractData {
             }),
         }));
 
-        let wasm_entry = if refined_cost_inputs {
-            wasm_entry_with_refined_contract_cost_inputs(wasm)
-        } else {
-            wasm_entry(wasm)
-        };
+        let wasm_entry = wasm_entry_with_refined_contract_cost_inputs(wasm, refined_cost_inputs);
 
         Self {
             deployer,
