@@ -770,8 +770,9 @@ mod cap_54_55_56 {
         let realhost = host.clone();
         drop(host);
         let (storage, _events) = realhost.try_finish()?;
+        let storage = Storage::with_enforcing_footprint_and_map(storage.footprint, storage.map);
 
-        // Phase 2: build new host with previous ledger output as storage, call contract. Possibly on new protocol.
+        // Phase 2: build new host with previous ledger output as storage. Possibly on new protocol.
         let host = observed_test_host_with_storage_and_budget(
             second_hostname,
             second_proto,

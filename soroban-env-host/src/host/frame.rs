@@ -195,7 +195,9 @@ impl Host {
                 .maybe_emulate_authentication(self)?;
             // See explanation for this line in [crate::vm::Vm::parse_module] -- it exists
             // to add-back module-parsing costs that were suppressed during the invocation.
-            self.rebuild_module_cache()?;
+            if let crate::storage::FootprintMode::Recording(_) = self.try_borrow_storage()?.mode {
+                self.rebuild_module_cache()?;
+            }
         }
         let mut auth_snapshot = None;
         if let Some(rp) = orp {
