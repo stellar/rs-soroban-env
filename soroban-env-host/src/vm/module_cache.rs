@@ -46,6 +46,16 @@ impl ModuleCache {
                     if let LedgerEntryData::ContractCode(ContractCodeEntry { code, hash, ext }) =
                         &e.data
                     {
+                        // We allow empty contracts in testing mode; they exist
+                        // to exercise as much of the contract-code-storage
+                        // infrastructure as possible, while still redirecting
+                        // the actual execution into a `ContractFunctionSet`.
+                        // They should never be called, so we do not have to go
+                        // as far as making a fake `ParsedModule` for them.
+                        if cfg!(any(test, feature = "testutils")) && code.as_slice().is_empty() {
+                            continue;
+                        }
+
                         let code_cost_inputs = match ext {
                             ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
                                 wasm_bytes: code.len(),
