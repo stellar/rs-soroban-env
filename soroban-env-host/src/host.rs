@@ -361,7 +361,7 @@ impl Host {
         }))
     }
 
-    pub fn maybe_add_module_cache(&self) -> Result<(), HostError> {
+    pub fn build_module_cache_if_needed(&self) -> Result<(), HostError> {
         if cfg!(feature = "next")
             && self.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
             && self.try_borrow_module_cache()?.is_none()
@@ -370,6 +370,16 @@ impl Host {
             let linker = cache.make_linker(self)?;
             *self.try_borrow_module_cache_mut()? = Some(cache);
             *self.try_borrow_linker_mut()? = Some(linker);
+        }
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn rebuild_module_cache(&self) -> Result<(), HostError> {
+        if cfg!(feature = "next") {
+            *self.try_borrow_module_cache_mut()? = None;
+            *self.try_borrow_linker_mut()? = None;
+            self.build_module_cache_if_needed()?;
         }
         Ok(())
     }

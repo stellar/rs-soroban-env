@@ -365,6 +365,12 @@ impl Default for BudgetImpl {
                     cpu.const_term = 451626;
                     cpu.lin_term = ScaledU64(45405);
                 }
+                #[cfg(not(feature = "next"))]
+                ContractCostType::VmCachedInstantiation => {
+                    cpu.const_term = 451626;
+                    cpu.lin_term = ScaledU64(45405);
+                }
+                #[cfg(feature = "next")]
                 ContractCostType::VmCachedInstantiation => {
                     cpu.const_term = 41142;
                     cpu.lin_term = ScaledU64(634);
@@ -569,6 +575,12 @@ impl Default for BudgetImpl {
                     mem.const_term = 130065;
                     mem.lin_term = ScaledU64(5064);
                 }
+                #[cfg(not(feature = "next"))]
+                ContractCostType::VmCachedInstantiation => {
+                    mem.const_term = 130065;
+                    mem.lin_term = ScaledU64(5064);
+                }
+                #[cfg(feature = "next")]
                 ContractCostType::VmCachedInstantiation => {
                     mem.const_term = 69472;
                     mem.lin_term = ScaledU64(1217);

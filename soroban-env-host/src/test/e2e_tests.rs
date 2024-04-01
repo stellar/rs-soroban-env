@@ -99,7 +99,7 @@ fn sign_auth_entry(
     match &mut out.credentials {
         SorobanCredentials::SourceAccount => {}
         SorobanCredentials::Address(creds) => {
-            let dummy_host = Host::test_host();
+            let dummy_host = Host::test_host_with_prng();
             let signature_payload_preimage =
                 HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
                     network_id: ledger_info.network_id.try_into().unwrap(),

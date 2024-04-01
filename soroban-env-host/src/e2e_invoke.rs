@@ -337,7 +337,6 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     let source_account: AccountId = host.metered_from_xdr(encoded_source_account.as_ref())?;
     host.set_source_account(source_account)?;
     host.set_ledger_info(ledger_info)?;
-    host.maybe_add_module_cache()?;
     host.set_authorization_entries(auth_entries)?;
     let seed32: [u8; 32] = base_prng_seed.as_ref().try_into().map_err(|_| {
         host.err(

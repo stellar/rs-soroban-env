@@ -108,7 +108,7 @@ fn test_event_rollback() -> Result<(), HostError> {
 
 #[test]
 fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
-    let host = observe_host!(Host::test_host());
+    let host = observe_host!(Host::test_host_with_prng());
     let dummy_id = [0; 32];
     let ce = InternalContractEvent {
         type_: ContractEventType::Contract,
@@ -148,7 +148,7 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
         args,
     });
 
-    let host = observe_host!(Host::test_host());
+    let host = observe_host!(Host::test_host_with_prng());
     let _ = host
         .clone()
         .test_budget(100000, 100000)
@@ -193,7 +193,7 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_off() -> Result<(), 
     // DEBUG mode OFF
 
     // NB: We don't observe here since the test is sensitive to shadow budget.
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     let budget = host.as_budget().clone();
     budget.reset_default()?;
     let evts = log_some_diagnostics(host)?;
@@ -211,7 +211,7 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_sufficient_bu
     // DEBUG mode ON, budget sufficient
 
     // NB: We don't observe here since the test is sensitive to shadow budget.
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     host.enable_debug()?;
     let budget = host.as_budget().clone();
     budget.reset_default()?;
@@ -230,7 +230,7 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_
     // DEBUG mode ON, budget insufficient
 
     // NB: We don't observe here since the test is sensitive to shadow budget.
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     host.enable_debug()?;
     let budget = host.as_budget().clone();
     budget.reset_default()?;
@@ -252,7 +252,7 @@ fn test_diagnostic_events_do_not_affect_metering_with_debug_on_and_insufficient_
 // diagnostic events for any failed borrows. We actually don't want that to
 // happen, we want failed borrows from the tracing subsystem to be silent.
 fn test_observation_does_not_emit_diagnostic_events_from_failed_borrows() -> Result<(), HostError> {
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     let obs_host = observe_host!(host.clone());
     host.enable_debug()?;
     let storage = host.try_borrow_storage_mut()?;
@@ -267,7 +267,7 @@ fn test_observation_does_not_emit_diagnostic_events_from_failed_borrows() -> Res
 
 #[test]
 fn nonexistent_topic_obj_handle() -> Result<(), HostError> {
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     let data = Val::from_void().to_val();
     let topics = unsafe { VecObject::from_handle(123) }; // non-existent handle
     let res = host.contract_event(topics, data);
@@ -282,7 +282,7 @@ fn nonexistent_topic_obj_handle() -> Result<(), HostError> {
 fn too_many_event_topics() -> Result<(), HostError> {
     let topics: Vec<_> = (0..0x00FFFFFF).map(|u| Val::from_u32(u).to_val()).collect();
     // We don't observe this test: it makes way too big a trace.
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     let budget = host.as_budget().clone();
     budget.reset_unlimited()?;
     let topics = host.vec_new_from_slice(topics.as_slice())?;
@@ -306,7 +306,7 @@ fn too_many_event_topics() -> Result<(), HostError> {
 
 #[test]
 fn too_big_event_topic() -> Result<(), HostError> {
-    let host = observe_host!(Host::test_host());
+    let host = observe_host!(Host::test_host_with_prng());
     let budget = host.as_budget().clone();
     budget.reset_unlimited()?;
     let bytes = host.bytes_new_from_slice(&[0; 0x0FFFFFFF])?;
@@ -326,7 +326,7 @@ fn too_big_event_topic() -> Result<(), HostError> {
 }
 #[test]
 fn too_big_event_data() -> Result<(), HostError> {
-    let host = observe_host!(Host::test_host());
+    let host = observe_host!(Host::test_host_with_prng());
     let budget = host.as_budget().clone();
     budget.reset_unlimited()?;
     let bytes = host.bytes_new_from_slice(&[0; 0x0FFFFFFF])?;
@@ -348,7 +348,7 @@ fn too_big_event_data() -> Result<(), HostError> {
 #[test]
 fn too_many_events_in_loop() -> Result<(), HostError> {
     // We don't observe this test: it makes way too big a trace.
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     let budget = host.as_budget().clone();
     budget.reset_unlimited()?;
     let topics = host.vec_new_from_slice(&[Val::from_u32(0).to_val()])?;

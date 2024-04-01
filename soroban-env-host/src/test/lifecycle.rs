@@ -219,8 +219,6 @@ fn create_contract_using_parent_id_test() {
     );
     assert_eq!(child_wasm, get_contract_wasm(&host, wasm_hash.clone()));
 
-    host.maybe_add_module_cache().unwrap();
-
     // Now successfully create the child contract itself.
     host.call(
         parent_contract_address,
@@ -756,7 +754,6 @@ mod cap_54_55_56 {
             protocol_version: proto,
             ..Default::default()
         })?;
-        host.maybe_add_module_cache()?;
         Ok(host)
     }
 
@@ -1009,6 +1006,8 @@ mod cap_54_55_56 {
             V_OLD,
         )?
         .0;
+        // force a module-cache build (this normally happens on first VM call)
+        host.build_module_cache_if_needed()?;
         let module_cache = host.try_borrow_module_cache()?;
         assert!(module_cache.is_none());
         Ok(())
@@ -1023,6 +1022,8 @@ mod cap_54_55_56 {
             "test_v_new_module_cache_check",
             V_NEW,
         )?;
+        // force a module-cache build (this normally happens on first VM call)
+        host.build_module_cache_if_needed()?;
         let wasm = get_contract_wasm_ref(&host, contract_id);
         let module_cache = host.try_borrow_module_cache()?;
         if let Some(module_cache) = &*module_cache {

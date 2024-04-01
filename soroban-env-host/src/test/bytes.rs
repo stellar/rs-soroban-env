@@ -267,7 +267,7 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 #[test]
 fn arbitrary_xdr_roundtrips() -> Result<(), HostError> {
     const ITERATIONS: u32 = 50_000;
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     host.budget_ref().reset_unlimited().unwrap();
 
     let mut successes = 0;

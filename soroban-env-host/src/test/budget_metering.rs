@@ -11,7 +11,7 @@ use soroban_test_wasms::VEC;
 
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
-    let host = observe_host!(Host::test_host());
+    let host = observe_host!(Host::test_host_with_prng());
     let _ = host.clone().test_budget(100_000, 100_000).enable_model(
         ContractCostType::MemCpy,
         1,
@@ -170,7 +170,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
 
 #[test]
 fn metered_xdr() -> Result<(), HostError> {
-    let host = Host::test_host()
+    let host = Host::test_host_with_prng()
         .test_budget(100_000, 100_000)
         .enable_model(ContractCostType::ValSer, 0, 10, 0, 1)
         .enable_model(ContractCostType::ValDeser, 0, 10, 0, 1);
@@ -210,10 +210,9 @@ fn metered_xdr() -> Result<(), HostError> {
 
 #[test]
 fn metered_xdr_out_of_budget() -> Result<(), HostError> {
-    let host =
-        Host::test_host()
-            .test_budget(10, 10)
-            .enable_model(ContractCostType::ValSer, 0, 10, 0, 1);
+    let host = Host::test_host_with_prng()
+        .test_budget(10, 10)
+        .enable_model(ContractCostType::ValSer, 0, 10, 0, 1);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -236,7 +235,7 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
 
 #[test]
 fn map_insert_key_vec_obj() -> Result<(), HostError> {
-    let mut host = Host::test_host().test_budget(1000, 1000);
+    let mut host = Host::test_host_with_prng().test_budget(1000, 1000);
     let mut m = host.map_new()?;
     let k0 = host.test_vec_obj(&[2, 3])?;
     let v0: Val = 6_u32.into();
@@ -274,7 +273,7 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
 
 #[test]
 fn test_recursive_type_clone() -> Result<(), HostError> {
-    let host = Host::test_host()
+    let host = Host::test_host_with_prng()
         .test_budget(100000, 100000)
         .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
         .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
