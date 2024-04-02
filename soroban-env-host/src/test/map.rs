@@ -490,6 +490,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
     const TOO_BIG: u32 = 1_000_000;
     let wasm_long =
         wasm::wasm_module_with_large_map_from_linear_memory(TOO_BIG, U32Val::from(7).to_val());
+    host.clear_module_cache()?;
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
     host.budget_ref().reset_default()?;

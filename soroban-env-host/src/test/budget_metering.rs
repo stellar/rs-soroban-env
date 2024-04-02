@@ -370,30 +370,35 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(1)),
     ];
 
-    #[cfg(feature="next")]
-    let tracker: Vec<(u64, Option<u64>)> = tracker.into_iter().chain(vec![
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-
-        (1, None),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, None),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-        (1, Some(1)),
-    ].into_iter()).collect();
+    #[cfg(feature = "next")]
+    let tracker: Vec<(u64, Option<u64>)> = tracker
+        .into_iter()
+        .chain(
+            vec![
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, None),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, None),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+                (1, Some(1)),
+            ]
+            .into_iter(),
+        )
+        .collect();
 
     for (ty, &(iterations, input)) in tracker.iter().enumerate() {
         host.with_budget(|b| b.bulk_charge(ContractCostType::VARIANTS[ty], iterations, input))?;
