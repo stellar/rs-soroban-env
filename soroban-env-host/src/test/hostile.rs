@@ -526,18 +526,19 @@ fn excessive_logging() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+    host.switch_to_enforcing_storage()?;
 
     #[cfg(feature = "next")]
     let expected_budget = expect![[r#"
         =======================================================
-        Cpu limit: 2000000; used: 214592
-        Mem limit: 500000; used: 166740
+        Cpu limit: 2000000; used: 212908
+        Mem limit: 500000; used: 166460
         =======================================================
         CostType                 cpu_insns      mem_bytes      
         WasmInsnExec             300            0              
-        MemAlloc                 16191          67320          
-        MemCpy                   2836           0              
-        MemCmp                   696            0              
+        MemAlloc                 15292          67040          
+        MemCpy                   2331           0              
+        MemCmp                   416            0              
         DispatchHostFunction     310            0              
         VisitObject              244            0              
         ValSer                   0              0              
@@ -617,6 +618,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     // moderate logging
     {
+        host.clear_module_cache()?;
         host.budget_ref().reset_limits(2_000_000, 500_000)?;
         let res = host.call(
             contract_id_obj,
