@@ -461,6 +461,14 @@ impl Host {
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
+    pub fn switch_to_enforcing_storage(&self) -> Result<(), HostError> {
+        self.with_mut_storage(|storage| {
+            storage.mode = crate::storage::FootprintMode::Enforcing;
+            Ok(())
+        })
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
     pub fn switch_to_recording_auth(&self, disable_non_root_auth: bool) -> Result<(), HostError> {
         *self.try_borrow_authorization_manager_mut()? =
             AuthorizationManager::new_recording(disable_non_root_auth);
