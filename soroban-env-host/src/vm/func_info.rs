@@ -1,7 +1,7 @@
 use super::dispatch;
 use crate::Host;
 use soroban_env_common::call_macro_with_all_host_functions;
-use wasmi::{Func, Store};
+use wasmi::{errors::LinkerError, Linker};
 
 pub(crate) struct HostFuncInfo {
     /// String name of the WASM module this host function is importable from.
@@ -15,10 +15,10 @@ pub(crate) struct HostFuncInfo {
     #[allow(dead_code)]
     pub(crate) arity: u32,
 
-    /// Function that takes a wasmi::Store and _wraps_ a dispatch function
+    /// Function that takes a wasmi::Linker and adds a dispatch function
     /// for this host function, with the specific type of the dispatch function,
-    /// into a Func in the Store.
-    pub(crate) wrap: fn(&mut Store<Host>) -> Func,
+    /// into a Func in the Linker.
+    pub(crate) wrap: fn(&mut Linker<Host>) -> Result<&mut Linker<Host>, LinkerError>,
 
     /// Minimal supported protocol version of this host function
     pub(crate) min_proto: Option<u32>,
@@ -45,7 +45,7 @@ macro_rules! host_function_info_helper {
             mod_str: $mod_str,
             fn_str: $fn_id,
             arity: fn_arity!($args),
-            wrap: |store| Func::wrap(store, dispatch::$func_id),
+            wrap: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::$func_id),
             min_proto: Some($min_proto),
             max_proto: Some($max_proto),
         }
@@ -55,7 +55,7 @@ macro_rules! host_function_info_helper {
             mod_str: $mod_str,
             fn_str: $fn_id,
             arity: fn_arity!($args),
-            wrap: |store| Func::wrap(store, dispatch::$func_id),
+            wrap: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::$func_id),
             min_proto: Some($min_proto),
             max_proto: None,
         }
@@ -65,7 +65,7 @@ macro_rules! host_function_info_helper {
             mod_str: $mod_str,
             fn_str: $fn_id,
             arity: fn_arity!($args),
-            wrap: |store| Func::wrap(store, dispatch::$func_id),
+            wrap: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::$func_id),
             min_proto: None,
             max_proto: Some($max_proto),
         }
@@ -75,7 +75,7 @@ macro_rules! host_function_info_helper {
             mod_str: $mod_str,
             fn_str: $fn_id,
             arity: fn_arity!($args),
-            wrap: |store| Func::wrap(store, dispatch::$func_id),
+            wrap: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::$func_id),
             min_proto: None,
             max_proto: None,
         }

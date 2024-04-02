@@ -217,6 +217,7 @@ fn contract_failure_with_debug_on_off_affects_no_metering() -> Result<(), HostEr
 
     let invoke_cross_contract_indirect_with_err = || -> Result<(u64, u64, u64, u64), HostError> {
         // try call -- add will trap, and add_with will trap, but we will get an error
+        host.rebuild_module_cache()?;
         host.as_budget().reset_default()?;
         let res = host.try_call(id0_obj, sym, args);
         HostError::result_matches_err(

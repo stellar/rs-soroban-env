@@ -58,6 +58,21 @@ pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
     }))
 }
 
+#[cfg(feature = "next")]
+pub fn wasm_entry_with_refined_contract_cost_inputs(wasm: &[u8]) -> LedgerEntry {
+    use crate::xdr::ContractCodeEntryV1;
+    let host = crate::Host::default();
+    ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
+        ext: ContractCodeEntryExt::V1(ContractCodeEntryV1 {
+            ext: ExtensionPoint::V0,
+            cost_inputs: crate::vm::ParsedModule::extract_refined_contract_cost_inputs(&host, wasm)
+                .unwrap(),
+        }),
+        hash: get_wasm_hash(wasm).try_into().unwrap(),
+        code: wasm.try_into().unwrap(),
+    }))
+}
+
 pub fn default_ledger_info() -> LedgerInfo {
     LedgerInfo {
         protocol_version: 20,
@@ -84,6 +99,13 @@ pub struct CreateContractData {
 
 impl CreateContractData {
     pub fn new(salt: [u8; 32], wasm: &[u8]) -> Self {
+        Self::new_with_refined_contract_cost_inputs(salt, wasm, false)
+    }
+    pub fn new_with_refined_contract_cost_inputs(
+        salt: [u8; 32],
+        wasm: &[u8],
+        _refined_cost_inputs: bool,
+    ) -> Self {
         let deployer = get_account_id([123; 32]);
         let contract_id_preimage = get_contract_id_preimage(&deployer, &salt);
 
@@ -114,10 +136,20 @@ impl CreateContractData {
             }),
         }));
 
+        #[cfg(not(feature = "next"))]
+        let wasm_entry = wasm_entry(wasm);
+
+        #[cfg(feature = "next")]
+        let wasm_entry = if _refined_cost_inputs {
+            wasm_entry_with_refined_contract_cost_inputs(wasm)
+        } else {
+            wasm_entry(wasm)
+        };
+
         Self {
             deployer,
             wasm_key: get_wasm_key(wasm),
-            wasm_entry: wasm_entry(wasm),
+            wasm_entry,
             contract_key,
             contract_entry,
             contract_address,

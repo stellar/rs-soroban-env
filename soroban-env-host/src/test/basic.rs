@@ -76,8 +76,14 @@ fn tuple_roundtrip() -> Result<(), HostError> {
 #[test]
 fn f32_does_not_work() -> Result<(), HostError> {
     use soroban_env_common::xdr::Hash;
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let hash = Hash::from([0; 32]);
-    assert!(crate::vm::Vm::new(&host, hash, soroban_test_wasms::ADD_F32).is_err());
+    assert!(HostError::result_matches_err(
+        crate::vm::Vm::new(&host, hash, soroban_test_wasms::ADD_F32),
+        (
+            crate::xdr::ScErrorType::WasmVm,
+            crate::xdr::ScErrorCode::InvalidAction
+        )
+    ));
     Ok(())
 }

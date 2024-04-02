@@ -96,6 +96,10 @@ impl DebugInfo {
                 || frame_name_matches(frame, "Host::err")
                 || frame_name_matches(frame, "Host>::err")
                 || frame_name_matches(frame, "::augment_err_result")
+                || frame_name_matches(frame, "::with_shadow_mode")
+                || frame_name_matches(frame, "::with_debug_mode")
+                || frame_name_matches(frame, "::maybe_get_debug_info")
+                || frame_name_matches(frame, "::map_err")
         }
         let mut bt = self.backtrace.clone();
         bt.resolve();
