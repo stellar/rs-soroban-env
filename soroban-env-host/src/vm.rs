@@ -314,11 +314,6 @@ impl Vm {
     /// and we still charge the instantiations to the real budget, to behave the
     /// same as if we had a cache.
     ///
-    /// Note that this will only produce "mostly correct" costs for recording in
-    /// the case of normal completion of the contract. If the contract traps or
-    /// otherwise fails to complete, the cost will be incorrect, because the
-    /// cache will not be built and the parse costs will never be charged.
-    ///
     /// Finally, for those scratching their head about the overall structure:
     /// all of this happens as a result of the "module cache" not being
     /// especially cache-like (i.e. not being populated lazily, on-access). It's
