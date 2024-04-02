@@ -526,6 +526,8 @@ fn excessive_logging() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+
+    #[cfg(feature = "next")]
     host.switch_to_enforcing_storage()?;
 
     #[cfg(feature = "next")]
