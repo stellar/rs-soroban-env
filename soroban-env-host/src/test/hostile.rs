@@ -530,13 +530,13 @@ fn excessive_logging() -> Result<(), HostError> {
     #[cfg(feature = "next")]
     let expected_budget = expect![[r#"
         =======================================================
-        Cpu limit: 2000000; used: 284819
-        Mem limit: 500000; used: 252830
+        Cpu limit: 2000000; used: 214592
+        Mem limit: 500000; used: 166740
         =======================================================
         CostType                 cpu_insns      mem_bytes      
         WasmInsnExec             300            0              
-        MemAlloc                 15750          67248          
-        MemCpy                   2345           0              
+        MemAlloc                 16191          67320          
+        MemCpy                   2836           0              
         MemCmp                   696            0              
         DispatchHostFunction     310            0              
         VisitObject              244            0              
@@ -557,26 +557,26 @@ fn excessive_logging() -> Result<(), HostError> {
         Int256Pow                0              0              
         Int256Shift              0              0              
         ChaCha20DrawBytes        0              0              
-        ParseWasmInstructions    74324          17967          
-        ParseWasmFunctions       4192           370            
-        ParseWasmGlobals         1382           104            
-        ParseWasmTableEntries    29639          6285           
-        ParseWasmTypes           8194           505            
+        ParseWasmInstructions    74665          17967          
+        ParseWasmFunctions       4224           370            
+        ParseWasmGlobals         1377           104            
+        ParseWasmTableEntries    29989          6285           
+        ParseWasmTypes           8292           505            
         ParseWasmDataSegments    0              0              
         ParseWasmElemSegments    0              0              
-        ParseWasmImports         5427           803            
-        ParseWasmExports         6672           568            
-        ParseWasmDataSegmentBytes66075          17580          
-        InstantiateWasmInstructions25059          70192          
-        InstantiateWasmFunctions 58             114            
-        InstantiateWasmGlobals   84             53             
-        InstantiateWasmTableEntries3211           1025           
+        ParseWasmImports         5483           806            
+        ParseWasmExports         6709           568            
+        ParseWasmDataSegmentBytes0              0              
+        InstantiateWasmInstructions43030          70704          
+        InstantiateWasmFunctions 59             114            
+        InstantiateWasmGlobals   83             53             
+        InstantiateWasmTableEntries3300           1025           
         InstantiateWasmTypes     0              0              
         InstantiateWasmDataSegments0              0              
         InstantiateWasmElemSegments0              0              
-        InstantiateWasmImports   5339           603            
-        InstantiateWasmExports   4641           143            
-        InstantiateWasmDataSegmentBytes25191          69256          
+        InstantiateWasmImports   6476           762            
+        InstantiateWasmExports   4642           143            
+        InstantiateWasmDataSegmentBytes0              0              
         =======================================================
 
     "#]];
@@ -636,6 +636,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     // excessive logging
     {
+        host.clear_module_cache()?;
         host.budget_ref().reset_limits(2_000_000, 500_000)?;
         let res = host.call(
             contract_id_obj,
@@ -657,6 +658,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     // increasing the shadow budget should make everything happy again
     {
+        host.clear_module_cache()?;
         host.budget_ref().reset_limits(2_000_000, 500_000)?;
         host.set_shadow_budget_limits(2_000_000, 1_000_000)?;
         let res = host.call(

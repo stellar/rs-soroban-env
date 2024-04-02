@@ -384,13 +384,18 @@ impl Host {
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
-    pub fn rebuild_module_cache(&self) -> Result<(), HostError> {
+    pub fn clear_module_cache(&self) -> Result<(), HostError> {
         if cfg!(feature = "next") {
             *self.try_borrow_module_cache_mut()? = None;
             *self.try_borrow_linker_mut()? = None;
-            self.build_module_cache_if_needed()?;
         }
         Ok(())
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn rebuild_module_cache(&self) -> Result<(), HostError> {
+        self.clear_module_cache()?;
+        self.build_module_cache_if_needed()
     }
 
     pub fn set_source_account(&self, source_account: AccountId) -> Result<(), HostError> {
