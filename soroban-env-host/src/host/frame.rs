@@ -195,7 +195,7 @@ impl Host {
                 .maybe_emulate_authentication(self)?;
             // See explanation for this line in [crate::vm::Vm::parse_module] -- it exists
             // to add-back module-parsing costs that were suppressed during the invocation.
-            if let crate::storage::FootprintMode::Recording(_) = self.try_borrow_storage()?.mode {
+            if self.in_storage_recording_mode()? {
                 self.rebuild_module_cache()?;
             }
         }
@@ -646,6 +646,15 @@ impl Host {
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 // If the module cache is not yet built, build it now, before first access.
+                // Unless we're in recording mode, because in that case the cache is built
+                // late in [pop_context] after we've determined the transaction footprint.
+                #[cfg(feature = "recording_mode")]
+                {
+                    if !self.in_storage_recording_mode()? {
+                        self.build_module_cache_if_needed()?;
+                    }
+                }
+                #[cfg(not(feature = "recording_mode"))]
                 self.build_module_cache_if_needed()?;
                 let contract_id = id.metered_clone(self)?;
                 let vm = if let Some(cache) = &*self.try_borrow_module_cache()? {

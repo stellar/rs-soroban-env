@@ -375,6 +375,15 @@ impl Host {
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
+    pub fn in_storage_recording_mode(&self) -> Result<bool, HostError> {
+        if let crate::storage::FootprintMode::Recording(_) = self.try_borrow_storage()?.mode {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
     pub fn rebuild_module_cache(&self) -> Result<(), HostError> {
         if cfg!(feature = "next") {
             *self.try_borrow_module_cache_mut()? = None;

@@ -331,11 +331,10 @@ impl Vm {
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<ParsedModule>, HostError> {
-        use crate::storage::FootprintMode;
         if cfg!(feature = "next")
             && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
         {
-            if let FootprintMode::Recording(_) = host.try_borrow_storage()?.mode {
+            if host.in_storage_recording_mode()? {
                 return host.budget_ref().with_observable_shadow_mode(|| {
                     ParsedModule::new(host, engine, wasm, cost_inputs)
                 });
