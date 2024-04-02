@@ -19,7 +19,7 @@ impl Host {
                 self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InvalidInput,
-                    "failed scep256r1 verification",
+                    "failed secp256r1 verification",
                     &[],
                 )
             })

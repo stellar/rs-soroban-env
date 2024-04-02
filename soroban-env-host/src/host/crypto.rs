@@ -99,7 +99,7 @@ impl Host {
                 self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InvalidInput,
-                    "failed scep256r1 verification",
+                    "failed secp256r1 verification",
                     &[],
                 )
             })
@@ -115,7 +115,7 @@ impl Host {
         // check and make sure the key was encoded in uncompressed format
         let tag = bytes
             .first()
-            .cloned()
+            .copied()
             .ok_or(sec1::Error::PointEncoding)
             .and_then(Tag::from_u8)
             .map_err(|_| {
