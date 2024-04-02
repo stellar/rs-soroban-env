@@ -370,6 +370,31 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(1)),
     ];
 
+    #[cfg(feature="next")]
+    let tracker: Vec<(u64, Option<u64>)> = tracker.into_iter().chain(vec![
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+
+        (1, None),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, None),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+        (1, Some(1)),
+    ].into_iter()).collect();
+
     for (ty, &(iterations, input)) in tracker.iter().enumerate() {
         host.with_budget(|b| b.bulk_charge(ContractCostType::VARIANTS[ty], iterations, input))?;
     }
@@ -423,60 +448,60 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     #[cfg(feature = "next")]
     let expected = expect![
         r#"
-    =====================================================================================================================================================================
-    Cpu limit: 100000000; used: 13060190
-    Mem limit: 41943040; used: 273960
-    =====================================================================================================================================================================
-    CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
-    WasmInsnExec             246            None           984            0              4                   0                   0                   0                   
-    MemAlloc                 1              Some(152)      453            168            434                 16                  16                  128                 
-    MemCpy                   1              Some(65)       50             0              42                  16                  0                   0                   
-    MemCmp                   1              Some(74)       53             0              44                  16                  0                   0                   
-    DispatchHostFunction     176            None           54560          0              310                 0                   0                   0                   
-    VisitObject              97             None           5917           0              61                  0                   0                   0                   
-    ValSer                   1              Some(49)       241            389            230                 29                  242                 384                 
-    ValDeser                 1              Some(103)      62271          309            59052               4001                0                   384                 
-    ComputeSha256Hash        1              Some(193)      14310          0              3738                7012                0                   0                   
-    ComputeEd25519PubKey     226            None           9097178        0              40253               0                   0                   0                   
-    VerifyEd25519Sig         1              Some(227)      384738         0              377524              4068                0                   0                   
-    VmInstantiation          1              Some(147)      503770         135880         451626              45405               130065              5064                
-    VmCachedInstantiation    1              Some(147)      503770         135880         451626              45405               130065              5064                
-    InvokeVmFunction         47             None           91556          658            1948                0                   14                  0                   
-    ComputeKeccak256Hash     1              Some(1)        3812           0              3766                5969                0                   0                   
-    ComputeEcdsaSecp256k1Sig 1              None           710            0              710                 0                   0                   0                   
-    RecoverEcdsaSecp256k1Key 1              None           2315295        181            2315295             0                   181                 0                   
-    Int256AddSub             1              None           4404           99             4404                0                   99                  0                   
-    Int256Mul                1              None           4947           99             4947                0                   99                  0                   
-    Int256Div                1              None           4911           99             4911                0                   99                  0                   
-    Int256Pow                1              None           4286           99             4286                0                   99                  0                   
-    Int256Shift              1              None           913            99             913                 0                   99                  0                   
-    ChaCha20DrawBytes        1              Some(1)        1061           0              1058                501                 0                   0                   
-    ParseWasmInstructions    0              Some(0)        0              0              72736               25420               17564               6457                
-    ParseWasmFunctions       0              Some(0)        0              0              0                   536688              0                   47464               
-    ParseWasmGlobals         0              Some(0)        0              0              0                   176902              0                   13420               
-    ParseWasmTableEntries    0              Some(0)        0              0              0                   29639               0                   6285                
-    ParseWasmTypes           0              Some(0)        0              0              0                   1048891             0                   64670               
-    ParseWasmDataSegments    0              Some(0)        0              0              0                   236970              0                   29074               
-    ParseWasmElemSegments    0              Some(0)        0              0              0                   317249              0                   48095               
-    ParseWasmImports         0              Some(0)        0              0              0                   694667              0                   102890              
-    ParseWasmExports         0              Some(0)        0              0              0                   427037              0                   36394               
-    ParseWasmDataSegmentBytes0              Some(0)        0              0              66075               28                  17580               257                 
-    InstantiateWasmInstructions0              None           0              0              25059               0                   70192               0                   
-    InstantiateWasmFunctions 0              Some(0)        0              0              0                   7503                0                   14613               
-    InstantiateWasmGlobals   0              Some(0)        0              0              0                   10761               0                   6833                
-    InstantiateWasmTableEntries0              Some(0)        0              0              0                   3211                0                   1025                
-    InstantiateWasmTypes     0              None           0              0              0                   0                   0                   0                   
-    InstantiateWasmDataSegments0              Some(0)        0              0              0                   16370               0                   129632              
-    InstantiateWasmElemSegments0              Some(0)        0              0              0                   28309               0                   13665               
-    InstantiateWasmImports   0              Some(0)        0              0              0                   683461              0                   77273               
-    InstantiateWasmExports   0              Some(0)        0              0              0                   297065              0                   9176                
-    InstantiateWasmDataSegmentBytes0              Some(0)        0              0              25191               14                  69256               126                 
-    =====================================================================================================================================================================
-    Internal details (diagnostics info, does not affect fees) 
-    Total # times meter was called: 23
-    Shadow cpu limit: 100000000; used: 13060190
-    Shadow mem limit: 41943040; used: 273960
-    =====================================================================================================================================================================
+        =====================================================================================================================================================================
+        Cpu limit: 100000000; used: 12751453
+        Mem limit: 41943040; used: 302115
+        =====================================================================================================================================================================
+        CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
+        WasmInsnExec             246            None           984            0              4                   0                   0                   0                   
+        MemAlloc                 1              Some(152)      453            168            434                 16                  16                  128                 
+        MemCpy                   1              Some(65)       50             0              42                  16                  0                   0                   
+        MemCmp                   1              Some(74)       53             0              44                  16                  0                   0                   
+        DispatchHostFunction     176            None           54560          0              310                 0                   0                   0                   
+        VisitObject              97             None           5917           0              61                  0                   0                   0                   
+        ValSer                   1              Some(49)       241            389            230                 29                  242                 384                 
+        ValDeser                 1              Some(103)      62271          309            59052               4001                0                   384                 
+        ComputeSha256Hash        1              Some(193)      14310          0              3738                7012                0                   0                   
+        ComputeEd25519PubKey     226            None           9097178        0              40253               0                   0                   0                   
+        VerifyEd25519Sig         1              Some(227)      384738         0              377524              4068                0                   0                   
+        VmInstantiation          1              Some(147)      503770         135880         451626              45405               130065              5064                
+        VmCachedInstantiation    1              Some(147)      41870          70869          41142               634                 69472               1217                
+        InvokeVmFunction         47             None           91556          658            1948                0                   14                  0                   
+        ComputeKeccak256Hash     1              Some(1)        3812           0              3766                5969                0                   0                   
+        ComputeEcdsaSecp256k1Sig 1              None           710            0              710                 0                   0                   0                   
+        RecoverEcdsaSecp256k1Key 1              None           2315295        181            2315295             0                   181                 0                   
+        Int256AddSub             1              None           4404           99             4404                0                   99                  0                   
+        Int256Mul                1              None           4947           99             4947                0                   99                  0                   
+        Int256Div                1              None           4911           99             4911                0                   99                  0                   
+        Int256Pow                1              None           4286           99             4286                0                   99                  0                   
+        Int256Shift              1              None           913            99             913                 0                   99                  0                   
+        ChaCha20DrawBytes        1              Some(1)        1061           0              1058                501                 0                   0                   
+        ParseWasmInstructions    1              Some(1)        73275          17614          73077               25410               17564               6457                
+        ParseWasmFunctions       1              Some(1)        4224           370            0                   540752              0                   47464               
+        ParseWasmGlobals         1              Some(1)        1377           104            0                   176363              0                   13420               
+        ParseWasmTableEntries    1              Some(1)        234            49             0                   29989               0                   6285                
+        ParseWasmTypes           1              Some(1)        8292           505            0                   1061449             0                   64670               
+        ParseWasmDataSegments    1              Some(1)        1854           227            0                   237336              0                   29074               
+        ParseWasmElemSegments    1              Some(1)        2566           375            0                   328476              0                   48095               
+        ParseWasmImports         1              Some(1)        5483           806            0                   701845              0                   103229              
+        ParseWasmExports         1              Some(1)        3354           284            0                   429383              0                   36394               
+        ParseWasmDataSegmentBytes1              Some(1)        0              2              0                   28                  0                   257                 
+        InstantiateWasmInstructions1              None           43030          70704          43030               0                   70704               0                   
+        InstantiateWasmFunctions 1              Some(1)        59             114            0                   7556                0                   14613               
+        InstantiateWasmGlobals   1              Some(1)        83             53             0                   10711               0                   6833                
+        InstantiateWasmTableEntries1              Some(1)        25             8              0                   3300                0                   1025                
+        InstantiateWasmTypes     1              None           0              0              0                   0                   0                   0                   
+        InstantiateWasmDataSegments1              Some(1)        179            1012           0                   23038               0                   129632              
+        InstantiateWasmElemSegments1              Some(1)        331            106            0                   42488               0                   13665               
+        InstantiateWasmImports   1              Some(1)        6476           762            0                   828974              0                   97637               
+        InstantiateWasmExports   1              Some(1)        2321           71             0                   297100              0                   9176                
+        InstantiateWasmDataSegmentBytes1              Some(1)        0              0              0                   14                  0                   126                 
+        =====================================================================================================================================================================
+        Internal details (diagnostics info, does not affect fees) 
+        Total # times meter was called: 43
+        Shadow cpu limit: 100000000; used: 12751453
+        Shadow mem limit: 41943040; used: 302115
+        =====================================================================================================================================================================
 
     "#
     ];
