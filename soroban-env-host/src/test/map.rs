@@ -501,6 +501,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
     // with this test in features=next,testutils mode (which turns on
     // feature=recording_mode implicitly). The easiest workaround is just to
     // switch to enforcing mode.
+    #[cfg(feature = "next")]
     host.switch_to_enforcing_storage()?;
 
     let res = host.call(
