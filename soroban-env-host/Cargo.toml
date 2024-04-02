@@ -32,11 +32,11 @@ num-traits = "=0.2.17"
 num-integer = "=0.1.45"
 num-derive = "=0.4.1"
 backtrace = { version = "=0.3.69", optional = true }
-k256 = {version = "=0.13.1", features=["ecdsa", "arithmetic"]}
-p256 = {version = "=0.13.2", features=["ecdsa", "arithmetic"]}
-ecdsa = {version = "=0.16.8"}
+k256 = {version = "=0.13.1", default-features = false, features = ["ecdsa", "arithmetic"]}
+p256 = {version = "=0.13.2", default-features = false, features = ["ecdsa", "arithmetic"]}
+ecdsa = {version = "=0.16.8", default-features = false}
 sec1 = {version = "=0.7.3"}
-elliptic-curve ={ version = "0.13.6"}
+elliptic-curve ={ version = "0.13.6", default-features = false}
 generic-array ={ version = "0.14.7"}
 # NB: getrandom is a transitive dependency of k256 which we're not using directly
 # but we have to specify it here in order to enable its 'js' feature which
@@ -89,6 +89,8 @@ nalgebra = { version = "=0.32.3", default-features = false, features = ["std"]}
 wasm-encoder = "=0.36.2"
 rustversion = "1.0"
 wycheproof = "=0.5.1"
+k256 = {version = "=0.13.1", default-features = false, features = ["alloc"]}
+p256 = {version = "=0.13.2", default-features = false, features = ["alloc"]}
 
 [dev-dependencies.stellar-xdr]
 version = "=20.1.0"
