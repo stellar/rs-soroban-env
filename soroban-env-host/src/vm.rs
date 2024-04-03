@@ -160,7 +160,7 @@ impl Vm {
             //    to return the same error.
             let _span0 = tracy_span!("define host functions");
             let ledger_proto = host.with_ledger_info(|li| Ok(li.protocol_version))?;
-            parsed_module.with_import_symbols(|module_symbols| {
+            parsed_module.with_import_symbols(host, |module_symbols| {
                 for hf in HOST_FUNCTIONS {
                     if !module_symbols.contains(&(hf.mod_str, hf.fn_str)) {
                         continue;
@@ -229,7 +229,7 @@ impl Vm {
         if let Some(linker) = &*host.try_borrow_linker()? {
             Self::instantiate(host, contract_id, parsed_module, linker)
         } else {
-            let linker = parsed_module.make_linker()?;
+            let linker = parsed_module.make_linker(host)?;
             Self::instantiate(host, contract_id, parsed_module, &linker)
         }
     }
@@ -271,7 +271,7 @@ impl Vm {
         let config = get_wasmi_config(host.as_budget())?;
         let engine = wasmi::Engine::new(&config);
         let parsed_module = Self::parse_module(host, &engine, wasm, cost_inputs)?;
-        let linker = parsed_module.make_linker()?;
+        let linker = parsed_module.make_linker(host)?;
         Self::instantiate(host, contract_id, parsed_module, &linker)
     }
 
