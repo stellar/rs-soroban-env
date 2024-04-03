@@ -645,6 +645,13 @@ impl Host {
         let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
+                // This is here so we can check and return the same error code between v20 and v21
+                // if the wasm blob was missing before querying the module cache
+                let _ = self
+                    .try_borrow_storage_mut()?
+                    .get(&self.contract_code_ledger_key(wasm_hash)?, self.as_budget())
+                    .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))?;
+
                 // If the module cache is not yet built, build it now, before first access.
                 // Unless we're in recording mode, because in that case the cache is built
                 // late in [pop_context] after we've determined the transaction footprint.
