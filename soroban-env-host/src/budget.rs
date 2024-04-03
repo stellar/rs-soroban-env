@@ -84,7 +84,10 @@ impl Default for BudgetTracker {
                 ContractCostType::VmCachedInstantiation => init_input(), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ComputeKeccak256Hash => init_input(), // number of bytes in the buffer
+                #[cfg(not(feature = "next"))]
                 ContractCostType::ComputeEcdsaSecp256k1Sig => (),
+                #[cfg(feature = "next")]
+                ContractCostType::DecodeEcdsaCurve256Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
                 ContractCostType::Int256AddSub => (),
                 ContractCostType::Int256Mul => (),
@@ -133,6 +136,10 @@ impl Default for BudgetTracker {
                 ContractCostType::InstantiateWasmExports => init_input(),
                 #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegmentBytes => init_input(),
+                #[cfg(feature = "next")]
+                ContractCostType::Sec1DecodePointUncompressed => (),
+                #[cfg(feature = "next")]
+                ContractCostType::VerifyEcdsaSecp256r1Sig => (),
             }
         }
         mt
@@ -383,7 +390,13 @@ impl Default for BudgetImpl {
                     cpu.const_term = 3766;
                     cpu.lin_term = ScaledU64(5969);
                 }
+                #[cfg(not(feature = "next"))]
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
+                    cpu.const_term = 710;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::DecodeEcdsaCurve256Sig => {
                     cpu.const_term = 710;
                     cpu.lin_term = ScaledU64(0);
                 }
@@ -516,6 +529,16 @@ impl Default for BudgetImpl {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(14);
                 }
+                #[cfg(feature = "next")]
+                ContractCostType::Sec1DecodePointUncompressed => {
+                    cpu.const_term = 1882;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::VerifyEcdsaSecp256r1Sig => {
+                    cpu.const_term = 3000906;
+                    cpu.lin_term = ScaledU64(0);
+                }
             }
 
             // define the memory cost model parameters
@@ -593,7 +616,13 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
+                #[cfg(not(feature = "next"))]
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::DecodeEcdsaCurve256Sig => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
@@ -726,6 +755,16 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(126);
                 }
+                #[cfg(feature = "next")]
+                ContractCostType::Sec1DecodePointUncompressed => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                #[cfg(feature = "next")]
+                ContractCostType::VerifyEcdsaSecp256r1Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
             }
         }
 
@@ -738,7 +777,7 @@ impl Default for BudgetImpl {
 
 impl Debug for BudgetImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{:=<165}", "")?;
+        writeln!(f, "{:=<175}", "")?;
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
@@ -749,10 +788,10 @@ impl Debug for BudgetImpl {
             "Mem limit: {}; used: {}",
             self.mem_bytes.limit, self.mem_bytes.total_count
         )?;
-        writeln!(f, "{:=<165}", "")?;
+        writeln!(f, "{:=<175}", "")?;
         writeln!(
             f,
-            "{:<25}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
+            "{:<35}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
             "CostType",
             "iterations",
             "input",
@@ -767,7 +806,7 @@ impl Debug for BudgetImpl {
             let i = ct as usize;
             writeln!(
                 f,
-                "{:<25}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
+                "{:<35}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
                 format!("{:?}", ct),
                 self.tracker.cost_tracker[i].iterations,
                 format!("{:?}", self.tracker.cost_tracker[i].inputs),
@@ -779,7 +818,7 @@ impl Debug for BudgetImpl {
                 format!("{}", self.mem_bytes.cost_models[i].lin_term),
             )?;
         }
-        writeln!(f, "{:=<165}", "")?;
+        writeln!(f, "{:=<175}", "")?;
         writeln!(
             f,
             "Internal details (diagnostics info, does not affect fees) "
@@ -799,14 +838,14 @@ impl Debug for BudgetImpl {
             "Shadow mem limit: {}; used: {}",
             self.mem_bytes.shadow_limit, self.mem_bytes.shadow_total_count
         )?;
-        writeln!(f, "{:=<165}", "")?;
+        writeln!(f, "{:=<175}", "")?;
         Ok(())
     }
 }
 
 impl Display for BudgetImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{:=<55}", "")?;
+        writeln!(f, "{:=<65}", "")?;
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
@@ -817,23 +856,23 @@ impl Display for BudgetImpl {
             "Mem limit: {}; used: {}",
             self.mem_bytes.limit, self.mem_bytes.total_count
         )?;
-        writeln!(f, "{:=<55}", "")?;
+        writeln!(f, "{:=<65}", "")?;
         writeln!(
             f,
-            "{:<25}{:<15}{:<15}",
+            "{:<35}{:<15}{:<15}",
             "CostType", "cpu_insns", "mem_bytes",
         )?;
         for ct in ContractCostType::variants() {
             let i = ct as usize;
             writeln!(
                 f,
-                "{:<25}{:<15}{:<15}",
+                "{:<35}{:<15}{:<15}",
                 format!("{:?}", ct),
                 self.tracker.cost_tracker[i].cpu,
                 self.tracker.cost_tracker[i].mem,
             )?;
         }
-        writeln!(f, "{:=<55}", "")?;
+        writeln!(f, "{:=<65}", "")?;
         Ok(())
     }
 }
@@ -1078,5 +1117,10 @@ impl Budget {
 
     pub(crate) fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
         self.0.try_borrow_mut_or_err()?.get_wasmi_fuel_remaining()
+    }
+
+    pub fn reset_default(&self) -> Result<(), HostError> {
+        *self.0.try_borrow_mut_or_err()? = BudgetImpl::default();
+        Ok(())
     }
 }

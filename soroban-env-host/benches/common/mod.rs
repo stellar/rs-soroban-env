@@ -56,6 +56,10 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
     call_bench::<B, Ed25519ScalarMulMeasure>(&mut params)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
     call_bench::<B, ReadXdrByteArrayMeasure>(&mut params)?;
+    call_bench::<B, EcdsaSecp256k1VerifyMeasure>(&mut params)?;
+    call_bench::<B, EcdsaSecp256r1RecoverMeasure>(&mut params)?;
+    call_bench::<B, Sec1DecodePointCompressedMeasure>(&mut params)?;
+    call_bench::<B, DecodeSecp256r1SigMeasure>(&mut params)?;
     Ok(params)
 }
 
@@ -64,7 +68,9 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     let mut params: BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)> =
         BTreeMap::new();
 
-    call_bench::<B, ComputeEcdsaSecp256k1SigMeasure>(&mut params)?;
+    #[cfg(not(feature = "next"))]
+    call_bench::<B, ComputeEcdsaSecp256k1Sig>(&mut params)?;
+
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut params)?;
     call_bench::<B, ComputeKeccak256HashMeasure>(&mut params)?;
     call_bench::<B, ComputeSha256HashMeasure>(&mut params)?;
@@ -108,6 +114,10 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
         call_bench::<B, InstantiateWasmImportsMeasure>(&mut params)?;
         call_bench::<B, InstantiateWasmExportsMeasure>(&mut params)?;
         call_bench::<B, InstantiateWasmDataSegmentBytesMeasure>(&mut params)?;
+
+        call_bench::<B, DecodeEcdsaCurve256SigMeasure>(&mut params)?;
+        call_bench::<B, Sec1DecodePointUncompressedMeasure>(&mut params)?;
+        call_bench::<B, VerifyEcdsaSecp256r1SigMeasure>(&mut params)?;
     }
     // These three mem ones are derived analytically, we do not calibrate them typically
     if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {

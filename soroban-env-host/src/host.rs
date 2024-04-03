@@ -2815,10 +2815,45 @@ impl VmCallerEnv for Host {
         signature: BytesObject,
         recovery_id: U32Val,
     ) -> Result<BytesObject, HostError> {
+        #[cfg(not(feature = "next"))]
         let sig = self.secp256k1_signature_from_bytesobj_input(signature)?;
+        #[cfg(feature = "next")]
+        let sig = self.ecdsa_signature_from_bytesobj_input::<k256::Secp256k1>(signature)?;
         let rid = self.secp256k1_recovery_id_from_u32val(recovery_id)?;
         let hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
-        self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)
+        let rk = self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)?;
+        self.add_host_object(rk)
+    }
+
+    #[cfg(feature = "next")]
+    fn verify_sig_ecdsa_secp256r1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        public_key: BytesObject,
+        msg_digest: BytesObject,
+        signature: BytesObject,
+    ) -> Result<Void, HostError> {
+        let pk = self.secp256r1_public_key_from_bytesobj_input(public_key)?;
+        let sig = self.ecdsa_signature_from_bytesobj_input::<p256::NistP256>(signature)?;
+        let msg_hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
+        let res = self.secp256r1_verify_signature(&pk, &msg_hash, &sig)?;
+        Ok(res.into())
+    }
+
+    #[cfg(not(feature = "next"))]
+    fn verify_sig_ecdsa_secp256r1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        _public_key: BytesObject,
+        _msg_digest: BytesObject,
+        _signature: BytesObject,
+    ) -> Result<Void, HostError> {
+        Err(self.err(
+            ScErrorType::Context,
+            ScErrorCode::InternalError,
+            "host function `verify_sig_ecdsa_secp256r1` not implemented",
+            &[],
+        ))
     }
 
     // endregion: "crypto" module functions

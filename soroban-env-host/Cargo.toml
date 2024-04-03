@@ -32,7 +32,12 @@ num-traits = "=0.2.17"
 num-integer = "=0.1.45"
 num-derive = "=0.4.1"
 backtrace = { version = "=0.3.69", optional = true }
-k256 = {version = "=0.13.1", features=["ecdsa", "arithmetic"]}
+k256 = {version = "=0.13.1", default-features = false, features = ["ecdsa", "arithmetic"]}
+p256 = {version = "=0.13.2", default-features = false, features = ["ecdsa", "arithmetic"]}
+ecdsa = {version = "=0.16.8", default-features = false}
+sec1 = {version = "=0.7.3"}
+elliptic-curve ={ version = "0.13.6", default-features = false}
+generic-array ={ version = "0.14.7"}
 # NB: getrandom is a transitive dependency of k256 which we're not using directly
 # but we have to specify it here in order to enable its 'js' feature which
 # is needed to build the host for wasm (a rare but supported config).
@@ -83,11 +88,14 @@ lstsq = "=0.5.0"
 nalgebra = { version = "=0.32.3", default-features = false, features = ["std"]}
 wasm-encoder = "=0.36.2"
 rustversion = "1.0"
+wycheproof = "=0.5.1"
+k256 = {version = "=0.13.1", default-features = false, features = ["alloc"]}
+p256 = {version = "=0.13.2", default-features = false, features = ["alloc"]}
 
 [dev-dependencies.stellar-xdr]
 version = "=20.1.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "44b7e2d4cdf27a3611663e82828de56c5274cba0"
+rev = "3a001b1fbb20e4cfa2cef2c0cc450564e8528057"
 default-features = false
 features = ["arbitrary"]
 

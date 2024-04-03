@@ -909,7 +909,6 @@ pub(crate) mod wasm {
         let mut fe = me.func(Arity(0), 0);
         fe.push(Symbol::try_from_small_str("pass").unwrap());
         let (mut me, fid) = fe.finish();
-        println!("{}", fid.0);
         // exporting a function I defined is okay
         me.export_func(fid, "test");
         // exporting an imported function is also okay, although weird
