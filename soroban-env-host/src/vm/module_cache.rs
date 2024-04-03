@@ -6,7 +6,7 @@ use crate::{
     budget::{get_wasmi_config, AsBudget},
     host::metered_clone::MeteredClone,
     xdr::{Hash, ScErrorCode, ScErrorType},
-    Host, HostError, MeteredOrdMap,
+    Error, Host, HostError, MeteredOrdMap,
 };
 use std::{collections::BTreeSet, rc::Rc};
 use wasmi::Engine;
@@ -118,19 +118,13 @@ impl ModuleCache {
         self.with_import_symbols(host, |symbols| Host::make_linker(&self.engine, symbols))
     }
 
-    pub fn get_module(
-        &self,
-        host: &Host,
-        contract_id: &Hash,
-    ) -> Result<Rc<ParsedModule>, HostError> {
-        if let Some(m) = self.modules.get(contract_id, host)? {
+    pub fn get_module(&self, host: &Host, wasm_hash: &Hash) -> Result<Rc<ParsedModule>, HostError> {
+        if let Some(m) = self.modules.get(wasm_hash, host)? {
             return Ok(m.clone());
         } else {
-            Err(host.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "module cache missing contract",
-                &[],
+            Err(host.decorate_contract_code_storage_error(
+                Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::ExceededLimit).into(),
+                wasm_hash,
             ))
         }
     }
