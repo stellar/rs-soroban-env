@@ -1,11 +1,14 @@
-use super::parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
+use super::{
+    func_info::HOST_FUNCTIONS,
+    parsed_module::{ParsedModule, VersionedContractCodeCostInputs},
+};
 use crate::{
     budget::{get_wasmi_config, AsBudget},
     host::metered_clone::MeteredClone,
     xdr::{Hash, ScErrorCode, ScErrorType},
     Host, HostError, MeteredOrdMap,
 };
-use std::rc::Rc;
+use std::{collections::BTreeSet, rc::Rc};
 use wasmi::Engine;
 
 /// A [ModuleCache] is a cache of a set of Wasm modules that have been parsed
@@ -43,6 +46,16 @@ impl ModuleCache {
                     if let LedgerEntryData::ContractCode(ContractCodeEntry { code, hash, ext }) =
                         &e.data
                     {
+                        // We allow empty contracts in testing mode; they exist
+                        // to exercise as much of the contract-code-storage
+                        // infrastructure as possible, while still redirecting
+                        // the actual execution into a `ContractFunctionSet`.
+                        // They should never be called, so we do not have to go
+                        // as far as making a fake `ParsedModule` for them.
+                        if cfg!(any(test, feature = "testutils")) && code.as_slice().is_empty() {
+                            continue;
+                        }
+
                         let code_cost_inputs = match ext {
                             ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
                                 wasm_bytes: code.len(),
@@ -74,11 +87,35 @@ impl ModuleCache {
                 &[],
             ));
         }
-        let parsed_module = Rc::new(ParsedModule::new(host, &self.engine, &wasm, cost_inputs)?);
+        let parsed_module = ParsedModule::new(host, &self.engine, &wasm, cost_inputs)?;
         self.modules =
             self.modules
                 .insert(contract_id.metered_clone(host)?, parsed_module, host)?;
         Ok(())
+    }
+
+    pub fn with_import_symbols<T>(
+        &self,
+        host: &Host,
+        callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
+        let mut import_symbols = BTreeSet::new();
+        for module in self.modules.values(host)? {
+            module.with_import_symbols(|module_symbols| {
+                for hf in HOST_FUNCTIONS {
+                    let sym = (hf.mod_str, hf.fn_str);
+                    if module_symbols.contains(&sym) {
+                        import_symbols.insert(sym);
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        callback(&import_symbols)
+    }
+
+    pub fn make_linker(&self, host: &Host) -> Result<wasmi::Linker<Host>, HostError> {
+        self.with_import_symbols(host, |symbols| Host::make_linker(&self.engine, symbols))
     }
 
     pub fn get_module(

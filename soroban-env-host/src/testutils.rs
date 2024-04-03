@@ -178,21 +178,22 @@ pub(crate) fn interface_meta_with_custom_versions(proto: u32, pre: u32) -> Vec<u
 impl Host {
     pub const TEST_PRNG_SEED: &'static [u8; 32] = b"12345678901234567890123456789012";
 
-    pub fn test_host() -> Self {
-        let host = Host::default();
-        host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
-        host
+    fn set_test_prng(&self) {
+        self.set_base_prng_seed(*Self::TEST_PRNG_SEED).unwrap();
     }
 
-    pub fn test_host_with_recording_footprint() -> Self {
-        let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
-        let storage = Storage::with_recording_footprint(snapshot_source);
-        let host = Host::with_storage_and_budget(storage, Budget::default());
-        host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
-        host.set_ledger_info(LedgerInfo {
-            protocol_version: crate::meta::get_ledger_protocol_version(
-                crate::meta::INTERFACE_VERSION,
-            ),
+    fn current_test_protocol() -> u32 {
+        use crate::meta::{get_ledger_protocol_version, INTERFACE_VERSION};
+        if let Ok(vers) = std::env::var("TEST_PROTOCOL") {
+            vers.parse().unwrap()
+        } else {
+            get_ledger_protocol_version(INTERFACE_VERSION)
+        }
+    }
+
+    fn set_test_protocol(&self) {
+        self.set_ledger_info(LedgerInfo {
+            protocol_version: Self::current_test_protocol(),
             sequence_number: 0,
             timestamp: 0,
             network_id: [0; 32],
@@ -202,6 +203,26 @@ impl Host {
             max_entry_ttl: 6_312_000,
         })
         .unwrap();
+    }
+
+    pub fn test_host() -> Self {
+        let host = Host::default();
+        host.set_test_protocol();
+        host
+    }
+
+    pub fn test_host_with_prng() -> Self {
+        let host = Self::test_host();
+        host.set_test_prng();
+        host
+    }
+
+    pub fn test_host_with_recording_footprint() -> Self {
+        let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
+        let storage = Storage::with_recording_footprint(snapshot_source);
+        let host = Host::with_storage_and_budget(storage, Budget::default());
+        host.set_test_protocol();
+        host.set_test_prng();
         host
     }
 
@@ -1133,7 +1154,7 @@ pub(crate) mod wasm {
         let (mut me, fid) = fe.finish();
         me.export_func(fid, "test");
         me.define_elem_funcs(&[fid]);
-        me.define_data_segment(0x1234, vec![0; 8]);
+        me.define_data_segment(0x1234, vec![0; 512]);
         me.finish()
     }
 }

@@ -47,6 +47,8 @@ pub use curr::*;
 mod curr {
     pub const ADD_I32: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_add_i32.wasm").as_slice();
+    pub const SUM_I32: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/example_sum_i32.wasm").as_slice();
     pub const ADD_F32: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_add_f32.wasm").as_slice();
     pub const ALLOC: &[u8] =

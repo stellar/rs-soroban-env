@@ -83,7 +83,7 @@ mod v21 {
                     _iter: u64,
                     sample: Self::SampleType,
                 ) -> Self::RecycledType {
-                    let module = black_box(Rc::new(
+                    let module = black_box(
                         ParsedModule::new(
                             host,
                             sample.module.module.engine(),
@@ -91,7 +91,7 @@ mod v21 {
                             sample.module.cost_inputs.clone(),
                         )
                         .unwrap(),
-                    ));
+                    );
                     (Some(module), sample.wasm)
                 }
 

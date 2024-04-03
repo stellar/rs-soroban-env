@@ -193,6 +193,11 @@ impl Host {
             // recording auth mode. This is a no-op for the enforcing mode.
             self.try_borrow_authorization_manager()?
                 .maybe_emulate_authentication(self)?;
+            // See explanation for this line in [crate::vm::Vm::parse_module] -- it exists
+            // to add-back module-parsing costs that were suppressed during the invocation.
+            if self.in_storage_recording_mode()? {
+                self.rebuild_module_cache()?;
+            }
         }
         let mut auth_snapshot = None;
         if let Some(rp) = orp {
@@ -640,11 +645,27 @@ impl Host {
         let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
+                // If the module cache is not yet built, build it now, before first access.
+                // Unless we're in recording mode, because in that case the cache is built
+                // late in [pop_context] after we've determined the transaction footprint.
+                #[cfg(feature = "recording_mode")]
+                {
+                    if !self.in_storage_recording_mode()? {
+                        self.build_module_cache_if_needed()?;
+                    }
+                }
+                #[cfg(not(feature = "recording_mode"))]
+                self.build_module_cache_if_needed()?;
                 let contract_id = id.metered_clone(self)?;
                 let vm = if let Some(cache) = &*self.try_borrow_module_cache()? {
+                    // This branch should be taken if we're on a protocol that
+                    // supports the module cache.
                     let module = cache.get_module(self, wasm_hash)?;
                     Vm::from_parsed_module(self, contract_id, module)?
                 } else {
+                    // If we got here we're running/replaying a protocol version
+                    // with no module cache. We'll parse the contract anew and
+                    // throw it away, as we did in that old protocol.
                     let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
                     Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs)?
                 };

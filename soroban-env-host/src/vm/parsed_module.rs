@@ -8,7 +8,7 @@ use crate::{
 use wasmi::{Engine, Module};
 
 use super::{ModuleCache, MAX_VM_ARGS};
-use std::io::Cursor;
+use std::{collections::BTreeSet, io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum VersionedContractCodeCostInputs {
@@ -153,32 +153,62 @@ impl ParsedModule {
         engine: &Engine,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
-    ) -> Result<Self, HostError> {
+    ) -> Result<Rc<Self>, HostError> {
         cost_inputs.charge_for_parsing(host)?;
         let (module, proto_version) = Self::parse_wasm(host, engine, wasm)?;
-        Ok(Self {
+        Ok(Rc::new(Self {
             module,
             proto_version,
             cost_inputs,
-        })
+        }))
     }
 
-    #[cfg(any(test, feature = "testutils"))]
+    pub fn with_import_symbols<T>(
+        &self,
+        callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
+        // Cap symbols we're willing to import at 10 characters for each of
+        // module and function name. in practice they are all 1-2 chars, but
+        // we'll leave some future-proofing room here. The important point
+        // is to not be introducing a DoS vector.
+        const SYM_LEN_LIMIT: usize = 10;
+        let symbols: BTreeSet<(&str, &str)> = self
+            .module
+            .imports()
+            .filter_map(|i| {
+                if i.ty().func().is_some() {
+                    let mod_str = i.module();
+                    let fn_str = i.name();
+                    if mod_str.len() < SYM_LEN_LIMIT && fn_str.len() < SYM_LEN_LIMIT {
+                        return Some((mod_str, fn_str));
+                    }
+                }
+                None
+            })
+            .collect();
+        callback(&symbols)
+    }
+
+    pub fn make_linker(&self) -> Result<wasmi::Linker<Host>, HostError> {
+        self.with_import_symbols(|symbols| Host::make_linker(self.module.engine(), symbols))
+    }
+
+    #[cfg(feature = "bench")]
     pub fn new_with_isolated_engine(
         host: &Host,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
-    ) -> Result<Self, HostError> {
+    ) -> Result<Rc<Self>, HostError> {
         use crate::budget::AsBudget;
         let config = crate::vm::get_wasmi_config(host.as_budget())?;
         let engine = Engine::new(&config);
         cost_inputs.charge_for_parsing(host)?;
         let (module, proto_version) = Self::parse_wasm(host, &engine, wasm)?;
-        Ok(Self {
+        Ok(Rc::new(Self {
             module,
             proto_version,
             cost_inputs,
-        })
+        }))
     }
 
     /// Parse the Wasm blob into a [Module] and its protocol number, checking its interface version

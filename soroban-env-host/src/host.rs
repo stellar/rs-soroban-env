@@ -81,6 +81,7 @@ pub struct CoverageScoreboard {
 #[derive(Clone, Default)]
 struct HostImpl {
     module_cache: RefCell<Option<ModuleCache>>,
+    shared_linker: RefCell<Option<wasmi::Linker<Host>>>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
@@ -193,6 +194,12 @@ impl_checked_borrow_helpers!(
     Option<ModuleCache>,
     try_borrow_module_cache,
     try_borrow_module_cache_mut
+);
+impl_checked_borrow_helpers!(
+    shared_linker,
+    Option<wasmi::Linker<Host>>,
+    try_borrow_linker,
+    try_borrow_linker_mut
 );
 impl_checked_borrow_helpers!(
     source_account,
@@ -323,6 +330,7 @@ impl Host {
         let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
             module_cache: RefCell::new(None),
+            shared_linker: RefCell::new(None),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
@@ -353,13 +361,41 @@ impl Host {
         }))
     }
 
-    pub fn maybe_add_module_cache(&self) -> Result<(), HostError> {
+    pub fn build_module_cache_if_needed(&self) -> Result<(), HostError> {
         if cfg!(feature = "next")
             && self.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
+            && self.try_borrow_module_cache()?.is_none()
         {
-            *self.try_borrow_module_cache_mut()? = Some(ModuleCache::new(self)?);
+            let cache = ModuleCache::new(self)?;
+            let linker = cache.make_linker(self)?;
+            *self.try_borrow_module_cache_mut()? = Some(cache);
+            *self.try_borrow_linker_mut()? = Some(linker);
         }
         Ok(())
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn in_storage_recording_mode(&self) -> Result<bool, HostError> {
+        if let crate::storage::FootprintMode::Recording(_) = self.try_borrow_storage()?.mode {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn clear_module_cache(&self) -> Result<(), HostError> {
+        if cfg!(feature = "next") {
+            *self.try_borrow_module_cache_mut()? = None;
+            *self.try_borrow_linker_mut()? = None;
+        }
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn rebuild_module_cache(&self) -> Result<(), HostError> {
+        self.clear_module_cache()?;
+        self.build_module_cache_if_needed()
     }
 
     pub fn set_source_account(&self, source_account: AccountId) -> Result<(), HostError> {
@@ -422,6 +458,14 @@ impl Host {
         } else {
             Ok(None)
         }
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn switch_to_enforcing_storage(&self) -> Result<(), HostError> {
+        self.with_mut_storage(|storage| {
+            storage.mode = crate::storage::FootprintMode::Enforcing;
+            Ok(())
+        })
     }
 
     #[cfg(any(test, feature = "recording_mode"))]

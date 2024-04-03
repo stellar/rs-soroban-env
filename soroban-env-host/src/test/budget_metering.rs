@@ -11,7 +11,7 @@ use soroban_test_wasms::VEC;
 
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
-    let host = observe_host!(Host::test_host());
+    let host = observe_host!(Host::test_host_with_prng());
     let _ = host.clone().test_budget(100_000, 100_000).enable_model(
         ContractCostType::MemCpy,
         1,
@@ -170,7 +170,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
 
 #[test]
 fn metered_xdr() -> Result<(), HostError> {
-    let host = Host::test_host()
+    let host = Host::test_host_with_prng()
         .test_budget(100_000, 100_000)
         .enable_model(ContractCostType::ValSer, 0, 10, 0, 1)
         .enable_model(ContractCostType::ValDeser, 0, 10, 0, 1);
@@ -210,10 +210,9 @@ fn metered_xdr() -> Result<(), HostError> {
 
 #[test]
 fn metered_xdr_out_of_budget() -> Result<(), HostError> {
-    let host =
-        Host::test_host()
-            .test_budget(10, 10)
-            .enable_model(ContractCostType::ValSer, 0, 10, 0, 1);
+    let host = Host::test_host_with_prng()
+        .test_budget(10, 10)
+        .enable_model(ContractCostType::ValSer, 0, 10, 0, 1);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -236,7 +235,7 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
 
 #[test]
 fn map_insert_key_vec_obj() -> Result<(), HostError> {
-    let mut host = Host::test_host().test_budget(1000, 1000);
+    let mut host = Host::test_host_with_prng().test_budget(1000, 1000);
     let mut m = host.map_new()?;
     let k0 = host.test_vec_obj(&[2, 3])?;
     let v0: Val = 6_u32.into();
@@ -274,7 +273,7 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
 
 #[test]
 fn test_recursive_type_clone() -> Result<(), HostError> {
-    let host = Host::test_host()
+    let host = Host::test_host_with_prng()
         .test_budget(100000, 100000)
         .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
         .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
@@ -475,8 +474,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     #[cfg(feature = "next")]
     let expected = expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 100000000; used: 16287502
-        Mem limit: 41943040; used: 453288
+        Cpu limit: 100000000; used: 15754241
+        Mem limit: 41943040; used: 302115
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           984            0              4                   0                   0                   0                   
@@ -491,7 +490,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         ComputeEd25519PubKey     226            None           9097178        0              40253               0                   0                   0                   
         VerifyEd25519Sig         1              Some(227)      384738         0              377524              4068                0                   0                   
         VmInstantiation          1              Some(147)      503770         135880         451626              45405               130065              5064                
-        VmCachedInstantiation    1              Some(147)      503770         135880         451626              45405               130065              5064                
+        VmCachedInstantiation    1              Some(147)      41870          70869          41142               634                 69472               1217                
         InvokeVmFunction         47             None           91556          658            1948                0                   14                  0                   
         ComputeKeccak256Hash     1              Some(1)        3812           0              3766                5969                0                   0                   
         DecodeEcdsaCurve256Sig   1              None           710            0              710                 0                   0                   0                   
@@ -502,33 +501,33 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Int256Pow                1              None           4286           99             4286                0                   99                  0                   
         Int256Shift              1              None           913            99             913                 0                   99                  0                   
         ChaCha20DrawBytes        1              Some(1)        1061           0              1058                501                 0                   0                   
-        ParseWasmInstructions    1              Some(1)        72934          17614          72736               25420               17564               6457                
-        ParseWasmFunctions       1              Some(1)        4192           370            0                   536688              0                   47464               
-        ParseWasmGlobals         1              Some(1)        1382           104            0                   176902              0                   13420               
-        ParseWasmTableEntries    1              Some(1)        231            49             0                   29639               0                   6285                
-        ParseWasmTypes           1              Some(1)        8194           505            0                   1048891             0                   64670               
-        ParseWasmDataSegments    1              Some(1)        1851           227            0                   236970              0                   29074               
-        ParseWasmElemSegments    1              Some(1)        2478           375            0                   317249              0                   48095               
-        ParseWasmImports         1              Some(1)        5427           803            0                   694667              0                   102890              
-        ParseWasmExports         1              Some(1)        3336           284            0                   427037              0                   36394               
-        ParseWasmDataSegmentBytes1              Some(1)        66075          17582          66075               28                  17580               257                 
-        InstantiateWasmInstructions1              None           25059          70192          25059               0                   70192               0                   
-        InstantiateWasmFunctions 1              Some(1)        58             114            0                   7503                0                   14613               
-        InstantiateWasmGlobals   1              Some(1)        84             53             0                   10761               0                   6833                
-        InstantiateWasmTableEntries1              Some(1)        25             8              0                   3211                0                   1025                
+        ParseWasmInstructions    1              Some(1)        73275          17614          73077               25410               17564               6457                
+        ParseWasmFunctions       1              Some(1)        4224           370            0                   540752              0                   47464               
+        ParseWasmGlobals         1              Some(1)        1377           104            0                   176363              0                   13420               
+        ParseWasmTableEntries    1              Some(1)        234            49             0                   29989               0                   6285                
+        ParseWasmTypes           1              Some(1)        8292           505            0                   1061449             0                   64670               
+        ParseWasmDataSegments    1              Some(1)        1854           227            0                   237336              0                   29074               
+        ParseWasmElemSegments    1              Some(1)        2566           375            0                   328476              0                   48095               
+        ParseWasmImports         1              Some(1)        5483           806            0                   701845              0                   103229              
+        ParseWasmExports         1              Some(1)        3354           284            0                   429383              0                   36394               
+        ParseWasmDataSegmentBytes1              Some(1)        0              2              0                   28                  0                   257                 
+        InstantiateWasmInstructions1              None           43030          70704          43030               0                   70704               0                   
+        InstantiateWasmFunctions 1              Some(1)        59             114            0                   7556                0                   14613               
+        InstantiateWasmGlobals   1              Some(1)        83             53             0                   10711               0                   6833                
+        InstantiateWasmTableEntries1              Some(1)        25             8              0                   3300                0                   1025                
         InstantiateWasmTypes     1              None           0              0              0                   0                   0                   0                   
-        InstantiateWasmDataSegments1              Some(1)        127            1012           0                   16370               0                   129632              
-        InstantiateWasmElemSegments1              Some(1)        221            106            0                   28309               0                   13665               
-        InstantiateWasmImports   1              Some(1)        5339           603            0                   683461              0                   77273               
-        InstantiateWasmExports   1              Some(1)        2320           71             0                   297065              0                   9176                
-        InstantiateWasmDataSegmentBytes1              Some(1)        25191          69256          25191               14                  69256               126                 
+        InstantiateWasmDataSegments1              Some(1)        179            1012           0                   23038               0                   129632              
+        InstantiateWasmElemSegments1              Some(1)        331            106            0                   42488               0                   13665               
+        InstantiateWasmImports   1              Some(1)        6476           762            0                   828974              0                   97637               
+        InstantiateWasmExports   1              Some(1)        2321           71             0                   297100              0                   9176                
+        InstantiateWasmDataSegmentBytes1              Some(1)        0              0              0                   14                  0                   126                 
         Sec1DecodePointUncompressed1              None           1882           0              1882                0                   0                   0                   
         VerifyEcdsaSecp256r1Sig  1              None           3000906        0              3000906             0                   0                   0                   
         =====================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 45
-        Shadow cpu limit: 100000000; used: 16287502
-        Shadow mem limit: 41943040; used: 453288
+        Shadow cpu limit: 100000000; used: 15754241
+        Shadow mem limit: 41943040; used: 302115
         =====================================================================================================================================================================
 
     "#]];
