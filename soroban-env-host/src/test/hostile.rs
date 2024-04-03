@@ -532,91 +532,91 @@ fn excessive_logging() -> Result<(), HostError> {
 
     #[cfg(feature = "next")]
     let expected_budget = expect![[r#"
-        =======================================================
+        =================================================================
         Cpu limit: 2000000; used: 212908
         Mem limit: 500000; used: 166460
-        =======================================================
-        CostType                 cpu_insns      mem_bytes      
-        WasmInsnExec             300            0              
-        MemAlloc                 15292          67040          
-        MemCpy                   2331           0              
-        MemCmp                   416            0              
-        DispatchHostFunction     310            0              
-        VisitObject              244            0              
-        ValSer                   0              0              
-        ValDeser                 0              0              
-        ComputeSha256Hash        3738           0              
-        ComputeEd25519PubKey     0              0              
-        VerifyEd25519Sig         0              0              
-        VmInstantiation          0              0              
-        VmCachedInstantiation    0              0              
-        InvokeVmFunction         1948           14             
-        ComputeKeccak256Hash     0              0              
-        DecodeEcdsaCurve256Sig   0              0              
-        RecoverEcdsaSecp256k1Key 0              0              
-        Int256AddSub             0              0              
-        Int256Mul                0              0              
-        Int256Div                0              0              
-        Int256Pow                0              0              
-        Int256Shift              0              0              
-        ChaCha20DrawBytes        0              0              
-        ParseWasmInstructions    74665          17967          
-        ParseWasmFunctions       4224           370            
-        ParseWasmGlobals         1377           104            
-        ParseWasmTableEntries    29989          6285           
-        ParseWasmTypes           8292           505            
-        ParseWasmDataSegments    0              0              
-        ParseWasmElemSegments    0              0              
-        ParseWasmImports         5483           806            
-        ParseWasmExports         6709           568            
-        ParseWasmDataSegmentBytes0              0              
-        InstantiateWasmInstructions43030          70704          
-        InstantiateWasmFunctions 59             114            
-        InstantiateWasmGlobals   83             53             
-        InstantiateWasmTableEntries3300           1025           
-        InstantiateWasmTypes     0              0              
-        InstantiateWasmDataSegments0              0              
-        InstantiateWasmElemSegments0              0              
-        InstantiateWasmImports   6476           762            
-        InstantiateWasmExports   4642           143            
-        InstantiateWasmDataSegmentBytes0              0              
-        Sec1DecodePointUncompressed0              0              
-        VerifyEcdsaSecp256r1Sig  0              0              
-        =======================================================
+        =================================================================
+        CostType                           cpu_insns      mem_bytes      
+        WasmInsnExec                       300            0              
+        MemAlloc                           15292          67040          
+        MemCpy                             2331           0              
+        MemCmp                             416            0              
+        DispatchHostFunction               310            0              
+        VisitObject                        244            0              
+        ValSer                             0              0              
+        ValDeser                           0              0              
+        ComputeSha256Hash                  3738           0              
+        ComputeEd25519PubKey               0              0              
+        VerifyEd25519Sig                   0              0              
+        VmInstantiation                    0              0              
+        VmCachedInstantiation              0              0              
+        InvokeVmFunction                   1948           14             
+        ComputeKeccak256Hash               0              0              
+        DecodeEcdsaCurve256Sig             0              0              
+        RecoverEcdsaSecp256k1Key           0              0              
+        Int256AddSub                       0              0              
+        Int256Mul                          0              0              
+        Int256Div                          0              0              
+        Int256Pow                          0              0              
+        Int256Shift                        0              0              
+        ChaCha20DrawBytes                  0              0              
+        ParseWasmInstructions              74665          17967          
+        ParseWasmFunctions                 4224           370            
+        ParseWasmGlobals                   1377           104            
+        ParseWasmTableEntries              29989          6285           
+        ParseWasmTypes                     8292           505            
+        ParseWasmDataSegments              0              0              
+        ParseWasmElemSegments              0              0              
+        ParseWasmImports                   5483           806            
+        ParseWasmExports                   6709           568            
+        ParseWasmDataSegmentBytes          0              0              
+        InstantiateWasmInstructions        43030          70704          
+        InstantiateWasmFunctions           59             114            
+        InstantiateWasmGlobals             83             53             
+        InstantiateWasmTableEntries        3300           1025           
+        InstantiateWasmTypes               0              0              
+        InstantiateWasmDataSegments        0              0              
+        InstantiateWasmElemSegments        0              0              
+        InstantiateWasmImports             6476           762            
+        InstantiateWasmExports             4642           143            
+        InstantiateWasmDataSegmentBytes    0              0              
+        Sec1DecodePointUncompressed        0              0              
+        VerifyEcdsaSecp256r1Sig            0              0              
+        =================================================================
 
     "#]];
 
     #[cfg(not(feature = "next"))]
     let expected_budget = expect![[r#"
-        =======================================================
+        =================================================================
         Cpu limit: 2000000; used: 522315
         Mem limit: 500000; used: 202391
-        =======================================================
-        CostType                 cpu_insns      mem_bytes      
-        WasmInsnExec             300            0              
-        MemAlloc                 15750          67248          
-        MemCpy                   2298           0              
-        MemCmp                   696            0              
-        DispatchHostFunction     310            0              
-        VisitObject              244            0              
-        ValSer                   0              0              
-        ValDeser                 0              0              
-        ComputeSha256Hash        3738           0              
-        ComputeEd25519PubKey     0              0              
-        VerifyEd25519Sig         0              0              
-        VmInstantiation          497031         135129         
-        VmCachedInstantiation    0              0              
-        InvokeVmFunction         1948           14             
-        ComputeKeccak256Hash     0              0              
-        ComputeEcdsaSecp256k1Sig 0              0              
-        RecoverEcdsaSecp256k1Key 0              0              
-        Int256AddSub             0              0              
-        Int256Mul                0              0              
-        Int256Div                0              0              
-        Int256Pow                0              0              
-        Int256Shift              0              0              
-        ChaCha20DrawBytes        0              0              
-        =======================================================
+        =================================================================
+        CostType                           cpu_insns      mem_bytes      
+        WasmInsnExec                       300            0              
+        MemAlloc                           15750          67248          
+        MemCpy                             2298           0              
+        MemCmp                             696            0              
+        DispatchHostFunction               310            0              
+        VisitObject                        244            0              
+        ValSer                             0              0              
+        ValDeser                           0              0              
+        ComputeSha256Hash                  3738           0              
+        ComputeEd25519PubKey               0              0              
+        VerifyEd25519Sig                   0              0              
+        VmInstantiation                    497031         135129         
+        VmCachedInstantiation              0              0              
+        InvokeVmFunction                   1948           14             
+        ComputeKeccak256Hash               0              0              
+        ComputeEcdsaSecp256k1Sig           0              0              
+        RecoverEcdsaSecp256k1Key           0              0              
+        Int256AddSub                       0              0              
+        Int256Mul                          0              0              
+        Int256Div                          0              0              
+        Int256Pow                          0              0              
+        Int256Shift                        0              0              
+        ChaCha20DrawBytes                  0              0              
+        =================================================================
 
     "#]];
 

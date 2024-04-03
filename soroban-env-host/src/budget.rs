@@ -777,7 +777,7 @@ impl Default for BudgetImpl {
 
 impl Debug for BudgetImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{:=<165}", "")?;
+        writeln!(f, "{:=<175}", "")?;
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
@@ -788,10 +788,10 @@ impl Debug for BudgetImpl {
             "Mem limit: {}; used: {}",
             self.mem_bytes.limit, self.mem_bytes.total_count
         )?;
-        writeln!(f, "{:=<165}", "")?;
+        writeln!(f, "{:=<175}", "")?;
         writeln!(
             f,
-            "{:<25}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
+            "{:<35}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
             "CostType",
             "iterations",
             "input",
@@ -806,7 +806,7 @@ impl Debug for BudgetImpl {
             let i = ct as usize;
             writeln!(
                 f,
-                "{:<25}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
+                "{:<35}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
                 format!("{:?}", ct),
                 self.tracker.cost_tracker[i].iterations,
                 format!("{:?}", self.tracker.cost_tracker[i].inputs),
@@ -818,7 +818,7 @@ impl Debug for BudgetImpl {
                 format!("{}", self.mem_bytes.cost_models[i].lin_term),
             )?;
         }
-        writeln!(f, "{:=<165}", "")?;
+        writeln!(f, "{:=<175}", "")?;
         writeln!(
             f,
             "Internal details (diagnostics info, does not affect fees) "
@@ -838,14 +838,14 @@ impl Debug for BudgetImpl {
             "Shadow mem limit: {}; used: {}",
             self.mem_bytes.shadow_limit, self.mem_bytes.shadow_total_count
         )?;
-        writeln!(f, "{:=<165}", "")?;
+        writeln!(f, "{:=<175}", "")?;
         Ok(())
     }
 }
 
 impl Display for BudgetImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{:=<55}", "")?;
+        writeln!(f, "{:=<65}", "")?;
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
@@ -856,23 +856,23 @@ impl Display for BudgetImpl {
             "Mem limit: {}; used: {}",
             self.mem_bytes.limit, self.mem_bytes.total_count
         )?;
-        writeln!(f, "{:=<55}", "")?;
+        writeln!(f, "{:=<65}", "")?;
         writeln!(
             f,
-            "{:<25}{:<15}{:<15}",
+            "{:<35}{:<15}{:<15}",
             "CostType", "cpu_insns", "mem_bytes",
         )?;
         for ct in ContractCostType::variants() {
             let i = ct as usize;
             writeln!(
                 f,
-                "{:<25}{:<15}{:<15}",
+                "{:<35}{:<15}{:<15}",
                 format!("{:?}", ct),
                 self.tracker.cost_tracker[i].cpu,
                 self.tracker.cost_tracker[i].mem,
             )?;
         }
-        writeln!(f, "{:=<55}", "")?;
+        writeln!(f, "{:=<65}", "")?;
         Ok(())
     }
 }
