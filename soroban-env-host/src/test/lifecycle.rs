@@ -1191,6 +1191,45 @@ mod cap_54_55_56 {
         Ok(())
     }
 
+    // Test that, when running on protocol vNew and calling a wasm that is in
+    // the footprint but not in storage, we get a storage error as well (though
+    // a different one: ScErrorCode::MissingValue). This is a minor variant of
+    // the `test_v_new_call_nonexistent_wasm` test above.
+    #[test]
+    fn test_v_new_call_wasm_in_footprint_but_not_storage() -> Result<(), HostError> {
+        let (host, contract_id) = upload_and_make_host_for_next_ledger(
+            "test_v_new_call_wasm_in_footprint_but_not_storage_upload",
+            V_NEW,
+            "test_v_new_call_wasm_in_footprint_but_not_storage_call",
+            V_NEW,
+        )?;
+        let contract = host.add_host_object(crate::xdr::ScAddress::Contract(contract_id))?;
+
+        // Remove the wasm from storage by setting its value to `None`.
+        let wasm_to_delete = wasm_module_with_a_bit_of_everything(V_NEW);
+        let wasm_hash = Hash(
+            sha256_hash_from_bytes(&wasm_to_delete, host.as_budget())?
+                .try_into()
+                .unwrap(),
+        );
+        let wasm_key = host.contract_code_ledger_key(&wasm_hash)?;
+        host.with_mut_storage(|storage| {
+            let budget = host.budget_cloned();
+            storage.map = storage.map.insert(wasm_key, None, &budget)?;
+            Ok(())
+        })?;
+
+        // Cache is built here, wasm is not present by time cache is built so it fails.
+        let test_symbol = Symbol::try_from_small_str("test")?;
+        let args = host.vec_new()?;
+        let res = host.call(contract, test_symbol, args);
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::Storage, ScErrorCode::MissingValue)
+        ));
+        Ok(())
+    }
+
     // Test that, when running on protocol vNew and calling a wasm that
     // initially _is_ in the footprint or storage, but is _deleted_ during
     // execution, we then get a storage error. This is a minor variant of the
