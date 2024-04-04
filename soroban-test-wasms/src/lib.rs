@@ -76,6 +76,8 @@ mod curr {
         include_bytes!("../wasm-workspace/opt/curr/auth_test_contract.wasm").as_slice();
     pub const UPDATEABLE_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_updateable_contract.wasm").as_slice();
+    pub const UPLOAD_CONTRACT: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/example_upload_contract.wasm").as_slice();
     pub const DELEGATED_ACCOUNT_TEST_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/test_delegated_account.wasm").as_slice();
     pub const ERR: &[u8] = include_bytes!("../wasm-workspace/opt/curr/example_err.wasm").as_slice();

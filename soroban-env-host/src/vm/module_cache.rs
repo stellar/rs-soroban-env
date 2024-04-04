@@ -129,17 +129,12 @@ impl ModuleCache {
     pub fn get_module(
         &self,
         host: &Host,
-        contract_id: &Hash,
-    ) -> Result<Rc<ParsedModule>, HostError> {
-        if let Some(m) = self.modules.get(contract_id, host)? {
-            return Ok(m.clone());
+        wasm_hash: &Hash,
+    ) -> Result<Option<Rc<ParsedModule>>, HostError> {
+        if let Some(m) = self.modules.get(wasm_hash, host)? {
+            Ok(Some(m.clone()))
         } else {
-            Err(host.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "module cache missing contract",
-                &[],
-            ))
+            Ok(None)
         }
     }
 }
