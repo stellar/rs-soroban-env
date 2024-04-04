@@ -23,6 +23,7 @@ members = [
     "auth",
     "fib",
     "contract_data",
+    "upload_contract",
     "create_contract",
     "invoke_contract",
     "linear_memory",
@@ -57,7 +58,7 @@ lto = true
 rust-version = "1.74.0"
 
 [workspace.dependencies.soroban-sdk]
-version = "=20.3.0"
+version = "=20.5.0"
 git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]

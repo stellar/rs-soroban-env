@@ -657,15 +657,56 @@ impl Host {
                 #[cfg(not(feature = "recording_mode"))]
                 self.build_module_cache_if_needed()?;
                 let contract_id = id.metered_clone(self)?;
-                let vm = if let Some(cache) = &*self.try_borrow_module_cache()? {
-                    // This branch should be taken if we're on a protocol that
-                    // supports the module cache.
-                    let module = cache.get_module(self, wasm_hash)?;
+                let parsed_module = if let Some(cache) = &*self.try_borrow_module_cache()? {
+                    // Check that storage thinks the entry exists before
+                    // checking the cache: this seems like overkill but it
+                    // provides some future-proofing, see below.
+                    let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
+                    if self
+                        .try_borrow_storage_mut()?
+                        .has(&wasm_key, self.budget_ref())?
+                    {
+                        cache.get_module(self, wasm_hash)?
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                let vm = if let Some(module) = parsed_module {
                     Vm::from_parsed_module(self, contract_id, module)?
                 } else {
-                    // If we got here we're running/replaying a protocol version
-                    // with no module cache. We'll parse the contract anew and
-                    // throw it away, as we did in that old protocol.
+                    // We can get here a few ways:
+                    //
+                    //   1. We are running/replaying a protocol that has no
+                    //      module cache.
+                    //
+                    //   2. We have a module cache, but it somehow doesn't have
+                    //      the module requested. This in turn has two
+                    //      sub-cases:
+                    //
+                    //     - User invoked us with bad input, eg. calling a
+                    //       contract that wasn't provided in footprint/storage.
+                    //
+                    //     - User uploaded the wasm _in this transaction_ so we
+                    //       didn't cache it when starting the transaction (and
+                    //       couldn't due to wasmi locking its engine while
+                    //       running).
+                    //
+                    //   3. Even more pathological: the module cache was built,
+                    //      and contained the module, but someone _removed_ the
+                    //      wasm from storage after the the cache was built
+                    //      (this is not currently possible from guest code, but
+                    //      we do some future-proofing here in case it becomes
+                    //      possible). This is the case we handle above with the
+                    //      early check for storage.has(wasm_key) before
+                    //      checking the cache as well.
+                    //
+                    // In all these cases, we want to try accessing storage, and
+                    // if it has the wasm, make a _throwaway_ module with its
+                    // own engine. If it doesn't have the wasm, we want to fail
+                    // with a storage error.
+
                     let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
                     Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs)?
                 };
