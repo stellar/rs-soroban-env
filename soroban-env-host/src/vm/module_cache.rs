@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     budget::{get_wasmi_config, AsBudget},
-    host::metered_clone::MeteredClone,
+    host::metered_clone::{MeteredClone, MeteredContainer},
     xdr::{Hash, ScErrorCode, ScErrorType},
     Host, HostError, MeteredOrdMap,
 };
@@ -101,7 +101,7 @@ impl ModuleCache {
     ) -> Result<T, HostError> {
         let mut import_symbols = BTreeSet::new();
         for module in self.modules.values(host)? {
-            module.with_import_symbols(|module_symbols| {
+            module.with_import_symbols(host, |module_symbols| {
                 for hf in HOST_FUNCTIONS {
                     let sym = (hf.mod_str, hf.fn_str);
                     if module_symbols.contains(&sym) {
@@ -111,6 +111,14 @@ impl ModuleCache {
                 Ok(())
             })?;
         }
+        // We approximate the cost of `BTreeSet` with the cost of initializng a
+        // `Vec` with the same elements, and we are doing it after the set has
+        // been created. The element count has been limited/charged during the
+        // parsing phase, so there is no DOS factor. We don't charge for
+        // insertion/lookups, since they should be cheap and number of
+        // operations on the set is limited (only used during `Linker`
+        // creation).
+        Vec::<(&str, &str)>::charge_bulk_init_cpy(import_symbols.len() as u64, host)?;
         callback(&import_symbols)
     }
 

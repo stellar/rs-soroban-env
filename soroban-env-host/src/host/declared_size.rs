@@ -62,6 +62,7 @@ impl_declared_size_type!(i64, 8);
 impl_declared_size_type!(u128, 16);
 impl_declared_size_type!(i128, 16);
 impl_declared_size_type!(usize, 8);
+impl_declared_size_type!(&str, 16);
 
 // Val-wrapping types
 impl_declared_size_type!(Val, 8);
@@ -343,6 +344,7 @@ mod test {
         expect!["16"].assert_eq(size_of::<u128>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<i128>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<usize>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<&str>().to_string().as_str());
 
         // Val-wrapping types
         expect!["8"].assert_eq(size_of::<Val>().to_string().as_str());
@@ -574,6 +576,7 @@ mod test {
         assert_mem_size_le_declared_size!(u128);
         assert_mem_size_le_declared_size!(i128);
         assert_mem_size_le_declared_size!(usize);
+        assert_mem_size_le_declared_size!(&str);
 
         // Val-wrapping types
         assert_mem_size_le_declared_size!(Val);

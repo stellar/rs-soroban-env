@@ -1,5 +1,6 @@
 use crate::{
     err,
+    host::metered_clone::MeteredContainer,
     meta::{self, get_ledger_protocol_version},
     xdr::{ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
@@ -165,6 +166,7 @@ impl ParsedModule {
 
     pub fn with_import_symbols<T>(
         &self,
+        host: &Host,
         callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
     ) -> Result<T, HostError> {
         // Cap symbols we're willing to import at 10 characters for each of
@@ -186,11 +188,24 @@ impl ParsedModule {
                 None
             })
             .collect();
+        // We approximate the cost of `BTreeSet` with the cost of initializng a
+        // `Vec` with the same elements, and we are doing it after the set has
+        // been created. The element count has been limited/charged during the
+        // parsing phase, so there is no DOS factor. We don't charge for
+        // insertion/lookups, since they should be cheap and number of
+        // operations on the set is limited.
+        if cfg!(feature = "next")
+            && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
+        {
+            Vec::<(&str, &str)>::charge_bulk_init_cpy(symbols.len() as u64, host)?;
+        }
         callback(&symbols)
     }
 
-    pub fn make_linker(&self) -> Result<wasmi::Linker<Host>, HostError> {
-        self.with_import_symbols(|symbols| Host::make_linker(self.module.engine(), symbols))
+    pub fn make_linker(&self, host: &Host) -> Result<wasmi::Linker<Host>, HostError> {
+        self.with_import_symbols(host, |symbols| {
+            Host::make_linker(self.module.engine(), symbols)
+        })
     }
 
     #[cfg(feature = "bench")]
