@@ -4,7 +4,7 @@ use crate::{Env, Host, HostError, Val};
 
 #[test]
 fn tuple_conversions() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     let val: Val = (1u32, 1i32).try_into_val(&*host)?;
 
@@ -22,7 +22,7 @@ fn tuple_conversions() -> Result<(), HostError> {
 
 #[test]
 fn tuple_array_conversions() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     let val: [Val; 0] = ().try_into_val(&*host)?;
     let _unit: () = val.try_into_val(&*host)?;

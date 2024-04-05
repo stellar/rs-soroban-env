@@ -23,7 +23,7 @@ use crate::{
 use itertools::Itertools;
 use std::{cell::RefCell, collections::BTreeMap, env, fs::File, path::PathBuf, rc::Rc};
 
-fn full_path(testname: &str) -> PathBuf {
+fn full_path(protocol: u32, testname: &str) -> PathBuf {
     let testname = if let Some((_, rest)) = testname.split_once("::") {
         rest.to_string()
     } else {
@@ -38,6 +38,7 @@ fn full_path(testname: &str) -> PathBuf {
             .join("soroban-env-host"),
     };
     root.join("observations")
+        .join(protocol.to_string())
         .join(filename)
         .with_extension("json")
 }
@@ -56,8 +57,8 @@ fn diff_line(last: &String, new: &String) -> String {
 
 #[cfg(all(not(feature = "next"), feature = "testutils"))]
 impl Observations {
-    fn load(testname: &str) -> Self {
-        let path = full_path(testname);
+    fn load(protocol: u32, testname: &str) -> Self {
+        let path = full_path(protocol, testname);
         let obs: BTreeMap<String, String> = if path.exists() {
             println!("reading {}", path.display());
             let file = File::open(&path).expect(&format!("unable to open {}", path.display()));
@@ -68,8 +69,8 @@ impl Observations {
         Self(obs)
     }
 
-    fn save(&self, testname: &str) {
-        let path = full_path(testname);
+    fn save(&self, protocol: u32, testname: &str) {
+        let path = full_path(protocol, testname);
         println!("writing {}", path.display());
         let file = File::create(&path).expect(&format!("unable to create {}", path.display()));
         serde_json::to_writer_pretty(file, &self.0)
@@ -84,7 +85,13 @@ impl Observations {
     // _not_ in update_observations mode (i.e. it's enforcing) it also calls
     // assert_eq! on the observations at this point, which will cause an
     // observed test to fail if there were differences from the old recording.
-    fn check(old: &Observations, new: &mut Observations, name: &'static str, tr: TraceRecord) {
+    fn check(
+        old: &Observations,
+        new: &mut Observations,
+        protocol: u32,
+        name: &'static str,
+        tr: TraceRecord,
+    ) {
         let mut disagreement: Option<(usize, String, String)> = None;
 
         if tr.event.is_begin() {
@@ -134,7 +141,7 @@ impl Observations {
                 }
             }
             if update_observations() {
-                new.save(&name);
+                new.save(protocol, &name);
             } else {
                 if let Some((i, old, new)) = disagreement {
                     assert_eq!(
@@ -173,7 +180,10 @@ impl ObservedHost {
 
     #[cfg(all(not(feature = "next"), feature = "testutils"))]
     pub(crate) fn new(testname: &'static str, host: Host) -> Self {
-        let old_obs = Rc::new(RefCell::new(Observations::load(testname)));
+        let protocol = host
+            .get_ledger_protocol_version()
+            .expect("getting ledger protocol");
+        let old_obs = Rc::new(RefCell::new(Observations::load(protocol, testname)));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
         let oh = Self {
             old_obs,
@@ -195,8 +205,17 @@ impl ObservedHost {
         let new_obs = self.new_obs.clone();
         let testname = self.testname;
         Rc::new(move |host, evt| {
+            let protocol = host
+                .get_ledger_protocol_version()
+                .expect("getting ledger protocol");
             let tr = TraceRecord::new(host, evt).expect("observing host");
-            Observations::check(&old_obs.borrow(), &mut new_obs.borrow_mut(), testname, tr);
+            Observations::check(
+                &old_obs.borrow(),
+                &mut new_obs.borrow_mut(),
+                protocol,
+                testname,
+                tr,
+            );
             Ok(())
         })
     }
