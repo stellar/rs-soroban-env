@@ -1071,10 +1071,7 @@ pub(crate) mod wasm {
     pub(crate) fn wasm_module_with_extern_ref() -> Vec<u8> {
         let mut me = ModEmitter::new();
         me.table(RefType::EXTERNREF, 2, None);
-        me.custom_section(
-            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
-            &soroban_env_common::meta::XDR,
-        );
+        me.add_protocol_version_meta();
         me.finish_no_validate()
     }
 

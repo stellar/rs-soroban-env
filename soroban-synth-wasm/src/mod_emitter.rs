@@ -1,5 +1,7 @@
 use crate::FuncEmitter;
-use std::{borrow::Cow, collections::BTreeMap};
+use soroban_env_common::xdr::{Limits, ScEnvMetaEntry, WriteXdr};
+use std::str::FromStr;
+use std::{borrow::Cow, collections::BTreeMap, env};
 #[cfg(feature = "adversarial")]
 use wasm_encoder::StartSection;
 use wasm_encoder::{
@@ -69,10 +71,7 @@ pub struct ModEmitter {
 impl Default for ModEmitter {
     fn default() -> Self {
         let mut me = Self::new();
-        me.custom_section(
-            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
-            &soroban_env_common::meta::XDR,
-        );
+        me.add_protocol_version_meta();
         me.table(RefType::FUNCREF, 128, None);
         me.memory(1, None, false, false);
         me.global(ValType::I64, true, &ConstExpr::i64_const(42));
@@ -84,15 +83,25 @@ impl Default for ModEmitter {
 impl ModEmitter {
     pub fn from_configs(mem_pages: u32, elem_count: u32) -> Self {
         let mut me = Self::new();
-        me.custom_section(
-            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
-            &soroban_env_common::meta::XDR,
-        );
+        me.add_protocol_version_meta();
         me.table(RefType::FUNCREF, elem_count, None);
         me.memory(mem_pages as u64, None, false, false);
         me.global(ValType::I64, true, &ConstExpr::i64_const(42));
         me.export("memory", wasm_encoder::ExportKind::Memory, 0);
         me
+    }
+
+    pub fn add_protocol_version_meta(&mut self) -> &mut Self {
+        let protocol_version = env::var("TEST_PROTOCOL")
+            .map(|v| u32::from_str(&v).unwrap())
+            .unwrap_or(soroban_env_common::meta::get_ledger_protocol_version(
+                soroban_env_common::meta::INTERFACE_VERSION,
+            ));
+        let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(protocol_version as u64);
+        self.custom_section(
+            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
+            &meta.to_xdr(Limits::none()).unwrap(),
+        )
     }
 
     pub fn new() -> Self {
