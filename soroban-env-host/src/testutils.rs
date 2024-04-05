@@ -167,7 +167,7 @@ impl SnapshotSource for MockSnapshotSource {
 #[cfg(test)]
 pub(crate) fn interface_meta_with_custom_versions(proto: u32, pre: u32) -> Vec<u8> {
     use crate::xdr::{Limited, Limits, ScEnvMetaEntry, WriteXdr};
-    let iv = (proto as u64) << 32 | pre as u64;
+    let iv = crate::meta::make_interface_version(proto, pre);
     let entry = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(iv);
     let bytes = Vec::<u8>::new();
     let mut w = Limited::new(bytes, Limits::none());
@@ -576,9 +576,7 @@ impl Host {
 
 #[cfg(test)]
 pub(crate) mod wasm {
-    use super::interface_meta_with_custom_versions;
     use crate::{Symbol, Tag, U32Val, Val};
-    use soroban_env_common::meta::{get_pre_release_version, INTERFACE_VERSION};
     use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
     use wasm_encoder::{ConstExpr, Elements, RefType};
 
@@ -1071,7 +1069,7 @@ pub(crate) mod wasm {
     pub(crate) fn wasm_module_with_extern_ref() -> Vec<u8> {
         let mut me = ModEmitter::new();
         me.table(RefType::EXTERNREF, 2, None);
-        me.add_protocol_version_meta();
+        me.add_test_protocol_version_meta();
         me.finish_no_validate()
     }
 
@@ -1115,11 +1113,7 @@ pub(crate) mod wasm {
 
     pub(crate) fn wasm_module_calling_protocol_gated_host_fn(wasm_proto: u32) -> Vec<u8> {
         let mut me = ModEmitter::new();
-        let pre = get_pre_release_version(INTERFACE_VERSION);
-        me.custom_section(
-            &"contractenvmetav0",
-            interface_meta_with_custom_versions(wasm_proto, pre).as_slice(),
-        );
+        me.add_protocol_version_meta(wasm_proto);
         // protocol_gated_dummy
         let f0 = me.import_func("t", "0", Arity(0));
         // the caller
@@ -1130,11 +1124,7 @@ pub(crate) mod wasm {
 
     pub(crate) fn wasm_module_with_a_bit_of_everything(wasm_proto: u32) -> Vec<u8> {
         let mut me = ModEmitter::new();
-        let pre = get_pre_release_version(INTERFACE_VERSION);
-        me.custom_section(
-            &"contractenvmetav0",
-            interface_meta_with_custom_versions(wasm_proto, pre).as_slice(),
-        );
+        me.add_protocol_version_meta(wasm_proto);
         me.table(RefType::FUNCREF, 128, None);
         me.memory(1, None, false, false);
         me.global(wasm_encoder::ValType::I64, true, &ConstExpr::i64_const(42));

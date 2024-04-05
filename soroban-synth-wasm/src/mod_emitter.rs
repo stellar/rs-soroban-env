@@ -71,7 +71,7 @@ pub struct ModEmitter {
 impl Default for ModEmitter {
     fn default() -> Self {
         let mut me = Self::new();
-        me.add_protocol_version_meta();
+        me.add_test_protocol_version_meta();
         me.table(RefType::FUNCREF, 128, None);
         me.memory(1, None, false, false);
         me.global(ValType::I64, true, &ConstExpr::i64_const(42));
@@ -83,7 +83,7 @@ impl Default for ModEmitter {
 impl ModEmitter {
     pub fn from_configs(mem_pages: u32, elem_count: u32) -> Self {
         let mut me = Self::new();
-        me.add_protocol_version_meta();
+        me.add_test_protocol_version_meta();
         me.table(RefType::FUNCREF, elem_count, None);
         me.memory(mem_pages as u64, None, false, false);
         me.global(ValType::I64, true, &ConstExpr::i64_const(42));
@@ -91,12 +91,7 @@ impl ModEmitter {
         me
     }
 
-    pub fn add_protocol_version_meta(&mut self) -> &mut Self {
-        let protocol_version = env::var("TEST_PROTOCOL")
-            .map(|v| u32::from_str(&v).unwrap())
-            .unwrap_or(soroban_env_common::meta::get_ledger_protocol_version(
-                soroban_env_common::meta::INTERFACE_VERSION,
-            ));
+    pub fn add_protocol_version_meta(&mut self, protocol_version: u32) -> &mut Self {
         let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(
             soroban_env_common::meta::make_interface_version(protocol_version, 0),
         );
@@ -104,6 +99,15 @@ impl ModEmitter {
             soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
             &meta.to_xdr(Limits::none()).unwrap(),
         )
+    }
+
+    pub fn add_test_protocol_version_meta(&mut self) -> &mut Self {
+        let protocol_version = env::var("TEST_PROTOCOL")
+            .map(|v| u32::from_str(&v).unwrap())
+            .unwrap_or(soroban_env_common::meta::get_ledger_protocol_version(
+                soroban_env_common::meta::INTERFACE_VERSION,
+            ));
+        self.add_protocol_version_meta(protocol_version)
     }
 
     pub fn new() -> Self {
