@@ -97,7 +97,9 @@ impl ModEmitter {
             .unwrap_or(soroban_env_common::meta::get_ledger_protocol_version(
                 soroban_env_common::meta::INTERFACE_VERSION,
             ));
-        let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(protocol_version as u64);
+        let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(
+            soroban_env_common::meta::make_interface_version(protocol_version, 0),
+        );
         self.custom_section(
             soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
             &meta.to_xdr(Limits::none()).unwrap(),
