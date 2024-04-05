@@ -17,7 +17,7 @@ fn is_object_error(err: HostError) -> bool {
 /// crypto tests
 #[test]
 fn sha256_test() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let compute_hash = |input_bytes: &[u8]| -> Result<Vec<u8>, HostError> {
         let bytes_obj = host.bytes_new_from_slice(input_bytes).unwrap();
         let hash_obj = host.compute_hash_sha256(bytes_obj)?;
@@ -58,7 +58,7 @@ fn sha256_test() {
 
 #[test]
 fn keccak256_test() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let compute_hash = |input_bytes: &[u8]| -> Result<Vec<u8>, HostError> {
         let bytes_obj = host.bytes_new_from_slice(input_bytes).unwrap();
         let hash_obj = host.compute_hash_keccak256(bytes_obj)?;
@@ -99,7 +99,7 @@ fn keccak256_test() {
 
 #[test]
 fn ed25519_verify_test() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     let verify_sig =
         |public_key: Vec<u8>, message: Vec<u8>, signature: Vec<u8>| -> Result<(), HostError> {
@@ -181,7 +181,7 @@ fn ed25519_verify_test() {
 
 #[test]
 fn recover_ecdsa_secp256k1_key_test() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     let recover_sig =
         |msg_digest: Vec<u8>, signature: Vec<u8>, recovery_id: u32| -> Result<String, HostError> {
@@ -260,7 +260,7 @@ fn recover_ecdsa_secp256k1_key_test() {
 fn test_secp256r1_signature_verification() -> Result<(), HostError> {
     use crate::{VmCaller, VmCallerEnv};
 
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     let verify_sig = |public_key: Vec<u8>,
                       msg_digest: Vec<u8>,

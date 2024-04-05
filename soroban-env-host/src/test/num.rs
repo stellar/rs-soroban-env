@@ -59,7 +59,7 @@ fn check_roundtrip_compare_ok<
 
 #[test]
 fn test_num_scval_roundtrips() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     check_roundtrip_ok::<i64>(&host, 0_i64, false);
     check_roundtrip_ok::<i64>(&host, 1_i64, false);
@@ -135,7 +135,7 @@ fn test_num_scval_roundtrips() {
 
 #[test]
 fn test_num_val_scval_roundtrip_ordering() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let input_vec = vec![
         0_i128,
         1_i128,
@@ -279,7 +279,7 @@ where
 
 #[test]
 fn test_u256_arith() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     // add
     check_num_arith_ok(
         &host,
@@ -347,7 +347,7 @@ fn test_u256_arith() -> Result<(), HostError> {
 
 #[test]
 fn test_i256_arith() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     // add
     check_num_arith_ok(
         &host,
@@ -410,7 +410,7 @@ fn test_i256_arith() -> Result<(), HostError> {
 
 #[test]
 fn test_i256_bytes_roundtrip() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let num = I256::from_words(-4353239472894, 6576786237846);
     let bo = host.bytes_new_from_slice(num.to_be_bytes().as_slice())?;
     let val = host.i256_val_from_be_bytes(bo)?;
@@ -425,7 +425,7 @@ fn test_i256_bytes_roundtrip() -> Result<(), HostError> {
 
 #[test]
 fn test_u256_bytes_roundtrip() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let num = U256::from_words(4353239472894, 6576786237846);
     let bo = host.bytes_new_from_slice(num.to_be_bytes().as_slice())?;
     let val = host.u256_val_from_be_bytes(bo)?;

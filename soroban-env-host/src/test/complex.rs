@@ -13,7 +13,7 @@ use super::observe::ObservedHost;
 #[test]
 fn run_complex() -> Result<(), HostError> {
     let info = crate::LedgerInfo {
-        protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
+        protocol_version: Host::current_test_protocol(),
         sequence_number: 1234,
         timestamp: 1234,
         network_id: [7; 32],
@@ -55,11 +55,9 @@ fn run_complex() -> Result<(), HostError> {
             Footprint::default(),
             MeteredOrdMap::default(),
         );
-        let host = ObservedHost::new(
-            "soroban_env_host::test::complex::run_complex_2",
-            Host::with_storage_and_budget(store, Budget::default()),
-        );
+        let host = Host::with_storage_and_budget(store, Budget::default());
         host.set_ledger_info(info)?;
+        let host = ObservedHost::new("soroban_env_host::test::complex::run_complex_2", host);
         host.setup_storage_footprint(foot)?;
 
         let contract_id_obj =

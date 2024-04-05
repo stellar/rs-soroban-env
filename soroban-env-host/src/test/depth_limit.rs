@@ -9,7 +9,7 @@ use crate::{
 
 #[test]
 fn deep_scval_to_host_val() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     host.as_budget().reset_unlimited()?;
 
     let mut v = ScVec::default();
@@ -33,7 +33,7 @@ fn deep_scval_to_host_val() -> Result<(), HostError> {
 
 #[test]
 fn deep_host_val_to_scval() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     host.as_budget().reset_unlimited()?;
 
     let mut hv = host.test_vec_obj::<u32>(&[])?;
@@ -49,7 +49,7 @@ fn deep_host_val_to_scval() -> Result<(), HostError> {
 
 #[test]
 fn deep_host_obj_clone() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     host.as_budget().reset_unlimited()?;
 
     let mut v = ScVec::default();
@@ -66,7 +66,7 @@ fn deep_host_obj_clone() -> Result<(), HostError> {
 
 #[test]
 fn deep_host_obj_cmp() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     host.as_budget().reset_unlimited()?;
 
     let mut hv = host.test_vec_obj::<u32>(&[])?;

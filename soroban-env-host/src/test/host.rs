@@ -49,7 +49,7 @@ fn invalid_object_handles() -> Result<(), HostError> {
 
 #[test]
 fn invalid_val() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let v = Val::from_payload(u64::MAX);
     let err = host.from_host_val(v).err().unwrap();
 

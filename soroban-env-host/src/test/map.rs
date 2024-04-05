@@ -15,7 +15,7 @@ const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCod
 
 #[test]
 fn map_put_has_and_get() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -43,7 +43,7 @@ fn map_put_has_and_get() -> Result<(), HostError> {
 
 #[test]
 fn map_put_insert_and_remove() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -102,7 +102,7 @@ fn map_put_insert_and_remove() -> Result<(), HostError> {
 
 #[test]
 fn map_iter_by_index() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -150,7 +150,7 @@ fn map_iter_by_index() -> Result<(), HostError> {
 
 #[test]
 fn hetro_map_iter_by_index() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let scmap: ScMap = host.map_err(
         vec![ScMapEntry {
             key: ScVal::U32(1),
@@ -232,7 +232,7 @@ fn hetro_map_iter_by_index() -> Result<(), HostError> {
 
 #[test]
 fn map_keys() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     let mut map = host.map_new()?;
     map = host.map_put(map, 2u32.into(), 20u32.into())?;
@@ -248,7 +248,7 @@ fn map_keys() -> Result<(), HostError> {
 
 #[test]
 fn map_values() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     let mut map = host.map_new()?;
     map = host.map_put(map, 2u32.into(), 20u32.into())?;
@@ -281,7 +281,7 @@ fn map_stack_no_overflow_65536_boxed_keys_and_vals() {
 
 #[test]
 fn scmap_out_of_order() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let bad_scmap = ScVal::Map(Some(ScMap(
         VecM::try_from(vec![
             ScMapEntry {
@@ -304,7 +304,7 @@ fn scmap_out_of_order() {
 
 #[test]
 fn scmap_duplicate() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let bad_scmap = ScVal::Map(Some(ScMap(
         VecM::try_from(vec![
             ScMapEntry {
@@ -323,7 +323,7 @@ fn scmap_duplicate() {
 
 #[test]
 fn scmap_invalid_element() {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let bad_nested_scmap = ScVal::Map(Some(ScMap(
         VecM::try_from(vec![
             ScMapEntry {
@@ -352,7 +352,7 @@ fn scmap_invalid_element() {
 #[test]
 fn map_build_bad_element_integrity() -> Result<(), HostError> {
     use crate::EnvBase;
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let obj = host.map_new()?;
 
     let ok_val = obj.to_val();
@@ -420,7 +420,7 @@ fn large_map_exceeds_budget() {
 #[test]
 fn initialization_invalid() -> Result<(), HostError> {
     use crate::EnvBase;
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     // Out of order keys
     assert!(host
@@ -536,7 +536,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
 
 #[test]
 fn metered_map_initialization() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let k1 = SymbolSmall::try_from_str("a")?.to_val();
     let k2 = SymbolSmall::try_from_str("b")?.to_val();
     let v1 = U32Val::from(1).to_val();
