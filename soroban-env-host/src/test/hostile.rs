@@ -532,7 +532,7 @@ fn excessive_logging() -> Result<(), HostError> {
         host.switch_to_enforcing_storage()?;
     }
 
-    let expected_budget_p20 = expect![[r#"
+    let expected_budget_p21 = expect![[r#"
         =================================================================
         Cpu limit: 2000000; used: 215305
         Mem limit: 500000; used: 166764
@@ -587,7 +587,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     "#]];
 
-    let expected_budget_p21 = expect![[r#"
+    let expected_budget_p20 = expect![[r#"
         =================================================================
         Cpu limit: 2000000; used: 522315
         Mem limit: 500000; used: 202391
