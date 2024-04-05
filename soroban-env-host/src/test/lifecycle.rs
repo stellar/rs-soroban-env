@@ -67,7 +67,7 @@ fn test_host() -> Host {
     let host = Host::with_storage_and_budget(storage, budget);
     host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
     host.set_ledger_info(LedgerInfo {
-        protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
+        protocol_version: Host::current_test_protocol(),
         network_id: generate_bytes_array(&host),
         ..Default::default()
     })

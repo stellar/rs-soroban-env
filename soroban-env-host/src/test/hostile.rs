@@ -840,14 +840,13 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
         (ScErrorType::WasmVm, ScErrorCode::InvalidInput)
     ));
 
-    let ledger_protocol = meta::get_ledger_protocol_version(meta::INTERFACE_VERSION);
-    let ledger_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
+    let ledger_protocol = host.get_ledger_protocol_version()?;
 
     // invalid: protocol is future
     let res = host.register_test_contract_wasm_from_source_account(
         wasm_util::wasm_module_with_custom_section(
             "contractenvmetav0",
-            interface_meta_with_custom_versions(ledger_protocol + 1, ledger_pre).as_slice(),
+            interface_meta_with_custom_versions(ledger_protocol + 1, 0).as_slice(),
         )
         .as_slice(),
         generate_account_id(&host),
@@ -875,10 +874,11 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
         ));
 
         // invalid: protocol is current but pre-release version doesn't match env's
+        let env_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
         let res = host.register_test_contract_wasm_from_source_account(
             wasm_util::wasm_module_with_custom_section(
                 "contractenvmetav0",
-                interface_meta_with_custom_versions(ledger_protocol, ledger_pre + 1).as_slice(),
+                interface_meta_with_custom_versions(ledger_protocol, env_pre + 1).as_slice(),
             )
             .as_slice(),
             generate_account_id(&host),
