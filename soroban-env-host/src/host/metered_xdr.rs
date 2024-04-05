@@ -1,11 +1,10 @@
 use crate::{
     budget::Budget,
+    host::crypto::sha256_hash_from_bytes_raw,
     xdr::{ContractCostType, Limited, ReadXdr, ScBytes, ScErrorCode, ScErrorType, WriteXdr},
     BytesObject, Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };
 use std::io::Write;
-
-use sha2::{Digest, Sha256};
 
 struct MeteredWrite<'a, W: Write> {
     budget: &'a Budget,
@@ -33,8 +32,7 @@ impl Host {
         let _span = tracy_span!("hash xdr");
         let mut buf = vec![];
         metered_write_xdr(self.budget_ref(), obj, &mut buf)?;
-        self.charge_budget(ContractCostType::ComputeSha256Hash, Some(buf.len() as u64))?;
-        Ok(Sha256::digest(&buf).try_into()?)
+        sha256_hash_from_bytes_raw(&buf, self)
     }
 
     pub fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
