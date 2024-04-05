@@ -84,9 +84,6 @@ impl Default for BudgetTracker {
                 ContractCostType::VmCachedInstantiation => init_input(), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ComputeKeccak256Hash => init_input(), // number of bytes in the buffer
-                #[cfg(not(feature = "next"))]
-                ContractCostType::ComputeEcdsaSecp256k1Sig => (),
-                #[cfg(feature = "next")]
                 ContractCostType::DecodeEcdsaCurve256Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
                 ContractCostType::Int256AddSub => (),
@@ -96,49 +93,27 @@ impl Default for BudgetTracker {
                 ContractCostType::Int256Shift => (),
                 ContractCostType::ChaCha20DrawBytes => init_input(), // number of random bytes to draw
 
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmInstructions => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmFunctions => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmGlobals => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTableEntries => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTypes => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegments => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmElemSegments => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmImports => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmExports => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegmentBytes => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmInstructions => (),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmFunctions => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmGlobals => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTableEntries => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTypes => (),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegments => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmElemSegments => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmImports => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmExports => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegmentBytes => init_input(),
-                #[cfg(feature = "next")]
                 ContractCostType::Sec1DecodePointUncompressed => (),
-                #[cfg(feature = "next")]
                 ContractCostType::VerifyEcdsaSecp256r1Sig => (),
             }
         }
@@ -289,6 +264,12 @@ impl BudgetImpl {
 /// read on-chain from network configuration via [`from_configs`] above.
 impl Default for BudgetImpl {
     fn default() -> Self {
+        #[cfg(any(test, feature = "testutils"))]
+        let proto = Host::current_test_protocol();
+
+        #[cfg(not(any(test, feature = "testutils")))]
+        let proto = crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION);
+
         let mut b = Self {
             cpu_insns: BudgetDimension::default(),
             mem_bytes: BudgetDimension::default(),
@@ -372,15 +353,14 @@ impl Default for BudgetImpl {
                     cpu.const_term = 451626;
                     cpu.lin_term = ScaledU64(45405);
                 }
-                #[cfg(not(feature = "next"))]
                 ContractCostType::VmCachedInstantiation => {
-                    cpu.const_term = 451626;
-                    cpu.lin_term = ScaledU64(45405);
-                }
-                #[cfg(feature = "next")]
-                ContractCostType::VmCachedInstantiation => {
-                    cpu.const_term = 41142;
-                    cpu.lin_term = ScaledU64(634);
+                    if proto < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+                        cpu.const_term = 451626;
+                        cpu.lin_term = ScaledU64(45405);
+                    } else {
+                        cpu.const_term = 41142;
+                        cpu.lin_term = ScaledU64(634);
+                    }
                 }
                 ContractCostType::InvokeVmFunction => {
                     cpu.const_term = 1948;
@@ -390,12 +370,6 @@ impl Default for BudgetImpl {
                     cpu.const_term = 3766;
                     cpu.lin_term = ScaledU64(5969);
                 }
-                #[cfg(not(feature = "next"))]
-                ContractCostType::ComputeEcdsaSecp256k1Sig => {
-                    cpu.const_term = 710;
-                    cpu.lin_term = ScaledU64(0);
-                }
-                #[cfg(feature = "next")]
                 ContractCostType::DecodeEcdsaCurve256Sig => {
                     cpu.const_term = 710;
                     cpu.lin_term = ScaledU64(0);
@@ -429,112 +403,90 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(501);
                 }
 
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmInstructions => {
                     cpu.const_term = 73077;
                     cpu.lin_term = ScaledU64(25410);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmFunctions => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(540752);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmGlobals => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(176363);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTableEntries => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(29989);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTypes => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(1061449);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegments => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(237336);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmElemSegments => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(328476);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmImports => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(701845);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmExports => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(429383);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegmentBytes => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(28);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmInstructions => {
                     cpu.const_term = 43030;
                     cpu.lin_term = ScaledU64(0);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmFunctions => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(7556);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmGlobals => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(10711);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTableEntries => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(3300);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTypes => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(0);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegments => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(23038);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmElemSegments => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(42488);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmImports => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(828974);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmExports => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(297100);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegmentBytes => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(14);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::Sec1DecodePointUncompressed => {
                     cpu.const_term = 1882;
                     cpu.lin_term = ScaledU64(0);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::VerifyEcdsaSecp256r1Sig => {
                     cpu.const_term = 3000906;
                     cpu.lin_term = ScaledU64(0);
@@ -598,15 +550,14 @@ impl Default for BudgetImpl {
                     mem.const_term = 130065;
                     mem.lin_term = ScaledU64(5064);
                 }
-                #[cfg(not(feature = "next"))]
                 ContractCostType::VmCachedInstantiation => {
-                    mem.const_term = 130065;
-                    mem.lin_term = ScaledU64(5064);
-                }
-                #[cfg(feature = "next")]
-                ContractCostType::VmCachedInstantiation => {
-                    mem.const_term = 69472;
-                    mem.lin_term = ScaledU64(1217);
+                    if proto < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+                        mem.const_term = 130065;
+                        mem.lin_term = ScaledU64(5064);
+                    } else {
+                        mem.const_term = 69472;
+                        mem.lin_term = ScaledU64(1217);
+                    }
                 }
                 ContractCostType::InvokeVmFunction => {
                     mem.const_term = 14;
@@ -616,12 +567,6 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                #[cfg(not(feature = "next"))]
-                ContractCostType::ComputeEcdsaSecp256k1Sig => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
-                #[cfg(feature = "next")]
                 ContractCostType::DecodeEcdsaCurve256Sig => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
@@ -655,112 +600,90 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(0);
                 }
 
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmInstructions => {
                     mem.const_term = 17564;
                     mem.lin_term = ScaledU64(6457);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmFunctions => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(47464);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmGlobals => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(13420);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTableEntries => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(6285);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmTypes => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(64670);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegments => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(29074);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmElemSegments => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(48095);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmImports => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(103229);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmExports => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(36394);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::ParseWasmDataSegmentBytes => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(257);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmInstructions => {
                     mem.const_term = 70704;
                     mem.lin_term = ScaledU64(0);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmFunctions => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(14613);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmGlobals => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(6833);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTableEntries => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(1025);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmTypes => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegments => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(129632);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmElemSegments => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(13665);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmImports => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(97637);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmExports => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(9176);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::InstantiateWasmDataSegmentBytes => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(126);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::Sec1DecodePointUncompressed => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                #[cfg(feature = "next")]
                 ContractCostType::VerifyEcdsaSecp256r1Sig => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);

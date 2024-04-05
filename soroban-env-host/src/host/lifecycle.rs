@@ -165,14 +165,6 @@ impl Host {
             )
         })?;
 
-        // We're going to make a code entry with an ext field which, if zero,
-        // can be read as either a protocol v20 ExtensionPoint::V0 value, or a
-        // protocol v21 ContractCodeEntryExt::V0 value, depending on which
-        // protocol we were compiled with.
-        #[cfg(not(feature = "next"))]
-        let ext = ExtensionPoint::V0;
-
-        #[cfg(feature = "next")]
         let mut ext = crate::xdr::ContractCodeEntryExt::V0;
 
         // Instantiate a temporary / throwaway VM using this wasm. This will do
@@ -193,7 +185,6 @@ impl Host {
                 Hash(hash_bytes.metered_clone(self)?),
                 wasm_bytes_m.as_slice(),
             )?;
-            #[cfg(feature = "next")]
             if self.get_ledger_protocol_version()? >= super::ModuleCache::MIN_LEDGER_VERSION {
                 // At this point we do a secondary parse on what we've checked to be a valid
                 // module in order to extract a refined cost model, which we'll store in the
@@ -226,7 +217,6 @@ impl Host {
             .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?;
 
         // We may also, in the cache-supporting protocol, overwrite the contract if its ext field changed.
-        #[cfg(feature = "next")]
         if !should_put_contract
             && self.get_ledger_protocol_version()? >= super::ModuleCache::MIN_LEDGER_VERSION
         {

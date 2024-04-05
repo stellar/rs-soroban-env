@@ -45,7 +45,6 @@ use wasmi::{Caller, StoreContextMut};
 impl wasmi::core::HostError for HostError {}
 
 const MAX_VM_ARGS: usize = 32;
-#[cfg(feature = "next")]
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
 
 struct VmInstantiationTimer {
@@ -326,9 +325,7 @@ impl Vm {
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<ParsedModule>, HostError> {
-        if cfg!(feature = "next")
-            && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
-        {
+        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
             if host.in_storage_recording_mode()? {
                 return host.budget_ref().with_observable_shadow_mode(|| {
                     ParsedModule::new(host, engine, wasm, cost_inputs)

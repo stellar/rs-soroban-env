@@ -484,12 +484,14 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
     );
 
     // constructing a big map will cause budget limit exceeded error
-    #[cfg(not(feature = "next"))]
-    const TOO_BIG: u32 = 20_000;
-    #[cfg(feature = "next")]
-    const TOO_BIG: u32 = 400_000;
+    let num_vals =
+        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+            20_000
+        } else {
+            400_000
+        };
     let wasm_long =
-        wasm::wasm_module_with_large_map_from_linear_memory(TOO_BIG, U32Val::from(7).to_val());
+        wasm::wasm_module_with_large_map_from_linear_memory(num_vals, U32Val::from(7).to_val());
     host.clear_module_cache()?;
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
@@ -498,11 +500,12 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
     // We want to observe a failure that happens part way through contract
     // instantiation, which means the weird half-deferred charging of
     // module-cache construct we do in storage-recording mode will interfere
-    // with this test in features=next,testutils mode (which turns on
+    // with this test in feature=testutils mode (which turns on
     // feature=recording_mode implicitly). The easiest workaround is just to
     // switch to enforcing mode.
-    #[cfg(feature = "next")]
-    host.switch_to_enforcing_storage()?;
+    if host.get_ledger_protocol_version()? >= crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+        host.switch_to_enforcing_storage()?;
+    }
 
     let res = host.call(
         contract_id_obj2,

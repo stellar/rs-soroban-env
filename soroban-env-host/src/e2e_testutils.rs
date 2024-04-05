@@ -1,4 +1,3 @@
-#[cfg(feature = "next")]
 use crate::xdr::ContractCodeEntryExt;
 use crate::xdr::{
     AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractDataDurability,
@@ -49,16 +48,12 @@ pub fn bytes_sc_val(bytes: &[u8]) -> ScVal {
 
 pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
     ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
-        #[cfg(not(feature = "next"))]
-        ext: ExtensionPoint::V0,
-        #[cfg(feature = "next")]
         ext: ContractCodeEntryExt::V0,
         hash: get_wasm_hash(wasm).try_into().unwrap(),
         code: wasm.try_into().unwrap(),
     }))
 }
 
-#[cfg(feature = "next")]
 pub fn wasm_entry_with_refined_contract_cost_inputs(wasm: &[u8]) -> LedgerEntry {
     use crate::xdr::ContractCodeEntryV1;
     let host = crate::Host::default();
@@ -104,7 +99,7 @@ impl CreateContractData {
     pub fn new_with_refined_contract_cost_inputs(
         salt: [u8; 32],
         wasm: &[u8],
-        _refined_cost_inputs: bool,
+        refined_cost_inputs: bool,
     ) -> Self {
         let deployer = get_account_id([123; 32]);
         let contract_id_preimage = get_contract_id_preimage(&deployer, &salt);
@@ -136,11 +131,7 @@ impl CreateContractData {
             }),
         }));
 
-        #[cfg(not(feature = "next"))]
-        let wasm_entry = wasm_entry(wasm);
-
-        #[cfg(feature = "next")]
-        let wasm_entry = if _refined_cost_inputs {
+        let wasm_entry = if refined_cost_inputs {
             wasm_entry_with_refined_contract_cost_inputs(wasm)
         } else {
             wasm_entry(wasm)

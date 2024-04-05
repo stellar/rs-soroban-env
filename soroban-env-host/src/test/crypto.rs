@@ -255,7 +255,6 @@ fn recover_ecdsa_secp256k1_key_test() {
         .err().unwrap()));
 }
 
-#[cfg(feature = "next")]
 #[test]
 fn test_secp256r1_signature_verification() -> Result<(), HostError> {
     use crate::{VmCaller, VmCallerEnv};

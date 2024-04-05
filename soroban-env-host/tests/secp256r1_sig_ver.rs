@@ -1,4 +1,3 @@
-#[cfg(feature = "next")]
 mod v21 {
     use elliptic_curve::sec1::FromEncodedPoint;
     use generic_array::GenericArray;

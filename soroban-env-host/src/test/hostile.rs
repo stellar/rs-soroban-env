@@ -520,6 +520,7 @@ fn broken_object() {
 }
 
 #[test]
+#[allow(unused_variables)]
 fn excessive_logging() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_linear_memory_logging();
     // NB: We don't observe here since the test is sensitive to shadow budget.
@@ -527,11 +528,11 @@ fn excessive_logging() -> Result<(), HostError> {
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
-    #[cfg(feature = "next")]
-    host.switch_to_enforcing_storage()?;
+    if host.get_ledger_protocol_version()? >= crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+        host.switch_to_enforcing_storage()?;
+    }
 
-    #[cfg(feature = "next")]
-    let expected_budget = expect![[r#"
+    let expected_budget_p20 = expect![[r#"
         =================================================================
         Cpu limit: 2000000; used: 215305
         Mem limit: 500000; used: 166764
@@ -586,8 +587,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     "#]];
 
-    #[cfg(not(feature = "next"))]
-    let expected_budget = expect![[r#"
+    let expected_budget_p21 = expect![[r#"
         =================================================================
         Cpu limit: 2000000; used: 522315
         Mem limit: 500000; used: 202391
@@ -619,6 +619,13 @@ fn excessive_logging() -> Result<(), HostError> {
         =================================================================
 
     "#]];
+
+    let expected_budget =
+        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+            expected_budget_p20
+        } else {
+            expected_budget_p21
+        };
 
     // moderate logging
     {

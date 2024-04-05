@@ -341,37 +341,11 @@ fn test_metered_collection() -> Result<(), HostError> {
 // If the cost schedule have changed, need to update this test by running
 // `UPDATE_EXPECT=true cargo test`
 #[test]
+#[allow(unused_variables)]
 fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let host = Host::default();
+    let proto = Host::current_test_protocol();
 
-    #[cfg(not(feature = "next"))]
-    let tracker: Vec<(u64, Option<u64>)> = vec![
-        (246, None),
-        (1, Some(152)),
-        (1, Some(65)),
-        (1, Some(74)),
-        (176, None),
-        (97, None),
-        (1, Some(49)),
-        (1, Some(103)),
-        (1, Some(193)),
-        (226, None),
-        (1, Some(227)),
-        (1, Some(147)),
-        (1, Some(147)),
-        (47, None),
-        (1, Some(1)),
-        (1, None),
-        (1, None),
-        (1, None),
-        (1, None),
-        (1, None),
-        (1, None),
-        (1, None),
-        (1, Some(1)),
-    ];
-
-    #[cfg(feature = "next")]
     let tracker: Vec<(u64, Option<u64>)> = vec![
         (246, None),
         (1, Some(152)),
@@ -432,8 +406,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     }
 
     let actual = format!("{:?}", host.as_budget());
-    #[cfg(not(feature = "next"))]
-    let expected = expect![[r#"
+    let expected_p20 = expect![[r#"
         ===============================================================================================================================================================================
         Cpu limit: 100000000; used: 13060190
         Mem limit: 41943040; used: 273960
@@ -470,8 +443,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         ===============================================================================================================================================================================
 
     "#]];
-    #[cfg(feature = "next")]
-    let expected = expect![[r#"
+    let expected_p21 = expect![[r#"
         ===============================================================================================================================================================================
         Cpu limit: 100000000; used: 15754241
         Mem limit: 41943040; used: 302115
@@ -530,7 +502,11 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         ===============================================================================================================================================================================
 
     "#]];
-    expected.assert_eq(&actual);
+    if proto <= 20 {
+        expected_p20.assert_eq(&actual);
+    } else {
+        expected_p21.assert_eq(&actual);
+    }
 
     assert_eq!(
         host.as_budget().get_cpu_insns_consumed()?,

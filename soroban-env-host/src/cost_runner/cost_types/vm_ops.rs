@@ -14,10 +14,8 @@ pub struct VmInstantiationSample {
 }
 
 // Protocol 20 coarse and unified cost model
-#[cfg(not(feature = "next"))]
 pub struct VmInstantiationRun;
 
-#[cfg(not(feature = "next"))]
 impl CostRunner for VmInstantiationRun {
     const COST_TYPE: CostType = CostType::Contract(VmInstantiation);
 
@@ -51,9 +49,7 @@ impl CostRunner for VmInstantiationRun {
 }
 
 // Protocol 21 refined and split/caching cost model.
-#[cfg(feature = "next")]
 pub use v21::*;
-#[cfg(feature = "next")]
 mod v21 {
     use super::*;
     use crate::vm::ParsedModule;

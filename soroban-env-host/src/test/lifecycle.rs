@@ -567,8 +567,6 @@ fn test_large_contract() {
     assert!(err.error.is_code(ScErrorCode::ExceededLimit));
 }
 
-#[cfg(feature = "next")]
-#[allow(dead_code)]
 mod cap_54_55_56 {
 
     use more_asserts::assert_gt;

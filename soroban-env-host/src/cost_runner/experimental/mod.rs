@@ -1,21 +1,15 @@
-#[cfg(feature = "next")]
 mod decode_secp256r1_sig;
 mod ecdsa_secp256k1_verify;
-#[cfg(feature = "next")]
 mod ecdsa_secp256r1_recover;
 mod ed25519_scalar_mut;
 mod read_xdr;
-#[cfg(feature = "next")]
 mod sec1_decode_point_compressed;
 
-#[cfg(feature = "next")]
 pub use decode_secp256r1_sig::*;
 pub use ecdsa_secp256k1_verify::*;
-#[cfg(feature = "next")]
 pub use ecdsa_secp256r1_recover::*;
 pub use ed25519_scalar_mut::*;
 pub use read_xdr::*;
-#[cfg(feature = "next")]
 pub use sec1_decode_point_compressed::*;
 
 use crate::xdr::Name;

@@ -14,11 +14,8 @@ use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use sha3::Keccak256;
 
-#[cfg(feature = "next")]
 use ecdsa::{signature::hazmat::PrehashVerifier, PrimeCurve, Signature, SignatureSize};
-#[cfg(feature = "next")]
 use elliptic_curve::CurveArithmetic;
-#[cfg(feature = "next")]
 use generic_array::ArrayLength;
 
 impl Host {
@@ -84,7 +81,6 @@ impl Host {
         })
     }
 
-    #[cfg(feature = "next")]
     pub(crate) fn secp256r1_verify_signature(
         &self,
         verifying_key: &p256::ecdsa::VerifyingKey,
@@ -105,7 +101,6 @@ impl Host {
             })
     }
 
-    #[cfg(feature = "next")]
     pub(crate) fn secp256r1_decode_sec1_uncompressed_pubkey(
         &self,
         bytes: &[u8],
@@ -145,7 +140,6 @@ impl Host {
         })
     }
 
-    #[cfg(feature = "next")]
     pub(crate) fn secp256r1_public_key_from_bytesobj_input(
         &self,
         k: BytesObject,
@@ -156,7 +150,6 @@ impl Host {
     }
 
     // ECDSA functions
-    #[cfg(feature = "next")]
     pub(crate) fn ecdsa_signature_from_bytes<C>(
         &self,
         bytes: &[u8],
@@ -186,7 +179,6 @@ impl Host {
         }
     }
 
-    #[cfg(feature = "next")]
     pub(crate) fn ecdsa_signature_from_bytesobj_input<C>(
         &self,
         k: BytesObject,
@@ -201,43 +193,6 @@ impl Host {
     }
 
     // ECDSA secp256k1 functions
-
-    #[cfg(not(feature = "next"))]
-    pub(crate) fn secp256k1_signature_from_bytes(
-        &self,
-        bytes: &[u8],
-    ) -> Result<k256::ecdsa::Signature, HostError> {
-        self.charge_budget(ContractCostType::ComputeEcdsaSecp256k1Sig, None)?;
-        let sig: k256::ecdsa::Signature =
-            k256::ecdsa::Signature::try_from(bytes).map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid ECDSA-secp256k1 signature",
-                    &[],
-                )
-            })?;
-        if sig.s().is_high().into() {
-            Err(self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                "ECDSA-secp256k1 signature 's' part is not normalized to low form",
-                &[],
-            ))
-        } else {
-            Ok(sig)
-        }
-    }
-
-    #[cfg(not(feature = "next"))]
-    pub(crate) fn secp256k1_signature_from_bytesobj_input(
-        &self,
-        k: BytesObject,
-    ) -> Result<k256::ecdsa::Signature, HostError> {
-        self.visit_obj(k, |bytes: &ScBytes| {
-            self.secp256k1_signature_from_bytes(bytes.as_slice())
-        })
-    }
 
     // NB: not metered as it's a trivial constant cost, just converting a byte to a byte,
     // and always done exactly once as part of the secp256k1 recovery path.

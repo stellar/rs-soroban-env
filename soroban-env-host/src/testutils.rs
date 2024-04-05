@@ -1131,7 +1131,6 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
-    #[cfg(feature = "next")]
     pub(crate) fn wasm_module_with_a_bit_of_everything(wasm_proto: u32) -> Vec<u8> {
         let mut me = ModEmitter::new();
         let pre = get_pre_release_version(INTERFACE_VERSION);
