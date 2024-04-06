@@ -635,8 +635,8 @@ mod cap_54_55_56 {
         proto: u32,
     ) -> Result<(ObservedHost, AddressObject), HostError> {
         let host = Host::test_host_with_recording_footprint();
-        let host = ObservedHost::new(hostname, host);
         host.with_mut_ledger_info(|ledger_info| ledger_info.protocol_version = proto)?;
+        let host = ObservedHost::new(hostname, host);
         let contract_addr_obj =
             host.register_test_contract_wasm(&wasm_module_with_a_bit_of_everything(proto));
         Ok((host, contract_addr_obj))
@@ -750,12 +750,12 @@ mod cap_54_55_56 {
         budget: Budget,
     ) -> Result<ObservedHost, HostError> {
         let host = Host::with_storage_and_budget(storage, budget);
-        let host = ObservedHost::new(hostname, host);
         host.enable_debug()?;
         host.set_ledger_info(LedgerInfo {
             protocol_version: proto,
             ..Default::default()
         })?;
+        let host = ObservedHost::new(hostname, host);
         Ok(host)
     }
 
@@ -1291,9 +1291,9 @@ mod cap_54_55_56 {
     #[test]
     fn test_v_new_update_contract_with_module_cache() -> Result<(), HostError> {
         let host = Host::test_host_with_recording_footprint();
-        let host = ObservedHost::new("test_v_new_update_contract_with_module_cache", host);
         host.enable_debug()?;
         host.with_mut_ledger_info(|ledger_info| ledger_info.protocol_version = V_NEW)?;
+        let host = ObservedHost::new("test_v_new_update_contract_with_module_cache", host);
         let upload_contract_addr_obj = host.register_test_contract_wasm(UPLOAD_CONTRACT);
         let updateable_contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
 
