@@ -169,6 +169,9 @@ pub(crate) struct ObservedHost {
 impl ObservedHost {
     #[cfg(any(feature = "next", not(feature = "testutils")))]
     pub(crate) fn new(testname: &'static str, host: Host) -> Self {
+        let protocol = host
+            .get_ledger_protocol_version()
+            .expect("getting ledger protocol");
         let old_obs = Rc::new(RefCell::new(Observations::default()));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
         Self {
@@ -176,6 +179,7 @@ impl ObservedHost {
             new_obs,
             testname,
             host,
+            protocol,
         }
     }
 
