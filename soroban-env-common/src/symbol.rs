@@ -368,8 +368,6 @@ impl<E: Env> TryFromVal<E, Symbol> for SymbolStr {
 }
 
 #[cfg(feature = "std")]
-use std::string::{String, ToString};
-#[cfg(feature = "std")]
 impl From<SymbolSmall> for String {
     fn from(s: SymbolSmall) -> Self {
         s.to_string()
