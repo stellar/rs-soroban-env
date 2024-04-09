@@ -124,22 +124,13 @@ fn test_load_config_from_snapshot() {
             config_entry(ConfigSettingEntry::ContractCostParamsMemoryBytes(
                 memory_cost_params.clone(),
             )),
-            config_entry(ConfigSettingEntry::BucketlistSizeWindow(
-                vec![
-                    150_000_000_000_000 * 2,
-                    150_000_000_000_000,
-                    150_000_000_000_000 / 2,
-                    150_000_000_000_000 / 2,
-                ]
-                .try_into()
-                .unwrap(),
-            )),
         ],
         0,
     )
     .unwrap();
 
-    let network_config = NetworkConfig::load_from_snapshot(&snapshot_source).unwrap();
+    let network_config =
+        NetworkConfig::load_from_snapshot(&snapshot_source, 150_000_000_000_000).unwrap();
     // From tests/resources `test_compute_write_fee`
     let write_fee = 1_000_000_000 + 50 * (1_000_000_000_i64 - 1_000_000) / 2;
     assert_eq!(
