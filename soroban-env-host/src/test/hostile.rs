@@ -799,6 +799,9 @@ fn test_integer_overflow() -> Result<(), HostError> {
 
 #[test]
 fn test_corrupt_custom_section() -> Result<(), HostError> {
+    use crate::meta::make_interface_version;
+    use crate::xdr::{Limits, ScEnvMetaEntry, WriteXdr};
+
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     host.as_budget().reset_unlimited()?;
@@ -826,12 +829,11 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
     ));
 
     // invalid section name
+    let xdr = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(make_interface_version(20, 0))
+        .to_xdr(Limits::none())
+        .unwrap();
     let res = host.register_test_contract_wasm_from_source_account(
-        wasm_util::wasm_module_with_custom_section(
-            "contractenvmetav1",
-            &soroban_env_common::meta::XDR,
-        )
-        .as_slice(),
+        wasm_util::wasm_module_with_custom_section("contractenvmetav1", &xdr).as_slice(),
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
