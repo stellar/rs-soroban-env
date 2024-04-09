@@ -1,10 +1,4 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
-  "   1 call bytes_new_from_slice(65)": "",
-  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:977, mem:145, objs:-/1@b2474f93",
-  "   3 call bytes_new_from_slice(32)": "",
-  "   4 ret bytes_new_from_slice -> Ok(Bytes(obj#3))": "cpu:1946, mem:257, objs:-/2@6c013500",
-  "   5 call bytes_new_from_slice(64)": "",
-  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:2923, mem:401, objs:-/3@2fb55113",
-  "   7 end": "cpu:0, mem:0, prngs:-/-, objs:-/3@2fb55113, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "   1 end": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

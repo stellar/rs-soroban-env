@@ -35,7 +35,8 @@ fn ledger_protocol_greater_than_env_protocol_should_fail() -> Result<(), HostErr
 fn wasm_protocol_greater_than_ledger_protocol_should_fail() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
-    let wasm = wasm_util::wasm_module_calling_protocol_gated_host_fn(host.get_ledger_protocol_version()?);
+    let wasm =
+        wasm_util::wasm_module_calling_protocol_gated_host_fn(host.get_ledger_protocol_version()?);
     host.with_mut_ledger_info(|li| li.protocol_version -= 1)?;
     let id = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
