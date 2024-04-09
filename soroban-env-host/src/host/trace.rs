@@ -18,6 +18,7 @@ mod fmt;
 // to actually record the quantity of detail that tracing records (eg. hashing everything
 // in the host on every host function call and return!).
 const TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR: u64 = 500;
+const TRACE_STATE_SHADOW_MEM_LIMIT_FACTOR: u64 = 30;
 
 pub type TraceHook = Rc<dyn for<'a> Fn(&'a Host, TraceEvent<'a>) -> Result<(), HostError>>;
 
@@ -88,6 +89,12 @@ impl TraceState {
         let budget = host.budget_ref();
         if budget
             .ensure_shadow_cpu_limit_factor(TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR)
+            .is_err()
+        {
+            return None;
+        }
+        if budget
+            .ensure_shadow_mem_limit_factor(TRACE_STATE_SHADOW_MEM_LIMIT_FACTOR)
             .is_err()
         {
             return None;
