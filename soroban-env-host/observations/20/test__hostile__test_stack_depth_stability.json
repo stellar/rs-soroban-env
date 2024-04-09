@@ -3,7 +3,7 @@
   "   1 call bytes_new_from_slice(2002)": "cpu:47",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1508, mem:2082, objs:-/1@f59c6527",
   "   3 call upload_wasm(Bytes(obj#1))": "",
-  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:1423312, mem:1328315, objs:-/2@878e1970, store:-/1@a523976a, foot:1@c6b2c38d",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:1423312, mem:1328315, objs:-/2@878e1970, store:-/1@91f2b96a, foot:1@75fca835",
   "   5 call bytes_new_from_slice(32)": "cpu:1423752, mem:1328379, objs:-/3@b1d34d7a",
   "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:1424721, mem:1328491, objs:-/4@1156a93e",
   "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
@@ -11,7 +11,7 @@
   "   9 ret obj_cmp -> Ok(0)": "cpu:1426656",
   "  10 call get_ledger_network_id()": "cpu:1426706, auth:1@9c2034af/1@d882c47d",
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:1427736, mem:1328781, objs:-/6@657db8e6",
-  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1445869, mem:1331855, objs:-/7@77ebce5a, store:-/2@6f31c221, foot:2@6830d09a, auth:-/1@aff83b04",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1445869, mem:1331855, objs:-/7@77ebce5a, store:-/2@fa3c2e48, foot:2@9ddf4d04, auth:-/1@aff83b04",
   "  13 call vec_new_from_slice(1)": " auth:-/-",
   "  14 ret vec_new_from_slice -> Ok(Vec(obj#15))": "cpu:1446832, mem:1331943, objs:-/8@883ed989",
   "  15 call call(Address(obj#13), Symbol(deepstack), Vec(obj#15))": "",
@@ -30,5 +30,5 @@
   "  28 push VM:cd475327:deepstack(U32(10240))": "cpu:6077936, mem:5312392, objs:-/13@26f17205, vm:1114112@415819ab/16@b860c029, stk:1@6cbdf7e, auth:1@8081480/-",
   "  29 pop VM:cd475327:deepstack -> Err(Error(Budget, ExceededLimit))": "cpu:6420713, mem:5312438",
   "  30 ret call -> Err(Error(Budget, ExceededLimit))": " vm:-/-, stk:-, auth:-/-",
-  "  31 end": "cpu:6420713, mem:5312438, prngs:-/9b4a753, objs:-/13@26f17205, vm:-/-, evt:-, store:-/2@6f31c221, foot:2@6830d09a, stk:-, auth:-/-"
+  "  31 end": "cpu:6420713, mem:5312438, prngs:-/9b4a753, objs:-/13@26f17205, vm:-/-, evt:-, store:-/2@fa3c2e48, foot:2@9ddf4d04, stk:-, auth:-/-"
 }

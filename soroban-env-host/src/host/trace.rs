@@ -2,10 +2,9 @@
 use crate::{
     budget::AsBudget,
     events::InternalEvent,
-    host::Frame,
     host::{
-        metered_hash::{CountingHasher, MeteredHash},
-        Context,
+        metered_hash::{CountingHasher, MeteredHash, MeteredHashXdr},
+        Context, Frame,
     },
     Host, HostError, Val,
 };
@@ -19,6 +18,7 @@ mod fmt;
 // to actually record the quantity of detail that tracing records (eg. hashing everything
 // in the host on every host function call and return!).
 const TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR: u64 = 500;
+const TRACE_STATE_SHADOW_MEM_LIMIT_FACTOR: u64 = 30;
 
 pub type TraceHook = Rc<dyn for<'a> Fn(&'a Host, TraceEvent<'a>) -> Result<(), HostError>>;
 
@@ -89,6 +89,12 @@ impl TraceState {
         let budget = host.budget_ref();
         if budget
             .ensure_shadow_cpu_limit_factor(TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR)
+            .is_err()
+        {
+            return None;
+        }
+        if budget
+            .ensure_shadow_mem_limit_factor(TRACE_STATE_SHADOW_MEM_LIMIT_FACTOR)
             .is_err()
         {
             return None;
@@ -278,8 +284,31 @@ impl Host {
         }
     }
     fn ledger_storage_hash(&self) -> u64 {
+        // Storage is full of XDR types that contain ExtensionPoints. Due to the way
+        // ExtensionPoint works (it changes size in Rust, defeating its identity in XDR)
+        // we can't use normal Rust hashing for this type. Instead we manually walk the
+        // map and hash the XDR of all the XDR-bits in it.
         if let Ok(store) = self.0.storage.try_borrow() {
-            self.hash_one(&store.map)
+            let mut state = CountingHasher::default();
+            let budget = self.budget_ref();
+            budget.with_shadow_mode(|| {
+                store.map.len().metered_hash(&mut state, budget)?;
+                for (k, v) in store.map.iter(budget)? {
+                    k.metered_hash_xdr(&mut state, budget)?;
+                    match v {
+                        Some((entry, ttl)) => {
+                            0.metered_hash(&mut state, budget)?;
+                            entry.metered_hash_xdr(&mut state, budget)?;
+                            ttl.metered_hash(&mut state, budget)?;
+                        }
+                        None => {
+                            1.metered_hash(&mut state, budget)?;
+                        }
+                    }
+                }
+                Ok(())
+            });
+            state.finish()
         } else {
             0
         }
@@ -330,8 +359,19 @@ impl Host {
         }
     }
     fn storage_footprint_hash(&self) -> u64 {
+        // See commentary on ExtensionPoint above in ledger_storage_hash.
         if let Ok(storage) = self.0.storage.try_borrow() {
-            self.hash_one(&storage.footprint.0)
+            let mut state = CountingHasher::default();
+            let budget = self.budget_ref();
+            budget.with_shadow_mode(|| {
+                storage.footprint.0.len().metered_hash(&mut state, budget)?;
+                for (k, v) in storage.footprint.0.iter(budget)? {
+                    k.metered_hash_xdr(&mut state, budget)?;
+                    v.metered_hash(&mut state, budget)?;
+                }
+                Ok(())
+            });
+            state.finish()
         } else {
             0
         }

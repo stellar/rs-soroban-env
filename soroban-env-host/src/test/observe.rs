@@ -163,11 +163,15 @@ pub(crate) struct ObservedHost {
     old_obs: Rc<RefCell<Observations>>,
     new_obs: Rc<RefCell<Observations>>,
     host: Host,
+    protocol: u32,
 }
 
 impl ObservedHost {
     #[cfg(any(feature = "next", not(feature = "testutils")))]
     pub(crate) fn new(testname: &'static str, host: Host) -> Self {
+        let protocol = host
+            .get_ledger_protocol_version()
+            .expect("getting ledger protocol");
         let old_obs = Rc::new(RefCell::new(Observations::default()));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
         Self {
@@ -175,6 +179,7 @@ impl ObservedHost {
             new_obs,
             testname,
             host,
+            protocol,
         }
     }
 
@@ -190,6 +195,7 @@ impl ObservedHost {
             new_obs,
             testname,
             host,
+            protocol,
         };
         oh.host
             .set_trace_hook(Some(oh.make_obs_hook()))
@@ -204,10 +210,8 @@ impl ObservedHost {
         let old_obs = self.old_obs.clone();
         let new_obs = self.new_obs.clone();
         let testname = self.testname;
+        let protocol = self.protocol;
         Rc::new(move |host, evt| {
-            let protocol = host
-                .get_ledger_protocol_version()
-                .expect("getting ledger protocol");
             let tr = TraceRecord::new(host, evt).expect("observing host");
             Observations::check(
                 &old_obs.borrow(),

@@ -3,7 +3,7 @@
   "   1 call bytes_new_from_slice(119)": "cpu:47",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1036, mem:199, objs:-/1@167366af",
   "   3 call upload_wasm(Bytes(obj#1))": "",
-  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:520192, mem:201476, objs:-/2@ec84e5be, store:-/1@b77615c8, foot:1@84180a80",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:520192, mem:201476, objs:-/2@ec84e5be, store:-/1@902ba8b1, foot:1@b79624c8",
   "   5 call bytes_new_from_slice(32)": "cpu:520632, mem:201540, objs:-/3@bcc012d0",
   "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:521601, mem:201652, objs:-/4@96db9b04",
   "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
@@ -11,7 +11,7 @@
   "   9 ret obj_cmp -> Ok(0)": "cpu:523536",
   "  10 call get_ledger_network_id()": "cpu:523586, auth:1@26b4c6e4/1@3cef5a5b",
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:524616, mem:201942, objs:-/6@2dff2c98",
-  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:542749, mem:205016, objs:-/7@e4e73abf, store:-/2@c9359d2a, foot:2@1a35f7ff, auth:-/1@51de19a8",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:542749, mem:205016, objs:-/7@e4e73abf, store:-/2@fb91669f, foot:2@334e2eca, auth:-/1@51de19a8",
   "  13 call call(Address(obj#13), Symbol(test), Vec(obj#15))": "cpu:543189, mem:205080, objs:-/8@b6775478, auth:-/-",
   "  14 push VM:5c5fdfba:test(Address(obj#123))": "cpu:1058231, mem:406851, objs:-/9@3b9cbc83, vm:65536@b1cd98b9/2@2f94d90d, stk:1@74fe8105, auth:1@d7dc1364/-",
   "  15 call u256_val_to_be_bytes(bad:77)": "cpu:1061139, mem:406921, objs:1@f40b9f61/9@3b9cbc83, vm:-/-, stk:1@8a3c3289",
@@ -177,5 +177,5 @@
   " 175 call u256_val_to_be_bytes(bad:2)": "cpu:17660055, mem:6867401, vm:-/-",
   " 176 pop VM:5c5fdfba:test -> Err(Error(Value, InvalidInput))": "cpu:17660653, vm:65536@b1cd98b9/2@2f94d90d",
   " 177 ret call -> Err(Error(Value, InvalidInput))": " vm:-/-, stk:-, auth:-/-",
-  " 178 end": "cpu:17660653, mem:6867401, prngs:-/9b4a753, objs:-/73@f290ebe, vm:-/-, evt:-, store:-/2@c9359d2a, foot:2@1a35f7ff, stk:-, auth:-/-"
+  " 178 end": "cpu:17660653, mem:6867401, prngs:-/9b4a753, objs:-/73@f290ebe, vm:-/-, evt:-, store:-/2@fb91669f, foot:2@334e2eca, stk:-, auth:-/-"
 }

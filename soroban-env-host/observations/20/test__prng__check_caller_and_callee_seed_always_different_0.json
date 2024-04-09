@@ -1,6 +1,6 @@
 {
   "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
-  "   1 call vec_new_from_slice(0)": "cpu:69795, mem:3116, prngs:-/ed310798, objs:-/4@372f7dc0, store:-/3@86be34e4, foot:3@d5704152",
+  "   1 call vec_new_from_slice(0)": "cpu:69795, mem:3116, prngs:-/ed310798, objs:-/4@372f7dc0, store:-/3@faaa29a2, foot:3@b2c23a6f",
   "   2 ret vec_new_from_slice -> Ok(Vec(obj#9))": "cpu:70756, mem:3196, objs:-/5@ed7a8460",
   "   3 call call(Address(obj#1), Symbol(getseed), Vec(obj#9))": "",
   "   4 push TEST:   0:getseed()": "cpu:81599, mem:4408, objs:-/6@6746d63d, stk:1@d3b1367a, auth:1@203dab23/-",
@@ -2800,5 +2800,5 @@
   "2798 ret bytes_len -> Ok(U32(32))": "cpu:5526600",
   "2799 call bytes_copy_to_slice(Bytes(obj#1607), U32(0), 32)": "",
   "2800 ret bytes_copy_to_slice -> Ok(())": "cpu:5526707",
-  "2801 end": "cpu:5526707, mem:414716, prngs:-/c52da5fd, objs:-/804@c7df627c, vm:-/-, evt:-, store:-/3@86be34e4, foot:3@d5704152, stk:-, auth:-/-"
+  "2801 end": "cpu:5526707, mem:414716, prngs:-/c52da5fd, objs:-/804@c7df627c, vm:-/-, evt:-, store:-/3@faaa29a2, foot:3@b2c23a6f, stk:-, auth:-/-"
 }

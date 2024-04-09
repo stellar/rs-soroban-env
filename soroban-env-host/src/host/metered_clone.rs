@@ -16,7 +16,7 @@
 //! pointers. The rest of each struct is considered its "shallow" part and
 //! charged based on its declared size (see [`DeclaredSizeForMetering`]).
 
-use std::{cell::RefCell, iter::FromIterator, mem, rc::Rc};
+use std::{cell::RefCell, mem, rc::Rc};
 
 #[cfg(feature = "next")]
 use crate::xdr::{ContractCodeCostInputs, ContractCodeEntryExt, ContractCodeEntryV1};

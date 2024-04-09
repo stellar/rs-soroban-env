@@ -1,4 +1,9 @@
-use crate::{budget::Budget, xdr::ContractCostType, HostError};
+use crate::{
+    budget::Budget,
+    host::metered_xdr::metered_write_xdr,
+    xdr::{ContractCostType, WriteXdr},
+    HostError,
+};
 use std::hash::{Hash, Hasher};
 
 // Technically we should be metering the cost of the hash function used, but
@@ -39,5 +44,38 @@ impl<T: Hash> MeteredHash for T {
         self.hash(hasher);
         budget.charge(HASH_COST_TYPE, Some(hasher.count as u64))?;
         Ok(())
+    }
+}
+
+impl std::io::Write for CountingHasher {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.count = self.count.saturating_add(buf.len());
+        self.hasher.write(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+pub(crate) trait MeteredHashXdr {
+    fn metered_hash_xdr(
+        &self,
+        hasher: &mut CountingHasher,
+        budget: &Budget,
+    ) -> Result<(), HostError>;
+}
+
+impl<T: WriteXdr> MeteredHashXdr for T {
+    fn metered_hash_xdr(
+        &self,
+        hasher: &mut CountingHasher,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        let mut buf = Vec::default();
+        metered_write_xdr(budget, self, &mut buf)?;
+        buf.metered_hash(hasher, budget)?;
+        budget.charge(HASH_COST_TYPE, Some(hasher.count as u64))
     }
 }

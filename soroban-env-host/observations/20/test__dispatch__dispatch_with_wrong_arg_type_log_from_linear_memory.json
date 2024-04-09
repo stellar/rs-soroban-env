@@ -3,7 +3,7 @@
   "   1 call bytes_new_from_slice(128)": "cpu:47",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1040, mem:208, objs:-/1@8fbabb1a",
   "   3 call upload_wasm(Bytes(obj#1))": "",
-  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:523887, mem:201851, objs:-/2@a509e81d, store:-/1@9cd3366c, foot:1@621ea539",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:523887, mem:201851, objs:-/2@a509e81d, store:-/1@ff4d9564, foot:1@91747e44",
   "   5 call bytes_new_from_slice(32)": "cpu:524327, mem:201915, objs:-/3@80a8a45",
   "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:525296, mem:202027, objs:-/4@70db9251",
   "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
@@ -11,7 +11,7 @@
   "   9 ret obj_cmp -> Ok(0)": "cpu:527231",
   "  10 call get_ledger_network_id()": "cpu:527281, auth:1@d8fcacb9/1@55ce3077",
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:528311, mem:202317, objs:-/6@f4c6cf9e",
-  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:546444, mem:205391, objs:-/7@3938d66d, store:-/2@42e19808, foot:2@cb5493ab, auth:-/1@bfbdc66c",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:546444, mem:205391, objs:-/7@3938d66d, store:-/2@bf1d66dc, foot:2@804a5115, auth:-/1@bfbdc66c",
   "  13 call call(Address(obj#13), Symbol(test), Vec(obj#15))": "cpu:546884, mem:205455, objs:-/8@e2ed2e76, auth:-/-",
   "  14 push VM:704e0636:test(Address(obj#123), U32(123), U32(123), U32(123))": "cpu:1065135, mem:407640, objs:-/9@8d32ebcb, vm:65536@b1cd98b9/2@2f94d90d, stk:1@6efc6902, auth:1@d7dc1364/-",
   "  15 call log_from_linear_memory(bad:77, U32(123), U32(123), U32(123))": "cpu:1068055, mem:407758, objs:1@f40b9f61/9@8d32ebcb, vm:-/-, stk:1@f1f9a2c",
@@ -187,5 +187,5 @@
   " 185 call log_from_linear_memory(bad:2, U32(123), U32(123), U32(123))": "cpu:18814434, mem:7287732, vm:-/-",
   " 186 pop VM:704e0636:test -> Err(Error(Value, InvalidInput))": "cpu:18815044, vm:65536@b1cd98b9/2@2f94d90d",
   " 187 ret call -> Err(Error(Value, InvalidInput))": " vm:-/-, stk:-, auth:-/-",
-  " 188 end": "cpu:18815044, mem:7287732, prngs:-/9b4a753, objs:-/77@35de6a08, vm:-/-, evt:-, store:-/2@42e19808, foot:2@cb5493ab, stk:-, auth:-/-"
+  " 188 end": "cpu:18815044, mem:7287732, prngs:-/9b4a753, objs:-/77@35de6a08, vm:-/-, evt:-, store:-/2@bf1d66dc, foot:2@804a5115, stk:-, auth:-/-"
 }
