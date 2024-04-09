@@ -3,7 +3,7 @@
   "   1 call bytes_new_from_slice(873)": "cpu:14535",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15714, mem:953, objs:-/1@d38950f4",
   "   3 call upload_wasm(Bytes(obj#1))": "",
-  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:974902, mem:1281391, objs:-/2@52417d31, store:-/1@4f237ba1, foot:1@63794e7d",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:974902, mem:1281391, objs:-/2@52417d31, store:-/1@24ccca89, foot:1@ced4aa3b",
   "   5 call bytes_new_from_slice(32)": "cpu:975342, mem:1281455, objs:-/3@1299fa98",
   "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:976311, mem:1281567, objs:-/4@5a23318d",
   "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
@@ -11,7 +11,7 @@
   "   9 ret obj_cmp -> Ok(0)": "cpu:978246",
   "  10 call get_ledger_network_id()": "cpu:978296, auth:1@d11a3bce/1@871749e",
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:979326, mem:1281857, objs:-/6@af28baea",
-  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:997459, mem:1284931, objs:-/7@622c8fae, store:-/2@6a012548, foot:2@c5cade1a, auth:-/1@ff5d84b5",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:997459, mem:1284931, objs:-/7@622c8fae, store:-/2@467355ef, foot:2@af07657d, auth:-/1@ff5d84b5",
   "  13 call call(Address(obj#13), Symbol(go), Vec(obj#15))": "cpu:997899, mem:1284995, objs:-/8@52c37e3f, auth:-/-",
   "  14 push VM:2c0dcac5:go()": "cpu:1911663, mem:2565911, objs:-/9@cbedd2d9, vm:1114112@c58cc467/5@8d05851, stk:1@34f84bc5, auth:1@afe23e00/-",
   "  15 call get_ledger_network_id()": "cpu:1914132, mem:2565941, vm:-/-",
@@ -41,8 +41,8 @@
   "  39 ret obj_cmp -> Ok(-1)": "cpu:1941382",
   "  40 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:1941822, mem:2567184, objs:6@e37e9bd8/18@c32de0f6",
   "  41 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:1942318, mem:2567208, objs:7@929806d2/18@c32de0f6, stk:1@8b608bf2",
-  "  42 ret put_contract_data -> Ok(Void)": "cpu:1949967, mem:2568840, store:-/3@cdb0d984, foot:3@968cbf30",
+  "  42 ret put_contract_data -> Ok(Void)": "cpu:1949967, mem:2568840, store:-/3@51df1159, foot:3@2f0e11c9",
   "  43 pop VM:2c0dcac5:go -> Ok(Void)": " vm:1114112@6ea60965/5@8d05851",
   "  44 ret call -> Ok(Void)": " objs:-/18@c32de0f6, vm:-/-, stk:-, auth:-/-",
-  "  45 end": "cpu:1949967, mem:2568840, prngs:-/9b4a753, objs:-/18@c32de0f6, vm:-/-, evt:1@4403228c, store:-/3@cdb0d984, foot:3@968cbf30, stk:-, auth:-/-"
+  "  45 end": "cpu:1949967, mem:2568840, prngs:-/9b4a753, objs:-/18@c32de0f6, vm:-/-, evt:1@4403228c, store:-/3@51df1159, foot:3@2f0e11c9, stk:-, auth:-/-"
 }
