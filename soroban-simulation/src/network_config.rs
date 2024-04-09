@@ -66,7 +66,10 @@ impl NetworkConfig {
     ///
     /// This may only fail in case when provided snapshot doesn't contain
     /// all the necessary entries or when these entries are mis-configured.
-    pub fn load_from_snapshot(snapshot: &impl SnapshotSourceWithArchive) -> Result<Self> {
+    pub fn load_from_snapshot(
+        snapshot: &impl SnapshotSourceWithArchive,
+        bucket_list_size: u64,
+    ) -> Result<Self> {
         let compute = load_setting!(snapshot, ContractComputeV0);
         let ledger_cost = load_setting!(snapshot, ContractLedgerCostV0);
         let historical_data = load_setting!(snapshot, ContractHistoricalDataV0);
@@ -76,26 +79,15 @@ impl NetworkConfig {
         let cpu_cost_params = load_setting!(snapshot, ContractCostParamsCpuInstructions);
         let memory_cost_params = load_setting!(snapshot, ContractCostParamsMemoryBytes);
 
-        let bucket_list_size_window = load_setting!(snapshot, BucketlistSizeWindow);
-        if bucket_list_size_window.is_empty() {
-            bail!("bucket list size window can not be empty");
-        }
-        let mut total_bucket_list_size: u128 = 0;
-        for s in bucket_list_size_window.iter() {
-            total_bucket_list_size = total_bucket_list_size.saturating_add(*s as u128);
-        }
-        let bucket_list_size: i64 = (total_bucket_list_size
-            / bucket_list_size_window.len() as u128)
-            .try_into()
-            .context("bucket list size is too large, the ledger is mis-configured")?;
-
         let write_fee_configuration = WriteFeeConfiguration {
             bucket_list_target_size_bytes: ledger_cost.bucket_list_target_size_bytes,
             write_fee_1kb_bucket_list_low: ledger_cost.write_fee1_kb_bucket_list_low,
             write_fee_1kb_bucket_list_high: ledger_cost.write_fee1_kb_bucket_list_high,
             bucket_list_write_fee_growth_factor: ledger_cost.bucket_list_write_fee_growth_factor,
         };
-
+        let bucket_list_size: i64 = bucket_list_size
+            .try_into()
+            .context("bucket list size exceeds i64::MAX")?;
         let write_fee_per_1kb =
             compute_write_fee_per_1kb(bucket_list_size, &write_fee_configuration);
 
