@@ -633,6 +633,7 @@ mod cap_54_55_56 {
         proto: u32,
     ) -> Result<(ObservedHost, AddressObject), HostError> {
         let host = Host::test_host_with_recording_footprint();
+        host.enable_debug()?;
         host.with_mut_ledger_info(|ledger_info| ledger_info.protocol_version = proto)?;
         let host = ObservedHost::new(hostname, host);
         let contract_addr_obj =
