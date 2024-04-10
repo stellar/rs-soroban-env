@@ -346,7 +346,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let host = Host::default();
     let proto = Host::current_test_protocol();
 
-    let tracker: Vec<(u64, Option<u64>)> = vec![
+    let mut tracker: Vec<(u64, Option<u64>)> = vec![
         (246, None),
         (1, Some(152)),
         (1, Some(65)),
@@ -370,29 +370,34 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, None),
         (1, None),
         (1, Some(1)),
-        (1, Some(1)), /* ParseWasmInstructions*/
-        (1, Some(1)), /* ParseWasmFunctions*/
-        (1, Some(1)), /* ParseWasmGlobals*/
-        (1, Some(1)), /* ParseWasmTableEntries*/
-        (1, Some(1)), /* ParseWasmTypes*/
-        (1, Some(1)), /* ParseWasmDataSegments*/
-        (1, Some(1)), /* ParseWasmElemSegments*/
-        (1, Some(1)), /* ParseWasmImports*/
-        (1, Some(1)), /* ParseWasmExports*/
-        (1, Some(1)), /* ParseWasmDataSegmentBytes*/
-        (1, None),    /* InstantiateWasmInstructions*/
-        (1, Some(1)), /* InstantiateWasmFunctions*/
-        (1, Some(1)), /* InstantiateWasmGlobals*/
-        (1, Some(1)), /* InstantiateWasmTableEntries*/
-        (1, None),    /* InstantiateWasmTypes*/
-        (1, Some(1)), /* InstantiateWasmDataSegments*/
-        (1, Some(1)), /* InstantiateWasmElemSegments*/
-        (1, Some(1)), /* InstantiateWasmImports*/
-        (1, Some(1)), /* InstantiateWasmExports*/
-        (1, Some(1)), /* InstantiateWasmDataSegmentBytes*/
-        (1, None),    /* Sec1DecodePointUncompressed*/
-        (1, None),    /* VerifyEcdsaSecp256r1Sig        */
     ];
+
+    if proto >= 21 {
+        tracker.extend_from_slice(&[
+            (1, Some(1)), /* ParseWasmInstructions*/
+            (1, Some(1)), /* ParseWasmFunctions*/
+            (1, Some(1)), /* ParseWasmGlobals*/
+            (1, Some(1)), /* ParseWasmTableEntries*/
+            (1, Some(1)), /* ParseWasmTypes*/
+            (1, Some(1)), /* ParseWasmDataSegments*/
+            (1, Some(1)), /* ParseWasmElemSegments*/
+            (1, Some(1)), /* ParseWasmImports*/
+            (1, Some(1)), /* ParseWasmExports*/
+            (1, Some(1)), /* ParseWasmDataSegmentBytes*/
+            (1, None),    /* InstantiateWasmInstructions*/
+            (1, Some(1)), /* InstantiateWasmFunctions*/
+            (1, Some(1)), /* InstantiateWasmGlobals*/
+            (1, Some(1)), /* InstantiateWasmTableEntries*/
+            (1, None),    /* InstantiateWasmTypes*/
+            (1, Some(1)), /* InstantiateWasmDataSegments*/
+            (1, Some(1)), /* InstantiateWasmElemSegments*/
+            (1, Some(1)), /* InstantiateWasmImports*/
+            (1, Some(1)), /* InstantiateWasmExports*/
+            (1, Some(1)), /* InstantiateWasmDataSegmentBytes*/
+            (1, None),    /* Sec1DecodePointUncompressed*/
+            (1, None),    /* VerifyEcdsaSecp256r1Sig        */
+        ]);
+    }
 
     for (ty, &(iterations, input)) in tracker.iter().enumerate() {
         host.with_budget(|b| b.bulk_charge(ContractCostType::VARIANTS[ty], iterations, input))?;
@@ -427,7 +432,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         VmCachedInstantiation              1              Some(147)      503770         135880         451626              45405               130065              5064                
         InvokeVmFunction                   47             None           91556          658            1948                0                   14                  0                   
         ComputeKeccak256Hash               1              Some(1)        3812           0              3766                5969                0                   0                   
-        ComputeEcdsaSecp256k1Sig           1              None           710            0              710                 0                   0                   0                   
+        DecodeEcdsaCurve256Sig             1              None           710            0              710                 0                   0                   0                   
         RecoverEcdsaSecp256k1Key           1              None           2315295        181            2315295             0                   181                 0                   
         Int256AddSub                       1              None           4404           99             4404                0                   99                  0                   
         Int256Mul                          1              None           4947           99             4947                0                   99                  0                   
@@ -435,6 +440,28 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Int256Pow                          1              None           4286           99             4286                0                   99                  0                   
         Int256Shift                        1              None           913            99             913                 0                   99                  0                   
         ChaCha20DrawBytes                  1              Some(1)        1061           0              1058                501                 0                   0                   
+        ParseWasmInstructions              0              Some(0)        0              0              73077               25410               17564               6457                
+        ParseWasmFunctions                 0              Some(0)        0              0              0                   540752              0                   47464               
+        ParseWasmGlobals                   0              Some(0)        0              0              0                   176363              0                   13420               
+        ParseWasmTableEntries              0              Some(0)        0              0              0                   29989               0                   6285                
+        ParseWasmTypes                     0              Some(0)        0              0              0                   1061449             0                   64670               
+        ParseWasmDataSegments              0              Some(0)        0              0              0                   237336              0                   29074               
+        ParseWasmElemSegments              0              Some(0)        0              0              0                   328476              0                   48095               
+        ParseWasmImports                   0              Some(0)        0              0              0                   701845              0                   103229              
+        ParseWasmExports                   0              Some(0)        0              0              0                   429383              0                   36394               
+        ParseWasmDataSegmentBytes          0              Some(0)        0              0              0                   28                  0                   257                 
+        InstantiateWasmInstructions        0              None           0              0              43030               0                   70704               0                   
+        InstantiateWasmFunctions           0              Some(0)        0              0              0                   7556                0                   14613               
+        InstantiateWasmGlobals             0              Some(0)        0              0              0                   10711               0                   6833                
+        InstantiateWasmTableEntries        0              Some(0)        0              0              0                   3300                0                   1025                
+        InstantiateWasmTypes               0              None           0              0              0                   0                   0                   0                   
+        InstantiateWasmDataSegments        0              Some(0)        0              0              0                   23038               0                   129632              
+        InstantiateWasmElemSegments        0              Some(0)        0              0              0                   42488               0                   13665               
+        InstantiateWasmImports             0              Some(0)        0              0              0                   828974              0                   97637               
+        InstantiateWasmExports             0              Some(0)        0              0              0                   297100              0                   9176                
+        InstantiateWasmDataSegmentBytes    0              Some(0)        0              0              0                   14                  0                   126                 
+        Sec1DecodePointUncompressed        0              None           0              0              1882                0                   0                   0                   
+        VerifyEcdsaSecp256r1Sig            0              None           0              0              3000906             0                   0                   0                   
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 23
