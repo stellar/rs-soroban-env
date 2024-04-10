@@ -201,7 +201,10 @@ mod v21 {
         use wycheproof::TestResult;
 
         let test_set = TestSet::load(EcdsaSecp256r1Sha256).unwrap();
-        let host = Host::default();
+        let host = Host::test_host();
+        if host.get_ledger_protocol_version()? < PROTOCOL_SUPPORT_FOR_SECP256R1 {
+            return Ok(());
+        }
         for test_group in test_set.test_groups {
             let public_key = host.bytes_new_from_slice(&test_group.key.key).unwrap();
             for test in test_group.tests {
