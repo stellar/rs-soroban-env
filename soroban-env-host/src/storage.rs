@@ -55,18 +55,10 @@ pub enum AccessType {
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
 /// The snapshot is expected to only return live ledger entries.
-#[cfg(any(test, feature = "unstable-next-api"))]
 pub trait SnapshotSource {
     /// Returns the ledger entry for the key and its live_until ledger if entry
     /// exists, or `None` otherwise.
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError>;
-}
-
-#[cfg(not(any(test, feature = "unstable-next-api")))]
-pub trait SnapshotSource {
-    // Returns the ledger entry for the key and its live_until ledger.
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<EntryWithLiveUntil, HostError>;
-    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError>;
 }
 
 /// Describes the total set of [LedgerKey]s that a given transaction
@@ -471,16 +463,7 @@ impl Storage {
                 // In recording mode we treat the map as a cache
                 // that misses read-through to the underlying src.
                 if !self.map.contains_key::<Rc<LedgerKey>>(key, budget)? {
-                    #[cfg(any(test, feature = "unstable-next-api"))]
                     let value = src.get(&key)?;
-
-                    #[cfg(not(any(test, feature = "unstable-next-api")))]
-                    let value = if src.has(&key)? {
-                        Some(src.get(key)?)
-                    } else {
-                        None
-                    };
-
                     self.map = self.map.insert(key.clone(), value, budget)?;
                 }
             }
