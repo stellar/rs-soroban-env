@@ -608,7 +608,7 @@ fn excessive_logging() -> Result<(), HostError> {
         VmCachedInstantiation              0              0              
         InvokeVmFunction                   1948           14             
         ComputeKeccak256Hash               0              0              
-        ComputeEcdsaSecp256k1Sig           0              0              
+        DecodeEcdsaCurve256Sig             0              0              
         RecoverEcdsaSecp256k1Key           0              0              
         Int256AddSub                       0              0              
         Int256Mul                          0              0              
@@ -616,6 +616,28 @@ fn excessive_logging() -> Result<(), HostError> {
         Int256Pow                          0              0              
         Int256Shift                        0              0              
         ChaCha20DrawBytes                  0              0              
+        ParseWasmInstructions              0              0              
+        ParseWasmFunctions                 0              0              
+        ParseWasmGlobals                   0              0              
+        ParseWasmTableEntries              0              0              
+        ParseWasmTypes                     0              0              
+        ParseWasmDataSegments              0              0              
+        ParseWasmElemSegments              0              0              
+        ParseWasmImports                   0              0              
+        ParseWasmExports                   0              0              
+        ParseWasmDataSegmentBytes          0              0              
+        InstantiateWasmInstructions        0              0              
+        InstantiateWasmFunctions           0              0              
+        InstantiateWasmGlobals             0              0              
+        InstantiateWasmTableEntries        0              0              
+        InstantiateWasmTypes               0              0              
+        InstantiateWasmDataSegments        0              0              
+        InstantiateWasmElemSegments        0              0              
+        InstantiateWasmImports             0              0              
+        InstantiateWasmExports             0              0              
+        InstantiateWasmDataSegmentBytes    0              0              
+        Sec1DecodePointUncompressed        0              0              
+        VerifyEcdsaSecp256r1Sig            0              0              
         =================================================================
 
     "#]];
