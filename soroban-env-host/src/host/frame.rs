@@ -708,7 +708,13 @@ impl Host {
                     // with a storage error.
 
                     let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
-                    Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs)?
+
+                    #[cfg(feature = "recording_mode")]
+                    let cost_mode = crate::vm::ModuleParseCostMode::PossiblyDeferredIfRecording;
+                    #[cfg(not(feature = "recording_mode"))]
+                    let cost_mode = crate::vm::ModuleParseCostMode::Normal;
+
+                    Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs, cost_mode)?
                 };
                 let relative_objects = Vec::new();
                 self.with_frame(

@@ -114,6 +114,17 @@ impl Host {
     }
 }
 
+// In one very narrow context -- when recording, and with a module cache -- we
+// defer the cost of parsing a module until we pop a control frame.
+// Unfortunately we have to thread this information from the call site to here.
+// See comment below where this type is used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ModuleParseCostMode {
+    Normal,
+    #[cfg(feature = "recording_mode")]
+    PossiblyDeferredIfRecording,
+}
+
 impl Vm {
     #[cfg(feature = "testutils")]
     pub fn get_all_host_functions() -> Vec<(&'static str, &'static str, u32)> {
@@ -256,20 +267,25 @@ impl Vm {
         let cost_inputs = VersionedContractCodeCostInputs::V0 {
             wasm_bytes: wasm.len(),
         };
-        Self::new_with_cost_inputs(host, contract_id, wasm, cost_inputs)
+        Self::new_with_cost_inputs(
+            host,
+            contract_id,
+            wasm,
+            cost_inputs,
+            ModuleParseCostMode::Normal,
+        )
     }
 
-    pub fn new_with_cost_inputs(
+    pub(crate) fn new_with_cost_inputs(
         host: &Host,
         contract_id: Hash,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
+        cost_mode: ModuleParseCostMode,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
         VmInstantiationTimer::new(host.clone());
-        let config = get_wasmi_config(host.as_budget())?;
-        let engine = wasmi::Engine::new(&config);
-        let parsed_module = Self::parse_module(host, &engine, wasm, cost_inputs)?;
+        let parsed_module = Self::parse_module(host, wasm, cost_inputs, cost_mode)?;
         let linker = parsed_module.make_linker(host)?;
         Self::instantiate(host, contract_id, parsed_module, &linker)
     }
@@ -277,11 +293,11 @@ impl Vm {
     #[cfg(not(any(test, feature = "recording_mode")))]
     fn parse_module(
         host: &Host,
-        engine: &wasmi::Engine,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
+        _cost_mode: ModuleParseCostMode,
     ) -> Result<Rc<ParsedModule>, HostError> {
-        ParsedModule::new(host, engine, wasm, cost_inputs)
+        ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
     }
 
     /// This method exists to support [crate::storage::FootprintMode::Recording]
@@ -294,9 +310,10 @@ impl Vm {
     ///   charge for it as normal.
     ///
     ///   2. When we're in a protocol that _does_ support the [ModuleCache] but
-    ///   are _also_ in [crate::storage::FootprintMode::Recording] mode. Then
-    ///   the [ModuleCache] _does not get built_ during host setup (because we
-    ///   have no footprint yet to buid the cache from), so our caller
+    ///   are _also_ in [crate::storage::FootprintMode::Recording] mode and
+    ///   _also_ being instantiated from [Host::call_contract_fn]. Then the
+    ///   [ModuleCache] _did not get built_ during host setup (because we had
+    ///   no footprint yet to buid the cache from), so our caller
     ///   [Host::call_contract_fn] sees no module cache, and so each call winds
     ///   up calling us here, reparsing each module as it's called, and then
     ///   throwing it away.
@@ -321,18 +338,20 @@ impl Vm {
     #[cfg(any(test, feature = "recording_mode"))]
     fn parse_module(
         host: &Host,
-        engine: &wasmi::Engine,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
+        cost_mode: ModuleParseCostMode,
     ) -> Result<Rc<ParsedModule>, HostError> {
-        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+        if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording
+            && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
+        {
             if host.in_storage_recording_mode()? {
                 return host.budget_ref().with_observable_shadow_mode(|| {
-                    ParsedModule::new(host, engine, wasm, cost_inputs)
+                    ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
                 });
             }
         }
-        ParsedModule::new(host, engine, wasm, cost_inputs)
+        ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {

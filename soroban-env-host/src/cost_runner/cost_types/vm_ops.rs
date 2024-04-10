@@ -1,6 +1,6 @@
 use crate::{
     cost_runner::{CostRunner, CostType},
-    vm::ParsedModule,
+    vm::{ModuleParseCostMode, ParsedModule},
     xdr::{ContractCostType::VmInstantiation, Hash},
     Vm,
 };
@@ -32,6 +32,7 @@ impl CostRunner for VmInstantiationRun {
                 sample.id.unwrap(),
                 &sample.wasm[..],
                 sample.module.cost_inputs.clone(),
+                ModuleParseCostMode::Normal,
             )
             .unwrap(),
         );

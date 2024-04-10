@@ -200,7 +200,6 @@ impl ParsedModule {
         })
     }
 
-    #[cfg(feature = "bench")]
     pub fn new_with_isolated_engine(
         host: &Host,
         wasm: &[u8],
@@ -209,13 +208,7 @@ impl ParsedModule {
         use crate::budget::AsBudget;
         let config = crate::vm::get_wasmi_config(host.as_budget())?;
         let engine = Engine::new(&config);
-        cost_inputs.charge_for_parsing(host)?;
-        let (module, proto_version) = Self::parse_wasm(host, &engine, wasm)?;
-        Ok(Rc::new(Self {
-            module,
-            proto_version,
-            cost_inputs,
-        }))
+        Self::new(host, &engine, wasm, cost_inputs)
     }
 
     /// Parse the Wasm blob into a [Module] and its protocol number, checking its interface version
