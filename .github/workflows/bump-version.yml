@@ -11,5 +11,7 @@ jobs:
 
   bump-version:
     uses: stellar/actions/.github/workflows/rust-bump-version.yml@main
+    permissions:
+      workflows: read
     with:
       version: ${{ inputs.version }}
