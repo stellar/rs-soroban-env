@@ -11,5 +11,9 @@ jobs:
 
   bump-version:
     uses: stellar/actions/.github/workflows/rust-bump-version.yml@main
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
     with:
       version: ${{ inputs.version }}
