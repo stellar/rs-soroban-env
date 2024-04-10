@@ -121,7 +121,7 @@ impl Host {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ModuleParseCostMode {
     Normal,
-    #[cfg(feature = "recording_mode")]
+    #[cfg(any(test, feature = "recording_mode"))]
     PossiblyDeferredIfRecording,
 }
 

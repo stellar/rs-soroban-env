@@ -648,13 +648,13 @@ impl Host {
                 // If the module cache is not yet built, build it now, before first access.
                 // Unless we're in recording mode, because in that case the cache is built
                 // late in [pop_context] after we've determined the transaction footprint.
-                #[cfg(feature = "recording_mode")]
+                #[cfg(any(test, feature = "recording_mode"))]
                 {
                     if !self.in_storage_recording_mode()? {
                         self.build_module_cache_if_needed()?;
                     }
                 }
-                #[cfg(not(feature = "recording_mode"))]
+                #[cfg(not(any(test, feature = "recording_mode")))]
                 self.build_module_cache_if_needed()?;
                 let contract_id = id.metered_clone(self)?;
                 let parsed_module = if let Some(cache) = &*self.try_borrow_module_cache()? {
@@ -709,9 +709,9 @@ impl Host {
 
                     let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
 
-                    #[cfg(feature = "recording_mode")]
+                    #[cfg(any(test, feature = "recording_mode"))]
                     let cost_mode = crate::vm::ModuleParseCostMode::PossiblyDeferredIfRecording;
-                    #[cfg(not(feature = "recording_mode"))]
+                    #[cfg(not(any(test, feature = "recording_mode")))]
                     let cost_mode = crate::vm::ModuleParseCostMode::Normal;
 
                     Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs, cost_mode)?

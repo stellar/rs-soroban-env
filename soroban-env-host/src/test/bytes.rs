@@ -9,9 +9,7 @@ use crate::{
     BytesObject, Compare, Env, EnvBase, Error, Host, HostError, TryFromVal, U32Val, Val,
     DEFAULT_XDR_RW_LIMITS,
 };
-use arbitrary::{Arbitrary, Unstructured};
 use more_asserts::assert_ge;
-use rand::RngCore;
 use soroban_test_wasms::LINEAR_MEMORY;
 use std::ops::Deref;
 
@@ -265,7 +263,10 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 }
 
 #[test]
+#[cfg(feature = "testutils")]
 fn arbitrary_xdr_roundtrips() -> Result<(), HostError> {
+    use arbitrary::{Arbitrary, Unstructured};
+    use rand::RngCore;
     const ITERATIONS: u32 = 50_000;
     let host = Host::test_host_with_prng();
     host.budget_ref().reset_unlimited().unwrap();
