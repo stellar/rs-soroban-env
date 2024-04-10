@@ -1,0 +1,22 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(7558)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:17384, mem:7638, objs:-/1@a86617a0",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:6797017, mem:1081182, objs:-/2@def31e59, store:-/1@9792f928, foot:1@ec384412",
+  "   5 call bytes_new_from_slice(32)": "cpu:6797457, mem:1081246, objs:-/3@acfb7a85",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:6798426, mem:1081358, objs:-/4@7f00003e",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:6800069, mem:1081536, objs:-/5@f2982688, auth:1@1faed12a/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:6800361",
+  "  10 call get_ledger_network_id()": "cpu:6800411, auth:1@1faed12a/1@4b4eb683",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:6801441, mem:1081648, objs:-/6@e3009cd5",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:6819574, mem:1084722, objs:-/7@7d511ed2, store:-/2@f355423a, foot:2@b50d4713, auth:-/1@3203d5ac",
+  "  13 call call(Address(obj#13), Symbol(loadmem1), Vec(obj#15))": "cpu:6820014, mem:1084786, objs:-/8@d48a1a60, auth:-/-",
+  "  14 push VM:c232a6d3:loadmem1(Symbol(kkkkkkkk), U32(256), U32(1))": "cpu:6906545, mem:1232540, objs:-/9@cb4e1b01, vm:65536@b1cd98b9/4@70bfd778, stk:1@f8135ed3, auth:1@b26f0b77/-",
+  "  15 call symbol_index_in_linear_memory(Symbol(kkkkkkkk), U32(256), U32(1))": "cpu:6909026, mem:1232618, vm:-/-",
+  "  16 ret symbol_index_in_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:6917651",
+  "  17 pop VM:c232a6d3:loadmem1 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@1ef083fd/4@70bfd778",
+  "  18 ret call -> Err(Error(WasmVm, IndexBounds))": "cpu:7471506, mem:1363879, vm:-/-, stk:-, auth:-/-",
+  "  19 end": "cpu:7471506, mem:1363879, prngs:-/9b4a753, objs:-/9@cb4e1b01, vm:-/-, evt:-, store:-/2@f355423a, foot:2@b50d4713, stk:-, auth:-/-"
+}

@@ -1,0 +1,16 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_insert(Vec(obj#1), U32(0), U32(1))": "cpu:963, mem:88, objs:-/1@2fb556c5",
+  "   2 ret vec_insert -> Ok(Vec(obj#3))": "cpu:2111, mem:184, objs:-/2@69fde329",
+  "   3 call obj_cmp(Vec(obj#3), Vec(obj#5))": "cpu:3076, mem:280, objs:-/3@bfe0f1a7",
+  "   4 ret obj_cmp -> Ok(0)": "cpu:3364",
+  "   5 call vec_insert(Vec(obj#3), U32(2), U32(3))": "",
+  "   6 ret vec_insert -> Ok(Vec(obj#7))": "cpu:4514, mem:384, objs:-/4@9efb570e",
+  "   7 call obj_cmp(Vec(obj#7), Vec(obj#9))": "cpu:5481, mem:488, objs:-/5@dcfdc273",
+  "   8 ret obj_cmp -> Ok(0)": "cpu:5770",
+  "   9 call vec_insert(Vec(obj#7), U32(2), U32(4))": "",
+  "  10 ret vec_insert -> Ok(Vec(obj#11))": "cpu:6922, mem:600, objs:-/6@cf2a1873",
+  "  11 call obj_cmp(Vec(obj#11), Vec(obj#13))": "cpu:7891, mem:712, objs:-/7@53447ea3",
+  "  12 ret obj_cmp -> Ok(0)": "cpu:8181",
+  "  13 end": "cpu:8181, mem:712, prngs:-/-, objs:-/7@53447ea3, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/2@52b01770, foot:2@a244340d, stk:-, auth:-/-",
+  "   1 call vec_new()": "cpu:42436, mem:373, objs:-/1@10432200, store:-/1@6f750601, foot:1@2784223c",
+  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:42937, mem:437, objs:-/2@acf0be8f",
+  "   3 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "",
+  "   4 ret call -> Err(Error(Storage, ExceededLimit))": "cpu:51600, mem:941",
+  "   5 end": "cpu:51600, mem:941, prngs:-/-, objs:-/2@acf0be8f, vm:-/-, evt:-, store:-/1@6f750601, foot:1@2784223c, stk:-, auth:-/-"
+}

@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call call(Address(obj#1), Symbol(add), Vec(obj#3))": "cpu:30003, mem:1822, objs:-/3@3e2c291c, store:-/2@7bc024e1, foot:2@d6be0e71",
+  "   2 push TEST:   0:add(I32(1), I32(2))": "cpu:40546, mem:2982, objs:-/4@d7708f9, stk:1@415daa75, auth:1@ab264b90/-",
+  "   3 pop TEST:   0:add -> Ok(Void)": "cpu:44607, mem:3432, objs:-/7@70af5289, evt:2@f1afdada",
+  "   4 ret call -> Ok(Void)": "cpu:45229, mem:3448, stk:-, auth:-/-",
+  "   5 end": "cpu:47801, mem:4104, prngs:-/9b4a753, objs:-/7@70af5289, vm:-/-, evt:2@26df635e, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+}

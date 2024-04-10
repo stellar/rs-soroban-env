@@ -1,0 +1,14 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call call(Address(obj#1), Symbol(u64_range), Vec(obj#5))": "cpu:44491, mem:1822, prngs:-/da694490, objs:-/3@8108cdff, store:-/2@7bc024e1, foot:2@d6be0e71",
+  "   2 push TEST:   0:u64_range(U64(0), U64(90))": "cpu:55034, mem:2982, objs:-/4@9b4e2a05, stk:1@dbe31a12, auth:1@99d29b33/-",
+  "   3 call prng_u64_in_inclusive_range(0, 90)": "",
+  "   4 ret prng_u64_in_inclusive_range -> Ok(81)": "cpu:57383, prngs:6d4c49fc/f3d00d54, stk:1@b8468052",
+  "   5 call obj_from_u64(81)": "",
+  "   6 ret obj_from_u64 -> Ok(U64(obj#9))": "cpu:57884, mem:3046, objs:-/5@f32a065e",
+  "   7 pop TEST:   0:u64_range -> Ok(U64(obj#9))": "",
+  "   8 ret call -> Ok(U64(obj#9))": "cpu:58567, mem:3062, prngs:-/f3d00d54, stk:-, auth:-/-",
+  "   9 call obj_to_u64(U64(obj#9))": "",
+  "  10 ret obj_to_u64 -> Ok(81)": "cpu:58732",
+  "  11 end": "cpu:58732, mem:3062, prngs:-/f3d00d54, objs:-/5@f32a065e, vm:-/-, evt:-, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+}

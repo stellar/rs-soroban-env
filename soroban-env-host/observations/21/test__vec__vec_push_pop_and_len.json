@@ -1,0 +1,20 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_len(Vec(obj#1))": "cpu:961, mem:80, objs:-/1@3e25b2a0",
+  "   2 ret vec_len -> Ok(U32(0))": "cpu:1083",
+  "   3 call vec_push_back(Vec(obj#1), U32(1))": "",
+  "   4 ret vec_push_back -> Ok(Vec(obj#3))": "cpu:2229, mem:168, objs:-/2@ef8c6bf8",
+  "   5 call vec_push_back(Vec(obj#3), U32(2))": "",
+  "   6 ret vec_push_back -> Ok(Vec(obj#5))": "cpu:3377, mem:264, objs:-/3@8e1af622",
+  "   7 call vec_len(Vec(obj#5))": "",
+  "   8 ret vec_len -> Ok(U32(2))": "cpu:3499",
+  "   9 call vec_pop_back(Vec(obj#5))": "",
+  "  10 ret vec_pop_back -> Ok(Vec(obj#7))": "cpu:4645, mem:352, objs:-/4@fe6369bd",
+  "  11 call vec_len(Vec(obj#7))": "",
+  "  12 ret vec_len -> Ok(U32(1))": "cpu:4767",
+  "  13 call vec_pop_back(Vec(obj#7))": "",
+  "  14 ret vec_pop_back -> Ok(Vec(obj#9))": "cpu:5911, mem:432, objs:-/5@6fa6fd61",
+  "  15 call vec_len(Vec(obj#9))": "",
+  "  16 ret vec_len -> Ok(U32(0))": "cpu:6033",
+  "  17 end": "cpu:6033, mem:432, prngs:-/-, objs:-/5@6fa6fd61, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

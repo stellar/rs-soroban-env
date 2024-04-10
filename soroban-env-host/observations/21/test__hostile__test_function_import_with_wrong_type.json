@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(89)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15518, mem:169, objs:-/1@d3e8da72",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:551211, mem:204338",
+  "   5 end": "cpu:551211, mem:204338, prngs:-/9b4a753, objs:-/1@d3e8da72, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

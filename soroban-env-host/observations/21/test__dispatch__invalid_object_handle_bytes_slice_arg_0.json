@@ -1,0 +1,21 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(125)": "cpu:47",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1038, mem:205, objs:-/1@ddd51e98",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:1061442, mem:407508, objs:-/2@2589ae79, store:-/1@91b8f74, foot:1@8bafb570",
+  "   5 call bytes_new_from_slice(32)": "cpu:1061882, mem:407572, objs:-/3@8069c950",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:1062851, mem:407684, objs:-/4@1db2d9e",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:1064494, mem:407862, objs:-/5@6e68b86, auth:1@70241dff/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:1064786",
+  "  10 call get_ledger_network_id()": "cpu:1064836, auth:1@70241dff/1@d8d19aa5",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:1065866, mem:407974, objs:-/6@8fafdfad",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1083999, mem:411048, objs:-/7@7889fa69, store:-/2@d3eb4bf, foot:2@399ff50, auth:-/1@84423b1f",
+  "  13 call call(Address(obj#13), Symbol(test), Vec(obj#15))": "cpu:1084439, mem:411112, objs:-/8@cf90b30b, auth:-/-",
+  "  14 push VM:def3da83:test(Bytes(obj#123), U32(123), U32(123))": "cpu:1164352, mem:551062, objs:-/9@13be8174, vm:65536@b1cd98b9/2@2f94d90d, stk:1@3e1aceed, auth:1@d7dc1364/-",
+  "  15 call bytes_slice(Bytes(obj#123), U32(123), U32(123))": "cpu:1167268, mem:551164, objs:1@1c4ba01b/9@13be8174, vm:-/-, stk:1@9ac4ca80",
+  "  16 pop VM:def3da83:test -> Err(Error(Value, InvalidInput))": "cpu:1167935, vm:65536@b1cd98b9/2@2f94d90d",
+  "  17 ret call -> Err(Error(Value, InvalidInput))": "cpu:1300469, mem:577903, objs:-/9@13be8174, vm:-/-, stk:-, auth:-/-",
+  "  18 end": "cpu:1300469, mem:577903, prngs:-/9b4a753, objs:-/9@13be8174, vm:-/-, evt:-, store:-/2@d3eb4bf, foot:2@399ff50, stk:-, auth:-/-"
+}

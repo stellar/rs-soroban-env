@@ -1,0 +1,20 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(2002)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15996, mem:2082, objs:-/1@f59c6527",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:2651808, mem:1626602, objs:-/2@878e1970, store:-/1@711b100a, foot:1@75fca835",
+  "   5 call bytes_new_from_slice(32)": "cpu:2652248, mem:1626666, objs:-/3@b1d34d7a",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:2653217, mem:1626778, objs:-/4@1156a93e",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:2654860, mem:1626956, objs:-/5@5bf6ee9e, auth:1@9c2034af/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:2655152",
+  "  10 call get_ledger_network_id()": "cpu:2655202, auth:1@9c2034af/1@d882c47d",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:2656232, mem:1627068, objs:-/6@657db8e6",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:2674365, mem:1630142, objs:-/7@77ebce5a, store:-/2@4b95aafd, foot:2@9ddf4d04, auth:-/1@aff83b04",
+  "  13 call call(Address(obj#13), Symbol(oob2), Vec(obj#15))": "cpu:2674805, mem:1630206, objs:-/8@2a540d72, auth:-/-",
+  "  14 push VM:cd475327:oob2()": "cpu:2949106, mem:2827545, objs:-/9@430dbbfd, vm:1114112@415819ab/16@b860c029, stk:1@642ad433, auth:1@5f48118b/-",
+  "  15 pop VM:cd475327:oob2 -> Err(Error(WasmVm, InvalidAction))": "cpu:2951583, mem:2827575",
+  "  16 ret call -> Err(Error(WasmVm, InvalidAction))": "cpu:3323921, mem:2886037, vm:-/-, stk:-, auth:-/-",
+  "  17 end": "cpu:3323921, mem:2886037, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@4b95aafd, foot:2@9ddf4d04, stk:-, auth:-/-"
+}
