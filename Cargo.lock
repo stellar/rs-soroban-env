@@ -1485,6 +1485,7 @@ dependencies = [
  "expect-test",
  "soroban-env-common",
  "soroban-env-macros",
+ "stellar-xdr",
  "wasm-encoder",
  "wasmparser",
  "wasmprinter",
