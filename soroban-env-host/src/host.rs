@@ -2918,6 +2918,126 @@ impl VmCallerEnv for Host {
         Ok(res.into())
     }
 
+    fn bls_g1_add(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        p0: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let p0_bytes = self.visit_obj(p0, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G1 point",
+                    &[],
+                )
+            })
+        })?;
+        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G1 point",
+                    &[],
+                )
+            })
+        })?;
+        let result = self.bls_g1_add_raw_internal(&p0_bytes, &p1_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_g1_mul(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        scalar: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let scalar_bytes = self.visit_obj(scalar, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "scalar value out of range for G1 multiplication",
+                    &[],
+                )
+            })
+        })?;
+        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G1 point",
+                    &[],
+                )
+            })
+        })?;
+        let result = self.bls_g1_mul_raw_internal(scalar_bytes, &p1_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_g2_add(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        p0: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let p0_bytes = self.visit_obj(p0, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G2 point",
+                    &[],
+                )
+            })
+        })?;
+        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G2 point",
+                    &[],
+                )
+            })
+        })?;
+        let result = self.bls_g2_add_raw_internal(&p0_bytes, &p1_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_g2_mul(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        scalar: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let scalar_bytes = self.visit_obj(scalar, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "scalar value out of range for G2 multiplication",
+                    &[],
+                )
+            })
+        })?;
+        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G2 point",
+                    &[],
+                )
+            })
+        })?;
+        let result = self.bls_g2_mul_raw_internal(scalar_bytes, &p1_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
     // endregion: "crypto" module functions
     // region: "test" module functions
 
