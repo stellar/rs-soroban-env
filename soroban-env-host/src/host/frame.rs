@@ -143,6 +143,17 @@ impl Frame {
         }
     }
 
+    #[cfg(any(test, feature = "recording_mode"))]
+    fn is_lifecycle_host_function_frame(&self) -> bool {
+        match self {
+            Frame::HostFunction(hf) => match hf {
+                HostFunctionType::CreateContract | HostFunctionType::UploadContractWasm => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     #[cfg(any(test, feature = "testutils"))]
     fn is_contract_vm(&self) -> bool {
         matches!(self, Frame::ContractVM { .. })
@@ -196,7 +207,23 @@ impl Host {
             // See explanation for this line in [crate::vm::Vm::parse_module] -- it exists
             // to add-back module-parsing costs that were suppressed during the invocation.
             if self.in_storage_recording_mode()? {
-                self.rebuild_module_cache()?;
+                let is_lifecycle_function_frame = if let Some(c) = &ctx {
+                    c.frame.is_lifecycle_host_function_frame()
+                } else {
+                    false
+                };
+                if !is_lifecycle_function_frame {
+                    // Host function calls that upload Wasm and create contracts
+                    // don't use the module cache and thus don't need to have it
+                    // rebuilt.
+                    // Note: VM-running contracts that call `upload_wasm` _will_ get here, because
+                    // they did not push a lifecycle function frame, but that's _nearly_ correct:
+                    // such a contract does get a module cache (containing the running contract), it
+                    // just doesn't get one containing the uploaded contract. So we'll be
+                    // over-estimating cost a bit in that case by simulating a module-cache build
+                    // including both contracts, instead of just the running contract.
+                    self.rebuild_module_cache()?;
+                }
             }
         }
         let mut auth_snapshot = None;

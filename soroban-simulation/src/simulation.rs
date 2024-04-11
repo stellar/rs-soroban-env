@@ -319,7 +319,7 @@ impl SimulationAdjustmentConfig {
 
     pub fn default_adjustment() -> Self {
         Self {
-            instructions: SimulationAdjustmentFactor::new(1.02, 50_000),
+            instructions: SimulationAdjustmentFactor::new(1.04, 50_000),
             read_bytes: SimulationAdjustmentFactor::no_adjustment(),
             write_bytes: SimulationAdjustmentFactor::no_adjustment(),
             // It's safe to have pretty significant adjustment for tx size, as

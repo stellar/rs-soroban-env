@@ -95,4 +95,7 @@ mod curr {
 
     pub const HOSTILE_LARGE_VALUE: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/hostile_large_val.wasm").as_slice();
+
+    pub const DEPLOYER_TEST_CONTRACT: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/test_deployer.wasm").as_slice();
 }

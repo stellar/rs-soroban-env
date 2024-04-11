@@ -3,7 +3,9 @@ use crate::simulation::{RestoreOpSimulationResult, SimulationAdjustmentConfig};
 use crate::snapshot_source::{AutoRestoringSnapshotSource, SimulationSnapshotSource};
 use crate::testutils::{ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource};
 use pretty_assertions::assert_eq;
-use soroban_env_host::e2e_testutils::{account_entry, get_account_id, ledger_entry, wasm_entry};
+use soroban_env_host::e2e_testutils::{
+    account_entry, get_account_id, ledger_entry, wasm_entry_non_validated,
+};
 use soroban_env_host::fees::{FeeConfiguration, RentFeeConfiguration};
 use soroban_env_host::storage::SnapshotSource;
 use soroban_env_host::xdr::{
@@ -22,13 +24,13 @@ fn test_automatic_restoration() {
     let snapshot = Rc::new(
         MockSnapshotSource::from_entries(
             vec![
-                (wasm_entry(b"1"), Some(100)), // persistent, expired
-                (wasm_entry(b"2"), Some(299)), // persistent, expired
-                (wasm_entry(b"3"), Some(300)), // persistent, live
-                (wasm_entry(b"4"), Some(400)), // persistent, live
-                (temp_entry(b"5"), Some(299)), // temp, removed
-                (temp_entry(b"6"), Some(300)), // temp, live
-                (temp_entry(b"7"), Some(400)), // temp, live
+                (wasm_entry_non_validated(b"1"), Some(100)), // persistent, expired
+                (wasm_entry_non_validated(b"2"), Some(299)), // persistent, expired
+                (wasm_entry_non_validated(b"3"), Some(300)), // persistent, live
+                (wasm_entry_non_validated(b"4"), Some(400)), // persistent, live
+                (temp_entry(b"5"), Some(299)),               // temp, removed
+                (temp_entry(b"6"), Some(300)),               // temp, live
+                (temp_entry(b"7"), Some(400)),               // temp, live
             ],
             ledger_seq,
         )
@@ -75,7 +77,7 @@ fn test_automatic_restoration() {
     assert_eq!(
         auto_restoring_snapshot
             .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry(b"1111")).unwrap()
+                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"1111")).unwrap()
             ))
             .unwrap(),
         None
@@ -83,34 +85,40 @@ fn test_automatic_restoration() {
     assert_eq!(
         auto_restoring_snapshot
             .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry(b"1")).unwrap()
+                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"1")).unwrap()
             ))
             .unwrap(),
-        Some((Rc::new(wasm_entry(b"1")), Some(restored_entry_expiration)))
+        Some((
+            Rc::new(wasm_entry_non_validated(b"1")),
+            Some(restored_entry_expiration)
+        ))
     );
     assert_eq!(
         auto_restoring_snapshot
             .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry(b"2")).unwrap()
+                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"2")).unwrap()
             ))
             .unwrap(),
-        Some((Rc::new(wasm_entry(b"2")), Some(restored_entry_expiration)))
+        Some((
+            Rc::new(wasm_entry_non_validated(b"2")),
+            Some(restored_entry_expiration)
+        ))
     );
     assert_eq!(
         auto_restoring_snapshot
             .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry(b"3")).unwrap()
+                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"3")).unwrap()
             ))
             .unwrap(),
-        Some((Rc::new(wasm_entry(b"3")), Some(300)))
+        Some((Rc::new(wasm_entry_non_validated(b"3")), Some(300)))
     );
     assert_eq!(
         auto_restoring_snapshot
             .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry(b"4")).unwrap()
+                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"4")).unwrap()
             ))
             .unwrap(),
-        Some((Rc::new(wasm_entry(b"4")), Some(400)))
+        Some((Rc::new(wasm_entry_non_validated(b"4")), Some(400)))
     );
 
     assert_eq!(
@@ -153,8 +161,8 @@ fn test_automatic_restoration() {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
                         read_write: vec![
-                            ledger_entry_to_ledger_key(&wasm_entry(b"1")).unwrap(),
-                            ledger_entry_to_ledger_key(&wasm_entry(b"2")).unwrap(),
+                            ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"1")).unwrap(),
+                            ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"2")).unwrap(),
                         ]
                         .try_into()
                         .unwrap()

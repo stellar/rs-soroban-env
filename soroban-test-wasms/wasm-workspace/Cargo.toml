@@ -42,7 +42,8 @@ members = [
     "recursive_account",
     "hostile_large_val",
     "contract_sac_transfer",
-    "sum_i32"
+    "sum_i32",
+    "deployer"
 ]
 [profile.release]
 opt-level = "z"
