@@ -1,0 +1,21 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(125)": "cpu:47",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1038, mem:205, objs:-/1@8c0b64cb",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:1061442, mem:407508, objs:-/2@f9ce540e, store:-/1@b46352fb, foot:1@ebd7ec0",
+  "   5 call bytes_new_from_slice(32)": "cpu:1061882, mem:407572, objs:-/3@bafa2df7",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:1062851, mem:407684, objs:-/4@b79a7780",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:1064494, mem:407862, objs:-/5@4c2cc176, auth:1@d733eb14/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:1064786",
+  "  10 call get_ledger_network_id()": "cpu:1064836, auth:1@d733eb14/1@50d07d4c",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:1065866, mem:407974, objs:-/6@efcf03e4",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1083999, mem:411048, objs:-/7@52065e6b, store:-/2@2bb7e717, foot:2@e2b69551, auth:-/1@e8016541",
+  "  13 call call(Address(obj#13), Symbol(test), Vec(obj#17))": "cpu:1084879, mem:411176, objs:-/9@1316c229, auth:-/-",
+  "  14 push VM:745d4a45:test(Address(obj#123), Symbol(abc), Vec(obj#15))": "cpu:1164792, mem:551126, objs:-/10@a44c46e6, vm:65536@b1cd98b9/2@2f94d90d, stk:1@2beb495d, auth:1@69e0f875/-",
+  "  15 call try_call(Address(obj#123), Symbol(abc), Vec(obj#15))": "cpu:1168143, mem:551252, objs:2@af36870c/10@a44c46e6, vm:-/-, stk:1@67df7054",
+  "  16 pop VM:745d4a45:test -> Err(Error(Value, InvalidInput))": "cpu:1168810, vm:65536@b1cd98b9/2@2f94d90d",
+  "  17 ret call -> Err(Error(Value, InvalidInput))": "cpu:1301344, mem:577991, objs:-/10@a44c46e6, vm:-/-, stk:-, auth:-/-",
+  "  18 end": "cpu:1301344, mem:577991, prngs:-/9b4a753, objs:-/10@a44c46e6, vm:-/-, evt:-, store:-/2@2bb7e717, foot:2@e2b69551, stk:-, auth:-/-"
+}

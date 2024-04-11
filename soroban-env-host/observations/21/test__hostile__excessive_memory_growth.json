@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/9b4a753, objs:-/7@d9885a3d, vm:-/-, evt:-, store:-/2@f8d3e04e, foot:2@b42c4369, stk:-, auth:-/-",
+  "   1 call call(Address(obj#13), Symbol(test), Vec(obj#15))": " mem:48, objs:-/8@81a70d6",
+  "   2 push VM:fd3d5653:test()": " mem:66797, objs:-/9@12301041, vm:65536@b1cd98b9/2@2f94d90d, stk:1@e7039225, auth:1@d7dc1364/-",
+  "   3 pop VM:fd3d5653:test -> Err(Error(Budget, ExceededLimit))": "",
+  "   4 ret call -> Err(Error(Budget, ExceededLimit))": " mem:66853, vm:-/-, stk:-, auth:-/-",
+  "   5 call call(Address(obj#13), Symbol(test), Vec(obj#19))": " mem:48, objs:-/10@990f5b12",
+  "   6 push VM:fd3d5653:test()": " mem:66688, objs:-/11@692a10c0, vm:65536@b1cd98b9/2@2f94d90d, stk:1@e7039225, auth:1@b1b428e/-",
+  "   7 pop VM:fd3d5653:test -> Ok(Symbol(pass))": " mem:2163840, vm:2162688@d306bee7/2@2f94d90d",
+  "   8 ret call -> Ok(Symbol(pass))": " mem:2163896, vm:-/-, stk:-, auth:-/-",
+  "   9 end": "cpu:0, mem:2163896, prngs:-/9b4a753, objs:-/11@692a10c0, vm:-/-, evt:-, store:-/2@f8d3e04e, foot:2@b42c4369, stk:-, auth:-/-"
+}

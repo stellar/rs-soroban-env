@@ -41,7 +41,8 @@ pub trait Emit {
 
     fn as_single_function_wasm_module(&self, name: &str, argtypes: &[&'static str]) -> Vec<u8> {
         let n_locals = self.num_locals();
-        let mut fe = ModEmitter::default().func(Arity(argtypes.len() as u32), n_locals);
+        let mut fe =
+            ModEmitter::default_with_test_protocol().func(Arity(argtypes.len() as u32), n_locals);
         for arg in argtypes.iter() {
             fe.alloc_arg(arg);
         }

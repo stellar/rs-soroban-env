@@ -1,0 +1,20 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(97)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15520, mem:177, objs:-/1@82b991d7",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:511847, mem:134240",
+  "   5 call bytes_new_from_slice(104)": "cpu:511894",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#3))": "cpu:512881, mem:134424, objs:-/2@294ca363",
+  "   7 call upload_wasm(Bytes(obj#3))": "",
+  "   8 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:1012077, mem:268771",
+  "   9 call bytes_new_from_slice(113)": "cpu:1012124",
+  "  10 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:1013113, mem:268964, objs:-/3@546fe205",
+  "  11 call upload_wasm(Bytes(obj#5))": "",
+  "  12 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:1515997, mem:403676",
+  "  13 call bytes_new_from_slice(97)": "cpu:1516044",
+  "  14 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:1517029, mem:403853, objs:-/4@c1409f52",
+  "  15 call upload_wasm(Bytes(obj#7))": "",
+  "  16 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:2013356, mem:537916",
+  "  17 end": "cpu:2013356, mem:537916, prngs:-/9b4a753, objs:-/4@c1409f52, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

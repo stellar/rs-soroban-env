@@ -1738,7 +1738,7 @@ fn test_classic_account_auth_using_simulation() {
     assert!(res.invoke_result.is_ok());
 }
 
-#[cfg(all(feature = "next", feature = "recording_mode"))]
+#[cfg(feature = "recording_mode")]
 mod cap_54_55_56 {
 
     use super::*;

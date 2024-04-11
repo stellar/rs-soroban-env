@@ -1,0 +1,10 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/2@417e1749, foot:2@dbc5e0d, stk:-, auth:-/-",
+  "   1 call vec_new()": "cpu:440, mem:64, objs:-/1@10432200",
+  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:941, mem:128, objs:-/2@acf0be8f",
+  "   3 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "",
+  "   4 push VM:b3afffa3:test()": "cpu:1390314, mem:379014, objs:-/3@2988da9d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@88dadaef, auth:1@1d00dc6b/-",
+  "   5 pop VM:b3afffa3:test -> Ok(Symbol(pass))": "cpu:1392811, mem:379044",
+  "   6 ret call -> Ok(Symbol(pass))": " vm:-/-, stk:-, auth:-/-",
+  "   7 end": "cpu:1392811, mem:379044, prngs:-/-, objs:-/3@2988da9d, vm:-/-, evt:-, store:-/2@417e1749, foot:2@dbc5e0d, stk:-, auth:-/-"
+}

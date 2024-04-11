@@ -217,7 +217,6 @@ fn write_budget_params_code(
                     ty,
                 );
             }
-            #[cfg(not(feature = "next"))]
             ContractCostType::VmCachedInstantiation => {
                 println!(
                     " 
@@ -293,7 +292,6 @@ fn write_budget_params_code(
                     ty
                 )
             }
-            #[cfg(not(feature = "next"))]
             ContractCostType::VmCachedInstantiation => {
                 println!(
                     " 

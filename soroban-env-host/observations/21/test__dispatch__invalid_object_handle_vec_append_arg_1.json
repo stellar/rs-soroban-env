@@ -1,0 +1,21 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(122)": "cpu:47",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1038, mem:202, objs:-/1@a3146062",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:1059135, mem:407235, objs:-/2@63a20f4b, store:-/1@299aab16, foot:1@d199ed19",
+  "   5 call bytes_new_from_slice(32)": "cpu:1059575, mem:407299, objs:-/3@906814e0",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:1060544, mem:407411, objs:-/4@2324a5ea",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:1062187, mem:407589, objs:-/5@40ad8a9b, auth:1@523417fa/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:1062479",
+  "  10 call get_ledger_network_id()": "cpu:1062529, auth:1@523417fa/1@b0c474f7",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:1063559, mem:407701, objs:-/6@2fd74021",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1081692, mem:410775, objs:-/7@aecb1a30, store:-/2@53bb6c59, foot:2@7b2e80be, auth:-/1@74fcf3dc",
+  "  13 call call(Address(obj#13), Symbol(test), Vec(obj#17))": "cpu:1082572, mem:410903, objs:-/9@b9ea360b, auth:-/-",
+  "  14 push VM:28e239aa:test(Vec(obj#15), Vec(obj#123))": "cpu:1162481, mem:550834, objs:-/10@35248801, vm:65536@b1cd98b9/2@2f94d90d, stk:1@239322f5, auth:1@69e0f875/-",
+  "  15 call vec_append(Vec(obj#15), Vec(obj#123))": "cpu:1165828, mem:550944, objs:2@8d7ea469/10@35248801, vm:-/-, stk:1@a3d7026c",
+  "  16 pop VM:28e239aa:test -> Err(Error(Value, InvalidInput))": "cpu:1166552, vm:65536@b1cd98b9/2@2f94d90d",
+  "  17 ret call -> Err(Error(Value, InvalidInput))": "cpu:1298888, mem:577632, objs:-/10@35248801, vm:-/-, stk:-, auth:-/-",
+  "  18 end": "cpu:1298888, mem:577632, prngs:-/9b4a753, objs:-/10@35248801, vm:-/-, evt:-, store:-/2@53bb6c59, foot:2@7b2e80be, stk:-, auth:-/-"
+}

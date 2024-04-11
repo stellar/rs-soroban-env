@@ -18,20 +18,19 @@
 
 use std::{cell::RefCell, mem, rc::Rc};
 
-#[cfg(feature = "next")]
-use crate::xdr::{ContractCodeCostInputs, ContractCodeEntryExt, ContractCodeEntryV1};
 use crate::{
     budget::{AsBudget, DepthLimiter},
     builtin_contracts::base_types::Address,
     storage::AccessType,
     xdr::{
-        AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType,
-        ContractExecutable, ContractIdPreimage, CreateContractArgs, Duration, Hash,
-        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
-        ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
+        ContractCodeEntryExt, ContractCodeEntryV1, ContractCostType, ContractExecutable,
+        ContractIdPreimage, CreateContractArgs, Duration, Hash, InvokeContractArgs, LedgerEntry,
+        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
+        LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode,
+        ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
+        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation, StringM,
+        TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -316,9 +315,7 @@ impl MeteredClone for TimePoint {}
 impl MeteredClone for Duration {}
 impl MeteredClone for Hash {}
 impl MeteredClone for Uint256 {}
-#[cfg(feature = "next")]
 impl MeteredClone for ContractCodeCostInputs {}
-#[cfg(feature = "next")]
 impl MeteredClone for ContractCodeEntryV1 {}
 impl MeteredClone for ContractExecutable {}
 impl MeteredClone for AccountId {}
@@ -563,7 +560,6 @@ impl MeteredClone for ContractCodeEntry {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        #[cfg(feature = "next")]
         // self.ext is a former ExtensionEntry; see note on ExtensionEntry in declared_size.rs
         match &self.ext {
             ContractCodeEntryExt::V0 => (),

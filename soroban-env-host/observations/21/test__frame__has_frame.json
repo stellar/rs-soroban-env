@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 push TEST:   0:()": "cpu:33398, mem:2670, objs:-/3@f25d6726, store:-/2@7bc024e1, foot:2@d6be0e71, stk:1@bee58c5, auth:1@b0976283/-",
+  "   2 pop TEST:   0: -> Ok(Void)": "",
+  "   3 end": "cpu:34020, mem:2686, prngs:-/9b4a753, objs:-/3@f25d6726, vm:-/-, evt:-, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+}

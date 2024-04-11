@@ -1,0 +1,22 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(7565)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:17386, mem:7645, objs:-/1@b46f6133",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:6802406, mem:1081816, objs:-/2@62e638d9, store:-/1@aa8ba57d, foot:1@776511a5",
+  "   5 call bytes_new_from_slice(32)": "cpu:6802846, mem:1081880, objs:-/3@7e637a1b",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:6803815, mem:1081992, objs:-/4@94e6fcff",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:6805458, mem:1082170, objs:-/5@1f0a5a91, auth:1@9b9c87e6/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:6805750",
+  "  10 call get_ledger_network_id()": "cpu:6805800, auth:1@9b9c87e6/1@21119a30",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:6806830, mem:1082282, objs:-/6@ce07e95f",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:6824963, mem:1085356, objs:-/7@aea971e3, store:-/2@7c50810d, foot:2@ca9197f9, auth:-/1@8c69f362",
+  "  13 call call(Address(obj#13), Symbol(loadmem2), Vec(obj#17))": "cpu:6825981, mem:1085484, objs:-/9@817fc031, auth:-/-",
+  "  14 push VM:435086b0:loadmem2(Map(obj#15), U32(0), U32(65536), U32(32))": "cpu:6912518, mem:1233261, objs:-/10@60b651f, vm:65536@b1cd98b9/4@70bfd778, stk:1@513c9de3, auth:1@8aa6820c/-",
+  "  15 call map_unpack_to_linear_memory(Map(obj#15), U32(0), U32(65536), U32(32))": "cpu:6915438, mem:1233379, objs:1@5b08ef60/10@60b651f, vm:-/-, stk:1@68c1c6aa",
+  "  16 ret map_unpack_to_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:6927534",
+  "  17 pop VM:435086b0:loadmem2 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@6d331be9/4@70bfd778",
+  "  18 ret call -> Err(Error(WasmVm, IndexBounds))": "cpu:7481985, mem:1364791, objs:-/10@60b651f, vm:-/-, stk:-, auth:-/-",
+  "  19 end": "cpu:7481985, mem:1364791, prngs:-/9b4a753, objs:-/10@60b651f, vm:-/-, evt:-, store:-/2@7c50810d, foot:2@ca9197f9, stk:-, auth:-/-"
+}

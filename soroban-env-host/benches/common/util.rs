@@ -4,7 +4,7 @@ use soroban_env_host::{budget::AsBudget, meta, Host, LedgerInfo, Val, I256};
 pub(crate) fn test_host() -> Host {
     let host = Host::default();
     host.set_ledger_info(LedgerInfo {
-        protocol_version: meta::get_ledger_protocol_version(meta::INTERFACE_VERSION),
+        protocol_version: Host::current_test_protocol(),
         ..Default::default()
     })
     .unwrap();

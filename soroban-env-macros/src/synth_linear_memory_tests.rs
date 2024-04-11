@@ -106,7 +106,7 @@ pub fn generate_wasm_module_with_preloaded_linear_memory(
             quote! {
                 // define the wasms
                 fn #wasm_module() -> Vec<u8> {
-                    let mut me = ModEmitter::default();
+                    let mut me = ModEmitter::default_with_test_protocol();
                     let f0 = me.import_func(#mod_export, #fn_export, Arity(#arity));
 
                     // *******************START of f1***************************

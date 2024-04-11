@@ -1,4 +1,3 @@
-#[cfg(feature = "next")]
 mod v21 {
     use elliptic_curve::sec1::FromEncodedPoint;
     use generic_array::GenericArray;
@@ -7,22 +6,24 @@ mod v21 {
         AffinePoint, EncodedPoint,
     };
     use soroban_env_common::EnvBase;
-    use soroban_env_host::{budget::AsBudget, Host, HostError, VmCaller, VmCallerEnv};
+    use soroban_env_host::{budget::AsBudget, Env, Host, HostError};
+
+    const PROTOCOL_SUPPORT_FOR_SECP256R1: u32 = 21;
 
     // Test vectors copied from
     // https://csrc.nist.gov/groups/STM/cavp/documents/dss/186-3ecdsatestvectors.zip
     // `SigVer.rsp` section [P-256,SHA-256]
     #[test]
     fn test_secp256r1_sig_ver_with_sha256_on_msg() -> Result<(), HostError> {
-        let host = Host::default();
-        // we use call the host function via the `VmCaller` interface to get through
-        // protocol gating, since the secp256r1 host function is added in v21
-        let mut vmcaller = VmCaller::none();
+        let host = Host::test_host();
+        if host.get_ledger_protocol_version()? < PROTOCOL_SUPPORT_FOR_SECP256R1 {
+            return Ok(());
+        }
         for test_vector in FIPS186_ECDSA_TEST_VECTORS {
             // reset the budget for each test case so they don't interfere
             host.as_budget().reset_default()?;
             let msg = host.bytes_new_from_slice(&hex::decode(test_vector.msg).unwrap())?;
-            let msg_hash = host.compute_hash_sha256(&mut vmcaller, msg)?;
+            let msg_hash = host.compute_hash_sha256(msg)?;
             let verifier = VerifyingKey::from_affine(
                 AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
                     &GenericArray::from_slice(hex::decode(test_vector.qx).unwrap().as_slice()),
@@ -42,7 +43,7 @@ mod v21 {
             sig = sig.normalize_s().unwrap_or(sig);
             let sig_obj = host.bytes_new_from_slice(&sig.to_bytes())?;
 
-            let res = host.verify_sig_ecdsa_secp256r1(&mut vmcaller, public_key, msg_hash, sig_obj);
+            let res = host.verify_sig_ecdsa_secp256r1(public_key, msg_hash, sig_obj);
 
             if test_vector.result == &SigVerResult::Ok {
                 assert!(res.is_ok())
@@ -200,15 +201,17 @@ mod v21 {
         use wycheproof::TestResult;
 
         let test_set = TestSet::load(EcdsaSecp256r1Sha256).unwrap();
-        let host = Host::default();
-        let mut vmcaller = VmCaller::none();
+        let host = Host::test_host();
+        if host.get_ledger_protocol_version()? < PROTOCOL_SUPPORT_FOR_SECP256R1 {
+            return Ok(());
+        }
         for test_group in test_set.test_groups {
             let public_key = host.bytes_new_from_slice(&test_group.key.key).unwrap();
             for test in test_group.tests {
                 // reset the budget for each test case so they don't interfere
                 host.as_budget().reset_default()?;
                 let msg = host.bytes_new_from_slice(test.msg.as_slice())?;
-                let msg_digest = host.compute_hash_sha256(&mut vmcaller, msg)?;
+                let msg_digest = host.compute_hash_sha256(msg)?;
 
                 let mut sig = match Signature::from_der(&test.sig) {
                     Ok(s) => s.normalize_s().unwrap_or(s),
@@ -224,12 +227,7 @@ mod v21 {
                 sig = sig.normalize_s().unwrap_or(sig);
                 let signature = host.bytes_new_from_slice(&sig.to_bytes())?;
 
-                match host.verify_sig_ecdsa_secp256r1(
-                    &mut vmcaller,
-                    public_key,
-                    msg_digest,
-                    signature,
-                ) {
+                match host.verify_sig_ecdsa_secp256r1(public_key, msg_digest, signature) {
                     Ok(_) => assert_eq!(test.result, TestResult::Valid),
                     // we treat `TestResult::Acceptable` as invalid
                     Err(_) => {

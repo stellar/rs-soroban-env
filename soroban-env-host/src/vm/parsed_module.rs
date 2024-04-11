@@ -13,10 +13,7 @@ use std::{collections::BTreeSet, io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum VersionedContractCodeCostInputs {
-    V0 {
-        wasm_bytes: usize,
-    },
-    #[cfg(feature = "next")]
+    V0 { wasm_bytes: usize },
     V1(crate::xdr::ContractCodeCostInputs),
 }
 
@@ -24,7 +21,6 @@ impl VersionedContractCodeCostInputs {
     pub fn is_v0(&self) -> bool {
         match self {
             Self::V0 { .. } => true,
-            #[cfg(feature = "next")]
             Self::V1(_) => false,
         }
     }
@@ -33,7 +29,6 @@ impl VersionedContractCodeCostInputs {
             Self::V0 { wasm_bytes } => {
                 host.charge_budget(ContractCostType::VmInstantiation, Some(*wasm_bytes as u64))?;
             }
-            #[cfg(feature = "next")]
             Self::V1(inputs) => {
                 host.charge_budget(
                     ContractCostType::ParseWasmInstructions,
@@ -97,7 +92,6 @@ impl VersionedContractCodeCostInputs {
                     )?;
                 }
             }
-            #[cfg(feature = "next")]
             Self::V1(inputs) => {
                 _host.charge_budget(ContractCostType::InstantiateWasmInstructions, None)?;
                 _host.charge_budget(
@@ -194,9 +188,7 @@ impl ParsedModule {
         // parsing phase, so there is no DOS factor. We don't charge for
         // insertion/lookups, since they should be cheap and number of
         // operations on the set is limited.
-        if cfg!(feature = "next")
-            && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
-        {
+        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
             Vec::<(&str, &str)>::charge_bulk_init_cpy(symbols.len() as u64, host)?;
         }
         callback(&symbols)
@@ -208,7 +200,6 @@ impl ParsedModule {
         })
     }
 
-    #[cfg(feature = "bench")]
     pub fn new_with_isolated_engine(
         host: &Host,
         wasm: &[u8],
@@ -217,13 +208,7 @@ impl ParsedModule {
         use crate::budget::AsBudget;
         let config = crate::vm::get_wasmi_config(host.as_budget())?;
         let engine = Engine::new(&config);
-        cost_inputs.charge_for_parsing(host)?;
-        let (module, proto_version) = Self::parse_wasm(host, &engine, wasm)?;
-        Ok(Rc::new(Self {
-            module,
-            proto_version,
-            cost_inputs,
-        }))
+        Self::new(host, &engine, wasm, cost_inputs)
     }
 
     /// Parse the Wasm blob into a [Module] and its protocol number, checking its interface version
@@ -394,7 +379,6 @@ impl ParsedModule {
 
     // Do a second, manual parse of the Wasm blob to extract cost parameters we're
     // interested in.
-    #[cfg(feature = "next")]
     pub fn extract_refined_contract_cost_inputs(
         host: &Host,
         wasm: &[u8],
@@ -600,7 +584,6 @@ impl ParsedModule {
         Ok(costs)
     }
 
-    #[cfg(feature = "next")]
     fn check_const_expr_simple(host: &Host, expr: &wasmparser::ConstExpr) -> Result<(), HostError> {
         use wasmparser::Operator::*;
         let mut op = expr.get_operators_reader();

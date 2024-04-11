@@ -1,0 +1,14 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call map_new()": "",
+  "   2 ret map_new -> Ok(Map(obj#1))": "cpu:501, mem:64, objs:-/1@a51fbffa",
+  "   3 call map_put(Map(obj#1), U32(2), U32(20))": "",
+  "   4 ret map_put -> Ok(Map(obj#3))": "cpu:1786, mem:168, objs:-/2@9a982fe4",
+  "   5 call map_put(Map(obj#3), U32(1), U32(10))": "",
+  "   6 ret map_put -> Ok(Map(obj#5))": "cpu:3083, mem:296, objs:-/3@c9de6e75",
+  "   7 call map_values(Map(obj#5))": "",
+  "   8 ret map_values -> Ok(Vec(obj#7))": "cpu:4279, mem:392, objs:-/4@d41d0b29",
+  "   9 call obj_cmp(Vec(obj#7), Vec(obj#9))": "cpu:5244, mem:488, objs:-/5@164e2714",
+  "  10 ret obj_cmp -> Ok(0)": "cpu:5532",
+  "  11 end": "cpu:5532, mem:488, prngs:-/-, objs:-/5@164e2714, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

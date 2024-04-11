@@ -361,8 +361,7 @@ impl Host {
     }
 
     pub fn build_module_cache_if_needed(&self) -> Result<(), HostError> {
-        if cfg!(feature = "next")
-            && self.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
+        if self.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
             && self.try_borrow_module_cache()?.is_none()
         {
             let cache = ModuleCache::new(self)?;
@@ -384,10 +383,8 @@ impl Host {
 
     #[cfg(any(test, feature = "recording_mode"))]
     pub fn clear_module_cache(&self) -> Result<(), HostError> {
-        if cfg!(feature = "next") {
-            *self.try_borrow_module_cache_mut()? = None;
-            *self.try_borrow_linker_mut()? = None;
-        }
+        *self.try_borrow_module_cache_mut()? = None;
+        *self.try_borrow_linker_mut()? = None;
         Ok(())
     }
 
@@ -2814,9 +2811,6 @@ impl VmCallerEnv for Host {
         signature: BytesObject,
         recovery_id: U32Val,
     ) -> Result<BytesObject, HostError> {
-        #[cfg(not(feature = "next"))]
-        let sig = self.secp256k1_signature_from_bytesobj_input(signature)?;
-        #[cfg(feature = "next")]
         let sig = self.ecdsa_signature_from_bytesobj_input::<k256::Secp256k1>(signature)?;
         let rid = self.secp256k1_recovery_id_from_u32val(recovery_id)?;
         let hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
@@ -2824,7 +2818,6 @@ impl VmCallerEnv for Host {
         self.add_host_object(rk)
     }
 
-    #[cfg(feature = "next")]
     fn verify_sig_ecdsa_secp256r1(
         &self,
         _vmcaller: &mut VmCaller<Host>,
@@ -2837,22 +2830,6 @@ impl VmCallerEnv for Host {
         let msg_hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
         let res = self.secp256r1_verify_signature(&pk, &msg_hash, &sig)?;
         Ok(res.into())
-    }
-
-    #[cfg(not(feature = "next"))]
-    fn verify_sig_ecdsa_secp256r1(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-        _public_key: BytesObject,
-        _msg_digest: BytesObject,
-        _signature: BytesObject,
-    ) -> Result<Void, HostError> {
-        Err(self.err(
-            ScErrorType::Context,
-            ScErrorCode::InternalError,
-            "host function `verify_sig_ecdsa_secp256r1` not implemented",
-            &[],
-        ))
     }
 
     // endregion: "crypto" module functions

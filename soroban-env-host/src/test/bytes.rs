@@ -9,9 +9,7 @@ use crate::{
     BytesObject, Compare, Env, EnvBase, Error, Host, HostError, TryFromVal, U32Val, Val,
     DEFAULT_XDR_RW_LIMITS,
 };
-use arbitrary::{Arbitrary, Unstructured};
 use more_asserts::assert_ge;
-use rand::RngCore;
 use soroban_test_wasms::LINEAR_MEMORY;
 use std::ops::Deref;
 
@@ -265,7 +263,10 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 }
 
 #[test]
+#[cfg(feature = "testutils")]
 fn arbitrary_xdr_roundtrips() -> Result<(), HostError> {
+    use arbitrary::{Arbitrary, Unstructured};
+    use rand::RngCore;
     const ITERATIONS: u32 = 50_000;
     let host = Host::test_host_with_prng();
     host.budget_ref().reset_unlimited().unwrap();
@@ -491,11 +492,13 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
     );
 
     // constructing a big bytes will cause budget limit exceeded error
-    #[cfg(not(feature = "next"))]
-    const TOO_BIG: u32 = 480000;
-    #[cfg(feature = "next")]
-    const TOO_BIG: u32 = 8_000_000;
-    let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(TOO_BIG, 7);
+    let num_bytes: u32 =
+        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+            480_000
+        } else {
+            8_000_000
+        };
+    let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(num_bytes, 7);
     host.clear_module_cache()?;
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());

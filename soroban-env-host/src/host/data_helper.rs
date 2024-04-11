@@ -136,15 +136,12 @@ impl Host {
         {
             LedgerEntryData::ContractCode(e) => {
                 let code = e.code.metered_clone(self)?;
-                #[allow(unused_mut)]
-                let mut costs = VersionedContractCodeCostInputs::V0 {
-                    wasm_bytes: code.len(),
-                };
-                #[cfg(feature = "next")]
-                match &e.ext {
-                    crate::xdr::ContractCodeEntryExt::V0 => (),
+                let costs = match &e.ext {
+                    crate::xdr::ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
+                        wasm_bytes: code.len(),
+                    },
                     crate::xdr::ContractCodeEntryExt::V1(v1) => {
-                        costs = VersionedContractCodeCostInputs::V1(
+                        VersionedContractCodeCostInputs::V1(
                             v1.cost_inputs.metered_clone(self.as_budget())?,
                         )
                     }

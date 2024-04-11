@@ -30,14 +30,11 @@ impl ModuleCache {
         let config = get_wasmi_config(host.as_budget())?;
         let engine = Engine::new(&config);
         let modules = MeteredOrdMap::new();
-        #[allow(unused_mut)]
         let mut cache = Self { engine, modules };
-        #[cfg(feature = "next")]
         cache.add_stored_contracts(host)?;
         Ok(cache)
     }
 
-    #[cfg(feature = "next")]
     pub fn add_stored_contracts(&mut self, host: &Host) -> Result<(), HostError> {
         use crate::xdr::{ContractCodeEntry, ContractCodeEntryExt, LedgerEntryData, LedgerKey};
         for (k, v) in host.try_borrow_storage()?.map.iter(host.as_budget())? {

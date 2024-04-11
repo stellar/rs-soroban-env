@@ -255,12 +255,15 @@ fn recover_ecdsa_secp256k1_key_test() {
         .err().unwrap()));
 }
 
-#[cfg(feature = "next")]
+const PROTOCOL_SUPPORT_FOR_SECP256R1: u32 = 21;
+
 #[test]
 fn test_secp256r1_signature_verification() -> Result<(), HostError> {
-    use crate::{VmCaller, VmCallerEnv};
-
     let host = observe_host!(Host::test_host());
+
+    if host.get_ledger_protocol_version()? < PROTOCOL_SUPPORT_FOR_SECP256R1 {
+        return Ok(());
+    }
 
     let verify_sig = |public_key: Vec<u8>,
                       msg_digest: Vec<u8>,
@@ -272,13 +275,7 @@ fn test_secp256r1_signature_verification() -> Result<(), HostError> {
         // Make sure we always verify with the fresh budget to make large payload tests
         // independent of each other.
         host.budget_ref().reset_default().unwrap();
-        <Host as VmCallerEnv>::verify_sig_ecdsa_secp256r1(
-            &host,
-            &mut VmCaller::none(),
-            public_key_obj,
-            msg_digest_obj,
-            signature_obj,
-        )
+        host.verify_sig_ecdsa_secp256r1(public_key_obj, msg_digest_obj, signature_obj)
     };
 
     // 0. Valid

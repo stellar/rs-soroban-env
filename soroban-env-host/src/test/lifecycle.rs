@@ -67,7 +67,7 @@ fn test_host() -> Host {
     let host = Host::with_storage_and_budget(storage, budget);
     host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
     host.set_ledger_info(LedgerInfo {
-        protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
+        protocol_version: Host::current_test_protocol(),
         network_id: generate_bytes_array(&host),
         ..Default::default()
     })
@@ -567,8 +567,6 @@ fn test_large_contract() {
     assert!(err.error.is_code(ScErrorCode::ExceededLimit));
 }
 
-#[cfg(feature = "next")]
-#[allow(dead_code)]
 mod cap_54_55_56 {
 
     use more_asserts::assert_gt;
@@ -635,6 +633,7 @@ mod cap_54_55_56 {
         proto: u32,
     ) -> Result<(ObservedHost, AddressObject), HostError> {
         let host = Host::test_host_with_recording_footprint();
+        host.enable_debug()?;
         host.with_mut_ledger_info(|ledger_info| ledger_info.protocol_version = proto)?;
         let host = ObservedHost::new(hostname, host);
         let contract_addr_obj =

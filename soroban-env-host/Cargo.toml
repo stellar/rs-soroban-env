@@ -130,5 +130,11 @@ bench = true
 name = "variation_histograms"
 path = "benches/variation_histograms.rs"
 
+[[test]]
+name = "secp256r1_sig_ver"
+path = "tests/secp256r1_sig_ver.rs"
+required-features = ["testutils"]
+
+
 [package.metadata.docs.rs]
 features = ["recording_mode", "tracy", "testutils"]

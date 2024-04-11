@@ -52,10 +52,9 @@ impl StellarAssetContractTest {
     fn setup(testname: &'static str) -> Self {
         let host = Host::test_host_with_recording_footprint();
         let obs = ObservedHost::new(testname, host.clone());
+        let protocol_version = host.get_ledger_protocol_version().unwrap();
         host.set_ledger_info(LedgerInfo {
-            protocol_version: crate::meta::get_ledger_protocol_version(
-                crate::meta::INTERFACE_VERSION,
-            ),
+            protocol_version,
             sequence_number: 123,
             timestamp: 123456,
             network_id: [5; 32],

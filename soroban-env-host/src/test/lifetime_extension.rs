@@ -32,7 +32,7 @@ impl InstanceCodeTest {
         };
 
         host.set_ledger_info(crate::LedgerInfo {
-            protocol_version: 21,
+            protocol_version: Host::current_test_protocol(),
             sequence_number: 4090,
             max_entry_ttl: 10000,
             ..Default::default()
@@ -53,7 +53,8 @@ mod separate_instance_code_extension {
 
     use super::*;
 
-    #[cfg(feature = "next")]
+    const PROTOCOL_SUPPORT_FOR_SEPARATE_EXTENSIONS: u32 = 21;
+
     #[test]
     fn extend_only_instance() {
         let InstanceCodeTest {
@@ -62,6 +63,10 @@ mod separate_instance_code_extension {
             contract,
             ..
         } = InstanceCodeTest::setup();
+
+        if host.get_ledger_protocol_version().unwrap() < PROTOCOL_SUPPORT_FOR_SEPARATE_EXTENSIONS {
+            return;
+        }
 
         assert!(host
             .extend_contract_instance_ttl(contract_id, 5.into(), 5000.into())
@@ -78,7 +83,6 @@ mod separate_instance_code_extension {
         assert_eq!(entry_with_live_until.1, Some(9090));
     }
 
-    #[cfg(feature = "next")]
     #[test]
     fn extend_only_code() {
         let InstanceCodeTest {
@@ -87,6 +91,10 @@ mod separate_instance_code_extension {
             code,
             ..
         } = InstanceCodeTest::setup();
+
+        if host.get_ledger_protocol_version().unwrap() < PROTOCOL_SUPPORT_FOR_SEPARATE_EXTENSIONS {
+            return;
+        }
 
         assert!(host
             .extend_contract_code_ttl(contract_id, 5.into(), 5000.into())

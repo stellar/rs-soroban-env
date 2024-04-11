@@ -25,7 +25,6 @@ impl Host {
             })
     }
 
-    #[cfg(feature = "next")]
     pub(crate) fn ecdsa_secp256r1_recover_key(
         &self,
         msg_hash: &Hash,

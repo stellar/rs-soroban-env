@@ -47,7 +47,7 @@ pub const ENV_META_V0_SECTION_NAME: &str = "contractenvmetav0";
 // protocol number for testing purposes.
 #[cfg(feature = "next")]
 soroban_env_macros::generate_env_meta_consts!(
-    ledger_protocol_version: 21,
+    ledger_protocol_version: 22,
     pre_release_version: 1,
 );
 
@@ -57,9 +57,13 @@ soroban_env_macros::generate_env_meta_consts!(
 // network protocol number.
 #[cfg(not(feature = "next"))]
 soroban_env_macros::generate_env_meta_consts!(
-    ledger_protocol_version: 20,
+    ledger_protocol_version: 21,
     pre_release_version: 0,
 );
+
+pub const fn make_interface_version(protocol_version: u32, pre_release_version: u32) -> u64 {
+    ((protocol_version as u64) << 32) | (pre_release_version as u64)
+}
 
 pub const fn get_ledger_protocol_version(interface_version: u64) -> u32 {
     // The ledger protocol version is the high 32 bits of INTERFACE_VERSION

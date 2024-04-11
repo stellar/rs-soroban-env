@@ -173,7 +173,7 @@ pub fn generate_wasm_module_calling_host_functions(file_lit: LitStr) -> Result<T
             quote! {
                 // define the wasms
                 fn #wasm_module() -> Vec<u8> {
-                    let mut me = ModEmitter::default();
+                    let mut me = ModEmitter::default_with_test_protocol();
                     let f0 = me.import_func(#mod_export, #fn_export, Arity(#arity));
                     let mut fe = me.func(Arity(#arity), 0);
                     for i in 0..#arity {
@@ -255,6 +255,10 @@ pub fn generate_hostfn_call_with_wrong_types(file_lit: LitStr) -> Result<TokenSt
             let wasm_module = format_ident!("wasm_module_calling_{}", &target_fn.name);
             let test_wrong_arg_type =
                 format_ident!("dispatch_with_wrong_arg_type_{}", &target_fn.name);
+            let target_min_vers = target_fn.min_supported_protocol.unwrap_or(0);
+            let target_max_vers = target_fn
+                .max_supported_protocol
+                .unwrap_or(LEDGER_PROTOCOL_VERSION);
 
             // There are three types of possibilities between two types "target" and "input":
             // 1. Compatible -- the target type is a parent (say `Val`), then passing in any child type value is fine.
@@ -310,6 +314,10 @@ pub fn generate_hostfn_call_with_wrong_types(file_lit: LitStr) -> Result<TokenSt
                     let wasm = #wasm_module();
                     let host = observe_host!(Host::test_host_with_recording_footprint());
                     host.as_budget().reset_unlimited()?;
+                    let proto = host.get_ledger_protocol_version()?;
+                    if proto < #target_min_vers || proto > #target_max_vers {
+                        return Ok(());
+                    }
                     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
                     #(#calls)*
                     Ok(())
@@ -344,21 +352,24 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
                 .clone()
                 .into_iter()
                 .enumerate()
-                .map(move |(i, a)| ((f.name.clone(), f.args.clone()), (i, a)))
+                .map(move |(i, a)| ((f.clone(), f.args.clone()), (i, a)))
         })
-        .filter(|((f_name, _), (_, arg))| {
-            !special_case_fns.contains(f_name) && arg.r#type.ends_with("Object")
+        .filter(|((f, _), (_, arg))| {
+            !special_case_fns.contains(&f.name) && arg.r#type.ends_with("Object")
         })
-        .map(|(f_info, (pos, _))| {
-            let wasm_module = format_ident!("wasm_module_calling_{}", f_info.0);
-            let fn_ident = format_ident!("invalid_object_handle_{}_arg_{}", f_info.0, pos);
-
-            let args = f_info.1.iter().enumerate().map(|(i, a)| {
+        .map(|((func, args), (pos, _))| {
+            let wasm_module = format_ident!("wasm_module_calling_{}", func.name);
+            let fn_ident = format_ident!("invalid_object_handle_{}_arg_{}", func.name, pos);
+            let target_min_vers = func.min_supported_protocol.unwrap_or(0);
+            let target_max_vers = func
+                .max_supported_protocol
+                .unwrap_or(LEDGER_PROTOCOL_VERSION);
+            let args = args.iter().enumerate().map(|(i, a)| {
                 let ty_ident = format_ident!("{}", a.r#type);
                 // if an arg is Object type, but it is not our test target, we generate an valid handle for it
                 if a.r#type.ends_with("Object") && i != pos {
                     // we must handle some special cases, e.g. a valid signature must be 64 bytes
-                    if f_info.0 == "verify_sig_ed25519" && i == 2 {
+                    if func.name == "verify_sig_ed25519" && i == 2 {
                         quote! {
                             #ty_ident::test_object_with_initial_length(&host, 64).to_val()
                         }
@@ -380,6 +391,10 @@ pub fn generate_hostfn_call_with_invalid_obj_handles(
                     let wasm = #wasm_module();
                     let host = observe_host!(Host::test_host_with_recording_footprint());
                     host.as_budget().reset_unlimited()?;
+                    let proto = host.get_ledger_protocol_version()?;
+                    if proto < #target_min_vers || proto > #target_max_vers {
+                        return Ok(());
+                    }
                     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
                     let args = HostVec::from_vec(vec![ #(#args),*])?;

@@ -68,9 +68,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     let mut params: BTreeMap<CostType, (MeteredCostComponent, MeteredCostComponent)> =
         BTreeMap::new();
 
-    #[cfg(not(feature = "next"))]
-    call_bench::<B, ComputeEcdsaSecp256k1Sig>(&mut params)?;
-
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut params)?;
     call_bench::<B, ComputeKeccak256HashMeasure>(&mut params)?;
     call_bench::<B, ComputeSha256HashMeasure>(&mut params)?;
@@ -89,36 +86,35 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, Int256ShiftMeasure>(&mut params)?;
     call_bench::<B, ChaCha20DrawBytesMeasure>(&mut params)?;
 
-    #[cfg(feature = "next")]
-    {
-        call_bench::<B, VmCachedInstantiationMeasure>(&mut params)?;
+    // P21 cost types
+    call_bench::<B, VmCachedInstantiationMeasure>(&mut params)?;
 
-        call_bench::<B, ParseWasmInstructionsMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmFunctionsMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmGlobalsMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmTableEntriesMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmTypesMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmDataSegmentsMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmElemSegmentsMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmImportsMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmExportsMeasure>(&mut params)?;
-        call_bench::<B, ParseWasmDataSegmentBytesMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmInstructionsMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmFunctionsMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmGlobalsMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmTableEntriesMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmTypesMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmDataSegmentsMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmElemSegmentsMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmImportsMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmExportsMeasure>(&mut params)?;
+    call_bench::<B, ParseWasmDataSegmentBytesMeasure>(&mut params)?;
 
-        call_bench::<B, InstantiateWasmInstructionsMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmFunctionsMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmGlobalsMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmTableEntriesMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmTypesMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmDataSegmentsMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmElemSegmentsMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmImportsMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmExportsMeasure>(&mut params)?;
-        call_bench::<B, InstantiateWasmDataSegmentBytesMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmInstructionsMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmFunctionsMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmGlobalsMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmTableEntriesMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmTypesMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmDataSegmentsMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmElemSegmentsMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmImportsMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmExportsMeasure>(&mut params)?;
+    call_bench::<B, InstantiateWasmDataSegmentBytesMeasure>(&mut params)?;
 
-        call_bench::<B, DecodeEcdsaCurve256SigMeasure>(&mut params)?;
-        call_bench::<B, Sec1DecodePointUncompressedMeasure>(&mut params)?;
-        call_bench::<B, VerifyEcdsaSecp256r1SigMeasure>(&mut params)?;
-    }
+    call_bench::<B, DecodeEcdsaCurve256SigMeasure>(&mut params)?;
+    call_bench::<B, Sec1DecodePointUncompressedMeasure>(&mut params)?;
+    call_bench::<B, VerifyEcdsaSecp256r1SigMeasure>(&mut params)?;
+
     // These three mem ones are derived analytically, we do not calibrate them typically
     if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {
         call_bench::<B, MemAllocMeasure>(&mut params)?;
