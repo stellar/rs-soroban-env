@@ -20,6 +20,9 @@ pub const BLS_G2_UNCOMPRESSED_SIZE: usize = 192;
 pub const BLS_FP_SIZE: usize = 48;
 pub const BLS_SCALAR_SIZE: usize = 32;
 pub const BLS_RESULT_SIZE: usize = 255;
+pub const BLS_G1_DST: &[u8; 50] = b"QUUX-V01-CS02-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
+pub const BLS_G2_DST: &[u8; 50] = b"QUUX-V01-CS02-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
+
 const BLS_FP12_ZERO: blst_fp12 = blst_fp12 {
     fp6: [blst_fp6 {
         fp2: [blst_fp2 {
@@ -240,18 +243,16 @@ impl Host {
         &self,
         msg: &[u8],
     ) -> Result<[u8; BLS_G1_UNCOMPRESSED_SIZE], HostError> {
-        let dst: &[u8; 50] = b"QUUX-V01-CS02-with-BLS12381G1_XMD:SHA-256_SSWU_RO_";
-        let aug = [0u8; 0];
         let mut res = blst_p1::default();
         unsafe {
             blst_hash_to_g1(
                 &mut res,
                 msg.as_ptr(),
                 msg.len(),
-                dst.as_ptr(),
-                dst.len(),
-                aug.as_ptr(),
-                aug.len(),
+                BLS_G1_DST.as_ptr(),
+                BLS_G1_DST.len(),
+                [].as_ptr(),
+                0,
             );
         }
         let mut out = [0u8; BLS_G1_UNCOMPRESSED_SIZE];
@@ -263,18 +264,16 @@ impl Host {
         &self,
         msg: &[u8],
     ) -> Result<[u8; BLS_G2_UNCOMPRESSED_SIZE], HostError> {
-        let dst: &[u8; 50] = b"QUUX-V01-CS02-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
-        let aug = [0u8; 0];
         let mut res = blst_p2::default();
         unsafe {
             blst_hash_to_g2(
                 &mut res,
                 msg.as_ptr(),
                 msg.len(),
-                dst.as_ptr(),
-                dst.len(),
-                aug.as_ptr(),
-                aug.len(),
+                BLS_G2_DST.as_ptr(),
+                BLS_G2_DST.len(),
+                [].as_ptr(),
+                0,
             );
         }
         let mut out = [0u8; BLS_G2_UNCOMPRESSED_SIZE];
@@ -429,21 +428,5 @@ unsafe fn serialize_default_p2(affine: &blst_p2_affine) -> [u8; BLS_G2_UNCOMPRES
     let mut raw = blst_p2::default();
     blst_p2_from_affine(&mut raw, affine);
     blst_p2_serialize(out.as_mut_ptr(), &raw);
-    out
-}
-
-unsafe fn serialize_to_affine_p1(raw: &blst_p1) -> [u8; BLS_G1_UNCOMPRESSED_SIZE] {
-    let mut out = [0u8; BLS_G1_UNCOMPRESSED_SIZE];
-    let affine = blst_p1_affine::default();
-    blst_p1_affine_in_g1(&affine);
-    blst_p1_serialize(out.as_mut_ptr(), raw);
-    out
-}
-
-unsafe fn serialize_to_affine_p2(raw: &blst_p2) -> [u8; BLS_G2_UNCOMPRESSED_SIZE] {
-    let mut out = [0u8; BLS_G2_UNCOMPRESSED_SIZE];
-    let affine = blst_p2_affine::default();
-    blst_p2_affine_in_g2(&affine);
-    blst_p2_serialize(out.as_mut_ptr(), raw);
     out
 }
