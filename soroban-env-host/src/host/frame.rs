@@ -737,7 +737,24 @@ impl Host {
                     let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
 
                     #[cfg(any(test, feature = "recording_mode"))]
-                    let cost_mode = crate::vm::ModuleParseCostMode::PossiblyDeferredIfRecording;
+                    // let cost_mode = crate::vm::ModuleParseCostMode::PossiblyDeferredIfRecording;
+                    let cost_mode = if self.in_storage_recording_mode()? {
+                        let contact_code_key =
+                            self.budget_ref().with_observable_shadow_mode(|| {
+                                self.contract_code_ledger_key(wasm_hash)
+                            })?;
+                        if self
+                            .try_borrow_storage()?
+                            .get_snapshot_value(self, &contact_code_key)?
+                            .is_some()
+                        {
+                            crate::vm::ModuleParseCostMode::PossiblyDeferredIfRecording
+                        } else {
+                            crate::vm::ModuleParseCostMode::Normal
+                        }
+                    } else {
+                        crate::vm::ModuleParseCostMode::Normal
+                    };
                     #[cfg(not(any(test, feature = "recording_mode")))]
                     let cost_mode = crate::vm::ModuleParseCostMode::Normal;
 

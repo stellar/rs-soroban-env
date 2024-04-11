@@ -37,7 +37,22 @@ impl ModuleCache {
 
     pub fn add_stored_contracts(&mut self, host: &Host) -> Result<(), HostError> {
         use crate::xdr::{ContractCodeEntry, ContractCodeEntryExt, LedgerEntryData, LedgerKey};
-        for (k, v) in host.try_borrow_storage()?.map.iter(host.as_budget())? {
+        let storage = host.try_borrow_storage()?;
+        for (k, v) in storage.map.iter(host.as_budget())? {
+            // In recording mode we build the module cache *after* the contract invocation has
+            // finished. This means that if any new Wasm has been uploaded, then we will add it to
+            // the cache. However, in the 'real' flow we build the cache first, so any new Wasm
+            // upload won't be cached. That's why we should look at the storage in its initial
+            // state, which is conveniently provided by the recording mode snapshot.
+            #[cfg(any(test, feature="recording_mode"))]
+            let init_value = if host.in_storage_recording_mode()? {
+                storage.get_snapshot_value(host, k)?
+            } else {
+                v.clone()
+            };
+            #[cfg(any(test, feature="recording_mode"))]
+            let v = &init_value;
+
             if let LedgerKey::ContractCode(_) = &**k {
                 if let Some((e, _)) = v {
                     if let LedgerEntryData::ContractCode(ContractCodeEntry { code, hash, ext }) =

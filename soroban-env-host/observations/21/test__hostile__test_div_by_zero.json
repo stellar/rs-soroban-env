@@ -13,8 +13,8 @@
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:1064174, mem:405990, objs:-/6@85b08315",
   "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1082307, mem:409064, objs:-/7@3d0da1ee, store:-/2@f7334274, foot:2@c8b66927, auth:-/1@9a65db67",
   "  13 call call(Address(obj#13), Symbol(test), Vec(obj#15))": "cpu:961, mem:80, objs:-/8@7f1b75f8, auth:-/-",
-  "  14 push VM:48d173c4:test()": "cpu:74362, mem:139119, objs:-/9@f4a25496, vm:65536@b1cd98b9/2@2f94d90d, stk:1@d745271a, auth:1@d7dc1364/-",
-  "  15 pop VM:48d173c4:test -> Err(Error(WasmVm, ArithDomain))": "cpu:76851, mem:139149",
-  "  16 ret call -> Err(Error(WasmVm, ArithDomain))": "cpu:203287, mem:164850, vm:-/-, stk:-, auth:-/-",
-  "  17 end": "cpu:203287, mem:164850, prngs:-/9b4a753, objs:-/9@f4a25496, vm:-/-, evt:-, store:-/2@f7334274, foot:2@c8b66927, stk:-, auth:-/-"
+  "  14 push VM:48d173c4:test()": "cpu:198824, mem:164716, objs:-/9@f4a25496, vm:65536@b1cd98b9/2@2f94d90d, stk:1@d745271a, auth:1@d7dc1364/-",
+  "  15 pop VM:48d173c4:test -> Err(Error(WasmVm, ArithDomain))": "cpu:201313, mem:164746",
+  "  16 ret call -> Err(Error(WasmVm, ArithDomain))": "cpu:201935, mem:164762, vm:-/-, stk:-, auth:-/-",
+  "  17 end": "cpu:201935, mem:164762, prngs:-/9b4a753, objs:-/9@f4a25496, vm:-/-, evt:-, store:-/2@f7334274, foot:2@c8b66927, stk:-, auth:-/-"
 }

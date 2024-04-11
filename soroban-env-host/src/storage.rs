@@ -451,6 +451,23 @@ impl Storage {
         Ok(())
     }
 
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub(crate) fn get_snapshot_value(
+        &self,
+        host: &Host,
+        key: &Rc<LedgerKey>,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        match &self.mode {
+            FootprintMode::Recording(snapshot) => snapshot.get(key),
+            FootprintMode::Enforcing => Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "trying to get snapshot value in enforcing mode",
+                &[],
+            )),
+        }
+    }
+
     fn prepare_read_only_access(
         &mut self,
         key: &Rc<LedgerKey>,
