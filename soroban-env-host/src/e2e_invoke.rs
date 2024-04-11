@@ -5,7 +5,6 @@
 use std::{cmp::max, rc::Rc};
 
 use crate::ledger_info::get_key_durability;
-#[cfg(any(test, feature = "unstable-next-api"))]
 use crate::storage::EntryWithLiveUntil;
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
@@ -80,7 +79,6 @@ pub struct InvokeHostFunctionRecordingModeResult {
     pub contract_events: Vec<ContractEvent>,
     /// Size of the encoded contract events and the return value.
     /// Non-zero only when invocation has succeeded.
-    #[cfg(any(test, feature = "unstable-next-api"))]
     pub contract_events_and_return_value_size: u32,
 }
 
@@ -160,14 +158,7 @@ pub fn get_ledger_changes(
                 new_live_until_ledger: 0,
             });
         }
-        #[cfg(any(test, feature = "unstable-next-api"))]
         let entry_with_live_until = init_storage_snapshot.get(key)?;
-        #[cfg(not(any(test, feature = "unstable-next-api")))]
-        let entry_with_live_until = if init_storage_snapshot.has(key)? {
-            Some(init_storage_snapshot.get(key)?)
-        } else {
-            None
-        };
         if let Some((old_entry, old_live_until_ledger)) = entry_with_live_until {
             let mut buf = vec![];
             metered_write_xdr(budget, old_entry.as_ref(), &mut buf)?;
@@ -567,14 +558,7 @@ pub fn invoke_host_function_in_recording_mode(
         let mut encoded_ttl_entries = Vec::with_capacity(storage.footprint.0.len());
         let mut read_bytes = 0_u32;
         for (lk, _) in &storage.footprint.0 {
-            #[cfg(any(test, feature = "unstable-next-api"))]
             let entry_with_live_until = ledger_snapshot.get(lk)?;
-            #[cfg(not(any(test, feature = "unstable-next-api")))]
-            let entry_with_live_until = if ledger_snapshot.has(lk)? {
-                Some(ledger_snapshot.get(lk)?)
-            } else {
-                None
-            };
             if let Some((le, live_until)) = entry_with_live_until {
                 let encoded_le = host.to_xdr_non_metered(&*le)?;
                 read_bytes = read_bytes.saturating_add(encoded_le.len() as u32);
@@ -652,7 +636,6 @@ pub fn invoke_host_function_in_recording_mode(
         auth: output_auth,
         ledger_changes,
         contract_events,
-        #[cfg(any(test, feature = "unstable-next-api"))]
         contract_events_and_return_value_size,
     })
 }
@@ -831,7 +814,6 @@ struct StorageMapSnapshotSource<'a> {
     map: &'a StorageMap,
 }
 
-#[cfg(any(test, feature = "unstable-next-api"))]
 impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
         if let Some(Some((entry, live_until_ledger))) =
@@ -840,33 +822,6 @@ impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
             Ok(Some((Rc::clone(entry), *live_until_ledger)))
         } else {
             Ok(None)
-        }
-    }
-}
-
-#[cfg(not(any(test, feature = "unstable-next-api")))]
-impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
-        if let Some(Some((entry, live_until_ledger))) =
-            self.map.get::<Rc<LedgerKey>>(key, self.budget)?
-        {
-            Ok((Rc::clone(entry), *live_until_ledger))
-        } else {
-            Err(HostError::from((
-                ScErrorType::Storage,
-                ScErrorCode::InternalError,
-            )))
-        }
-    }
-
-    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
-        if let Some(maybe_value) = self.map.get::<Rc<LedgerKey>>(key, self.budget)? {
-            Ok(maybe_value.is_some())
-        } else {
-            Err(HostError::from((
-                ScErrorType::Storage,
-                ScErrorCode::InternalError,
-            )))
         }
     }
 }

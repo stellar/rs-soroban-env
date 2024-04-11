@@ -1,5 +1,4 @@
 use crate::e2e_invoke::ledger_entry_to_ledger_key;
-#[cfg(any(test, feature = "unstable-next-api"))]
 use crate::storage::EntryWithLiveUntil;
 use crate::{
     budget::Budget,
@@ -134,7 +133,6 @@ impl MockSnapshotSource {
     }
 }
 
-#[cfg(any(test, feature = "unstable-next-api"))]
 impl SnapshotSource for MockSnapshotSource {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
         if let Some((entry, live_until)) = self.0.get(key) {
@@ -142,25 +140,6 @@ impl SnapshotSource for MockSnapshotSource {
         } else {
             Ok(None)
         }
-    }
-}
-
-#[cfg(not(any(test, feature = "unstable-next-api")))]
-impl SnapshotSource for MockSnapshotSource {
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
-        if let Some(val) = self.0.get(key) {
-            Ok((Rc::clone(&val.0), val.1))
-        } else {
-            Err((
-                crate::xdr::ScErrorType::Storage,
-                crate::xdr::ScErrorCode::MissingValue,
-            )
-                .into())
-        }
-    }
-
-    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
-        Ok(self.0.contains_key(key))
     }
 }
 
