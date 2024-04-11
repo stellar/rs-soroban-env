@@ -75,9 +75,9 @@ pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
 
 pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
     wasm: &[u8],
-    _add_refined_cost_inputs: bool,
+    add_refined_cost_inputs: bool,
 ) -> LedgerEntry {
-    let ext = if !_add_refined_cost_inputs {
+    let ext = if !add_refined_cost_inputs {
         ContractCodeEntryExt::V0
     } else {
         let dummy_host = crate::Host::test_host();
