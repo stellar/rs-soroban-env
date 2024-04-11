@@ -69,9 +69,14 @@ pub struct ModEmitter {
 }
 
 impl Default for ModEmitter {
+    /// For backward compatibility sake with earlier versions of this code, this
+    /// is hard-wired to emit a module with a handful of miscellaneous content
+    /// and, crucially, metadata identifying itself as a protocol-20 module
+    /// rather than one from some newer release. If you want an actually-empty
+    /// `ModEmitter` you should call [`ModEmitter::new`].
     fn default() -> Self {
         let mut me = Self::new();
-        me.add_test_protocol_version_meta();
+        me.add_protocol_version_meta(20);
         me.table(RefType::FUNCREF, 128, None);
         me.memory(1, None, false, false);
         me.global(ValType::I64, true, &ConstExpr::i64_const(42));
@@ -81,6 +86,24 @@ impl Default for ModEmitter {
 }
 
 impl ModEmitter {
+    /// Creates the same "miscellaneous content" `ModEmitter` as
+    /// [`ModEmitter::default`], but calls
+    /// [`Self::add_test_protocol_version_meta`] to allow variability in the
+    /// protocol version rather than hard wiring to version 20.
+    pub fn default_with_test_protocol() -> Self {
+        let mut me = Self::new();
+        me.add_test_protocol_version_meta();
+        me.table(RefType::FUNCREF, 128, None);
+        me.memory(1, None, false, false);
+        me.global(ValType::I64, true, &ConstExpr::i64_const(42));
+        me.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        me
+    }
+
+    /// Creates the same `TEST_PROTOCOL`-qualified "miscellaneous content"
+    /// `ModEmitter` as [`ModEmitter::default_with_test_protocol`] except with a
+    /// caller-specified number of linear memory pages and function table
+    /// entries.
     pub fn from_configs(mem_pages: u32, elem_count: u32) -> Self {
         let mut me = Self::new();
         me.add_test_protocol_version_meta();
@@ -91,6 +114,8 @@ impl ModEmitter {
         me
     }
 
+    /// Add a metadata section marking the module as belonging to the specified
+    /// protocol version.
     pub fn add_protocol_version_meta(&mut self, protocol_version: u32) -> &mut Self {
         let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(
             soroban_env_common::meta::make_interface_version(protocol_version, 0),
@@ -101,6 +126,10 @@ impl ModEmitter {
         )
     }
 
+    /// Calls [`Self::add_protocol_version_meta`] with a number specified by
+    /// either the environment variable `TEST_PROTOCOL`, or the value of
+    /// [`soroban_env_common::meta::INTERFACE_VERSION`] if the environment
+    /// variable is not set.
     pub fn add_test_protocol_version_meta(&mut self) -> &mut Self {
         let protocol_version = env::var("TEST_PROTOCOL")
             .map(|v| u32::from_str(&v).unwrap())
@@ -110,6 +139,8 @@ impl ModEmitter {
         self.add_protocol_version_meta(protocol_version)
     }
 
+    /// Creates an empty `ModEmitter`, which does not even have a
+    /// protocol metadata section.
     pub fn new() -> Self {
         let module = Module::new();
         let types = TypeSection::new();
