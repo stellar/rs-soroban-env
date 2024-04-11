@@ -11,7 +11,7 @@ use crate::xdr::{
     Uint256, WriteXdr,
 };
 use crate::xdr::{ContractCodeEntryExt, ContractCodeEntryV1};
-use crate::LedgerInfo;
+use crate::{Host, LedgerInfo};
 use sha2::{Digest, Sha256};
 use std::env;
 use std::str::FromStr;
@@ -96,9 +96,7 @@ pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
 }
 
 pub fn e2e_test_protocol_version() -> u32 {
-    env::var("TEST_PROTOCOL")
-        .map(|v| u32::from_str(&v).unwrap())
-        .unwrap_or(20)
+    Host::current_test_protocol()
 }
 
 pub fn default_ledger_info() -> LedgerInfo {

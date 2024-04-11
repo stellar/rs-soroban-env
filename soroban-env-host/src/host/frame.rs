@@ -216,6 +216,12 @@ impl Host {
                     // Host function calls that upload Wasm and create contracts
                     // don't use the module cache and thus don't need to have it
                     // rebuilt.
+                    // Note: VM-running contracts that call `upload_wasm` _will_ get here, because
+                    // they did not push a lifecycle function frame, but that's _nearly_ correct:
+                    // such a contract does get a module cache (containing the running contract), it
+                    // just doesn't get one containing the uploaded contract. So we'll be
+                    // over-estimating cost a bit in that case by simulating a module-cache build
+                    // including both contracts, instead of just the running contract.
                     self.rebuild_module_cache()?;
                 }
             }
