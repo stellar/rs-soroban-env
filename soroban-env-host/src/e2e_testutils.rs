@@ -13,8 +13,6 @@ use crate::xdr::{
 use crate::xdr::{ContractCodeEntryExt, ContractCodeEntryV1};
 use crate::{Host, LedgerInfo};
 use sha2::{Digest, Sha256};
-use std::env;
-use std::str::FromStr;
 
 pub const DEFAULT_LEDGER_SEQ: u32 = 1_000_000;
 pub const DEFAULT_NETWORK_ID: [u8; 32] = [5; 32];
