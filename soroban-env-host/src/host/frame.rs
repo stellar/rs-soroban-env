@@ -142,18 +142,6 @@ impl Frame {
             Frame::TestContract(tc) => Some(&tc.instance),
         }
     }
-
-    #[cfg(any(test, feature = "recording_mode"))]
-    fn is_lifecycle_host_function_frame(&self) -> bool {
-        match self {
-            Frame::HostFunction(hf) => match hf {
-                HostFunctionType::CreateContract | HostFunctionType::UploadContractWasm => true,
-                _ => false,
-            },
-            _ => false,
-        }
-    }
-
     #[cfg(any(test, feature = "testutils"))]
     fn is_contract_vm(&self) -> bool {
         matches!(self, Frame::ContractVM { .. })
@@ -207,24 +195,16 @@ impl Host {
             // See explanation for this line in [crate::vm::Vm::parse_module] -- it exists
             // to add-back module-parsing costs that were suppressed during the invocation.
             if self.in_storage_recording_mode()? {
-                let is_lifecycle_function_frame = if let Some(c) = &ctx {
-                    c.frame.is_lifecycle_host_function_frame()
-                } else {
-                    false
-                };
-                if !is_lifecycle_function_frame {
+                if *self.try_borrow_need_to_build_module_cache()? {
                     // Host function calls that upload Wasm and create contracts
                     // don't use the module cache and thus don't need to have it
                     // rebuilt.
-                    // Note: VM-running contracts that call `upload_wasm` _will_ get here, because
-                    // they did not push a lifecycle function frame, but that's _nearly_ correct:
-                    // such a contract does get a module cache (containing the running contract), it
-                    // just doesn't get one containing the uploaded contract. So we'll be
-                    // over-estimating cost a bit in that case by simulating a module-cache build
-                    // including both contracts, instead of just the running contract.
                     self.rebuild_module_cache()?;
                 }
             }
+            // Reset the flag for building the module cache. This is only relevant
+            // for tests that keep reusing the same host for several invocations.
+            *(self.try_borrow_need_to_build_module_cache_mut()?) = false;
         }
         let mut auth_snapshot = None;
         if let Some(rp) = orp {
@@ -675,14 +655,18 @@ impl Host {
                 // If the module cache is not yet built, build it now, before first access.
                 // Unless we're in recording mode, because in that case the cache is built
                 // late in [pop_context] after we've determined the transaction footprint.
+                // In the latter case we just mark that the module cache needs to be built.
                 #[cfg(any(test, feature = "recording_mode"))]
                 {
                     if !self.in_storage_recording_mode()? {
                         self.build_module_cache_if_needed()?;
+                    } else {
+                        *(self.try_borrow_need_to_build_module_cache_mut()?) = true;
                     }
                 }
                 #[cfg(not(any(test, feature = "recording_mode")))]
                 self.build_module_cache_if_needed()?;
+
                 let contract_id = id.metered_clone(self)?;
                 let parsed_module = if let Some(cache) = &*self.try_borrow_module_cache()? {
                     // Check that storage thinks the entry exists before
