@@ -1383,7 +1383,7 @@ dependencies = [
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",
- "stellar-xdr 20.1.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=a80c899c61e869fd00b7b475a4947ab6aaf9dcac)",
+ "stellar-xdr",
  "tracy-client",
  "wasmparser",
 ]
@@ -1439,7 +1439,7 @@ dependencies = [
  "soroban-wasmi",
  "static_assertions",
  "stellar-strkey",
- "stellar-xdr 20.1.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=3a001b1fbb20e4cfa2cef2c0cc450564e8528057)",
+ "stellar-xdr",
  "tabwriter",
  "textplots",
  "thousands",
@@ -1459,7 +1459,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "stellar-xdr 20.1.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=a80c899c61e869fd00b7b475a4947ab6aaf9dcac)",
+ "stellar-xdr",
  "syn",
 ]
 
@@ -1485,7 +1485,7 @@ dependencies = [
  "expect-test",
  "soroban-env-common",
  "soroban-env-macros",
- "stellar-xdr 20.1.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=a80c899c61e869fd00b7b475a4947ab6aaf9dcac)",
+ "stellar-xdr",
  "wasm-encoder",
  "wasmparser",
  "wasmprinter",
@@ -1538,18 +1538,6 @@ dependencies = [
  "base32",
  "crate-git-revision",
  "thiserror",
-]
-
-[[package]]
-name = "stellar-xdr"
-version = "20.1.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=3a001b1fbb20e4cfa2cef2c0cc450564e8528057#3a001b1fbb20e4cfa2cef2c0cc450564e8528057"
-dependencies = [
- "arbitrary",
- "crate-git-revision",
- "escape-bytes",
- "hex",
- "stellar-strkey",
 ]
 
 [[package]]
