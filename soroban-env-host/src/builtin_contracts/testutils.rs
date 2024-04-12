@@ -256,6 +256,25 @@ pub(crate) fn sign_payload_for_ed25519(
     .unwrap()
 }
 
+#[allow(dead_code)]
+pub(crate) fn sign_payload_for_secp256r1(
+    host: &Host,
+    signer: &p256::ecdsa::SigningKey,
+    payload: &[u8],
+) -> BytesN<64> {
+    use p256::ecdsa::Signature;
+    let mut sig: Signature = signer.sign_prehash_recoverable(payload).unwrap().0;
+    sig = sig.normalize_s().unwrap_or(sig);
+    println!("produced signature {:x?}", sig.to_bytes());
+    BytesN::<64>::try_from_val(
+        host,
+        &host
+            .bytes_new_from_slice(sig.to_bytes().as_slice())
+            .unwrap(),
+    )
+    .unwrap()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn create_account(
     host: &Host,

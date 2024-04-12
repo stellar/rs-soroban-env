@@ -43,7 +43,8 @@ members = [
     "hostile_large_val",
     "contract_sac_transfer",
     "sum_i32",
-    "deployer"
+    "deployer",
+    "increment",
 ]
 [profile.release]
 opt-level = "z"
@@ -63,7 +64,7 @@ version = "=20.5.0"
 git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]
-version = "=20.3.0"
+version = "=21.0.0"
 git = "https://github.com/stellar/rs-soroban-env"
 
 # Always build from the local instance of env as we need to rebuild test WASMs
@@ -78,5 +79,5 @@ soroban-env-host = { path = "../../soroban-env-host" }
 [patch."https://github.com/stellar/rs-soroban-sdk"]
 soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
 
-# [patch."https://github.com/stellar/rs-stellar-xdr"]
-# stellar-xdr = { path = "../../../rs-stellar-xdr/" }
+[patch."https://github.com/stellar/rs-stellar-xdr"]
+stellar-xdr = { path = "../../../rs-stellar-xdr/" }
