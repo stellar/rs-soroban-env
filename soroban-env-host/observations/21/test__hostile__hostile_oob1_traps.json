@@ -13,8 +13,8 @@
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:2656232, mem:1627068, objs:-/6@657db8e6",
   "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:2674365, mem:1630142, objs:-/7@77ebce5a, store:-/2@4b95aafd, foot:2@9ddf4d04, auth:-/1@aff83b04",
   "  13 call call(Address(obj#13), Symbol(oob1), Vec(obj#15))": "cpu:2674805, mem:1630206, objs:-/8@2a540d72, auth:-/-",
-  "  14 push VM:cd475327:oob1()": "cpu:2949106, mem:2827545, objs:-/9@430dbbfd, vm:1114112@415819ab/16@b860c029, stk:1@b3372320, auth:1@c80a506a/-",
-  "  15 pop VM:cd475327:oob1 -> Err(Error(WasmVm, InvalidAction))": "cpu:2951583, mem:2827575",
-  "  16 ret call -> Err(Error(WasmVm, InvalidAction))": "cpu:3323921, mem:2886037, vm:-/-, stk:-, auth:-/-",
-  "  17 end": "cpu:3323921, mem:2886037, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@4b95aafd, foot:2@9ddf4d04, stk:-, auth:-/-"
+  "  14 push VM:cd475327:oob1()": "cpu:3319350, mem:2885423, objs:-/9@430dbbfd, vm:1114112@415819ab/16@b860c029, stk:1@b3372320, auth:1@c80a506a/-",
+  "  15 pop VM:cd475327:oob1 -> Err(Error(WasmVm, InvalidAction))": "cpu:3321827, mem:2885453",
+  "  16 ret call -> Err(Error(WasmVm, InvalidAction))": "cpu:3322449, mem:2885469, vm:-/-, stk:-, auth:-/-",
+  "  17 end": "cpu:3322449, mem:2885469, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@4b95aafd, foot:2@9ddf4d04, stk:-, auth:-/-"
 }

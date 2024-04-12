@@ -13,10 +13,10 @@
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:6796054, mem:1081013, objs:-/6@a50823b",
   "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:6814187, mem:1084087, objs:-/7@d4a6ea22, store:-/2@8b455158, foot:2@37f79a55, auth:-/1@ec225167",
   "  13 call call(Address(obj#13), Symbol(loadmem3), Vec(obj#15))": "cpu:6814627, mem:1084151, objs:-/8@8924ee7e, auth:-/-",
-  "  14 push VM:d8e20a3c:loadmem3(U32(65505), U32(32))": "cpu:6901152, mem:1231882, objs:-/9@b22f3eb2, vm:65536@b1cd98b9/4@70bfd778, stk:1@4d85ca19, auth:1@762323d1/-",
-  "  15 call string_new_from_linear_memory(U32(65505), U32(32))": "cpu:6903629, mem:1231944, vm:-/-",
-  "  16 ret string_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:6908867, mem:1231992",
+  "  14 push VM:d8e20a3c:loadmem3(U32(65505), U32(32))": "cpu:7452418, mem:1362807, objs:-/9@b22f3eb2, vm:65536@b1cd98b9/4@70bfd778, stk:1@4d85ca19, auth:1@762323d1/-",
+  "  15 call string_new_from_linear_memory(U32(65505), U32(32))": "cpu:7454895, mem:1362869, vm:-/-",
+  "  16 ret string_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:7460133, mem:1362917",
   "  17 pop VM:d8e20a3c:loadmem3 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@72ee363d/4@70bfd778",
-  "  18 ret call -> Err(Error(WasmVm, IndexBounds))": "cpu:7462127, mem:1363101, vm:-/-, stk:-, auth:-/-",
-  "  19 end": "cpu:7462127, mem:1363101, prngs:-/9b4a753, objs:-/9@b22f3eb2, vm:-/-, evt:-, store:-/2@8b455158, foot:2@37f79a55, stk:-, auth:-/-"
+  "  18 ret call -> Err(Error(WasmVm, IndexBounds))": "cpu:7460755, mem:1362933, vm:-/-, stk:-, auth:-/-",
+  "  19 end": "cpu:7460755, mem:1362933, prngs:-/9b4a753, objs:-/9@b22f3eb2, vm:-/-, evt:-, store:-/2@8b455158, foot:2@37f79a55, stk:-, auth:-/-"
 }

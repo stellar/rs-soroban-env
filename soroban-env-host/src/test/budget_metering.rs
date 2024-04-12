@@ -100,8 +100,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     let budget_err = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
 
     // successful call with sufficient budget
-    let _ = host
-        .clone()
+    let host = host
         .test_budget(100_000, 1_048_576)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
@@ -117,17 +116,17 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
         ))
     })?;
     assert_eq!(
-        (cpu_count, cpu_consumed, wasm_mem_alloc),
-        (4005, 24030, 65536)
+        (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
+        (4005, 24030, 65536, 73718)
     );
 
-    // giving it the exact required amount will success
+    // giving it the exact required amount will succeed
     let (cpu_required, mem_required) = (cpu_consumed, mem_consumed);
-    let _ = host
-        .clone()
+    let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    host.clear_module_cache()?;
     host.call(id_obj, sym, args)?;
     host.with_budget(|budget| {
         assert_eq!(budget.get_cpu_insns_consumed()?, cpu_required);
@@ -137,11 +136,11 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
 
     // give it one less cpu results in failure with no cpu consumption but full mem consumption
     let (cpu_required, mem_required) = (cpu_consumed - 1, mem_consumed);
-    let _ = host
-        .clone()
+    let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    host.clear_module_cache()?;
     let res = host.try_call(id_obj, sym, args);
     assert!(HostError::result_matches_err(res, budget_err));
     host.with_budget(|budget| {
@@ -152,11 +151,11 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
 
     // give it less than 1 page of memory in failure with no cpu consumption or mem consumption
     let (cpu_required, mem_required) = (cpu_consumed, 65535);
-    let _ = host
-        .clone()
+    let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    host.clear_module_cache()?;
     let res = host.try_call(id_obj, sym, args);
     assert!(HostError::result_matches_err(res, budget_err));
     host.with_budget(|budget| {

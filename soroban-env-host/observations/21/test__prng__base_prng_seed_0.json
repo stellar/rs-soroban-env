@@ -7,8 +7,8 @@
   "   5 call obj_from_u64(33)": "",
   "   6 ret obj_from_u64 -> Ok(U64(obj#9))": "cpu:57884, mem:3046, objs:-/5@2fccfe72",
   "   7 pop TEST:   0:u64_range -> Ok(U64(obj#9))": "",
-  "   8 ret call -> Ok(U64(obj#9))": "cpu:58567, mem:3062, prngs:-/bea2af26, stk:-, auth:-/-",
+  "   8 ret call -> Ok(U64(obj#9))": "cpu:57945, prngs:-/bea2af26, stk:-, auth:-/-",
   "   9 call obj_to_u64(U64(obj#9))": "",
-  "  10 ret obj_to_u64 -> Ok(33)": "cpu:58732",
-  "  11 end": "cpu:58732, mem:3062, prngs:-/bea2af26, objs:-/5@2fccfe72, vm:-/-, evt:-, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+  "  10 ret obj_to_u64 -> Ok(33)": "cpu:58110",
+  "  11 end": "cpu:58110, mem:3046, prngs:-/bea2af26, objs:-/5@2fccfe72, vm:-/-, evt:-, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
 }
