@@ -44,13 +44,13 @@ impl ModuleCache {
             // the cache. However, in the 'real' flow we build the cache first, so any new Wasm
             // upload won't be cached. That's why we should look at the storage in its initial
             // state, which is conveniently provided by the recording mode snapshot.
-            #[cfg(any(test, feature="recording_mode"))]
+            #[cfg(any(test, feature = "recording_mode"))]
             let init_value = if host.in_storage_recording_mode()? {
                 storage.get_snapshot_value(host, k)?
             } else {
                 v.clone()
             };
-            #[cfg(any(test, feature="recording_mode"))]
+            #[cfg(any(test, feature = "recording_mode"))]
             let v = &init_value;
 
             if let LedgerKey::ContractCode(_) = &**k {
