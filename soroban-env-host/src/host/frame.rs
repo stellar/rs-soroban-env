@@ -721,15 +721,15 @@ impl Host {
                     let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
 
                     #[cfg(any(test, feature = "recording_mode"))]
-// In recording mode: if a contract was present in the initial snapshot image, it is part of
-// the set of contracts that would have been built into a module cache in enforcing mode;
-// we want to defer the cost of parsing those (simulating them as cache hits) and then charge
-// once for each such contract the simulated-module-cache-build that happens at the end of
-// the frame in [`Self::pop_context`].
-//
-// If a contract is _not_ in the initial snapshot image, it's because someone just uploaded
-// it during execution. Those would be cache misses in enforcing mode, and so it is right to
-// continue to charge for them as such (charging the parse cost on each call) in recording.
+                    // In recording mode: if a contract was present in the initial snapshot image, it is part of
+                    // the set of contracts that would have been built into a module cache in enforcing mode;
+                    // we want to defer the cost of parsing those (simulating them as cache hits) and then charge
+                    // once for each such contract the simulated-module-cache-build that happens at the end of
+                    // the frame in [`Self::pop_context`].
+                    //
+                    // If a contract is _not_ in the initial snapshot image, it's because someone just uploaded
+                    // it during execution. Those would be cache misses in enforcing mode, and so it is right to
+                    // continue to charge for them as such (charging the parse cost on each call) in recording.
                     let cost_mode = if self.in_storage_recording_mode()? {
                         let contact_code_key =
                             self.budget_ref().with_observable_shadow_mode(|| {
