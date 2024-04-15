@@ -153,6 +153,14 @@ struct HostImpl {
     #[doc(hidden)]
     #[cfg(any(test, feature = "recording_mode"))]
     suppress_diagnostic_events: RefCell<bool>,
+
+    // This flag marks the call of `build_module_cache` that would happen
+    // in enforcing mode. In recording mode we need to use this flag to
+    // determine whether we need to rebuild module cache after the host
+    // invocation has been done.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "recording_mode"))]
+    need_to_build_module_cache: RefCell<bool>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -310,6 +318,14 @@ impl_checked_borrow_helpers!(
     try_borrow_suppress_diagnostic_events_mut
 );
 
+#[cfg(any(test, feature = "recording_mode"))]
+impl_checked_borrow_helpers!(
+    need_to_build_module_cache,
+    bool,
+    try_borrow_need_to_build_module_cache,
+    try_borrow_need_to_build_module_cache_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -359,6 +375,8 @@ impl Host {
             coverage_scoreboard: Default::default(),
             #[cfg(any(test, feature = "recording_mode"))]
             suppress_diagnostic_events: RefCell::new(false),
+            #[cfg(any(test, feature = "recording_mode"))]
+            need_to_build_module_cache: RefCell::new(false),
         }))
     }
 

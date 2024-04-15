@@ -15,6 +15,6 @@
   "  13 call contract_event(Vec(obj#17), Map(obj#11))": "",
   "  14 ret contract_event -> Ok(Void)": "cpu:46797, mem:3575, objs:-/10@14da6192, evt:1@5435ad6c",
   "  15 pop TEST:   0:add -> Ok(Void)": "",
-  "  16 ret call -> Ok(Void)": "cpu:47419, mem:3591, stk:-, auth:-/-",
-  "  17 end": "cpu:49364, mem:4063, prngs:-/9b4a753, objs:-/10@14da6192, vm:-/-, evt:1@5435ad6c, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+  "  16 ret call -> Ok(Void)": " stk:-, auth:-/-",
+  "  17 end": "cpu:48742, mem:4047, prngs:-/9b4a753, objs:-/10@14da6192, vm:-/-, evt:1@5435ad6c, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
 }

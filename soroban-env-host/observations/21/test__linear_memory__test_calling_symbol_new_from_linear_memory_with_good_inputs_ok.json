@@ -13,10 +13,10 @@
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:6796828, mem:1081105, objs:-/6@a0b496b8",
   "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:6814961, mem:1084179, objs:-/7@d096f8e1, store:-/2@ee9758b9, foot:2@2ca3cedf, auth:-/1@5eb0eb32",
   "  13 call call(Address(obj#13), Symbol(loadmem3), Vec(obj#15))": "cpu:6815401, mem:1084243, objs:-/8@9d9e52e7, auth:-/-",
-  "  14 push VM:180ca54b:loadmem3(U32(65280), U32(32))": "cpu:6901928, mem:1231975, objs:-/9@3b3eee98, vm:65536@b1cd98b9/4@70bfd778, stk:1@6f5a472c, auth:1@762323d1/-",
-  "  15 call symbol_new_from_linear_memory(U32(65280), U32(32))": "cpu:6904405, mem:1232037, vm:-/-",
-  "  16 ret symbol_new_from_linear_memory -> Ok(Symbol(obj#19))": "cpu:6910083, mem:1232149, objs:-/10@5e62cd50",
-  "  17 pop VM:180ca54b:loadmem3 -> Ok(Symbol(obj#19))": "cpu:6910579, mem:1232173, objs:1@19be61e5/10@5e62cd50, vm:65536@a66e806d/4@70bfd778, stk:1@ee593714",
-  "  18 ret call -> Ok(Symbol(obj#19))": "cpu:7463900, mem:1363282, objs:-/10@5e62cd50, vm:-/-, stk:-, auth:-/-",
-  "  19 end": "cpu:7463900, mem:1363282, prngs:-/9b4a753, objs:-/10@5e62cd50, vm:-/-, evt:-, store:-/2@ee9758b9, foot:2@2ca3cedf, stk:-, auth:-/-"
+  "  14 push VM:180ca54b:loadmem3(U32(65280), U32(32))": "cpu:7453194, mem:1362900, objs:-/9@3b3eee98, vm:65536@b1cd98b9/4@70bfd778, stk:1@6f5a472c, auth:1@762323d1/-",
+  "  15 call symbol_new_from_linear_memory(U32(65280), U32(32))": "cpu:7455671, mem:1362962, vm:-/-",
+  "  16 ret symbol_new_from_linear_memory -> Ok(Symbol(obj#19))": "cpu:7461349, mem:1363074, objs:-/10@5e62cd50",
+  "  17 pop VM:180ca54b:loadmem3 -> Ok(Symbol(obj#19))": "cpu:7461845, mem:1363098, objs:1@19be61e5/10@5e62cd50, vm:65536@a66e806d/4@70bfd778, stk:1@ee593714",
+  "  18 ret call -> Ok(Symbol(obj#19))": "cpu:7462528, mem:1363114, objs:-/10@5e62cd50, vm:-/-, stk:-, auth:-/-",
+  "  19 end": "cpu:7462528, mem:1363114, prngs:-/9b4a753, objs:-/10@5e62cd50, vm:-/-, evt:-, store:-/2@ee9758b9, foot:2@2ca3cedf, stk:-, auth:-/-"
 }

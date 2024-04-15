@@ -22,11 +22,27 @@ impl TestDeployerContract {
             (updated_hash, false).into_val(&env),
         );
         assert_eq!(res, 123);
+
+        // Call the updated contract several times to cover subtle interaction between the module
+        // cache simulation and uploaded Wasm (specifically that we charge for parsing the freshly
+        // uploaded Wasms as we can't cache them).
         let res2: i32 = env.invoke_contract::<i32>(
             &contract_id,
             &symbol_short!("add"),
             (5_i32, 6_i32).into_val(&env),
         );
         assert_eq!(res2, 11);
+        let res2: i32 = env.invoke_contract::<i32>(
+            &contract_id,
+            &symbol_short!("add"),
+            (6_i32, 6_i32).into_val(&env),
+        );
+        assert_eq!(res2, 12);
+        let res2: i32 = env.invoke_contract::<i32>(
+            &contract_id,
+            &symbol_short!("add"),
+            (6_i32, 7_i32).into_val(&env),
+        );
+        assert_eq!(res2, 13);
     }
 }

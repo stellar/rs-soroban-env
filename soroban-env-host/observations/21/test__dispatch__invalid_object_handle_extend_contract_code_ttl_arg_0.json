@@ -13,9 +13,9 @@
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:1065866, mem:407974, objs:-/6@6a679f53",
   "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:1083999, mem:411048, objs:-/7@d528ae8a, store:-/2@eead815, foot:2@b1bdb195, auth:-/1@5a8fbd43",
   "  13 call call(Address(obj#13), Symbol(test), Vec(obj#15))": "cpu:1084439, mem:411112, objs:-/8@d0a0ad58, auth:-/-",
-  "  14 push VM:72fc7905:test(Address(obj#123), U32(123), U32(123))": "cpu:1164352, mem:551062, objs:-/9@62250e4, vm:65536@b1cd98b9/2@2f94d90d, stk:1@cc177070, auth:1@d7dc1364/-",
-  "  15 call extend_contract_code_ttl(Address(obj#123), U32(123), U32(123))": "cpu:1167268, mem:551164, objs:1@f40b9f61/9@62250e4, vm:-/-, stk:1@e35f1399",
-  "  16 pop VM:72fc7905:test -> Err(Error(Value, InvalidInput))": "cpu:1167935, vm:65536@b1cd98b9/2@2f94d90d",
-  "  17 ret call -> Err(Error(Value, InvalidInput))": "cpu:1300469, mem:577903, objs:-/9@62250e4, vm:-/-, stk:-, auth:-/-",
-  "  18 end": "cpu:1300469, mem:577903, prngs:-/9b4a753, objs:-/9@62250e4, vm:-/-, evt:-, store:-/2@eead815, foot:2@b1bdb195, stk:-, auth:-/-"
+  "  14 push VM:72fc7905:test(Address(obj#123), U32(123), U32(123))": "cpu:1294892, mem:577617, objs:-/9@62250e4, vm:65536@b1cd98b9/2@2f94d90d, stk:1@cc177070, auth:1@d7dc1364/-",
+  "  15 call extend_contract_code_ttl(Address(obj#123), U32(123), U32(123))": "cpu:1297808, mem:577719, objs:1@f40b9f61/9@62250e4, vm:-/-, stk:1@e35f1399",
+  "  16 pop VM:72fc7905:test -> Err(Error(Value, InvalidInput))": "cpu:1298475, vm:65536@b1cd98b9/2@2f94d90d",
+  "  17 ret call -> Err(Error(Value, InvalidInput))": "cpu:1299097, mem:577735, objs:-/9@62250e4, vm:-/-, stk:-, auth:-/-",
+  "  18 end": "cpu:1299097, mem:577735, prngs:-/9b4a753, objs:-/9@62250e4, vm:-/-, evt:-, store:-/2@eead815, foot:2@b1bdb195, stk:-, auth:-/-"
 }
