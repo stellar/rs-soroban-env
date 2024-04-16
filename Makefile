@@ -14,11 +14,11 @@ test-all-protocols:
 		if [ $$i -le $(MAX_PROTOCOL) ]; then \
 		  	echo "Testing protocol $$i for vCurr host build..."; \
 			TEST_PROTOCOL=$$i cargo hack test -p soroban-env-host --locked --features testutils; \
-			TEST_PROTOCOL=$$i cargo hack test -p soroban-env-simulation --locked --features testutils; \
+			TEST_PROTOCOL=$$i cargo hack test -p soroban-simulation --locked --features testutils; \
 		fi; \
 		echo "Testing protocol $$i for vNext host build..."; \
 		TEST_PROTOCOL=$$i cargo hack test -p soroban-env-host --locked --features testutils,next; \
-		TEST_PROTOCOL=$$i cargo hack test -p soroban-env-simulation --locked --features testutils,next; \
+		TEST_PROTOCOL=$$i cargo hack test -p soroban-simulation --locked --features testutils,next; \
 	done
 
 build:
