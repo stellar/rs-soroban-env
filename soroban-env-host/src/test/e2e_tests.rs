@@ -1,4 +1,6 @@
+use crate::builtin_contracts::testutils::AccountContractSigner;
 use crate::e2e_testutils::{account_entry, bytes_sc_val, upload_wasm_host_fn};
+use crate::testutils::simple_account_sign_fn;
 use crate::vm::ModuleCache;
 use crate::{
     budget::Budget,
@@ -14,12 +16,13 @@ use crate::{
     },
     testutils::MockSnapshotSource,
     xdr::{
-        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, DiagnosticEvent,
+        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable,
+        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, DiagnosticEvent,
         ExtensionPoint, HashIdPreimage, HashIdPreimageSorobanAuthorization, HostFunction,
         InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
         LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScErrorCode,
         ScErrorType, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
-        TtlEntry, WriteXdr,
+        TtlEntry, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -28,9 +31,10 @@ use pretty_assertions::assert_eq;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sha2::{Digest, Sha256};
+use soroban_env_common::TryIntoVal;
 use soroban_test_wasms::{
     ADD_F32, ADD_I32, AUTH_TEST_CONTRACT, CONTRACT_STORAGE, DEPLOYER_TEST_CONTRACT, LINEAR_MEMORY,
-    SUM_I32, UPDATEABLE_CONTRACT,
+    SIMPLE_ACCOUNT_CONTRACT, SUM_I32, UPDATEABLE_CONTRACT,
 };
 use std::rc::Rc;
 
@@ -95,6 +99,7 @@ fn u32_sc_val(v: u32) -> ScVal {
 }
 
 fn sign_auth_entry(
+    dummy_host: &Host,
     ledger_info: &LedgerInfo,
     signers: &Vec<TestSigner>,
     auth_entry: SorobanAuthorizationEntry,
@@ -104,7 +109,6 @@ fn sign_auth_entry(
     match &mut out.credentials {
         SorobanCredentials::SourceAccount => {}
         SorobanCredentials::Address(creds) => {
-            let dummy_host = Host::test_host_with_prng();
             let signature_payload_preimage =
                 HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
                     network_id: ledger_info.network_id.try_into().unwrap(),
@@ -330,9 +334,10 @@ fn invoke_host_function_using_simulation_with_signers(
     ledger_info: &LedgerInfo,
     ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
     prng_seed: &[u8; 32],
+    dummy_host: &Host,
     signers: &Vec<TestSigner>,
 ) -> Result<InvokeHostFunctionHelperResult, HostError> {
-    let mut recording_result = invoke_host_function_recording_helper(
+    let recording_result = invoke_host_function_recording_helper(
         enable_diagnostics,
         host_fn,
         source_account,
@@ -346,8 +351,8 @@ fn invoke_host_function_using_simulation_with_signers(
 
     let signed_auth: Vec<_> = recording_result
         .auth
-        .into_iter()
-        .map(|a| sign_auth_entry(ledger_info, signers, a))
+        .iter()
+        .map(|a| sign_auth_entry(dummy_host, ledger_info, signers, a.clone()))
         .collect();
 
     let recording_result_with_enforcing_auth = invoke_host_function_recording_helper(
@@ -365,47 +370,67 @@ fn invoke_host_function_using_simulation_with_signers(
         recording_result.invoke_result,
         recording_result_with_enforcing_auth.invoke_result
     );
-    assert_eq!(
-        recording_result.resources.footprint,
-        recording_result_with_enforcing_auth.resources.footprint
-    );
-    assert_eq!(
-        recording_result.resources.read_bytes,
-        recording_result_with_enforcing_auth.resources.read_bytes
-    );
-    assert_eq!(
-        recording_result.resources.write_bytes,
-        recording_result_with_enforcing_auth.resources.write_bytes
-    );
 
-    assert_eq!(
-        recording_result.ledger_changes,
-        recording_result_with_enforcing_auth.ledger_changes
-    );
-    assert_eq!(
-        recording_result.contract_events,
-        recording_result_with_enforcing_auth.contract_events
-    );
-    assert_eq!(
-        recording_result.diagnostic_events,
-        recording_result_with_enforcing_auth.diagnostic_events
-    );
-    assert_eq!(
-        recording_result.contract_events_and_return_value_size,
-        recording_result_with_enforcing_auth.contract_events_and_return_value_size
-    );
+    let has_custom_account_signers = signers
+        .iter()
+        .any(|s| matches!(s, TestSigner::AccountContract(_)));
+    // We can't simulate custom account verification logic without a signature, and
+    // we don't have a signature in recording auth mode. Thus, the divergence in
+    // simulated resources and footprint is expected.
+    if !has_custom_account_signers {
+        assert_eq!(
+            recording_result.resources.footprint,
+            recording_result_with_enforcing_auth.resources.footprint
+        );
+        assert_eq!(
+            recording_result.resources.read_bytes,
+            recording_result_with_enforcing_auth.resources.read_bytes
+        );
+        assert_eq!(
+            recording_result.resources.write_bytes,
+            recording_result_with_enforcing_auth.resources.write_bytes
+        );
 
+        assert_eq!(
+            recording_result.ledger_changes,
+            recording_result_with_enforcing_auth.ledger_changes
+        );
+        assert_eq!(
+            recording_result.contract_events,
+            recording_result_with_enforcing_auth.contract_events
+        );
+        assert_eq!(
+            recording_result.diagnostic_events,
+            recording_result_with_enforcing_auth.diagnostic_events
+        );
+        assert_eq!(
+            recording_result.contract_events_and_return_value_size,
+            recording_result_with_enforcing_auth.contract_events_and_return_value_size
+        );
+        let adjusted_recording_result_instructions =
+            (recording_result.resources.instructions as f64
+                * (1.0 + RECORDING_MODE_INSTRUCTIONS_RANGE)) as u32;
+        assert!(
+            adjusted_recording_result_instructions
+                >= recording_result_with_enforcing_auth.resources.instructions
+        );
+    }
+    // When no custom accounts are involved, we should be able to use the
+    // simulation results from the recording auth mode to succeed in the
+    // enforcing mode.
+    let mut recording_result = if has_custom_account_signers {
+        recording_result_with_enforcing_auth
+    } else {
+        recording_result
+    };
     // Instructions are expected to be slightly different between recording and
     // enforcing modes, so just make sure that the estimation is within the small
     // coefficient.
     let initial_recording_result_instructions = recording_result.resources.instructions;
-    recording_result.resources.instructions = (initial_recording_result_instructions as f64
+    recording_result.resources.instructions = (recording_result.resources.instructions as f64
         * (1.0 + RECORDING_MODE_INSTRUCTIONS_RANGE))
         as u32;
-    assert!(
-        recording_result.resources.instructions
-            >= recording_result_with_enforcing_auth.resources.instructions
-    );
+
     let enforcing_result = invoke_host_function_helper(
         enable_diagnostics,
         host_fn,
@@ -467,6 +492,7 @@ fn invoke_host_function_using_simulation(
         ledger_info,
         ledger_entries_with_ttl,
         prng_seed,
+        &Host::test_host(),
         &vec![],
     )
 }
@@ -694,6 +720,7 @@ fn test_wasm_upload_success_using_simulation() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        &Host::test_host(),
         &vec![],
     );
     assert!(res.is_ok());
@@ -1778,6 +1805,7 @@ fn test_classic_account_auth_using_simulation() {
             (account_entry(&signers[1].account_id()), None),
         ],
         &prng_seed(),
+        &Host::test_host(),
         &signers,
     )
     .unwrap();
@@ -1882,6 +1910,79 @@ fn test_deployer_operations_using_simulation() {
             ),
         ],
         &prng_seed(),
+    )
+    .unwrap();
+    assert!(res.invoke_result.is_ok());
+}
+
+#[test]
+fn test_create_contract_authorized_by_custom_account() {
+    let ledger_info = default_ledger_info();
+    let account_contract = CreateContractData::new([1; 32], SIMPLE_ACCOUNT_CONTRACT);
+    let mut prng = StdRng::from_seed(prng_seed());
+    let account_key = SigningKey::generate(&mut prng);
+    let dummy_host = Host::test_host();
+    let signers = vec![TestSigner::AccountContract(AccountContractSigner {
+        address: dummy_host
+            .add_host_object(account_contract.contract_address.clone())
+            .unwrap()
+            .try_into_val(&dummy_host)
+            .unwrap(),
+        sign: simple_account_sign_fn(&dummy_host, &account_key),
+    })];
+
+    let source_account = get_account_id([123; 32]);
+    let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+        address: account_contract.contract_address.clone(),
+        salt: Uint256([2; 32]),
+    });
+    let executable = ContractExecutable::Wasm(get_wasm_hash(ADD_I32).try_into().unwrap());
+    let host_fn = HostFunction::CreateContract(CreateContractArgs {
+        contract_id_preimage: contract_id_preimage.clone(),
+        executable: executable.clone(),
+    });
+    let account_key_entry = ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
+        ext: ExtensionPoint::V0,
+        contract: account_contract.contract_address.clone(),
+        key: ScVal::Vec(Some(
+            vec![ScVal::Symbol("Owner".try_into().unwrap())]
+                .try_into()
+                .unwrap(),
+        )),
+        durability: ContractDataDurability::Persistent,
+        val: ScVal::Bytes(
+            account_key
+                .verifying_key()
+                .as_bytes()
+                .to_vec()
+                .try_into()
+                .unwrap(),
+        ),
+    }));
+
+    let res = invoke_host_function_using_simulation_with_signers(
+        true,
+        &host_fn,
+        &source_account,
+        &ledger_info,
+        vec![
+            (
+                account_contract.wasm_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                account_contract.contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            (
+                wasm_entry(ADD_I32),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            (account_key_entry, Some(ledger_info.sequence_number + 100)),
+        ],
+        &prng_seed(),
+        &dummy_host,
+        &signers,
     )
     .unwrap();
     assert!(res.invoke_result.is_ok());

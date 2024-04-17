@@ -1,6 +1,7 @@
 use std::{convert::TryInto, rc::Rc};
 
 use crate::builtin_contracts::base_types::BytesN;
+use crate::testutils::simple_account_sign_fn;
 use crate::{
     auth::RecordedAuthPayload,
     budget::AsBudget,
@@ -2941,15 +2942,6 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
 
     // Trustline balance stays the same.
     assert_eq!(test.get_trustline_balance(&trustline_key), 100_000_000);
-}
-
-#[allow(clippy::type_complexity)]
-fn simple_account_sign_fn<'a>(
-    host: &'a Host,
-    kp: &'a SigningKey,
-) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
-    use crate::builtin_contracts::testutils::sign_payload_for_ed25519;
-    Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
 }
 
 #[test]

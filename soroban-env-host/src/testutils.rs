@@ -11,6 +11,7 @@ use crate::{
     AddressObject, BytesObject, Env, EnvBase, Host, HostError, LedgerInfo, MeteredOrdMap,
     StorageType, SymbolSmall, Val, VecObject,
 };
+use ed25519_dalek::SigningKey;
 use rand::RngCore;
 use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
 use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
@@ -1121,4 +1122,13 @@ pub(crate) mod wasm {
         me.define_data_segment(0x1234, vec![0; 512]);
         me.finish()
     }
+}
+
+#[allow(clippy::type_complexity)]
+pub fn simple_account_sign_fn<'a>(
+    host: &'a Host,
+    kp: &'a SigningKey,
+) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
+    use crate::builtin_contracts::testutils::sign_payload_for_ed25519;
+    Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
 }
