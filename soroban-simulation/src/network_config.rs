@@ -5,8 +5,9 @@ use soroban_env_host::fees::{
     compute_write_fee_per_1kb, FeeConfiguration, RentFeeConfiguration, WriteFeeConfiguration,
 };
 use soroban_env_host::xdr::{
-    ConfigSettingEntry, ConfigSettingId, ContractCostParams, LedgerEntry, LedgerEntryData,
-    LedgerKey, LedgerKeyConfigSetting,
+    ConfigSettingEntry, ConfigSettingId, ContractCostParamEntry, ContractCostParams,
+    ContractCostType, ExtensionPoint, LedgerEntry, LedgerEntryData, LedgerKey,
+    LedgerKeyConfigSetting,
 };
 use soroban_env_host::LedgerInfo;
 use std::rc::Rc;
@@ -49,6 +50,24 @@ fn load_configuration_setting(
     }
 }
 
+fn extend_cost_params(params: &mut ContractCostParams) -> Result<()> {
+    let target_size = ContractCostType::variants().len();
+    if params.0.len() >= target_size {
+        return Ok(());
+    }
+    let mut v = params.to_vec();
+    v.resize(
+        target_size,
+        ContractCostParamEntry {
+            ext: ExtensionPoint::V0,
+            const_term: 0,
+            linear_term: 0,
+        },
+    );
+    params.0 = v.try_into().context("too many contract cost params")?;
+    Ok(())
+}
+
 macro_rules! load_setting {
     ($snapshot:ident, $enum_variant:ident) => {
         match load_configuration_setting($snapshot, ConfigSettingId::$enum_variant)? {
@@ -76,8 +95,13 @@ impl NetworkConfig {
         let events = load_setting!(snapshot, ContractEventsV0);
         let bandwidth = load_setting!(snapshot, ContractBandwidthV0);
         let state_archival = load_setting!(snapshot, StateArchival);
-        let cpu_cost_params = load_setting!(snapshot, ContractCostParamsCpuInstructions);
-        let memory_cost_params = load_setting!(snapshot, ContractCostParamsMemoryBytes);
+        let mut cpu_cost_params = load_setting!(snapshot, ContractCostParamsCpuInstructions);
+        let mut memory_cost_params = load_setting!(snapshot, ContractCostParamsMemoryBytes);
+        // This is a hack to get around env using hardcoded cost param length
+        // instead of the protocol-defined length:
+        // https://github.com/stellar/rs-soroban-env/issues/1388.
+        extend_cost_params(&mut cpu_cost_params)?;
+        extend_cost_params(&mut memory_cost_params)?;
 
         let write_fee_configuration = WriteFeeConfiguration {
             bucket_list_target_size_bytes: ledger_cost.bucket_list_target_size_bytes,
