@@ -1,0 +1,22 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(7552)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:17384, mem:7632, objs:-/1@93859bdc",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:3582273, mem:510411, objs:-/2@68fd4f8f, store:-/1@dfa0554, foot:1@64e8e2e5",
+  "   5 call bytes_new_from_slice(32)": "cpu:3582713, mem:510475, objs:-/3@2c8d28cc",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:3583682, mem:510587, objs:-/4@1354534b",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:3585325, mem:510765, objs:-/5@a0fdcb9, auth:1@a39f9cda/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:3585617",
+  "  10 call get_ledger_network_id()": "cpu:3585667, auth:1@a39f9cda/1@212966ba",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:3586697, mem:510877, objs:-/6@fdc063",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:3604830, mem:513951, objs:-/7@fdb4f0d8, store:-/2@6f326f89, foot:2@eaf6287b, auth:-/1@19694c2a",
+  "  13 call call(Address(obj#13), Symbol(loadmem3), Vec(obj#15))": "cpu:3605270, mem:514015, objs:-/8@2e5eb2ed, auth:-/-",
+  "  14 push VM:4f3692f2:loadmem3(U32(65536), U32(32))": "cpu:6758859, mem:1017304, objs:-/9@90005a3d, vm:65536@b1cd98b9/4@70bfd778, stk:1@2cdded5e, auth:1@762323d1/-",
+  "  15 call symbol_new_from_linear_memory(U32(65536), U32(32))": "cpu:6761336, mem:1017366, vm:-/-",
+  "  16 ret symbol_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:6766574, mem:1017414",
+  "  17 pop VM:4f3692f2:loadmem3 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@a66e806d/4@70bfd778",
+  "  18 ret call -> Err(Error(WasmVm, IndexBounds))": " vm:-/-, stk:-, auth:-/-",
+  "  19 end": "cpu:6766574, mem:1017414, prngs:-/9b4a753, objs:-/9@90005a3d, vm:-/-, evt:-, store:-/2@6f326f89, foot:2@eaf6287b, stk:-, auth:-/-"
+}

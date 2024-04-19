@@ -1,0 +1,22 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(7565)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:17386, mem:7645, objs:-/1@390e6deb",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:3587600, mem:510951, objs:-/2@a4d41313, store:-/1@8c53e0bd, foot:1@d13d2546",
+  "   5 call bytes_new_from_slice(32)": "cpu:3588040, mem:511015, objs:-/3@463581c9",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:3589009, mem:511127, objs:-/4@4076fdca",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:3590652, mem:511305, objs:-/5@448aaebc, auth:1@b9f98dac/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:3590944",
+  "  10 call get_ledger_network_id()": "cpu:3590994, auth:1@b9f98dac/1@49245eb1",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:3592024, mem:511417, objs:-/6@14ed9c86",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:3610157, mem:514491, objs:-/7@8b8f8e5, store:-/2@dd9d3bd9, foot:2@2383a875, auth:-/1@63f6520f",
+  "  13 call call(Address(obj#13), Symbol(loadmem3), Vec(obj#17))": "cpu:3611037, mem:514619, objs:-/9@847cc542, auth:-/-",
+  "  14 push VM:e0c072e8:loadmem3(String(obj#15), U32(0), U32(65536), U32(256))": "cpu:6769247, mem:1018467, objs:-/10@f643693b, vm:65536@b1cd98b9/4@70bfd778, stk:1@9c4e9f0, auth:1@84815e36/-",
+  "  15 call string_copy_to_linear_memory(String(obj#15), U32(0), U32(65536), U32(256))": "cpu:6772167, mem:1018585, objs:1@32c1ba5/10@f643693b, vm:-/-, stk:1@5271f6f",
+  "  16 ret string_copy_to_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:6777125",
+  "  17 pop VM:e0c072e8:loadmem3 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@72ee363d/4@70bfd778",
+  "  18 ret call -> Err(Error(WasmVm, IndexBounds))": " objs:-/10@f643693b, vm:-/-, stk:-, auth:-/-",
+  "  19 end": "cpu:6777125, mem:1018585, prngs:-/9b4a753, objs:-/10@f643693b, vm:-/-, evt:-, store:-/2@dd9d3bd9, foot:2@2383a875, stk:-, auth:-/-"
+}

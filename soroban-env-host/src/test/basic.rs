@@ -5,7 +5,7 @@ use crate::{host::HostError, xdr::ScVal, Host, Object};
 /// numbers test
 #[test]
 fn u64_roundtrip() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let u: u64 = 38473_u64; // This will be treated as a U64Small
     let v: Val = u.try_into_val(&*host)?;
     assert_eq!(v.get_tag(), Tag::U64Small);
@@ -24,7 +24,7 @@ fn u64_roundtrip() -> Result<(), HostError> {
 
 #[test]
 fn i64_roundtrip() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let i: i64 = 12345_i64; // Will be treated as I64Small
     let v: Val = i.try_into_val(&*host)?;
     assert_eq!(v.get_tag(), Tag::I64Small);
@@ -43,7 +43,7 @@ fn i64_roundtrip() -> Result<(), HostError> {
 
 #[test]
 fn u32_as_seen_by_host() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let scval0 = ScVal::U32(12345);
     let val0 = host.to_host_val(&scval0)?;
     assert_eq!(val0.get_tag(), Tag::U32Val);
@@ -54,7 +54,7 @@ fn u32_as_seen_by_host() -> Result<(), HostError> {
 
 #[test]
 fn i32_as_seen_by_host() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let scval0 = ScVal::I32(-12345);
     let val0 = host.to_host_val(&scval0)?;
     assert_eq!(val0.get_tag(), Tag::I32Val);
@@ -65,7 +65,7 @@ fn i32_as_seen_by_host() -> Result<(), HostError> {
 
 #[test]
 fn tuple_roundtrip() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let t0: (u32, i32) = (5, -4);
     let ev: Val = t0.try_into_val(&*host)?;
     let t0_back: (u32, i32) = <(u32, i32)>::try_from_val(&*host, &ev)?;
@@ -76,8 +76,14 @@ fn tuple_roundtrip() -> Result<(), HostError> {
 #[test]
 fn f32_does_not_work() -> Result<(), HostError> {
     use soroban_env_common::xdr::Hash;
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let hash = Hash::from([0; 32]);
-    assert!(crate::vm::Vm::new(&host, hash, soroban_test_wasms::ADD_F32).is_err());
+    assert!(HostError::result_matches_err(
+        crate::vm::Vm::new(&host, hash, soroban_test_wasms::ADD_F32),
+        (
+            crate::xdr::ScErrorType::WasmVm,
+            crate::xdr::ScErrorCode::InvalidAction
+        )
+    ));
     Ok(())
 }

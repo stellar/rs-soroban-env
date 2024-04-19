@@ -6,7 +6,7 @@ use crate::{Env, Host, HostError, Val};
 
 #[test]
 fn str_conversions() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let mut obj = host.bytes_new()?;
     for c in 'a'..='z' {
         obj = host.bytes_push(obj, (c as u32).into())?;

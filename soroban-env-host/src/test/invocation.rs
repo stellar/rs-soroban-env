@@ -67,9 +67,9 @@ fn invoke_alloc() -> Result<(), HostError> {
     // pages or about 1.3 MiB, plus the initial 17 pages (1.1MiB) plus some more
     // slop from general host machinery allocations, plus allocating a VM once
     // during upload and once during execution we get around 2.5MiB. Call
-    // is "less than 4MiB".
+    // is "less than 5MiB".
     assert!(used_bytes > (128 * 4096));
-    assert!(used_bytes < 0x40_0000);
+    assert!(used_bytes < 0x50_0000);
     Ok(())
 }
 
@@ -217,6 +217,7 @@ fn contract_failure_with_debug_on_off_affects_no_metering() -> Result<(), HostEr
 
     let invoke_cross_contract_indirect_with_err = || -> Result<(u64, u64, u64, u64), HostError> {
         // try call -- add will trap, and add_with will trap, but we will get an error
+        host.rebuild_module_cache()?;
         host.as_budget().reset_default()?;
         let res = host.try_call(id0_obj, sym, args);
         HostError::result_matches_err(

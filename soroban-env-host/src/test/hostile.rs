@@ -520,6 +520,7 @@ fn broken_object() {
 }
 
 #[test]
+#[allow(unused_variables)]
 fn excessive_logging() -> Result<(), HostError> {
     let wasm = wasm_util::wasm_module_with_linear_memory_logging();
     // NB: We don't observe here since the test is sensitive to shadow budget.
@@ -527,41 +528,130 @@ fn excessive_logging() -> Result<(), HostError> {
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
-    let expected_budget = expect![[r#"
-        =======================================================
-        Cpu limit: 2000000; used: 522315
-        Mem limit: 500000; used: 202391
-        =======================================================
-        CostType                 cpu_insns      mem_bytes      
-        WasmInsnExec             300            0              
-        MemAlloc                 15750          67248          
-        MemCpy                   2298           0              
-        MemCmp                   696            0              
-        DispatchHostFunction     310            0              
-        VisitObject              244            0              
-        ValSer                   0              0              
-        ValDeser                 0              0              
-        ComputeSha256Hash        3738           0              
-        ComputeEd25519PubKey     0              0              
-        VerifyEd25519Sig         0              0              
-        VmInstantiation          497031         135129         
-        VmCachedInstantiation    0              0              
-        InvokeVmFunction         1948           14             
-        ComputeKeccak256Hash     0              0              
-        ComputeEcdsaSecp256k1Sig 0              0              
-        RecoverEcdsaSecp256k1Key 0              0              
-        Int256AddSub             0              0              
-        Int256Mul                0              0              
-        Int256Div                0              0              
-        Int256Pow                0              0              
-        Int256Shift              0              0              
-        ChaCha20DrawBytes        0              0              
-        =======================================================
+    if host.get_ledger_protocol_version()? >= crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+        host.switch_to_enforcing_storage()?;
+    }
+
+    let expected_budget_p21 = expect![[r#"
+        =================================================================
+        Cpu limit: 2000000; used: 215305
+        Mem limit: 500000; used: 166764
+        =================================================================
+        CostType                           cpu_insns      mem_bytes      
+        WasmInsnExec                       300            0              
+        MemAlloc                           17058          67344          
+        MemCpy                             2866           0              
+        MemCmp                             512            0              
+        DispatchHostFunction               310            0              
+        VisitObject                        244            0              
+        ValSer                             0              0              
+        ValDeser                           0              0              
+        ComputeSha256Hash                  3738           0              
+        ComputeEd25519PubKey               0              0              
+        VerifyEd25519Sig                   0              0              
+        VmInstantiation                    0              0              
+        VmCachedInstantiation              0              0              
+        InvokeVmFunction                   1948           14             
+        ComputeKeccak256Hash               0              0              
+        DecodeEcdsaCurve256Sig             0              0              
+        RecoverEcdsaSecp256k1Key           0              0              
+        Int256AddSub                       0              0              
+        Int256Mul                          0              0              
+        Int256Div                          0              0              
+        Int256Pow                          0              0              
+        Int256Shift                        0              0              
+        ChaCha20DrawBytes                  0              0              
+        ParseWasmInstructions              74665          17967          
+        ParseWasmFunctions                 4224           370            
+        ParseWasmGlobals                   1377           104            
+        ParseWasmTableEntries              29989          6285           
+        ParseWasmTypes                     8292           505            
+        ParseWasmDataSegments              0              0              
+        ParseWasmElemSegments              0              0              
+        ParseWasmImports                   5483           806            
+        ParseWasmExports                   6709           568            
+        ParseWasmDataSegmentBytes          0              0              
+        InstantiateWasmInstructions        43030          70704          
+        InstantiateWasmFunctions           59             114            
+        InstantiateWasmGlobals             83             53             
+        InstantiateWasmTableEntries        3300           1025           
+        InstantiateWasmTypes               0              0              
+        InstantiateWasmDataSegments        0              0              
+        InstantiateWasmElemSegments        0              0              
+        InstantiateWasmImports             6476           762            
+        InstantiateWasmExports             4642           143            
+        InstantiateWasmDataSegmentBytes    0              0              
+        Sec1DecodePointUncompressed        0              0              
+        VerifyEcdsaSecp256r1Sig            0              0              
+        =================================================================
 
     "#]];
 
+    let expected_budget_p20 = expect![[r#"
+        =================================================================
+        Cpu limit: 2000000; used: 522315
+        Mem limit: 500000; used: 202391
+        =================================================================
+        CostType                           cpu_insns      mem_bytes      
+        WasmInsnExec                       300            0              
+        MemAlloc                           15750          67248          
+        MemCpy                             2298           0              
+        MemCmp                             696            0              
+        DispatchHostFunction               310            0              
+        VisitObject                        244            0              
+        ValSer                             0              0              
+        ValDeser                           0              0              
+        ComputeSha256Hash                  3738           0              
+        ComputeEd25519PubKey               0              0              
+        VerifyEd25519Sig                   0              0              
+        VmInstantiation                    497031         135129         
+        VmCachedInstantiation              0              0              
+        InvokeVmFunction                   1948           14             
+        ComputeKeccak256Hash               0              0              
+        DecodeEcdsaCurve256Sig             0              0              
+        RecoverEcdsaSecp256k1Key           0              0              
+        Int256AddSub                       0              0              
+        Int256Mul                          0              0              
+        Int256Div                          0              0              
+        Int256Pow                          0              0              
+        Int256Shift                        0              0              
+        ChaCha20DrawBytes                  0              0              
+        ParseWasmInstructions              0              0              
+        ParseWasmFunctions                 0              0              
+        ParseWasmGlobals                   0              0              
+        ParseWasmTableEntries              0              0              
+        ParseWasmTypes                     0              0              
+        ParseWasmDataSegments              0              0              
+        ParseWasmElemSegments              0              0              
+        ParseWasmImports                   0              0              
+        ParseWasmExports                   0              0              
+        ParseWasmDataSegmentBytes          0              0              
+        InstantiateWasmInstructions        0              0              
+        InstantiateWasmFunctions           0              0              
+        InstantiateWasmGlobals             0              0              
+        InstantiateWasmTableEntries        0              0              
+        InstantiateWasmTypes               0              0              
+        InstantiateWasmDataSegments        0              0              
+        InstantiateWasmElemSegments        0              0              
+        InstantiateWasmImports             0              0              
+        InstantiateWasmExports             0              0              
+        InstantiateWasmDataSegmentBytes    0              0              
+        Sec1DecodePointUncompressed        0              0              
+        VerifyEcdsaSecp256r1Sig            0              0              
+        =================================================================
+
+    "#]];
+
+    let expected_budget =
+        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+            expected_budget_p20
+        } else {
+            expected_budget_p21
+        };
+
     // moderate logging
     {
+        host.clear_module_cache()?;
         host.budget_ref().reset_limits(2_000_000, 500_000)?;
         let res = host.call(
             contract_id_obj,
@@ -581,6 +671,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     // excessive logging
     {
+        host.clear_module_cache()?;
         host.budget_ref().reset_limits(2_000_000, 500_000)?;
         let res = host.call(
             contract_id_obj,
@@ -602,6 +693,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     // increasing the shadow budget should make everything happy again
     {
+        host.clear_module_cache()?;
         host.budget_ref().reset_limits(2_000_000, 500_000)?;
         host.set_shadow_budget_limits(2_000_000, 1_000_000)?;
         let res = host.call(
@@ -729,6 +821,9 @@ fn test_integer_overflow() -> Result<(), HostError> {
 
 #[test]
 fn test_corrupt_custom_section() -> Result<(), HostError> {
+    use crate::meta::make_interface_version;
+    use crate::xdr::{Limits, ScEnvMetaEntry, WriteXdr};
+
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     host.as_budget().reset_unlimited()?;
@@ -756,12 +851,11 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
     ));
 
     // invalid section name
+    let xdr = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(make_interface_version(20, 0))
+        .to_xdr(Limits::none())
+        .unwrap();
     let res = host.register_test_contract_wasm_from_source_account(
-        wasm_util::wasm_module_with_custom_section(
-            "contractenvmetav1",
-            &soroban_env_common::meta::XDR,
-        )
-        .as_slice(),
+        wasm_util::wasm_module_with_custom_section("contractenvmetav1", &xdr).as_slice(),
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
@@ -770,14 +864,13 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
         (ScErrorType::WasmVm, ScErrorCode::InvalidInput)
     ));
 
-    let ledger_protocol = meta::get_ledger_protocol_version(meta::INTERFACE_VERSION);
-    let ledger_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
+    let ledger_protocol = host.get_ledger_protocol_version()?;
 
     // invalid: protocol is future
     let res = host.register_test_contract_wasm_from_source_account(
         wasm_util::wasm_module_with_custom_section(
             "contractenvmetav0",
-            interface_meta_with_custom_versions(ledger_protocol + 1, ledger_pre).as_slice(),
+            interface_meta_with_custom_versions(ledger_protocol + 1, 0).as_slice(),
         )
         .as_slice(),
         generate_account_id(&host),
@@ -805,10 +898,11 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
         ));
 
         // invalid: protocol is current but pre-release version doesn't match env's
+        let env_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
         let res = host.register_test_contract_wasm_from_source_account(
             wasm_util::wasm_module_with_custom_section(
                 "contractenvmetav0",
-                interface_meta_with_custom_versions(ledger_protocol, ledger_pre + 1).as_slice(),
+                interface_meta_with_custom_versions(ledger_protocol, env_pre + 1).as_slice(),
             )
             .as_slice(),
             generate_account_id(&host),

@@ -1,3 +1,4 @@
+use super::metered_clone::MeteredContainer;
 use crate::host::prng::SEED_BYTES;
 use crate::{
     budget::AsBudget,
@@ -5,6 +6,7 @@ use crate::{
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
     BytesObject, Error, Host, HostError, U32Val, Val,
 };
+use elliptic_curve::scalar::IsHigh;
 use hex_literal::hex;
 use hmac::{Hmac, Mac};
 use rand::RngCore;
@@ -12,7 +14,9 @@ use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use sha3::Keccak256;
 
-use super::metered_clone::MeteredContainer;
+use ecdsa::{signature::hazmat::PrehashVerifier, PrimeCurve, Signature, SignatureSize};
+use elliptic_curve::CurveArithmetic;
+use generic_array::ArrayLength;
 
 impl Host {
     // Ed25519 functions
@@ -77,28 +81,97 @@ impl Host {
         })
     }
 
-    // ECDSA secp256k1 functions
-
-    pub(crate) fn secp256k1_signature_from_bytes(
+    pub(crate) fn secp256r1_verify_signature(
         &self,
-        bytes: &[u8],
-    ) -> Result<k256::ecdsa::Signature, HostError> {
-        use k256::elliptic_curve::scalar::IsHigh;
-        self.charge_budget(ContractCostType::ComputeEcdsaSecp256k1Sig, None)?;
-        let sig: k256::ecdsa::Signature =
-            k256::ecdsa::Signature::try_from(bytes).map_err(|_| {
+        verifying_key: &p256::ecdsa::VerifyingKey,
+        msg_hash: &Hash,
+        sig: &Signature<p256::NistP256>,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("p256 verify");
+        self.charge_budget(ContractCostType::VerifyEcdsaSecp256r1Sig, None)?;
+        verifying_key
+            .verify_prehash(msg_hash.as_slice(), sig)
+            .map_err(|_| {
                 self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InvalidInput,
-                    "invalid ECDSA-secp256k1 signature",
+                    "failed secp256r1 verification",
+                    &[],
+                )
+            })
+    }
+
+    pub(crate) fn secp256r1_decode_sec1_uncompressed_pubkey(
+        &self,
+        bytes: &[u8],
+    ) -> Result<p256::ecdsa::VerifyingKey, HostError> {
+        use sec1::point::Tag;
+        self.charge_budget(ContractCostType::Sec1DecodePointUncompressed, None)?;
+        // check and make sure the key was encoded in uncompressed format
+        let tag = bytes
+            .first()
+            .copied()
+            .ok_or(sec1::Error::PointEncoding)
+            .and_then(Tag::from_u8)
+            .map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid ECDSA public key",
                     &[],
                 )
             })?;
+        if tag != Tag::Uncompressed {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "invalid ECDSA public key",
+                &[],
+            ));
+        }
+
+        p256::ecdsa::VerifyingKey::from_sec1_bytes(bytes).map_err(|_| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "invalid ECDSA public key",
+                &[],
+            )
+        })
+    }
+
+    pub(crate) fn secp256r1_public_key_from_bytesobj_input(
+        &self,
+        k: BytesObject,
+    ) -> Result<p256::ecdsa::VerifyingKey, HostError> {
+        self.visit_obj(k, |bytes: &ScBytes| {
+            self.secp256r1_decode_sec1_uncompressed_pubkey(bytes.as_slice())
+        })
+    }
+
+    // ECDSA functions
+    pub(crate) fn ecdsa_signature_from_bytes<C>(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Signature<C>, HostError>
+    where
+        C: PrimeCurve + CurveArithmetic,
+        SignatureSize<C>: ArrayLength<u8>,
+    {
+        self.charge_budget(ContractCostType::DecodeEcdsaCurve256Sig, None)?;
+        let sig = Signature::<C>::try_from(bytes).map_err(|_| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "invalid ECDSA sinature",
+                &[],
+            )
+        })?;
         if sig.s().is_high().into() {
             Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                "ECDSA-secp256k1 signature 's' part is not normalized to low form",
+                "ECDSA signature 's' part is not normalized to low form",
                 &[],
             ))
         } else {
@@ -106,14 +179,20 @@ impl Host {
         }
     }
 
-    pub(crate) fn secp256k1_signature_from_bytesobj_input(
+    pub(crate) fn ecdsa_signature_from_bytesobj_input<C>(
         &self,
         k: BytesObject,
-    ) -> Result<k256::ecdsa::Signature, HostError> {
+    ) -> Result<Signature<C>, HostError>
+    where
+        C: PrimeCurve + CurveArithmetic,
+        SignatureSize<C>: ArrayLength<u8>,
+    {
         self.visit_obj(k, |bytes: &ScBytes| {
-            self.secp256k1_signature_from_bytes(bytes.as_slice())
+            self.ecdsa_signature_from_bytes(bytes.as_slice())
         })
     }
+
+    // ECDSA secp256k1 functions
 
     // NB: not metered as it's a trivial constant cost, just converting a byte to a byte,
     // and always done exactly once as part of the secp256k1 recovery path.
@@ -145,7 +224,7 @@ impl Host {
         hash: &Hash,
         sig: &k256::ecdsa::Signature,
         rid: k256::ecdsa::RecoveryId,
-    ) -> Result<BytesObject, HostError> {
+    ) -> Result<ScBytes, HostError> {
         let _span = tracy_span!("secp256k1 recover");
         self.charge_budget(ContractCostType::RecoverEcdsaSecp256k1Key, None)?;
         let recovered_key =
@@ -159,12 +238,11 @@ impl Host {
                     )
                 },
             )?;
-        let rk = ScBytes::from(crate::xdr::BytesM::try_from(
+        Ok(ScBytes::from(crate::xdr::BytesM::try_from(
             recovered_key
                 .to_encoded_point(/*compress:*/ false)
                 .as_bytes(),
-        )?);
-        self.add_host_object(rk)
+        )?))
     }
 
     // SHA256 functions

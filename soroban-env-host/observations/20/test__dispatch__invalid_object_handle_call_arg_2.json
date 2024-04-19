@@ -1,0 +1,21 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(125)": "cpu:47",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1038, mem:205, objs:-/1@2dfca2c9",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:522653, mem:201726, objs:-/2@47990e66, store:-/1@889bdbb1, foot:1@808f0a8c",
+  "   5 call bytes_new_from_slice(32)": "cpu:523093, mem:201790, objs:-/3@a0143844",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:524062, mem:201902, objs:-/4@cc259fcf",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:525705, mem:202080, objs:-/5@3a6bffed, auth:1@8663364a/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:525997",
+  "  10 call get_ledger_network_id()": "cpu:526047, auth:1@8663364a/1@b055b42a",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:527077, mem:202192, objs:-/6@2162e67",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:545210, mem:205266, objs:-/7@c23eec30, store:-/2@a5e36bff, foot:2@8ef5ee33, auth:-/1@eaa228d1",
+  "  13 call call(Address(obj#13), Symbol(test), Vec(obj#17))": "cpu:546090, mem:205394, objs:-/9@e5898f35, auth:-/-",
+  "  14 push VM:3b9e82a7:test(Address(obj#15), Symbol(abc), Vec(obj#123))": "cpu:1063270, mem:407441, objs:-/10@c9718a69, vm:65536@b1cd98b9/2@2f94d90d, stk:1@c00e015a, auth:1@69e0f875/-",
+  "  15 call call(Address(obj#15), Symbol(abc), Vec(obj#123))": "cpu:1066621, mem:407567, objs:2@15a0fa40/10@c9718a69, vm:-/-, stk:1@8e9a0333",
+  "  16 pop VM:3b9e82a7:test -> Err(Error(Value, InvalidInput))": "cpu:1067349, vm:65536@b1cd98b9/2@2f94d90d",
+  "  17 ret call -> Err(Error(Value, InvalidInput))": " objs:-/10@c9718a69, vm:-/-, stk:-, auth:-/-",
+  "  18 end": "cpu:1067349, mem:407567, prngs:-/9b4a753, objs:-/10@c9718a69, vm:-/-, evt:-, store:-/2@a5e36bff, foot:2@8ef5ee33, stk:-, auth:-/-"
+}

@@ -4,12 +4,15 @@ use soroban_env_host::{budget::AsBudget, meta, Host, LedgerInfo, Val, I256};
 pub(crate) fn test_host() -> Host {
     let host = Host::default();
     host.set_ledger_info(LedgerInfo {
-        protocol_version: meta::get_ledger_protocol_version(meta::INTERFACE_VERSION),
+        protocol_version: Host::current_test_protocol(),
         ..Default::default()
     })
     .unwrap();
     host.as_budget().reset_unlimited().unwrap();
     host.as_budget().reset_fuel_config().unwrap();
+    if std::env::var("DEBUG_BENCH_HOST").is_ok() {
+        host.enable_debug().unwrap();
+    }
     host
 }
 

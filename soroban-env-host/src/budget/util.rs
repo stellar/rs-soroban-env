@@ -32,11 +32,6 @@ impl Budget {
         Ok(self.0.try_borrow_or_err()?.tracker.wasm_memory)
     }
 
-    pub fn reset_default(&self) -> Result<(), HostError> {
-        *self.0.try_borrow_mut_or_err()? = super::BudgetImpl::default();
-        Ok(())
-    }
-
     pub fn reset_unlimited(&self) -> Result<(), HostError> {
         self.reset_unlimited_cpu()?;
         self.reset_unlimited_mem()?;
@@ -182,7 +177,7 @@ impl Budget {
     ///
     /// However, in testing and non-production workflows, sometimes we need the
     /// convenience of temporarily "turning off" the budget. This can happen for
-    /// several reasons: we want the some test logic to not affect the
+    /// several reasons: we want some test logic to not affect the
     /// production budget, or we want to maintain an accurate prediction of
     /// production budget during preflight. In the latter case, we want to
     /// exclude preflight-only logic from the budget. By routing metering to the

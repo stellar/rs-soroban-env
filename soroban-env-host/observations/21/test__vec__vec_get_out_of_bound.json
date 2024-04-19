@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_get(Vec(obj#1), U32(3))": "cpu:967, mem:104, objs:-/1@c38361c",
+  "   2 ret vec_get -> Err(Error(Object, IndexBounds))": "cpu:1089",
+  "   3 end": "cpu:1089, mem:104, prngs:-/-, objs:-/1@c38361c, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

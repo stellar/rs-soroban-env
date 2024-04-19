@@ -6,7 +6,6 @@ use crate::{
 };
 use core::{
     cmp::Ordering,
-    convert::TryFrom,
     fmt::Debug,
     hash::{Hash, Hasher},
 };
@@ -274,6 +273,13 @@ impl From<wasmi::Error> for Error {
         }
 
         Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    }
+}
+
+#[cfg(feature = "wasmi")]
+impl From<wasmparser::BinaryReaderError> for Error {
+    fn from(_: wasmparser::BinaryReaderError) -> Self {
+        Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidInput)
     }
 }
 

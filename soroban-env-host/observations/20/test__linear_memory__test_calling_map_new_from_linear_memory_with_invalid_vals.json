@@ -1,0 +1,22 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(7558)": "cpu:14535",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:17384, mem:7638, objs:-/1@467bce3",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:3584729, mem:510660, objs:-/2@35fae902, store:-/1@4497303b, foot:1@a93e8a8e",
+  "   5 call bytes_new_from_slice(32)": "cpu:3585169, mem:510724, objs:-/3@e5f70efd",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:3586138, mem:510836, objs:-/4@95406b04",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:3587781, mem:511014, objs:-/5@8f7c31f7, auth:1@827f55aa/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:3588073",
+  "  10 call get_ledger_network_id()": "cpu:3588123, auth:1@827f55aa/1@82eee509",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:3589153, mem:511126, objs:-/6@aa738688",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:3607286, mem:514200, objs:-/7@eb1dd43c, store:-/2@dabdc185, foot:2@76b92503, auth:-/1@3fe8aaf7",
+  "  13 call call(Address(obj#13), Symbol(loadmem2), Vec(obj#15))": "cpu:3607726, mem:514264, objs:-/8@b81301f5, auth:-/-",
+  "  14 push VM:4ced3c78:loadmem2(U32(0), U32(65024), U32(32))": "cpu:6763447, mem:1017812, objs:-/9@9df18cf0, vm:65536@b1cd98b9/4@70bfd778, stk:1@2ca57a7d, auth:1@64ec9f3/-",
+  "  15 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:6765928, mem:1017890, vm:-/-",
+  "  16 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:6777638, mem:1018434",
+  "  17 pop VM:4ced3c78:loadmem2 -> Err(Error(Value, InvalidInput))": " vm:65536@6d331be9/4@70bfd778",
+  "  18 ret call -> Err(Error(Value, InvalidInput))": " vm:-/-, stk:-, auth:-/-",
+  "  19 end": "cpu:6777638, mem:1018434, prngs:-/9b4a753, objs:-/9@9df18cf0, vm:-/-, evt:-, store:-/2@dabdc185, foot:2@76b92503, stk:-, auth:-/-"
+}

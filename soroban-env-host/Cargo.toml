@@ -8,7 +8,7 @@ license = "Apache-2.0"
 version.workspace = true
 readme = "../README.md"
 edition = "2021"
-rust-version.workspace = true
+rust-version = "1.74"
 build = "build.rs"
 
 exclude = ["observations/"]
@@ -17,6 +17,7 @@ exclude = ["observations/"]
 soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi", "shallow-val-hash"] }
 wasmi = { workspace = true }
+wasmparser = { workspace = true }
 stellar-strkey = "=0.0.8"
 static_assertions = "=1.1.0"
 sha2 = "=0.10.8"
@@ -31,7 +32,12 @@ num-traits = "=0.2.17"
 num-integer = "=0.1.45"
 num-derive = "=0.4.1"
 backtrace = { version = "=0.3.69", optional = true }
-k256 = {version = "=0.13.1", features=["ecdsa", "arithmetic"]}
+k256 = {version = "=0.13.1", default-features = false, features = ["ecdsa", "arithmetic"]}
+p256 = {version = "=0.13.2", default-features = false, features = ["ecdsa", "arithmetic"]}
+ecdsa = {version = "=0.16.7", default-features = false}
+sec1 = {version = "=0.7.2"}
+elliptic-curve ={ version = "0.13.5", default-features = false}
+generic-array ={ version = "0.14.7"}
 # NB: getrandom is a transitive dependency of k256 which we're not using directly
 # but we have to specify it here in order to enable its 'js' feature which
 # is needed to build the host for wasm (a rare but supported config).
@@ -82,11 +88,14 @@ lstsq = "=0.5.0"
 nalgebra = { version = "=0.32.3", default-features = false, features = ["std"]}
 wasm-encoder = "=0.36.2"
 rustversion = "1.0"
+wycheproof = "=0.5.1"
+k256 = {version = "=0.13.1", default-features = false, features = ["alloc"]}
+p256 = {version = "=0.13.2", default-features = false, features = ["alloc"]}
 
 [dev-dependencies.stellar-xdr]
-version = "=20.1.0"
+version = "=21.0.0"
 # git = "https://github.com/stellar/rs-stellar-xdr"
-# rev = "8b9d623ef40423a8462442b86997155f2c04d3a1"
+# rev = "d0138770652a615e3cd99447f2f2727658c17450"
 default-features = false
 features = ["arbitrary"]
 
@@ -96,6 +105,16 @@ next = ["soroban-env-common/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_mode = []
 bench = []
+# This feature guards the work-in-progress changes in soroban-env-host
+# API. Its main purpose is to be able to make API changes without bumping
+# the crate version.
+# These changes should only be used by importers who depend on
+# an exact patch version of the crates in this repo, because breaking
+# changes may be introduced into any version in any code gated by
+# this feature.
+# When bumping the major version of any crates in this repo all the code
+# guarded by this feature should be enabled unconditionally.
+unstable-next-api = []
 
 [[bench]]
 required-features = ["bench"]
@@ -111,5 +130,11 @@ bench = true
 name = "variation_histograms"
 path = "benches/variation_histograms.rs"
 
+[[test]]
+name = "secp256r1_sig_ver"
+path = "tests/secp256r1_sig_ver.rs"
+required-features = ["testutils"]
+
+
 [package.metadata.docs.rs]
-all-features = true
+features = ["recording_mode", "tracy", "testutils"]

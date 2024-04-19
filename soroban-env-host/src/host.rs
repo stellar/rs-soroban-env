@@ -10,16 +10,16 @@ use crate::{
     impl_wrapping_obj_to_num,
     num::*,
     storage::Storage,
+    vm::ModuleCache,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, Duration, Hash,
         LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
         ScSymbol, ScVal, TimePoint, Uint256,
     },
-    AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
-    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, TryFromVal,
-    U128Object, U256Object, U32Val, U64Val, Val, VecObject, VmCaller, VmCallerEnv, Void, I256,
-    U256,
+    AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
+    MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, TryFromVal, Val, VecObject,
+    VmCaller, VmCallerEnv, Void,
 };
 
 mod comparison;
@@ -61,18 +61,6 @@ pub(crate) use frame::Frame;
 use rand_chacha::ChaCha20Rng;
 use soroban_env_common::SymbolSmall;
 
-#[derive(Debug, Clone, Default)]
-pub struct LedgerInfo {
-    pub protocol_version: u32,
-    pub sequence_number: u32,
-    pub timestamp: u64,
-    pub network_id: [u8; 32],
-    pub base_reserve: u32,
-    pub min_temp_entry_ttl: u32,
-    pub min_persistent_entry_ttl: u32,
-    pub max_entry_ttl: u32,
-}
-
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]
 pub enum ContractInvocationEvent {
@@ -91,6 +79,8 @@ pub struct CoverageScoreboard {
 
 #[derive(Clone, Default)]
 struct HostImpl {
+    module_cache: RefCell<Option<ModuleCache>>,
+    shared_linker: RefCell<Option<wasmi::Linker<Host>>>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
@@ -161,6 +151,14 @@ struct HostImpl {
     #[doc(hidden)]
     #[cfg(any(test, feature = "recording_mode"))]
     suppress_diagnostic_events: RefCell<bool>,
+
+    // This flag marks the call of `build_module_cache` that would happen
+    // in enforcing mode. In recording mode we need to use this flag to
+    // determine whether we need to rebuild module cache after the host
+    // invocation has been done.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "recording_mode"))]
+    need_to_build_module_cache: RefCell<bool>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -198,7 +196,18 @@ macro_rules! impl_checked_borrow_helpers {
         }
     };
 }
-
+impl_checked_borrow_helpers!(
+    module_cache,
+    Option<ModuleCache>,
+    try_borrow_module_cache,
+    try_borrow_module_cache_mut
+);
+impl_checked_borrow_helpers!(
+    shared_linker,
+    Option<wasmi::Linker<Host>>,
+    try_borrow_linker,
+    try_borrow_linker_mut
+);
 impl_checked_borrow_helpers!(
     source_account,
     Option<AccountId>,
@@ -307,6 +316,14 @@ impl_checked_borrow_helpers!(
     try_borrow_suppress_diagnostic_events_mut
 );
 
+#[cfg(any(test, feature = "recording_mode"))]
+impl_checked_borrow_helpers!(
+    need_to_build_module_cache,
+    bool,
+    try_borrow_need_to_build_module_cache,
+    try_borrow_need_to_build_module_cache_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -327,6 +344,8 @@ impl Host {
         #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
         let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
+            module_cache: RefCell::new(None),
+            shared_linker: RefCell::new(None),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
@@ -354,7 +373,43 @@ impl Host {
             coverage_scoreboard: Default::default(),
             #[cfg(any(test, feature = "recording_mode"))]
             suppress_diagnostic_events: RefCell::new(false),
+            #[cfg(any(test, feature = "recording_mode"))]
+            need_to_build_module_cache: RefCell::new(false),
         }))
+    }
+
+    pub fn build_module_cache_if_needed(&self) -> Result<(), HostError> {
+        if self.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
+            && self.try_borrow_module_cache()?.is_none()
+        {
+            let cache = ModuleCache::new(self)?;
+            let linker = cache.make_linker(self)?;
+            *self.try_borrow_module_cache_mut()? = Some(cache);
+            *self.try_borrow_linker_mut()? = Some(linker);
+        }
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn in_storage_recording_mode(&self) -> Result<bool, HostError> {
+        if let crate::storage::FootprintMode::Recording(_) = self.try_borrow_storage()?.mode {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn clear_module_cache(&self) -> Result<(), HostError> {
+        *self.try_borrow_module_cache_mut()? = None;
+        *self.try_borrow_linker_mut()? = None;
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn rebuild_module_cache(&self) -> Result<(), HostError> {
+        self.clear_module_cache()?;
+        self.build_module_cache_if_needed()
     }
 
     pub fn set_source_account(&self, source_account: AccountId) -> Result<(), HostError> {
@@ -417,6 +472,14 @@ impl Host {
         } else {
             Ok(None)
         }
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn switch_to_enforcing_storage(&self) -> Result<(), HostError> {
+        self.with_mut_storage(|storage| {
+            storage.mode = crate::storage::FootprintMode::Enforcing;
+            Ok(())
+        })
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
@@ -2068,11 +2131,34 @@ impl VmCallerEnv for Host {
         extend_to: U32Val,
     ) -> Result<Void, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        self.extend_contract_instance_and_code_ttl_from_contract_id(
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.extend_contract_instance_ttl_from_contract_id(
             &contract_id,
+            key.clone(),
             threshold.into(),
             extend_to.into(),
         )?;
+        self.extend_contract_code_ttl_from_contract_id(key, threshold.into(), extend_to.into())?;
+        Ok(Val::VOID)
+    }
+
+    fn extend_contract_instance_ttl(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        threshold: U32Val,
+        extend_to: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+
+        self.extend_contract_instance_ttl_from_contract_id(
+            &contract_id,
+            key,
+            threshold.into(),
+            extend_to.into(),
+        )?;
+
         Ok(Val::VOID)
     }
 
@@ -2084,11 +2170,29 @@ impl VmCallerEnv for Host {
         extend_to: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
-        self.extend_contract_instance_and_code_ttl_from_contract_id(
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.extend_contract_instance_ttl_from_contract_id(
             &contract_id,
+            key.clone(),
             threshold.into(),
             extend_to.into(),
         )?;
+        self.extend_contract_code_ttl_from_contract_id(key, threshold.into(), extend_to.into())?;
+        Ok(Val::VOID)
+    }
+
+    fn extend_contract_code_ttl(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        threshold: U32Val,
+        extend_to: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+
+        self.extend_contract_code_ttl_from_contract_id(key, threshold.into(), extend_to.into())?;
+
         Ok(Val::VOID)
     }
 
@@ -2725,10 +2829,25 @@ impl VmCallerEnv for Host {
         signature: BytesObject,
         recovery_id: U32Val,
     ) -> Result<BytesObject, HostError> {
-        let sig = self.secp256k1_signature_from_bytesobj_input(signature)?;
+        let sig = self.ecdsa_signature_from_bytesobj_input::<k256::Secp256k1>(signature)?;
         let rid = self.secp256k1_recovery_id_from_u32val(recovery_id)?;
         let hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
-        self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)
+        let rk = self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)?;
+        self.add_host_object(rk)
+    }
+
+    fn verify_sig_ecdsa_secp256r1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        public_key: BytesObject,
+        msg_digest: BytesObject,
+        signature: BytesObject,
+    ) -> Result<Void, HostError> {
+        let pk = self.secp256r1_public_key_from_bytesobj_input(public_key)?;
+        let sig = self.ecdsa_signature_from_bytesobj_input::<p256::NistP256>(signature)?;
+        let msg_hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
+        let res = self.secp256r1_verify_signature(&pk, &msg_hash, &sig)?;
+        Ok(res.into())
     }
 
     // endregion: "crypto" module functions

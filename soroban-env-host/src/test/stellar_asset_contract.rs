@@ -1,6 +1,7 @@
 use std::{convert::TryInto, rc::Rc};
 
 use crate::builtin_contracts::base_types::BytesN;
+use crate::testutils::simple_account_sign_fn;
 use crate::{
     auth::RecordedAuthPayload,
     budget::AsBudget,
@@ -52,10 +53,9 @@ impl StellarAssetContractTest {
     fn setup(testname: &'static str) -> Self {
         let host = Host::test_host_with_recording_footprint();
         let obs = ObservedHost::new(testname, host.clone());
+        let protocol_version = host.get_ledger_protocol_version().unwrap();
         host.set_ledger_info(LedgerInfo {
-            protocol_version: crate::meta::get_ledger_protocol_version(
-                crate::meta::INTERFACE_VERSION,
-            ),
+            protocol_version,
             sequence_number: 123,
             timestamp: 123456,
             network_id: [5; 32],
@@ -2942,15 +2942,6 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
 
     // Trustline balance stays the same.
     assert_eq!(test.get_trustline_balance(&trustline_key), 100_000_000);
-}
-
-#[allow(clippy::type_complexity)]
-fn simple_account_sign_fn<'a>(
-    host: &'a Host,
-    kp: &'a SigningKey,
-) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
-    use crate::builtin_contracts::testutils::sign_payload_for_ed25519;
-    Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
 }
 
 #[test]

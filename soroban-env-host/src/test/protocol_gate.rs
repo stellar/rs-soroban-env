@@ -7,12 +7,17 @@ use crate::{
 
 #[test]
 fn ledger_protocol_greater_than_env_protocol_should_fail() -> Result<(), HostError> {
-    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let host = Host::test_host_with_recording_footprint();
     host.enable_debug()?;
-    let mut li = LedgerInfo::default();
     let env_proto = get_ledger_protocol_version(INTERFACE_VERSION);
-    li.protocol_version = env_proto + 1;
-    host.set_ledger_info(li)?;
+
+    // This test only makes sense if TEST_PROTOCOL is equal to the env version
+    if env_proto != host.get_ledger_protocol_version()? {
+        return Ok(());
+    }
+
+    let host = observe_host!(host);
+    host.with_mut_ledger_info(|li| li.protocol_version = env_proto + 1)?;
     let wasm = wasm_util::wasm_module_calling_protocol_gated_host_fn(env_proto);
     let id = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
@@ -30,11 +35,9 @@ fn ledger_protocol_greater_than_env_protocol_should_fail() -> Result<(), HostErr
 fn wasm_protocol_greater_than_ledger_protocol_should_fail() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
-    let mut li = LedgerInfo::default();
-    let env_proto = get_ledger_protocol_version(INTERFACE_VERSION);
-    li.protocol_version = env_proto - 1;
-    host.set_ledger_info(li)?;
-    let wasm = wasm_util::wasm_module_calling_protocol_gated_host_fn(env_proto);
+    let wasm =
+        wasm_util::wasm_module_calling_protocol_gated_host_fn(host.get_ledger_protocol_version()?);
+    host.with_mut_ledger_info(|li| li.protocol_version -= 1)?;
     let id = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         generate_account_id(&host),

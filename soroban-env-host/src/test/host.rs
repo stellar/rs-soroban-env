@@ -4,7 +4,7 @@ use soroban_env_common::Val;
 use crate::{
     budget::Budget,
     storage::{Footprint, Storage, StorageMap},
-    Env, Host, HostError, LedgerInfo,
+    Env, Host, HostError,
 };
 
 #[test]
@@ -15,18 +15,7 @@ fn invalid_object_handles() -> Result<(), HostError> {
             Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new());
 
         let host = Host::with_storage_and_budget(storage, budget);
-        host.set_ledger_info(LedgerInfo {
-            protocol_version: crate::meta::get_ledger_protocol_version(
-                crate::meta::INTERFACE_VERSION,
-            ),
-            sequence_number: 0,
-            timestamp: 0,
-            network_id: [7; 32],
-            base_reserve: 0,
-            min_persistent_entry_ttl: 4096,
-            min_temp_entry_ttl: 16,
-            max_entry_ttl: 6312000,
-        })?;
+        host.set_test_ledger_info_with_current_test_protocol();
 
         Ok(host)
     };
@@ -49,7 +38,7 @@ fn invalid_object_handles() -> Result<(), HostError> {
 
 #[test]
 fn invalid_val() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let v = Val::from_payload(u64::MAX);
     let err = host.from_host_val(v).err().unwrap();
 

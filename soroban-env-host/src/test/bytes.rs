@@ -9,15 +9,13 @@ use crate::{
     BytesObject, Compare, Env, EnvBase, Error, Host, HostError, TryFromVal, U32Val, Val,
     DEFAULT_XDR_RW_LIMITS,
 };
-use arbitrary::{Arbitrary, Unstructured};
 use more_asserts::assert_ge;
-use rand::RngCore;
 use soroban_test_wasms::LINEAR_MEMORY;
 use std::ops::Deref;
 
 #[test]
 fn bytes_suite_of_tests() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     // new and push
     let mut obj = host.bytes_new()?;
     for i in 0..32 {
@@ -69,7 +67,7 @@ fn bytes_suite_of_tests() -> Result<(), HostError> {
 
 #[test]
 fn bytes_put_out_of_bound() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let obj = host.bytes_new()?;
     let res = host.bytes_put(obj, 0u32.into(), 1u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -79,7 +77,7 @@ fn bytes_put_out_of_bound() -> Result<(), HostError> {
 
 #[test]
 fn bytes_slice_start_greater_than_end() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 2_u32.into(), 1_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::InvalidInput);
@@ -89,7 +87,7 @@ fn bytes_slice_start_greater_than_end() -> Result<(), HostError> {
 
 #[test]
 fn bytes_slice_start_equal_len() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 4_u32.into(), 4_u32.into())?;
     assert_eq!(host.obj_cmp(res.into(), host.bytes_new()?.into())?, 0);
@@ -98,7 +96,7 @@ fn bytes_slice_start_equal_len() -> Result<(), HostError> {
 
 #[test]
 fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 5_u32.into(), 10_u32.into());
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
@@ -108,7 +106,7 @@ fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
 
 #[test]
 fn bytes_xdr_roundtrip() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let roundtrip = |v: ScVal| -> Result<(), HostError> {
         let rv: Val = host.to_host_val(&v)?;
         let bo = host.serialize_to_bytes(rv)?;
@@ -265,9 +263,12 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 }
 
 #[test]
+#[cfg(feature = "testutils")]
 fn arbitrary_xdr_roundtrips() -> Result<(), HostError> {
+    use arbitrary::{Arbitrary, Unstructured};
+    use rand::RngCore;
     const ITERATIONS: u32 = 50_000;
-    let host = Host::test_host();
+    let host = Host::test_host_with_prng();
     host.budget_ref().reset_unlimited().unwrap();
 
     let mut successes = 0;
@@ -318,7 +319,7 @@ fn arbitrary_xdr_roundtrips() -> Result<(), HostError> {
 
 #[test]
 fn test_malformed_xdr_decoding() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     let run_test = |bytes: Vec<u8>| -> Result<(), HostError> {
         let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
         let res = host.deserialize_from_bytes(bo);
@@ -411,7 +412,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
 
 #[test]
 fn test_bytes_out_of_cpu_budget() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     host.as_budget().reset_unlimited_cpu()?;
     let mut b1 = host.bytes_new_from_slice(&[2; 1])?;
     loop {
@@ -431,7 +432,7 @@ fn test_bytes_out_of_cpu_budget() -> Result<(), HostError> {
 
 #[test]
 fn test_bytes_out_of_mem_budget() -> Result<(), HostError> {
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
     host.as_budget().reset_unlimited_mem()?;
     let mut b1 = host.bytes_new_from_slice(&[2; 1])?;
     loop {
@@ -452,7 +453,7 @@ fn test_bytes_out_of_mem_budget() -> Result<(), HostError> {
 #[test]
 fn instantiate_oversized_bytes_from_slice() -> Result<(), HostError> {
     use crate::EnvBase;
-    let host = observe_host!(Host::default());
+    let host = observe_host!(Host::test_host());
 
     let buf = vec![0; 42_000_000];
     let res = host.bytes_new_from_slice(&buf);
@@ -490,8 +491,15 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
         U32Val::from(100).to_val().get_payload()
     );
 
-    // constructing a big map will cause budget limit exceeded error
-    let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(480000, 7);
+    // constructing a big bytes will cause budget limit exceeded error
+    let num_bytes: u32 =
+        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+            480_000
+        } else {
+            8_000_000
+        };
+    let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(num_bytes, 7);
+    host.clear_module_cache()?;
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
     host.budget_ref().reset_default()?;

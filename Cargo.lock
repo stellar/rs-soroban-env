@@ -384,9 +384,9 @@ dependencies = [
 
 [[package]]
 name = "ecdsa"
-version = "0.16.8"
+version = "0.16.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4b1e0c257a9e9f25f90ff76d7a68360ed497ee519c8e428d1825ef0000799d4"
+checksum = "0997c976637b606099b9985693efa3581e84e41f5c11ba5255f88711058ad428"
 dependencies = [
  "der",
  "digest",
@@ -702,9 +702,7 @@ dependencies = [
  "cfg-if",
  "ecdsa",
  "elliptic-curve",
- "once_cell",
  "sha2",
- "signature",
 ]
 
 [[package]]
@@ -943,6 +941,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
+name = "p256"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9863ad85fa8f4460f9c48cb909d38a0d689dba1f6f6988a5e3e0d31071bcd4b"
+dependencies = [
+ "ecdsa",
+ "elliptic-curve",
+ "primeorder",
+ "sha2",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1009,6 +1019,15 @@ checksum = "af7cee1a6c8a5b9208b3cb1061f10c0cb689087b3d8ce85fb9d2dd7a29b6ba66"
 dependencies = [
  "diff",
  "yansi",
+]
+
+[[package]]
+name = "primeorder"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7dbe9ed3b56368bd99483eb32fe9c17fdd3730aebadc906918ce78d54c7eeb4"
+dependencies = [
+ "elliptic-curve",
 ]
 
 [[package]]
@@ -1194,9 +1213,9 @@ checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
 
 [[package]]
 name = "sec1"
-version = "0.7.3"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3e97a565f76233a6003f9f5c54be1d9c5bdfa3eccfb189469f11ec4901c47dc"
+checksum = "f0aec48e813d6b90b15f0b8948af3c63483992dee44c03e9930b3eebdabe046e"
 dependencies = [
  "base16ct",
  "der",
@@ -1333,7 +1352,7 @@ checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 
 [[package]]
 name = "soroban-bench-utils"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "perf-event",
  "soroban-env-common",
@@ -1342,7 +1361,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-builtin-sdk-macros"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1352,7 +1371,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-common"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "arbitrary",
  "crate-git-revision",
@@ -1366,11 +1385,12 @@ dependencies = [
  "static_assertions",
  "stellar-xdr",
  "tracy-client",
+ "wasmparser",
 ]
 
 [[package]]
 name = "soroban-env-guest"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "soroban-env-common",
  "static_assertions",
@@ -1378,14 +1398,17 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-host"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "arbitrary",
  "backtrace",
  "bytes-lit",
  "curve25519-dalek",
+ "ecdsa",
  "ed25519-dalek",
+ "elliptic-curve",
  "expect-test",
+ "generic-array",
  "getrandom",
  "hex",
  "hex-literal",
@@ -1398,10 +1421,12 @@ dependencies = [
  "num-derive",
  "num-integer",
  "num-traits",
+ "p256",
  "pretty_assertions",
  "rand",
  "rand_chacha",
  "rustversion",
+ "sec1",
  "serde_json",
  "sha2",
  "sha3",
@@ -1420,12 +1445,14 @@ dependencies = [
  "thousands",
  "tracy-client",
  "wasm-encoder",
+ "wasmparser",
  "wasmprinter",
+ "wycheproof",
 ]
 
 [[package]]
 name = "soroban-env-macros"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1438,23 +1465,27 @@ dependencies = [
 
 [[package]]
 name = "soroban-simulation"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "anyhow",
+ "pretty_assertions",
  "rand",
  "soroban-env-host",
+ "soroban-test-wasms",
  "static_assertions",
+ "tap",
  "thiserror",
 ]
 
 [[package]]
 name = "soroban-synth-wasm"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "arbitrary",
  "expect-test",
  "soroban-env-common",
  "soroban-env-macros",
+ "stellar-xdr",
  "wasm-encoder",
  "wasmparser",
  "wasmprinter",
@@ -1462,7 +1493,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-test-wasms"
-version = "20.2.2"
+version = "21.0.0"
 
 [[package]]
 name = "soroban-wasmi"
@@ -1511,9 +1542,9 @@ dependencies = [
 
 [[package]]
 name = "stellar-xdr"
-version = "20.1.0"
+version = "21.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e59cdf3eb4467fb5a4b00b52e7de6dca72f67fac6f9b700f55c95a5d86f09c9d"
+checksum = "193cef4375f498306b3b39d2182b8e1192904fc90dd2eec8b3f3007b87c427c7"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
@@ -1558,8 +1589,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tap"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
 name = "test_no_std"
-version = "20.2.2"
+version = "21.0.0"
 dependencies = [
  "soroban-env-common",
 ]
@@ -2014,6 +2051,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "829846f3e3db426d4cee4510841b71a8e58aa2a76b1132579487ae430ccd9c7b"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "wycheproof"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e639f57253b80c6584b378011aec0fed61c4c21d7a4b97c4d9d7eaf35ca77d12"
+dependencies = [
+ "base64 0.21.5",
+ "hex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

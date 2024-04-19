@@ -47,6 +47,8 @@ pub use curr::*;
 mod curr {
     pub const ADD_I32: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_add_i32.wasm").as_slice();
+    pub const SUM_I32: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/example_sum_i32.wasm").as_slice();
     pub const ADD_F32: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_add_f32.wasm").as_slice();
     pub const ALLOC: &[u8] =
@@ -74,6 +76,8 @@ mod curr {
         include_bytes!("../wasm-workspace/opt/curr/auth_test_contract.wasm").as_slice();
     pub const UPDATEABLE_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/example_updateable_contract.wasm").as_slice();
+    pub const UPLOAD_CONTRACT: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/example_upload_contract.wasm").as_slice();
     pub const DELEGATED_ACCOUNT_TEST_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/test_delegated_account.wasm").as_slice();
     pub const ERR: &[u8] = include_bytes!("../wasm-workspace/opt/curr/example_err.wasm").as_slice();
@@ -91,4 +95,7 @@ mod curr {
 
     pub const HOSTILE_LARGE_VALUE: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/hostile_large_val.wasm").as_slice();
+
+    pub const DEPLOYER_TEST_CONTRACT: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/test_deployer.wasm").as_slice();
 }

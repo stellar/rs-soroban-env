@@ -1,15 +1,17 @@
 use crate::e2e_invoke::ledger_entry_to_ledger_key;
+use crate::storage::EntryWithLiveUntil;
 use crate::{
     budget::Budget,
     builtin_contracts::testutils::create_account,
     storage::{SnapshotSource, Storage},
     xdr::{
-        AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScErrorCode,
-        ScErrorType, ScVal, ScVec, Uint256,
+        AccountId, ContractCostType, LedgerEntry, LedgerKey, PublicKey, ScAddress, ScVal, ScVec,
+        Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
+    AddressObject, BytesObject, Env, EnvBase, Host, HostError, LedgerInfo, MeteredOrdMap,
     StorageType, SymbolSmall, Val, VecObject,
 };
+use ed25519_dalek::SigningKey;
 use rand::RngCore;
 use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
 use std::{cell::Cell, collections::BTreeMap, rc::Rc, sync::Once};
@@ -31,7 +33,7 @@ where
     C: FnOnce() -> R + UnwindSafe,
 {
     thread_local! {
-        static TEST_CONTRACT_CALL_COUNT: Cell<u64> = Cell::new(0);
+        static TEST_CONTRACT_CALL_COUNT: Cell<u64> = const { Cell::new(0) };
     }
 
     static WRAP_PANIC_HOOK: Once = Once::new();
@@ -131,24 +133,21 @@ impl MockSnapshotSource {
         Self(map)
     }
 }
-impl SnapshotSource for MockSnapshotSource {
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
-        if let Some(val) = self.0.get(key) {
-            Ok((Rc::clone(&val.0), val.1))
-        } else {
-            Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::MissingValue).into())
-        }
-    }
 
-    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
-        Ok(self.0.contains_key(key))
+impl SnapshotSource for MockSnapshotSource {
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        if let Some((entry, live_until)) = self.0.get(key) {
+            Ok(Some((Rc::clone(entry), *live_until)))
+        } else {
+            Ok(None)
+        }
     }
 }
 
 #[cfg(test)]
 pub(crate) fn interface_meta_with_custom_versions(proto: u32, pre: u32) -> Vec<u8> {
     use crate::xdr::{Limited, Limits, ScEnvMetaEntry, WriteXdr};
-    let iv = (proto as u64) << 32 | pre as u64;
+    let iv = crate::meta::make_interface_version(proto, pre);
     let entry = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(iv);
     let bytes = Vec::<u8>::new();
     let mut w = Limited::new(bytes, Limits::none());
@@ -159,21 +158,22 @@ pub(crate) fn interface_meta_with_custom_versions(proto: u32, pre: u32) -> Vec<u
 impl Host {
     pub const TEST_PRNG_SEED: &'static [u8; 32] = b"12345678901234567890123456789012";
 
-    pub fn test_host() -> Self {
-        let host = Host::default();
-        host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
-        host
+    pub fn set_test_prng(&self) {
+        self.set_base_prng_seed(*Self::TEST_PRNG_SEED).unwrap();
     }
 
-    pub fn test_host_with_recording_footprint() -> Self {
-        let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
-        let storage = Storage::with_recording_footprint(snapshot_source);
-        let host = Host::with_storage_and_budget(storage, Budget::default());
-        host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
-        host.set_ledger_info(LedgerInfo {
-            protocol_version: crate::meta::get_ledger_protocol_version(
-                crate::meta::INTERFACE_VERSION,
-            ),
+    pub fn current_test_protocol() -> u32 {
+        use crate::meta::{get_ledger_protocol_version, INTERFACE_VERSION};
+        if let Ok(vers) = std::env::var("TEST_PROTOCOL") {
+            vers.parse().unwrap()
+        } else {
+            get_ledger_protocol_version(INTERFACE_VERSION)
+        }
+    }
+
+    pub fn set_test_ledger_info_with_current_test_protocol(&self) {
+        self.set_ledger_info(LedgerInfo {
+            protocol_version: Self::current_test_protocol(),
             sequence_number: 0,
             timestamp: 0,
             network_id: [0; 32],
@@ -183,6 +183,26 @@ impl Host {
             max_entry_ttl: 6_312_000,
         })
         .unwrap();
+    }
+
+    pub fn test_host() -> Self {
+        let host = Host::default();
+        host.set_test_ledger_info_with_current_test_protocol();
+        host
+    }
+
+    pub fn test_host_with_prng() -> Self {
+        let host = Self::test_host();
+        host.set_test_prng();
+        host
+    }
+
+    pub fn test_host_with_recording_footprint() -> Self {
+        let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
+        let storage = Storage::with_recording_footprint(snapshot_source);
+        let host = Host::with_storage_and_budget(storage, Budget::default());
+        host.set_test_ledger_info_with_current_test_protocol();
+        host.set_test_prng();
         host
     }
 
@@ -536,14 +556,12 @@ impl Host {
 
 #[cfg(test)]
 pub(crate) mod wasm {
-    use super::interface_meta_with_custom_versions;
     use crate::{Symbol, Tag, U32Val, Val};
-    use soroban_env_common::meta::{get_pre_release_version, INTERFACE_VERSION};
     use soroban_synth_wasm::{Arity, FuncRef, LocalRef, ModEmitter, Operand};
     use wasm_encoder::{ConstExpr, Elements, RefType};
 
     pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
-        let mut fe = ModEmitter::default().func(Arity(1), 0);
+        let mut fe = ModEmitter::default_with_test_protocol().func(Arity(1), 0);
         let arg = fe.args[0];
         fe.push(Operand::Const64(1));
         for i in 0..n {
@@ -558,7 +576,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_n_funcs_no_export(n: usize) -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         for _i in 0..n {
             let mut fe = me.func(Arity(0), 0);
             fe.push(Symbol::try_from_small_str("pass").unwrap());
@@ -568,7 +586,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_repeated_exporting_the_same_func(n: usize) -> Vec<u8> {
-        let me = ModEmitter::default();
+        let me = ModEmitter::default_with_test_protocol();
         let mut fe = me.func(Arity(0), 0);
         fe.push(Symbol::try_from_small_str("pass").unwrap());
         let (mut me, fid) = fe.finish();
@@ -579,7 +597,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
-        let mut fe = ModEmitter::default().func(Arity(0), 0);
+        let mut fe = ModEmitter::default_with_test_protocol().func(Arity(0), 0);
         fe.push(Operand::Const32(n_pages as i32));
         fe.memory_grow();
         fe.drop();
@@ -588,7 +606,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_linear_memory_logging() -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         // log_from_linear_memory
         let f0 = me.import_func("x", "_", Arity(4));
         // the caller
@@ -604,14 +622,14 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_unreachable() -> Vec<u8> {
-        let me = ModEmitter::default();
+        let me = ModEmitter::default_with_test_protocol();
         let mut fe = me.func(Arity(0), 0);
         fe.trap();
         fe.finish_and_export("test").finish()
     }
 
     pub(crate) fn wasm_module_with_indirect_call() -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
         // a local wasm function
@@ -635,7 +653,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_div_by_zero() -> Vec<u8> {
-        let me = ModEmitter::default();
+        let me = ModEmitter::default_with_test_protocol();
         let mut fe = me.func(Arity(0), 0);
         fe.push(Operand::Const64(123));
         fe.push(Operand::Const64(0));
@@ -644,7 +662,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_integer_overflow() -> Vec<u8> {
-        let me = ModEmitter::default();
+        let me = ModEmitter::default_with_test_protocol();
         let mut fe = me.func(Arity(0), 0);
         fe.push(Operand::Const64(i64::MIN));
         fe.push(Operand::Const64(-1));
@@ -793,7 +811,7 @@ pub(crate) mod wasm {
     // Emit a wasm module that uses post-MVP WASM features. Specifically
     // mutable-globals and sign-ext.
     pub fn post_mvp_wasm_module() -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
 
         // Emit an exported mutable global
         me.define_global_i64(-100, true, Some("global"));
@@ -824,7 +842,7 @@ pub(crate) mod wasm {
     }
 
     pub fn wasm_module_with_floating_point_ops() -> Vec<u8> {
-        let me = ModEmitter::default();
+        let me = ModEmitter::default_with_test_protocol();
         let mut fe = me.func(Arity(0), 0);
         fe.f64_const(1.1f64);
         fe.f64_const(2.2f64);
@@ -842,7 +860,7 @@ pub(crate) mod wasm {
     }
 
     pub fn wasm_module_lying_about_import_function_type() -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         // function {"t", "_"} is "dummy0", taking 0 arguments
         // this will not pass the wasmi linker
         me.import_func("t", "_", Arity(1));
@@ -850,13 +868,13 @@ pub(crate) mod wasm {
     }
 
     pub fn wasm_module_importing_nonexistent_function() -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         me.import_func("t", "z", Arity(1));
         me.finish()
     }
 
     pub fn wasm_module_with_duplicate_function_import(n: u32) -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         for _ in 0..n {
             me.import_func_no_check("t", "_", Arity(0));
         }
@@ -864,12 +882,11 @@ pub(crate) mod wasm {
     }
 
     pub fn wasm_module_with_nonexistent_function_export() -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         me.import_func("t", "_", Arity(0));
         let mut fe = me.func(Arity(0), 0);
         fe.push(Symbol::try_from_small_str("pass").unwrap());
         let (mut me, fid) = fe.finish();
-        println!("{}", fid.0);
         // exporting a function I defined is okay
         me.export_func(fid, "test");
         // exporting an imported function is also okay, although weird
@@ -880,7 +897,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_nonexistent_func_element() -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
         // a local wasm function
@@ -897,7 +914,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_start_function() -> Vec<u8> {
-        let me = ModEmitter::default();
+        let me = ModEmitter::default_with_test_protocol();
         let fe = me.func_with_arity_and_ret(Arity(0), Arity(0), 0);
         let (mut me, fid) = fe.finish();
         me.export_func(fid.clone(), "start");
@@ -906,7 +923,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_multi_value() -> Vec<u8> {
-        let me = ModEmitter::default();
+        let me = ModEmitter::default_with_test_protocol();
         let mut fe = me.func_with_arity_and_ret(Arity(0), Arity(2), 0);
         fe.push(Symbol::try_from_small_str("pass1").unwrap());
         fe.push(Symbol::try_from_small_str("pass2").unwrap());
@@ -923,7 +940,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_various_constexpr_in_elements(case: u32) -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
 
@@ -961,7 +978,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_large_globals(n: u32) -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         for i in 0..n {
             me.define_global_i64(i as i64, true, None);
         }
@@ -969,7 +986,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_various_constexr_in_global(case: u32) -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         match case {
             0 =>
             // err: mismatch
@@ -1002,7 +1019,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_various_constexr_in_data_segment(case: u32) -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         // an imported function
         let f0 = me.import_func("t", "_", Arity(0));
 
@@ -1032,15 +1049,12 @@ pub(crate) mod wasm {
     pub(crate) fn wasm_module_with_extern_ref() -> Vec<u8> {
         let mut me = ModEmitter::new();
         me.table(RefType::EXTERNREF, 2, None);
-        me.custom_section(
-            soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
-            &soroban_env_common::meta::XDR,
-        );
+        me.add_test_protocol_version_meta();
         me.finish_no_validate()
     }
 
     pub(crate) fn wasm_module_with_additional_tables(n: u32) -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         // by default, module already includes a table, here we are creating
         // additional ones
         for _i in 0..n {
@@ -1054,7 +1068,7 @@ pub(crate) mod wasm {
     // composite types defined by the GC proposal, which should not be allowed
     // and we will verify that in another test.
     pub(crate) fn wasm_module_with_many_func_types(n: u32) -> Vec<u8> {
-        let mut me = ModEmitter::default();
+        let mut me = ModEmitter::default_with_test_protocol();
         for _i in 0..n {
             // it is allowed to define the same types over and over
             me.add_fn_type_no_check(Arity(0), Arity(0));
@@ -1063,7 +1077,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_simd_add_i32x4() -> Vec<u8> {
-        let me = ModEmitter::default();
+        let me = ModEmitter::default_with_test_protocol();
         let mut fe = me.func(Arity(0), 0);
         // we load [u32, u32, u32, u32] x 2, add them and store back
         fe.i32_const(32); // ptr for storing the result
@@ -1079,11 +1093,7 @@ pub(crate) mod wasm {
 
     pub(crate) fn wasm_module_calling_protocol_gated_host_fn(wasm_proto: u32) -> Vec<u8> {
         let mut me = ModEmitter::new();
-        let pre = get_pre_release_version(INTERFACE_VERSION);
-        me.custom_section(
-            &"contractenvmetav0",
-            interface_meta_with_custom_versions(wasm_proto, pre).as_slice(),
-        );
+        me.add_protocol_version_meta(wasm_proto);
         // protocol_gated_dummy
         let f0 = me.import_func("t", "0", Arity(0));
         // the caller
@@ -1091,4 +1101,34 @@ pub(crate) mod wasm {
         fe.call_func(f0);
         fe.finish_and_export("test").finish()
     }
+
+    pub(crate) fn wasm_module_with_a_bit_of_everything(wasm_proto: u32) -> Vec<u8> {
+        let mut me = ModEmitter::new();
+        me.add_protocol_version_meta(wasm_proto);
+        me.table(RefType::FUNCREF, 128, None);
+        me.memory(1, None, false, false);
+        me.global(wasm_encoder::ValType::I64, true, &ConstExpr::i64_const(42));
+        me.export("memory", wasm_encoder::ExportKind::Memory, 0);
+        let _f0 = me.import_func("t", "_", Arity(0));
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Operand::Const64(1));
+        fe.push(Operand::Const64(2));
+        fe.i64_add();
+        fe.drop();
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        let (mut me, fid) = fe.finish();
+        me.export_func(fid, "test");
+        me.define_elem_funcs(&[fid]);
+        me.define_data_segment(0x1234, vec![0; 512]);
+        me.finish()
+    }
+}
+
+#[allow(clippy::type_complexity)]
+pub fn simple_account_sign_fn<'a>(
+    host: &'a Host,
+    kp: &'a SigningKey,
+) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
+    use crate::builtin_contracts::testutils::sign_payload_for_ed25519;
+    Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
 }

@@ -6,6 +6,7 @@ use crate::{
     err,
     host::metered_clone::{MeteredAlloc, MeteredClone},
     storage::{InstanceStorageMap, Storage},
+    vm::VersionedContractCodeCostInputs,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
         ContractDataEntry, ContractExecutable, ContractIdPreimage, ExtensionPoint, Hash,
@@ -122,7 +123,10 @@ impl Host {
         )
     }
 
-    pub(crate) fn retrieve_wasm_from_storage(&self, wasm_hash: &Hash) -> Result<BytesM, HostError> {
+    pub(crate) fn retrieve_wasm_from_storage(
+        &self,
+        wasm_hash: &Hash,
+    ) -> Result<(BytesM, VersionedContractCodeCostInputs), HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
         match &self
             .try_borrow_storage_mut()?
@@ -130,7 +134,20 @@ impl Host {
             .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))?
             .data
         {
-            LedgerEntryData::ContractCode(e) => e.code.metered_clone(self),
+            LedgerEntryData::ContractCode(e) => {
+                let code = e.code.metered_clone(self)?;
+                let costs = match &e.ext {
+                    crate::xdr::ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
+                        wasm_bytes: code.len(),
+                    },
+                    crate::xdr::ContractCodeEntryExt::V1(v1) => {
+                        VersionedContractCodeCostInputs::V1(
+                            v1.cost_inputs.metered_clone(self.as_budget())?,
+                        )
+                    }
+                };
+                Ok((code, costs))
+            }
             _ => Err(err!(
                 self,
                 (ScErrorType::Storage, ScErrorCode::InternalError),
@@ -233,18 +250,14 @@ impl Host {
         Ok(())
     }
 
-    pub(crate) fn extend_contract_instance_and_code_ttl_from_contract_id(
+    pub(crate) fn extend_contract_code_ttl_from_contract_id(
         &self,
-        contract_id: &Hash,
+        instance_key: Rc<LedgerKey>,
         threshold: u32,
         extend_to: u32,
     ) -> Result<(), HostError> {
-        let key = self.contract_instance_ledger_key(&contract_id)?;
-        self.try_borrow_storage_mut()?
-            .extend_ttl(self, key.metered_clone(self)?, threshold, extend_to)
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
-            .retrieve_contract_instance_from_storage(&key)?
+            .retrieve_contract_instance_from_storage(&instance_key)?
             .executable
         {
             ContractExecutable::Wasm(wasm_hash) => {
@@ -255,6 +268,24 @@ impl Host {
             }
             ContractExecutable::StellarAsset => {}
         }
+        Ok(())
+    }
+
+    pub(crate) fn extend_contract_instance_ttl_from_contract_id(
+        &self,
+        contract_id: &Hash,
+        instance_key: Rc<LedgerKey>,
+        threshold: u32,
+        extend_to: u32,
+    ) -> Result<(), HostError> {
+        self.try_borrow_storage_mut()?
+            .extend_ttl(
+                self,
+                instance_key.metered_clone(self)?,
+                threshold,
+                extend_to,
+            )
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         Ok(())
     }
 
