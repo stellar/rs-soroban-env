@@ -15,7 +15,7 @@ pub(crate) struct BudgetDimension {
     /// tracked by this dimension (eg. cpu or memory). CostType enum values are
     /// used as indexes into this vector, to make runtime lookups as cheap as
     /// possible.
-    pub(crate) cost_models: [MeteredCostComponent; ContractCostType::variants().len()],
+    pub(crate) cost_models: Vec<MeteredCostComponent>,
 
     /// The limit against-which the count is compared to decide if we're
     /// over budget.
@@ -39,11 +39,11 @@ pub(crate) struct BudgetDimension {
 impl Default for BudgetDimension {
     fn default() -> Self {
         Self {
-            cost_models: [MeteredCostComponent::default(); ContractCostType::variants().len()],
-            limit: Default::default(),
-            total_count: Default::default(),
-            shadow_limit: Default::default(),
-            shadow_total_count: Default::default(),
+            cost_models: vec![MeteredCostComponent::default(); ContractCostType::variants().len()],
+            limit: 0,
+            total_count: 0,
+            shadow_limit: 0,
+            shadow_total_count: 0,
         }
     }
 }
@@ -72,36 +72,48 @@ impl Debug for BudgetDimension {
 
 impl BudgetDimension {
     pub(crate) fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
-        let cost_models = cost_params
-            .0
-            .iter()
-            .map(|p| MeteredCostComponent::try_from(p))
-            .collect::<Result<Vec<MeteredCostComponent>, HostError>>()?;
-
-        Ok(Self {
-            cost_models: cost_models.try_into().map_err(|_| {
-                // error means the cost_params has the wrong dimension
+        let mut bd = BudgetDimension::default();
+        for (i, cp) in cost_params.0.iter().enumerate() {
+            let cm = bd.cost_models.get_mut(i).ok_or_else(|| {
+                // the index of ContractCostParams exceeds length of the cost
+                // models means attempting to construct the budget from a config
+                // that is not yet supported by the protocol
                 HostError::from(Error::from_type_and_code(
                     ScErrorType::Budget,
                     ScErrorCode::InternalError,
                 ))
-            })?,
-            limit: Default::default(),
-            total_count: Default::default(),
-            shadow_limit: Default::default(),
-            shadow_total_count: Default::default(),
-        })
+            })?;
+            *cm = MeteredCostComponent::try_from(cp)?;
+        }
+        Ok(bd)
     }
 
-    pub(crate) fn get_cost_model(&self, ty: ContractCostType) -> Option<&MeteredCostComponent> {
-        self.cost_models.get(ty as usize)
+    pub(crate) fn get_cost_model(
+        &self,
+        ty: ContractCostType,
+    ) -> Result<&MeteredCostComponent, HostError> {
+        self.cost_models.get(ty as usize).ok_or_else(|| {
+            // cost models are initialized with the static size of the
+            // ContractCostType, so this call should always succeed
+            HostError::from(Error::from_type_and_code(
+                ScErrorType::Budget,
+                ScErrorCode::InternalError,
+            ))
+        })
     }
 
     pub(crate) fn get_cost_model_mut(
         &mut self,
         ty: ContractCostType,
-    ) -> Option<&mut MeteredCostComponent> {
-        self.cost_models.get_mut(ty as usize)
+    ) -> Result<&mut MeteredCostComponent, HostError> {
+        self.cost_models.get_mut(ty as usize).ok_or_else(|| {
+            // cost models are initialized with the static size of the
+            // ContractCostType, so this call should always succeed
+            HostError::from(Error::from_type_and_code(
+                ScErrorType::Budget,
+                ScErrorCode::InternalError,
+            ))
+        })
     }
 
     pub(crate) fn get_total_count(&self) -> u64 {
@@ -147,9 +159,7 @@ impl BudgetDimension {
         _is_cpu: IsCpu,
         is_shadow: IsShadowMode,
     ) -> Result<u64, HostError> {
-        let Some(cm) = self.get_cost_model(ty) else {
-            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
-        };
+        let cm = self.get_cost_model(ty)?;
         let amount = cm.evaluate(input)?.saturating_mul(iterations);
 
         #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]

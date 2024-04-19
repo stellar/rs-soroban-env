@@ -34,23 +34,23 @@ pub struct CostTracker {
 #[derive(Clone)]
 struct BudgetTracker {
     // Tracks the `(sum_of_iterations, total_input)` for each `CostType`
-    cost_tracker: [CostTracker; ContractCostType::variants().len()],
+    cost_tracker: Vec<CostTracker>,
     // Total number of times the meter is called
     meter_count: u32,
     #[cfg(any(test, feature = "testutils", feature = "bench"))]
     wasm_memory: u64,
     // Tracks the real time (in nsecs) spent on various `CostType`
-    time_tracker: [u64; ContractCostType::variants().len()],
+    time_tracker: Vec<u64>,
 }
 
 impl Default for BudgetTracker {
     fn default() -> Self {
         let mut mt = Self {
-            cost_tracker: [CostTracker::default(); ContractCostType::variants().len()],
+            cost_tracker: vec![CostTracker::default(); ContractCostType::variants().len()],
             meter_count: Default::default(),
             #[cfg(any(test, feature = "testutils", feature = "bench"))]
             wasm_memory: Default::default(),
-            time_tracker: [0_u64; ContractCostType::variants().len()],
+            time_tracker: vec![0_u64; ContractCostType::variants().len()],
         };
         for (ct, tracker) in ContractCostType::variants()
             .iter()
@@ -239,12 +239,9 @@ impl BudgetImpl {
 
     fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
         let cpu_remaining = self.cpu_insns.get_remaining();
-        let Some(cost_model) = self
+        let cost_model = self
             .cpu_insns
-            .get_cost_model(ContractCostType::WasmInsnExec)
-        else {
-            return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
-        };
+            .get_cost_model(ContractCostType::WasmInsnExec)?;
         let cpu_per_fuel = cost_model.const_term.max(1);
         // Due to rounding, the amount of cpu converted to fuel will be slightly
         // less than the total cpu available. This is okay because 1. that rounded-off
@@ -281,7 +278,7 @@ impl Default for BudgetImpl {
 
         for ct in ContractCostType::variants() {
             // define the cpu cost model parameters
-            let Some(cpu) = &mut b.cpu_insns.get_cost_model_mut(ct) else {
+            let Ok(cpu) = b.cpu_insns.get_cost_model_mut(ct) else {
                 continue;
             };
             match ct {
@@ -494,7 +491,7 @@ impl Default for BudgetImpl {
             }
 
             // define the memory cost model parameters
-            let Some(mem) = b.mem_bytes.get_cost_model_mut(ct) else {
+            let Ok(mem) = b.mem_bytes.get_cost_model_mut(ct) else {
                 continue;
             };
             match ct {
@@ -820,7 +817,7 @@ impl BudgetImpl {
         println!();
         println!();
         for ct in ContractCostType::variants() {
-            let Some(cpu) = self.cpu_insns.get_cost_model(ct) else {
+            let Ok(cpu) = self.cpu_insns.get_cost_model(ct) else {
                 continue;
             };
             println!("case {}:", ct.name());
@@ -835,7 +832,7 @@ impl BudgetImpl {
         println!();
         println!();
         for ct in ContractCostType::variants() {
-            let Some(mem) = self.mem_bytes.get_cost_model(ct) else {
+            let Ok(mem) = self.mem_bytes.get_cost_model(ct) else {
                 continue;
             };
             println!("case {}:", ct.name());
