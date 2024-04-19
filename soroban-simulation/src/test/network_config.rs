@@ -133,20 +133,6 @@ fn test_load_config_from_snapshot() {
         NetworkConfig::load_from_snapshot(&snapshot_source, 150_000_000_000_000).unwrap();
     // From tests/resources `test_compute_write_fee`
     let write_fee = 1_000_000_000 + 50 * (1_000_000_000_i64 - 1_000_000) / 2;
-
-    let empty_entry = ContractCostParamEntry {
-        ext: ExtensionPoint::V0,
-        const_term: 0,
-        linear_term: 0,
-    };
-    let mut expected_cpu_cost_params_vec = cpu_cost_params.to_vec();
-    expected_cpu_cost_params_vec.resize(ContractCostType::variants().len(), empty_entry.clone());
-    let expected_cpu_cost_params =
-        ContractCostParams(expected_cpu_cost_params_vec.try_into().unwrap());
-    let mut expected_mem_cost_params_vec = memory_cost_params.to_vec();
-    expected_mem_cost_params_vec.resize(ContractCostType::variants().len(), empty_entry.clone());
-    let expected_mem_cost_params =
-        ContractCostParams(expected_mem_cost_params_vec.try_into().unwrap());
     assert_eq!(
         network_config,
         NetworkConfig {
@@ -168,8 +154,8 @@ fn test_load_config_from_snapshot() {
             },
             tx_max_instructions: 2,
             tx_memory_limit: 4,
-            cpu_cost_params: expected_cpu_cost_params,
-            memory_cost_params: expected_mem_cost_params,
+            cpu_cost_params,
+            memory_cost_params,
             min_temp_entry_ttl: 27,
             min_persistent_entry_ttl: 28,
             max_entry_ttl: 26,
