@@ -1046,3 +1046,65 @@ impl Budget {
         Ok(())
     }
 }
+
+#[test]
+fn test_budget_initialization() -> Result<(), HostError> {
+    use crate::xdr::{ContractCostParamEntry, ExtensionPoint};
+    let cpu_cost_params = ContractCostParams(
+        vec![
+            ContractCostParamEntry {
+                ext: ExtensionPoint::V0,
+                const_term: 35,
+                linear_term: 36,
+            },
+            ContractCostParamEntry {
+                ext: ExtensionPoint::V0,
+                const_term: 37,
+                linear_term: 38,
+            },
+        ]
+        .try_into()
+        .unwrap(),
+    );
+    let mem_cost_params = ContractCostParams(
+        vec![
+            ContractCostParamEntry {
+                ext: ExtensionPoint::V0,
+                const_term: 39,
+                linear_term: 40,
+            },
+            ContractCostParamEntry {
+                ext: ExtensionPoint::V0,
+                const_term: 41,
+                linear_term: 42,
+            },
+            ContractCostParamEntry {
+                ext: ExtensionPoint::V0,
+                const_term: 43,
+                linear_term: 44,
+            },
+        ]
+        .try_into()
+        .unwrap(),
+    );
+
+    let budget = Budget::try_from_configs(100, 100, cpu_cost_params, mem_cost_params)?;
+    assert_eq!(
+        budget.0.try_borrow_or_err()?.cpu_insns.cost_models.len(),
+        ContractCostType::variants().len()
+    );
+    assert_eq!(
+        budget.0.try_borrow_or_err()?.mem_bytes.cost_models.len(),
+        ContractCostType::variants().len()
+    );
+    assert_eq!(
+        budget.0.try_borrow_or_err()?.tracker.cost_trackers.len(),
+        ContractCostType::variants().len()
+    );
+    assert_eq!(
+        budget.0.try_borrow_or_err()?.tracker.time_tracker.len(),
+        ContractCostType::variants().len()
+    );
+
+    Ok(())
+}
