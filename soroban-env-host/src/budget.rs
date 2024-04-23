@@ -34,7 +34,7 @@ pub struct CostTracker {
 #[derive(Clone)]
 struct BudgetTracker {
     // Tracker for each `CostType`
-    cost_tracker: [CostTracker; ContractCostType::variants().len()],
+    cost_trackers: [CostTracker; ContractCostType::variants().len()],
     // Total number of times the meter is called
     meter_count: u32,
     #[cfg(any(test, feature = "testutils", feature = "bench"))]
@@ -46,15 +46,15 @@ struct BudgetTracker {
 impl Default for BudgetTracker {
     fn default() -> Self {
         let mut mt = Self {
-            cost_tracker: [CostTracker::default(); ContractCostType::variants().len()],
-            meter_count: Default::default(),
+            cost_trackers: [CostTracker::default(); ContractCostType::variants().len()],
+            meter_count: 0,
             #[cfg(any(test, feature = "testutils", feature = "bench"))]
-            wasm_memory: Default::default(),
+            wasm_memory: 0,
             time_tracker: [0; ContractCostType::variants().len()],
         };
         for (ct, tracker) in ContractCostType::variants()
             .iter()
-            .zip(mt.cost_tracker.iter_mut())
+            .zip(mt.cost_trackers.iter_mut())
         {
             // Define what inputs actually mean. For any constant-cost types --
             // whether it is a true constant unit cost type, or empirically
@@ -125,7 +125,7 @@ impl BudgetTracker {
     #[cfg(any(test, feature = "testutils", feature = "bench"))]
     fn reset(&mut self) {
         self.meter_count = 0;
-        for tracker in &mut self.cost_tracker {
+        for tracker in &mut self.cost_trackers {
             tracker.iterations = 0;
             tracker.inputs = tracker.inputs.map(|_| 0);
             tracker.cpu = 0;
@@ -172,18 +172,14 @@ impl BudgetImpl {
         cpu_cost_params: ContractCostParams,
         mem_cost_params: ContractCostParams,
     ) -> Result<Self, HostError> {
-        let mut b = Self {
-            cpu_insns: BudgetDimension::try_from_config(cpu_cost_params)?,
-            mem_bytes: BudgetDimension::try_from_config(mem_cost_params)?,
-            tracker: Default::default(),
+        Ok(Self {
+            cpu_insns: BudgetDimension::try_from_config(cpu_cost_params, cpu_limit)?,
+            mem_bytes: BudgetDimension::try_from_config(mem_cost_params, mem_limit)?,
+            tracker: BudgetTracker::default(),
             is_in_shadow_mode: false,
             fuel_costs: load_calibrated_fuel_costs(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
-        };
-
-        b.cpu_insns.reset(cpu_limit);
-        b.mem_bytes.reset(mem_limit);
-        Ok(b)
+        })
     }
 
     pub fn charge(
@@ -194,7 +190,7 @@ impl BudgetImpl {
     ) -> Result<(), HostError> {
         let tracker = self
             .tracker
-            .cost_tracker
+            .cost_trackers
             .get_mut(ty as usize)
             .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
 
@@ -728,10 +724,10 @@ impl Debug for BudgetImpl {
                 f,
                 "{:<35}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
                 format!("{:?}", ct),
-                self.tracker.cost_tracker[i].iterations,
-                format!("{:?}", self.tracker.cost_tracker[i].inputs),
-                self.tracker.cost_tracker[i].cpu,
-                self.tracker.cost_tracker[i].mem,
+                self.tracker.cost_trackers[i].iterations,
+                format!("{:?}", self.tracker.cost_trackers[i].inputs),
+                self.tracker.cost_trackers[i].cpu,
+                self.tracker.cost_trackers[i].mem,
                 self.cpu_insns.cost_models[i].const_term,
                 format!("{}", self.cpu_insns.cost_models[i].lin_term),
                 self.mem_bytes.cost_models[i].const_term,
@@ -788,8 +784,8 @@ impl Display for BudgetImpl {
                 f,
                 "{:<35}{:<15}{:<15}",
                 format!("{:?}", ct),
-                self.tracker.cost_tracker[i].cpu,
-                self.tracker.cost_tracker[i].mem,
+                self.tracker.cost_trackers[i].cpu,
+                self.tracker.cost_trackers[i].mem,
             )?;
         }
         writeln!(f, "{:=<65}", "")?;
@@ -1008,7 +1004,7 @@ impl Budget {
         self.0
             .try_borrow_or_err()?
             .tracker
-            .cost_tracker
+            .cost_trackers
             .get(ty as usize)
             .map(|x| *x)
             .ok_or_else(|| (ScErrorType::Budget, ScErrorCode::InternalError).into())

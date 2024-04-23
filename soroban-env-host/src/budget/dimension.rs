@@ -71,7 +71,10 @@ impl Debug for BudgetDimension {
 }
 
 impl BudgetDimension {
-    pub(crate) fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
+    pub(crate) fn try_from_config(
+        cost_params: ContractCostParams,
+        limit: u64,
+    ) -> Result<Self, HostError> {
         let mut bd = BudgetDimension::default();
         for (i, cp) in cost_params.0.iter().enumerate() {
             let cm = bd.cost_models.get_mut(i).ok_or_else(|| {
@@ -85,6 +88,8 @@ impl BudgetDimension {
             })?;
             *cm = MeteredCostComponent::try_from(cp)?;
         }
+        bd.limit = limit;
+        bd.shadow_limit = limit;
         Ok(bd)
     }
 
