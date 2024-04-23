@@ -33,24 +33,24 @@ pub struct CostTracker {
 
 #[derive(Clone)]
 struct BudgetTracker {
-    // Tracks the `(sum_of_iterations, total_input)` for each `CostType`
-    cost_tracker: Vec<CostTracker>,
+    // Tracker for each `CostType`
+    cost_tracker: [CostTracker; ContractCostType::variants().len()],
     // Total number of times the meter is called
     meter_count: u32,
     #[cfg(any(test, feature = "testutils", feature = "bench"))]
     wasm_memory: u64,
     // Tracks the real time (in nsecs) spent on various `CostType`
-    time_tracker: Vec<u64>,
+    time_tracker: [u64; ContractCostType::variants().len()],
 }
 
 impl Default for BudgetTracker {
     fn default() -> Self {
         let mut mt = Self {
-            cost_tracker: vec![CostTracker::default(); ContractCostType::variants().len()],
+            cost_tracker: [CostTracker::default(); ContractCostType::variants().len()],
             meter_count: Default::default(),
             #[cfg(any(test, feature = "testutils", feature = "bench"))]
             wasm_memory: Default::default(),
-            time_tracker: vec![0_u64; ContractCostType::variants().len()],
+            time_tracker: [0; ContractCostType::variants().len()],
         };
         for (ct, tracker) in ContractCostType::variants()
             .iter()

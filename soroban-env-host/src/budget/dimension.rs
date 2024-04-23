@@ -15,7 +15,7 @@ pub(crate) struct BudgetDimension {
     /// tracked by this dimension (eg. cpu or memory). CostType enum values are
     /// used as indexes into this vector, to make runtime lookups as cheap as
     /// possible.
-    pub(crate) cost_models: Vec<MeteredCostComponent>,
+    pub(crate) cost_models: [MeteredCostComponent; ContractCostType::variants().len()],
 
     /// The limit against-which the count is compared to decide if we're
     /// over budget.
@@ -39,7 +39,7 @@ pub(crate) struct BudgetDimension {
 impl Default for BudgetDimension {
     fn default() -> Self {
         Self {
-            cost_models: vec![MeteredCostComponent::default(); ContractCostType::variants().len()],
+            cost_models: [MeteredCostComponent::default(); ContractCostType::variants().len()],
             limit: 0,
             total_count: 0,
             shadow_limit: 0,
