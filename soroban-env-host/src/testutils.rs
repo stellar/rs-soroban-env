@@ -157,7 +157,6 @@ pub(crate) fn interface_meta_with_custom_versions(proto: u32, pre: u32) -> Vec<u
 
 impl Host {
     pub const TEST_PRNG_SEED: &'static [u8; 32] = b"12345678901234567890123456789012";
-    pub const PROTOCOL_20_COST_TYPE_LENGTH: usize = 23;
 
     pub fn set_test_prng(&self) {
         self.set_base_prng_seed(*Self::TEST_PRNG_SEED).unwrap();
