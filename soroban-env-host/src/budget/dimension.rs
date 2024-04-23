@@ -71,21 +71,22 @@ impl Debug for BudgetDimension {
 }
 
 impl BudgetDimension {
-    pub(crate) fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
-        let mut bd = BudgetDimension::default();
-        for (i, cp) in cost_params.0.iter().enumerate() {
-            let cm = bd.cost_models.get_mut(i).ok_or_else(|| {
-                // the index of ContractCostParams exceeds length of the cost
-                // models means attempting to construct the budget from a config
-                // that is not yet supported by the protocol
-                HostError::from(Error::from_type_and_code(
-                    ScErrorType::Budget,
-                    ScErrorCode::InternalError,
-                ))
-            })?;
-            *cm = MeteredCostComponent::try_from(cp)?;
-        }
-        Ok(bd)
+    pub(crate) fn try_from_config(
+        cost_params: ContractCostParams,
+        limit: u64,
+    ) -> Result<Self, HostError> {
+        let cost_models = cost_params
+            .0
+            .iter()
+            .map(|p| MeteredCostComponent::try_from(p))
+            .collect::<Result<Vec<MeteredCostComponent>, HostError>>()?;
+        Ok(BudgetDimension {
+            cost_models,
+            limit,
+            total_count: 0,
+            shadow_limit: limit,
+            shadow_total_count: 0,
+        })
     }
 
     pub(crate) fn get_cost_model(
@@ -93,8 +94,8 @@ impl BudgetDimension {
         ty: ContractCostType,
     ) -> Result<&MeteredCostComponent, HostError> {
         self.cost_models.get(ty as usize).ok_or_else(|| {
-            // cost models are initialized with the static size of the
-            // ContractCostType, so this call should always succeed
+            // error here means trying to access a cost model not available for
+            // the protocol corresponding to the input config
             HostError::from(Error::from_type_and_code(
                 ScErrorType::Budget,
                 ScErrorCode::InternalError,
@@ -107,8 +108,8 @@ impl BudgetDimension {
         ty: ContractCostType,
     ) -> Result<&mut MeteredCostComponent, HostError> {
         self.cost_models.get_mut(ty as usize).ok_or_else(|| {
-            // cost models are initialized with the static size of the
-            // ContractCostType, so this call should always succeed
+            // error here means trying to access a cost model not available for
+            // the protocol corresponding to the input config
             HostError::from(Error::from_type_and_code(
                 ScErrorType::Budget,
                 ScErrorCode::InternalError,

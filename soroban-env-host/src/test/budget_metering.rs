@@ -439,28 +439,6 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Int256Pow                          1              None           4286           99             4286                0                   99                  0                   
         Int256Shift                        1              None           913            99             913                 0                   99                  0                   
         ChaCha20DrawBytes                  1              Some(1)        1061           0              1058                501                 0                   0                   
-        ParseWasmInstructions              0              Some(0)        0              0              73077               25410               17564               6457                
-        ParseWasmFunctions                 0              Some(0)        0              0              0                   540752              0                   47464               
-        ParseWasmGlobals                   0              Some(0)        0              0              0                   176363              0                   13420               
-        ParseWasmTableEntries              0              Some(0)        0              0              0                   29989               0                   6285                
-        ParseWasmTypes                     0              Some(0)        0              0              0                   1061449             0                   64670               
-        ParseWasmDataSegments              0              Some(0)        0              0              0                   237336              0                   29074               
-        ParseWasmElemSegments              0              Some(0)        0              0              0                   328476              0                   48095               
-        ParseWasmImports                   0              Some(0)        0              0              0                   701845              0                   103229              
-        ParseWasmExports                   0              Some(0)        0              0              0                   429383              0                   36394               
-        ParseWasmDataSegmentBytes          0              Some(0)        0              0              0                   28                  0                   257                 
-        InstantiateWasmInstructions        0              None           0              0              43030               0                   70704               0                   
-        InstantiateWasmFunctions           0              Some(0)        0              0              0                   7556                0                   14613               
-        InstantiateWasmGlobals             0              Some(0)        0              0              0                   10711               0                   6833                
-        InstantiateWasmTableEntries        0              Some(0)        0              0              0                   3300                0                   1025                
-        InstantiateWasmTypes               0              None           0              0              0                   0                   0                   0                   
-        InstantiateWasmDataSegments        0              Some(0)        0              0              0                   23038               0                   129632              
-        InstantiateWasmElemSegments        0              Some(0)        0              0              0                   42488               0                   13665               
-        InstantiateWasmImports             0              Some(0)        0              0              0                   828974              0                   97637               
-        InstantiateWasmExports             0              Some(0)        0              0              0                   297100              0                   9176                
-        InstantiateWasmDataSegmentBytes    0              Some(0)        0              0              0                   14                  0                   126                 
-        Sec1DecodePointUncompressed        0              None           0              0              1882                0                   0                   0                   
-        VerifyEcdsaSecp256r1Sig            0              None           0              0              3000906             0                   0                   0                   
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 23
