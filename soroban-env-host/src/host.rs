@@ -606,21 +606,7 @@ impl Host {
     /// debug-level _only_ flows into other functions that are themselves
     /// debug-mode-guarded and/or only write results into debug state (eg.
     /// diagnostic events).
-    #[cfg(not(any(test, feature = "testutils")))]
     pub(crate) fn with_debug_mode<F>(&self, f: F)
-    where
-        F: FnOnce() -> Result<(), HostError>,
-    {
-        use crate::host::error::TryBorrowOrErr;
-        if let Ok(cell) = self.0.diagnostic_level.try_borrow_or_err() {
-            if matches!(*cell, DiagnosticLevel::Debug) {
-                return self.budget_ref().with_shadow_mode(f);
-            }
-        }
-    }
-
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn with_debug_mode<F>(&self, f: F)
     where
         F: FnOnce() -> Result<(), HostError>,
     {

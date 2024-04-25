@@ -244,4 +244,26 @@ impl InternalEventsBuffer {
 
         Ok(Events(vec))
     }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) fn externalize_diagnostics(&self, host: &Host) -> Result<Events, HostError> {
+        let mut vec = Vec::with_capacity(self.vec.len());
+
+        for (event, status) in self.vec.iter() {
+            match event {
+                InternalEvent::Contract(_) => {}
+                InternalEvent::Diagnostic(d) => {
+                    host.with_debug_mode(|| {
+                        vec.push(HostEvent {
+                            event: d.to_xdr(host)?,
+                            failed_call: *status == EventError::FromFailedCall,
+                        });
+                        Ok(())
+                    });
+                }
+            }
+        }
+
+        Ok(Events(vec))
+    }
 }
