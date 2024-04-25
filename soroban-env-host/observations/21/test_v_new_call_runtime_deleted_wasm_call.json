@@ -7,6 +7,6 @@
   "   5 pop VM:3fa21985:test -> Ok(Symbol(pass))": "cpu:219364, mem:169803",
   "   6 ret call -> Ok(Symbol(pass))": " vm:-/-, stk:-, auth:-/-",
   "   7 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "cpu:261360, mem:170112, store:-/1@6f750601, foot:1@2784223c",
-  "   8 ret call -> Err(Error(Storage, ExceededLimit))": "cpu:269410, mem:170600",
-  "   9 end": "cpu:269410, mem:170600, prngs:-/-, objs:-/3@2988da9d, vm:-/-, evt:-, store:-/1@6f750601, foot:1@2784223c, stk:-, auth:-/-"
+  "   8 ret call -> Err(Error(Storage, ExceededLimit))": "cpu:269410, mem:170600, objs:-/4@d193fe73",
+  "   9 end": "cpu:269410, mem:170600, prngs:-/-, objs:-/4@d193fe73, vm:-/-, evt:-, store:-/1@6f750601, foot:1@2784223c, stk:-, auth:-/-"
 }

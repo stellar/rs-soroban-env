@@ -4,7 +4,6 @@ use crate::builtin_contracts::base_types::BytesN;
 use crate::testutils::simple_account_sign_fn;
 use crate::{
     auth::RecordedAuthPayload,
-    budget::AsBudget,
     builtin_contracts::{
         base_types::Address,
         contract_error::ContractError,
@@ -146,10 +145,12 @@ impl StellarAssetContractTest {
 
     fn get_trustline_balance(&self, key: &Rc<LedgerKey>) -> i64 {
         self.host
-            .with_mut_storage(|s| match &s.get(key, self.host.as_budget()).unwrap().data {
-                LedgerEntryData::Trustline(trustline) => Ok(trustline.balance),
-                _ => unreachable!(),
-            })
+            .with_mut_storage(
+                |s| match &s.get_with_host(key, &self.host, None).unwrap().data {
+                    LedgerEntryData::Trustline(trustline) => Ok(trustline.balance),
+                    _ => unreachable!(),
+                },
+            )
             .unwrap()
     }
     #[allow(clippy::too_many_arguments)]
@@ -182,7 +183,7 @@ impl StellarAssetContractTest {
     fn update_account_flags(&self, key: &Rc<LedgerKey>, new_flags: u32) {
         self.host
             .with_mut_storage(|s| {
-                let entry = s.get(key, self.host.as_budget()).unwrap();
+                let entry = s.get_with_host(key, &self.host, None).unwrap();
                 match entry.data.clone() {
                     LedgerEntryData::Account(mut account) => {
                         account.flags = new_flags;
@@ -191,7 +192,7 @@ impl StellarAssetContractTest {
                             &entry,
                             LedgerEntryData::Account(account),
                         )?;
-                        s.put(key, &update, None, self.host.as_budget())
+                        s.put_with_host(key, &update, None, &self.host, None)
                     }
                     _ => unreachable!(),
                 }
@@ -260,7 +261,7 @@ impl StellarAssetContractTest {
     fn update_trustline_flags(&self, key: &Rc<LedgerKey>, new_flags: u32) {
         self.host
             .with_mut_storage(|s| {
-                let entry = s.get(key, self.host.as_budget()).unwrap();
+                let entry = s.get_with_host(key, &self.host, None).unwrap();
                 match entry.data.clone() {
                     LedgerEntryData::Trustline(mut trustline) => {
                         trustline.flags = new_flags;
@@ -269,7 +270,7 @@ impl StellarAssetContractTest {
                             &entry,
                             LedgerEntryData::Trustline(trustline),
                         )?;
-                        s.put(key, &update, None, self.host.as_budget())
+                        s.put_with_host(key, &update, None, &self.host, None)
                     }
                     _ => unreachable!(),
                 }
@@ -3042,7 +3043,7 @@ fn test_custom_account_auth() {
             let key = test.host.contract_instance_ledger_key(&contract_id)?;
             // Note, that this represents 'correct footprint, missing value' scenario.
             // Incorrect footprint scenario is not covered (it's not auth specific).
-            storage.del(&key, test.host.budget_ref())
+            storage.del_with_host(&key, &test.host, None)
         })
         .unwrap();
 

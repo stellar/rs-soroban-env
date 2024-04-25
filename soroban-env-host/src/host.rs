@@ -54,6 +54,7 @@ use self::{
     prng::Prng,
 };
 
+use crate::host::error::TryBorrowOrErr;
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
@@ -577,7 +578,6 @@ impl Host {
     }
 
     pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) -> Result<(), HostError> {
-        use crate::host::error::TryBorrowOrErr;
         *self.0.diagnostic_level.try_borrow_mut_or_err()? = diagnostic_level;
         Ok(())
     }
@@ -610,7 +610,6 @@ impl Host {
     where
         F: FnOnce() -> Result<(), HostError>,
     {
-        use crate::host::error::TryBorrowOrErr;
         if let Ok(cell) = self.0.diagnostic_level.try_borrow_or_err() {
             if matches!(*cell, DiagnosticLevel::Debug) {
                 return self.budget_ref().with_shadow_mode(f);
@@ -2022,8 +2021,7 @@ impl VmCallerEnv for Host {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
                 self.try_borrow_storage_mut()?
-                    .has(&key, self.as_budget())
-                    .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
+                    .has_with_host(&key, self, Some(k))?
             }
             StorageType::Instance => {
                 self.with_instance_storage(|s| Ok(s.map.get(&k, self)?.is_some()))?
@@ -2045,8 +2043,7 @@ impl VmCallerEnv for Host {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
                 let entry = self
                     .try_borrow_storage_mut()?
-                    .get(&key, self.as_budget())
-                    .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+                    .get_with_host(&key, self, Some(k))?;
                 match &entry.data {
                     LedgerEntryData::ContractData(e) => Ok(self.to_valid_host_val(&e.val)?),
                     _ => Err(self.err(
@@ -2084,8 +2081,7 @@ impl VmCallerEnv for Host {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
                 self.try_borrow_storage_mut()?
-                    .del(&key, self.as_budget())
-                    .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+                    .del_with_host(&key, self, Some(k))?;
             }
             StorageType::Instance => {
                 self.with_mut_instance_storage(|s| {
@@ -2118,9 +2114,13 @@ impl VmCallerEnv for Host {
             ))?;
         }
         let key = self.storage_key_from_val(k, t.try_into()?)?;
-        self.try_borrow_storage_mut()?
-            .extend_ttl(self, key, threshold.into(), extend_to.into())
-            .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+        self.try_borrow_storage_mut()?.extend_ttl(
+            self,
+            key,
+            threshold.into(),
+            extend_to.into(),
+            Some(k),
+        )?;
         Ok(Val::VOID)
     }
 
@@ -2133,7 +2133,6 @@ impl VmCallerEnv for Host {
         let contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.extend_contract_instance_ttl_from_contract_id(
-            &contract_id,
             key.clone(),
             threshold.into(),
             extend_to.into(),
@@ -2153,7 +2152,6 @@ impl VmCallerEnv for Host {
         let key = self.contract_instance_ledger_key(&contract_id)?;
 
         self.extend_contract_instance_ttl_from_contract_id(
-            &contract_id,
             key,
             threshold.into(),
             extend_to.into(),
@@ -2172,7 +2170,6 @@ impl VmCallerEnv for Host {
         let contract_id = self.contract_id_from_address(contract)?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.extend_contract_instance_ttl_from_contract_id(
-            &contract_id,
             key.clone(),
             threshold.into(),
             extend_to.into(),
@@ -3121,6 +3118,99 @@ impl Host {
         F: FnOnce(Budget) -> Result<T, HostError>,
     {
         f(self.0.budget.clone())
+    }
+
+    /// Returns the ledger number until a contract with given address lives
+    /// (inclusive).
+    pub fn get_contract_instance_live_until_ledger(
+        &self,
+        contract: AddressObject,
+    ) -> Result<u32, HostError> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        let (_, live_until) = self
+            .try_borrow_storage_mut()?
+            .get_with_live_until_ledger(&key, self, None)?;
+        live_until.ok_or_else(|| {
+            self.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "unexpected contract instance without TTL",
+                &[contract.into()],
+            )
+        })
+    }
+
+    /// Returns the ledger number until contract code entry for contract with
+    /// given address lives (inclusive).
+    pub fn get_contract_code_live_until_ledger(
+        &self,
+        contract: AddressObject,
+    ) -> Result<u32, HostError> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        match self
+            .retrieve_contract_instance_from_storage(&key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                let (_, live_until) = self
+                    .try_borrow_storage_mut()?
+                    .get_with_live_until_ledger(&key, self, None)?;
+                live_until.ok_or_else(|| {
+                    self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::InternalError,
+                        "unexpected contract code without TTL for a contract",
+                        &[contract.into()],
+                    )
+                })
+            }
+            ContractExecutable::StellarAsset => Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidInput,
+                "Stellar Asset Contracts don't have contract code",
+                &[],
+            )),
+        }
+    }
+
+    /// Returns the ledger number until a current contract's data entry
+    /// with given key and storage type lives (inclusive).
+    /// Instance storage type is not supported by this function, use
+    /// `get_contract_instance_live_until_ledger` instead.
+    pub fn get_contract_data_live_until_ledger(
+        &self,
+        key: Val,
+        storage_type: StorageType,
+    ) -> Result<u32, HostError> {
+        let ledger_key = match storage_type {
+            StorageType::Temporary | StorageType::Persistent => {
+                self.storage_key_from_val(key, storage_type.try_into()?)?
+            }
+            StorageType::Instance => {
+                return Err(self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InvalidAction,
+                    "`get_contract_data_live_until_ledger` doesn't support instance storage, use `get_contract_instance_live_until_ledger` instead.",
+                    &[],
+                ));
+            }
+        };
+        let (_, live_until) = self.try_borrow_storage_mut()?.get_with_live_until_ledger(
+            &ledger_key,
+            self,
+            Some(key),
+        )?;
+        live_until.ok_or_else(|| {
+            self.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "unexpected contract data without TTL",
+                &[key],
+            )
+        })
     }
 }
 
