@@ -231,10 +231,10 @@ impl Storage {
     ) -> Result<Option<EntryWithLiveUntil>, HostError> {
         let res = self
             .try_get_full(key, host.as_budget())
-            .map_err(|e| host.decorate_storage_error(e, &*key, key_val))?;
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))?;
 
         #[cfg(any(test, feature = "testutils"))]
-        if !host.check_if_entry_is_live(&*key, &res, key_val)? {
+        if !host.check_if_entry_is_live(key.as_ref(), &res, key_val)? {
             return Ok(None);
         }
 
@@ -270,7 +270,7 @@ impl Storage {
         self.try_get_full_with_host(key, host, key_val)?
             .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
             .map(|e| e.0)
-            .map_err(|e| host.decorate_storage_error(e, &*key, key_val))
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
     // Like `get_with_host`, but distinguishes between missing values (return `Ok(None)`)
@@ -309,7 +309,7 @@ impl Storage {
             .and_then(|maybe_entry| {
                 maybe_entry.ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
             })
-            .map_err(|e| host.decorate_storage_error(e, &*key, key_val))
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
     // Helper function `put` and `del` funnel into.
@@ -351,13 +351,13 @@ impl Storage {
             else {
                 return Ok(());
             };
-            let _ = host.check_if_entry_is_live(&*key, &entry_with_live_until, key_val)?;
+            let _ = host.check_if_entry_is_live(key.as_ref(), &entry_with_live_until, key_val)?;
             Ok(())
         })?;
         let curr = host.as_budget().get_cpu_insns_consumed().unwrap();
         assert_eq!(prev, curr);
         self.put_opt(key, val, host.as_budget())
-            .map_err(|e| host.decorate_storage_error(e, &*key, key_val))
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
     /// Attempts to write to the [LedgerEntry] associated with a given
@@ -414,7 +414,7 @@ impl Storage {
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage del");
         self.put_opt_with_host(key, None, host, key_val)
-            .map_err(|e| host.decorate_storage_error(e, &*key, key_val))
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
     /// Attempts to determine the presence of a [LedgerEntry] associated with a
@@ -447,8 +447,6 @@ impl Storage {
     ) -> Result<bool, HostError> {
         let _span = tracy_span!("storage has");
         Ok(self.try_get_full_with_host(key, host, key_val)?.is_some())
-        // self.has(key, host.as_budget())
-        //     .map_err(|e| host.decorate_storage_error(e, &*key, key_val))
     }
 
     /// Extends `key` to live `extend_to` ledgers from now (not counting the
@@ -695,7 +693,7 @@ impl Host {
             }
             LedgerKey::Account(_) | LedgerKey::Trustline(_) => {
                 if can_create_new_objects {
-                    res.push(self.account_address_from_key(lk)?.into())
+                    res.push(self.account_address_from_key(lk)?)
                 }
             }
             // This shouldn't normally trigger, but it's safer to just return
