@@ -2169,19 +2169,22 @@ impl Host {
         let live_until_ledger = live_until_ledger
             .max(self.get_min_live_until_ledger(xdr::ContractDataDurability::Temporary)?);
         self.with_mut_storage(|storage| {
-            if storage.has(&nonce_key, self.budget_ref()).map_err(|err| {
-                if err.error.is_type(ScErrorType::Storage)
-                    && err.error.is_code(ScErrorCode::ExceededLimit)
-                {
-                    return self.err(
-                        ScErrorType::Storage,
-                        ScErrorCode::ExceededLimit,
-                        "trying to access nonce outside of footprint for address",
-                        &[address.to_val()],
-                    );
-                }
-                err
-            })? {
+            if storage
+                .has_with_host(&nonce_key, self, None)
+                .map_err(|err| {
+                    if err.error.is_type(ScErrorType::Storage)
+                        && err.error.is_code(ScErrorCode::ExceededLimit)
+                    {
+                        return self.err(
+                            ScErrorType::Storage,
+                            ScErrorCode::ExceededLimit,
+                            "trying to access nonce outside of footprint for address",
+                            &[address.to_val()],
+                        );
+                    }
+                    err
+                })?
+            {
                 return Err(self.err(
                     ScErrorType::Auth,
                     ScErrorCode::ExistingValue,
@@ -2201,11 +2204,12 @@ impl Host {
                 data,
                 ext: LedgerEntryExt::V0,
             };
-            storage.put(
+            storage.put_with_host(
                 &nonce_key,
                 &Rc::metered_new(entry, self)?,
                 Some(live_until_ledger),
-                self.budget_ref(),
+                self,
+                None,
             )
         })
     }

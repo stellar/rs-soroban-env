@@ -49,8 +49,6 @@ impl InstanceCodeTest {
 }
 
 mod separate_instance_code_extension {
-    use crate::budget::AsBudget;
-
     use super::*;
 
     const PROTOCOL_SUPPORT_FOR_SEPARATE_EXTENSIONS: u32 = 21;
@@ -76,7 +74,8 @@ mod separate_instance_code_extension {
             .unwrap()
             .get_with_live_until_ledger(
                 &host.contract_instance_ledger_key(&contract).unwrap(),
-                host.as_budget(),
+                &host,
+                None,
             )
             .unwrap();
 
@@ -102,10 +101,7 @@ mod separate_instance_code_extension {
         let entry_with_live_until = host
             .try_borrow_storage_mut()
             .unwrap()
-            .get_with_live_until_ledger(
-                &host.contract_code_ledger_key(&code).unwrap(),
-                host.as_budget(),
-            )
+            .get_with_live_until_ledger(&host.contract_code_ledger_key(&code).unwrap(), &host, None)
             .unwrap();
 
         assert_eq!(entry_with_live_until.1, Some(9090));
@@ -126,10 +122,7 @@ mod separate_instance_code_extension {
         let code_entry_with_live_until = host
             .try_borrow_storage_mut()
             .unwrap()
-            .get_with_live_until_ledger(
-                &host.contract_code_ledger_key(&code).unwrap(),
-                host.as_budget(),
-            )
+            .get_with_live_until_ledger(&host.contract_code_ledger_key(&code).unwrap(), &host, None)
             .unwrap();
 
         assert_eq!(code_entry_with_live_until.1, Some(9090));
@@ -139,7 +132,8 @@ mod separate_instance_code_extension {
             .unwrap()
             .get_with_live_until_ledger(
                 &host.contract_instance_ledger_key(&contract).unwrap(),
-                host.as_budget(),
+                &host,
+                None,
             )
             .unwrap();
 
