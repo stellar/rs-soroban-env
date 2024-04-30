@@ -22,6 +22,7 @@ use crate::{
     VmCaller, VmCallerEnv, Void,
 };
 
+pub(crate) mod bls;
 mod comparison;
 mod conversion;
 pub(crate) mod crypto;
@@ -54,6 +55,7 @@ use self::{
     prng::Prng,
 };
 
+use crate::host::bls::{BLS_G1_UNCOMPRESSED_SIZE, BLS_G2_UNCOMPRESSED_SIZE, BLS_SCALAR_SIZE};
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
@@ -2848,6 +2850,259 @@ impl VmCallerEnv for Host {
         let msg_hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
         let res = self.secp256r1_verify_signature(&pk, &msg_hash, &sig)?;
         Ok(res.into())
+    }
+
+    fn bls_g1_add(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        p0: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let p0_bytes = self.visit_obj(p0, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G1 point",
+                    &[],
+                )
+            })
+        })?;
+        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G1 point",
+                    &[],
+                )
+            })
+        })?;
+        let result = self.bls_g1_add_raw_internal(&p0_bytes, &p1_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_g1_mul(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        scalar: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let scalar_bytes = self.visit_obj(scalar, |bytes: &ScBytes| {
+            let scalar_array: Result<[u8; BLS_SCALAR_SIZE], _> = bytes.as_slice().try_into();
+            scalar_array.map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "scalar value out of range for G1 multiplication",
+                    &[],
+                )
+            })
+        })?;
+        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G1 point",
+                    &[],
+                )
+            })
+        })?;
+        let result = self.bls_g1_mul_raw_internal(&scalar_bytes, &p1_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_g1_multiexp(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        scalars: BytesObject,
+        pn: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let scalars_bytes: Vec<u8> = self
+            .visit_obj(scalars, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))
+            .map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "scalar value out of range for G1 multi exponentiation",
+                    &[],
+                )
+            })?;
+
+        let pn_bytes: Vec<u8> = self
+            .visit_obj(pn, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))
+            .map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "point out of range for G1 multi exponentiation",
+                    &[],
+                )
+            })?;
+        let result = self.bls_g1_multiexp_raw_internal(&scalars_bytes, &pn_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_map_to_g1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        msg: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let msg_bytes: [u8; BLS_G1_UNCOMPRESSED_SIZE] = self
+            .visit_obj(msg, |bytes: &ScBytes| {
+                Ok(bytes.as_slice().try_into().unwrap())
+            })?;
+        let result = self.bls_map_to_g1_internal(&msg_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_hash_to_g1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        msg: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let msg_bytes: [u8; BLS_G1_UNCOMPRESSED_SIZE] = self
+            .visit_obj(msg, |bytes: &ScBytes| {
+                Ok(bytes.as_slice().try_into().unwrap())
+            })?;
+        let result = self.bls_hash_to_g1_internal(&msg_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_g2_add(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        p0: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let p0_bytes = self.visit_obj(p0, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G2 point",
+                    &[],
+                )
+            })
+        })?;
+        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G2 point",
+                    &[],
+                )
+            })
+        })?;
+        let result = self.bls_g2_add_raw_internal(&p0_bytes, &p1_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_g2_mul(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        scalar: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let scalar_bytes = self.visit_obj(scalar, |bytes: &ScBytes| {
+            let scalar_array: Result<[u8; BLS_SCALAR_SIZE], _> = bytes.as_slice().try_into();
+            scalar_array.map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "scalar value out of range for G2 multiplication",
+                    &[],
+                )
+            })
+        })?;
+        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
+            bytes.as_slice().try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "invalid length for G2 point",
+                    &[],
+                )
+            })
+        })?;
+        let result = self.bls_g2_mul_raw_internal(&scalar_bytes, &p1_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_g2_multiexp(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        scalars: BytesObject,
+        pn: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let scalars_bytes: Vec<u8> = self
+            .visit_obj(scalars, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))
+            .map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "scalar value out of range for G2 multi exponentiation",
+                    &[],
+                )
+            })?;
+
+        let pn_bytes: Vec<u8> = self
+            .visit_obj(pn, |bytes: &ScBytes| Ok(bytes.as_slice().to_vec()))
+            .map_err(|_| {
+                self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InvalidInput,
+                    "point out of range for G2 multi exponentiation",
+                    &[],
+                )
+            })?;
+        let result = self.bls_g2_multiexp_raw_internal(&scalars_bytes, &pn_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_map_to_g2(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        msg: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let msg_bytes: [u8; BLS_G2_UNCOMPRESSED_SIZE] = self
+            .visit_obj(msg, |bytes: &ScBytes| {
+                Ok(bytes.as_slice().try_into().unwrap())
+            })?;
+        let result = self.bls_map_to_g2_internal(&msg_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_hash_to_g2(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        msg: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let msg_bytes: [u8; BLS_G2_UNCOMPRESSED_SIZE] = self
+            .visit_obj(msg, |bytes: &ScBytes| {
+                Ok(bytes.as_slice().try_into().unwrap())
+            })?;
+        let result = self.bls_hash_to_g2_internal(&msg_bytes)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+    }
+
+    fn bls_pairing(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        p1: BytesObject,
+        p2: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let p1: [u8; BLS_G1_UNCOMPRESSED_SIZE] = self.visit_obj(p1, |bytes: &ScBytes| {
+            Ok(bytes.as_slice().try_into().unwrap())
+        })?;
+
+        let p2: [u8; BLS_G2_UNCOMPRESSED_SIZE] = self.visit_obj(p2, |bytes: &ScBytes| {
+            Ok(bytes.as_slice().try_into().unwrap())
+        })?;
+        let result = self.bls_pairing_internal(&p1, &p2)?;
+        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
     }
 
     // endregion: "crypto" module functions

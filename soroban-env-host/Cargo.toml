@@ -62,6 +62,7 @@ sha3 = "=0.10.8"
 # protocol release when we can safely bump the minimum curve25519-dalek version
 # in stellar-core as well.
 curve25519-dalek = { version = ">=4.1.1, <=4.1.2", default-features = false, features = ["digest"]}
+blst = "0.3.11"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], default-features = false, optional = true }
