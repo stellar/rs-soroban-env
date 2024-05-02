@@ -245,6 +245,7 @@ impl InternalEventsBuffer {
         Ok(Events(vec))
     }
 
+    /// Converts the internal diagnostic events into their external representation.
     #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn externalize_diagnostics(&self, host: &Host) -> Result<Events, HostError> {
         let mut vec = Vec::with_capacity(self.vec.len());
