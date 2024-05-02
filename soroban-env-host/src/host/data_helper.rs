@@ -92,7 +92,9 @@ impl Host {
         &self,
         key: &Rc<LedgerKey>,
     ) -> Result<ScContractInstance, HostError> {
-        let entry = self.try_borrow_storage_mut()?.get(key, self.as_budget())?;
+        let entry = self
+            .try_borrow_storage_mut()?
+            .get_with_host(key, self, None)?;
         match &entry.data {
             LedgerEntryData::ContractData(e) => match &e.val {
                 ScVal::ContractInstance(instance) => instance.metered_clone(self),
@@ -130,8 +132,7 @@ impl Host {
         let key = self.contract_code_ledger_key(wasm_hash)?;
         match &self
             .try_borrow_storage_mut()?
-            .get(&key, self.as_budget())
-            .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))?
+            .get_with_host(&key, self, None)?
             .data
         {
             LedgerEntryData::ContractCode(e) => {
@@ -160,8 +161,7 @@ impl Host {
     pub(crate) fn wasm_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
         self.try_borrow_storage_mut()?
-            .has(&key, self.as_budget())
-            .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))
+            .has_with_host(&key, self, None)
     }
 
     // Stores the contract instance specified with its parts (executable and
@@ -179,12 +179,11 @@ impl Host {
     ) -> Result<(), HostError> {
         if self
             .try_borrow_storage_mut()?
-            .has(key, self.as_budget())
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?
+            .has_with_host(key, self, None)?
         {
             let (current, live_until_ledger) = self
                 .try_borrow_storage_mut()?
-                .get_with_live_until_ledger(key, self.as_budget())?;
+                .get_with_live_until_ledger(key, self, None)?;
             let mut current = (*current).metered_clone(self)?;
 
             if let LedgerEntryData::ContractData(ref mut entry) = current.data {
@@ -212,14 +211,13 @@ impl Host {
                 ));
             }
 
-            self.try_borrow_storage_mut()?
-                .put(
-                    &key,
-                    &Rc::metered_new(current, self)?,
-                    live_until_ledger,
-                    self.as_budget(),
-                )
-                .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+            self.try_borrow_storage_mut()?.put_with_host(
+                &key,
+                &Rc::metered_new(current, self)?,
+                live_until_ledger,
+                self,
+                None,
+            )?;
         } else {
             let data = ContractDataEntry {
                 contract: ScAddress::Contract(contract_id.metered_clone(self)?),
@@ -238,14 +236,13 @@ impl Host {
                 durability: ContractDataDurability::Persistent,
                 ext: ExtensionPoint::V0,
             };
-            self.try_borrow_storage_mut()?
-                .put(
-                    key,
-                    &Host::new_contract_data(self, data)?,
-                    Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
-                    self.as_budget(),
-                )
-                .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+            self.try_borrow_storage_mut()?.put_with_host(
+                key,
+                &Host::new_contract_data(self, data)?,
+                Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
+                self,
+                None,
+            )?;
         }
         Ok(())
     }
@@ -263,8 +260,7 @@ impl Host {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
                 self.try_borrow_storage_mut()?
-                    .extend_ttl(self, key, threshold, extend_to)
-                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
+                    .extend_ttl(self, key, threshold, extend_to, None)?;
             }
             ContractExecutable::StellarAsset => {}
         }
@@ -273,19 +269,17 @@ impl Host {
 
     pub(crate) fn extend_contract_instance_ttl_from_contract_id(
         &self,
-        contract_id: &Hash,
         instance_key: Rc<LedgerKey>,
         threshold: u32,
         extend_to: u32,
     ) -> Result<(), HostError> {
-        self.try_borrow_storage_mut()?
-            .extend_ttl(
-                self,
-                instance_key.metered_clone(self)?,
-                threshold,
-                extend_to,
-            )
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+        self.try_borrow_storage_mut()?.extend_ttl(
+            self,
+            instance_key.metered_clone(self)?,
+            threshold,
+            extend_to,
+            None,
+        )?;
         Ok(())
     }
 
@@ -304,18 +298,8 @@ impl Host {
     // notes on metering: `get` from storage is covered. Rest are free.
     pub(crate) fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id)?;
-        self.with_mut_storage(|storage| {
-            match &storage
-                .get(&acc, self.as_budget())
-                .map_err(|e| {
-                    self.decorate_account_footprint_error(
-                        e,
-                        &acc,
-                        "trying to access account entry outside of the footprint",
-                    )
-                })?
-                .data
-            {
+        self.with_mut_storage(
+            |storage| match &storage.get_with_host(&acc, self, None)?.data {
                 LedgerEntryData::Account(ae) => ae.metered_clone(self),
                 e => Err(err!(
                     self,
@@ -323,8 +307,8 @@ impl Host {
                     "ledger entry is not account",
                     e.name()
                 )),
-            }
-        })
+            },
+        )
     }
 
     pub(crate) fn to_account_key(&self, account_id: AccountId) -> Result<Rc<LedgerKey>, HostError> {
@@ -488,18 +472,16 @@ impl Host {
         let durability: ContractDataDurability = t.try_into()?;
         let key = self.storage_key_from_val(k, durability)?;
         // Currently the storage stores the whole ledger entries, while this
-        // operation might only modify only the internal `ScVal` value. Thus we
+        // operation might only modify the internal `ScVal` value. Thus we
         // need to only overwrite the value in case if there is already an
         // existing ledger entry value for the key in the storage.
         if self
             .try_borrow_storage_mut()?
-            .has(&key, self.as_budget())
-            .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
+            .has_with_host(&key, self, Some(k))?
         {
             let (current, live_until_ledger) = self
                 .try_borrow_storage_mut()?
-                .get_with_live_until_ledger(&key, self.as_budget())
-                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+                .get_with_live_until_ledger(&key, self, Some(k))?;
             let mut current = (*current).metered_clone(self)?;
             match current.data {
                 LedgerEntryData::ContractData(ref mut entry) => {
@@ -514,14 +496,13 @@ impl Host {
                     ));
                 }
             }
-            self.try_borrow_storage_mut()?
-                .put(
-                    &key,
-                    &Rc::metered_new(current, self)?,
-                    live_until_ledger,
-                    self.as_budget(),
-                )
-                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+            self.try_borrow_storage_mut()?.put_with_host(
+                &key,
+                &Rc::metered_new(current, self)?,
+                live_until_ledger,
+                self,
+                Some(k),
+            )?;
         } else {
             let data = ContractDataEntry {
                 contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
@@ -530,14 +511,13 @@ impl Host {
                 durability,
                 ext: ExtensionPoint::V0,
             };
-            self.try_borrow_storage_mut()?
-                .put(
-                    &key,
-                    &Host::new_contract_data(self, data)?,
-                    Some(self.get_min_live_until_ledger(durability)?),
-                    self.as_budget(),
-                )
-                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+            self.try_borrow_storage_mut()?.put_with_host(
+                &key,
+                &Host::new_contract_data(self, data)?,
+                Some(self.get_min_live_until_ledger(durability)?),
+                self,
+                Some(k),
+            )?;
         }
 
         Ok(())
@@ -558,7 +538,9 @@ impl Host {
         val: &Rc<soroban_env_common::xdr::LedgerEntry>,
         live_until_ledger: Option<u32>,
     ) -> Result<(), HostError> {
-        self.with_mut_storage(|storage| storage.put(key, val, live_until_ledger, self.as_budget()))
+        self.with_mut_storage(|storage| {
+            storage.put_with_host(key, val, live_until_ledger, self, None)
+        })
     }
 
     // Performs the necessary setup to access the provided ledger key/entry in

@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use crate::{
-    budget::AsBudget,
     builtin_contracts::{
         base_types::{Address, BytesN},
         contract_error::ContractError,
@@ -418,7 +417,7 @@ fn transfer_account_balance(
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
             le = Host::modify_ledger_entry_data(host, &le, LedgerEntryData::Account(ae))?;
-            storage.put(&lk, &le, None, host.as_budget())
+            storage.put_with_host(&lk, &le, None, &host, None)
         } else {
             Err(err!(
                 host,
@@ -437,26 +436,17 @@ fn read_account_entry(
     storage: &mut Storage,
     lk: &Rc<LedgerKey>,
 ) -> Result<Rc<LedgerEntry>, HostError> {
-    storage
-        .try_get(&lk, host.as_budget())
-        .map_err(|e| {
-            host.decorate_account_footprint_error(
-                e,
-                lk,
-                "trying to access account entry outside of the footprint",
-            )
-        })?
-        .ok_or_else(|| {
-            let account_address = host.account_address_from_key(lk);
-            match account_address {
-                Ok(account_address) => host.error(
-                    ContractError::AccountMissingError.into(),
-                    "account entry is missing",
-                    &[account_address],
-                ),
-                Err(e) => e,
-            }
-        })
+    storage.try_get(&lk, &host, None)?.ok_or_else(|| {
+        let account_address = host.account_address_from_key(lk);
+        match account_address {
+            Ok(account_address) => host.error(
+                ContractError::AccountMissingError.into(),
+                "account entry is missing",
+                &[account_address],
+            ),
+            Err(e) => e,
+        }
+    })
 }
 
 fn read_trustline_entry(
@@ -464,26 +454,17 @@ fn read_trustline_entry(
     storage: &mut Storage,
     lk: &Rc<LedgerKey>,
 ) -> Result<Rc<LedgerEntry>, HostError> {
-    storage
-        .try_get(&lk, host.as_budget())
-        .map_err(|e| {
-            host.decorate_account_footprint_error(
-                e,
-                lk,
-                "trying to access account trustline entry outside of the footprint",
-            )
-        })?
-        .ok_or_else(|| {
-            let account_address = host.account_address_from_key(lk);
-            match account_address {
-                Ok(account_address) => host.error(
-                    ContractError::TrustlineMissingError.into(),
-                    "trustline entry is missing for account",
-                    &[account_address],
-                ),
-                Err(e) => e,
-            }
-        })
+    storage.try_get(&lk, &host, None)?.ok_or_else(|| {
+        let account_address = host.account_address_from_key(lk);
+        match account_address {
+            Ok(account_address) => host.error(
+                ContractError::TrustlineMissingError.into(),
+                "trustline entry is missing for account",
+                &[account_address],
+            ),
+            Err(e) => e,
+        }
+    })
 }
 
 // Metering: covered by components.
@@ -518,7 +499,7 @@ fn transfer_trustline_balance(
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
             le = Host::modify_ledger_entry_data(host, &le, LedgerEntryData::Trustline(tl))?;
-            storage.put(&lk, &le, None, host.as_budget())
+            storage.put_with_host(&lk, &le, None, &host, None)
         } else {
             Err(err!(
                 host,
@@ -788,7 +769,7 @@ fn set_trustline_authorization(
             tl.flags |= TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32;
         }
         le = Host::modify_ledger_entry_data(host, &le, LedgerEntryData::Trustline(tl))?;
-        storage.put(&lk, &le, None, host.as_budget())
+        storage.put_with_host(&lk, &le, None, &host, None)
     })
 }
 

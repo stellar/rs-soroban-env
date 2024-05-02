@@ -1,5 +1,4 @@
 use crate::{
-    budget::AsBudget,
     err,
     host::{
         metered_clone::{MeteredAlloc, MeteredClone},
@@ -25,8 +24,7 @@ impl Host {
         let storage_key = self.contract_instance_ledger_key(&contract_id)?;
         if self
             .try_borrow_storage_mut()?
-            .has(&storage_key, self.as_budget())
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?
+            .has_with_host(&storage_key, self, None)?
         {
             return Err(self.err(
                 ScErrorType::Storage,
@@ -212,17 +210,13 @@ impl Host {
 
         // We will definitely put the contract in the ledger if it isn't there yet.
         #[allow(unused_mut)]
-        let mut should_put_contract = !storage
-            .has(&code_key, self.as_budget())
-            .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?;
+        let mut should_put_contract = !storage.has_with_host(&code_key, self, None)?;
 
         // We may also, in the cache-supporting protocol, overwrite the contract if its ext field changed.
         if !should_put_contract
             && self.get_ledger_protocol_version()? >= super::ModuleCache::MIN_LEDGER_VERSION
         {
-            let entry = storage
-                .get(&code_key, self.as_budget())
-                .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?;
+            let entry = storage.get_with_host(&code_key, self, None)?;
             if let crate::xdr::LedgerEntryData::ContractCode(ContractCodeEntry {
                 ext: old_ext,
                 ..
@@ -238,14 +232,13 @@ impl Host {
                 ext,
                 code: wasm_bytes_m,
             };
-            storage
-                .put(
-                    &code_key,
-                    &Host::new_contract_code(self, data)?,
-                    Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
-                    self.as_budget(),
-                )
-                .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?;
+            storage.put_with_host(
+                &code_key,
+                &Host::new_contract_code(self, data)?,
+                Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
+                self,
+                None,
+            )?;
         }
         Ok(hash_obj)
     }
