@@ -449,9 +449,14 @@ impl Storage {
         Ok(self.try_get_full_with_host(key, host, key_val)?.is_some())
     }
 
-    /// Extends `key` to live `extend_to` ledgers from now (not counting the
-    /// current ledger) if the current live_until_ledger for the entry is
+    /// Extends `key` to live `extend_by` ledgers from now (not counting the
+    /// current ledger) if the current `live_until_ledger_seq` for the entry is
     /// `threshold` ledgers or less away from the current ledger.
+    ///
+    /// If attempting to extend an entry past `Host::max_live_until_ledger()`
+    /// - if the entry is `Persistent`, the entries's new
+    ///   `live_until_ledger_seq` is clamped to it.
+    /// - if the entry is `Temporary`, returns error.
     ///
     /// This operation is only defined within a host as it relies on ledger
     /// state.
@@ -463,18 +468,18 @@ impl Storage {
         host: &Host,
         key: Rc<LedgerKey>,
         threshold: u32,
-        extend_to: u32,
+        extend_by: u32,
         key_val: Option<Val>,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("extend key");
         Self::check_supported_ledger_key_type(&key)?;
 
-        if threshold > extend_to {
+        if threshold > extend_by {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidInput,
-                "threshold must be <= extend_to",
-                &[threshold.into(), extend_to.into()],
+                "threshold must be <= extend_by",
+                &[threshold.into(), extend_by.into()],
             ));
         }
 
@@ -501,7 +506,7 @@ impl Storage {
         }
 
         let mut new_live_until = host.with_ledger_info(|li| {
-            li.sequence_number.checked_add(extend_to).ok_or_else(|| {
+            li.sequence_number.checked_add(extend_by).ok_or_else(|| {
                 // overflowing here means a misconfiguration of the network (the
                 // ttl is too large), in which case we immediately flag it as an
                 // unrecoverable `InternalError`, even though the source is
@@ -518,6 +523,11 @@ impl Storage {
                 if matches!(durability, ContractDataDurability::Persistent) {
                     new_live_until = host.max_live_until_ledger()?;
                 } else {
+                    //  for `Temporary` entries TTL has to be exact - most of
+                    //  the time entry has to live until the exact specified
+                    //  ledger, or else something bad would happen (e.g. nonce
+                    //  expiring before the corresponding signature, thus
+                    //  allowing replay and double spend).
                     return Err(host.err(
                         ScErrorType::Storage,
                         ScErrorCode::InvalidAction,
