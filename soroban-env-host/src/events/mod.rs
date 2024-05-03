@@ -180,6 +180,11 @@ impl Host {
         self.try_borrow_events()?.externalize(self)
     }
 
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn get_diagnostic_events(&self) -> Result<Events, HostError> {
+        self.try_borrow_events()?.externalize_diagnostics(self)
+    }
+
     // Records a contract event.
     pub(crate) fn record_contract_event(
         &self,
