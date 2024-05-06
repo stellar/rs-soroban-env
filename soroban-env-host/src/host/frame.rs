@@ -633,21 +633,14 @@ impl Host {
     ) -> Result<TestContractFrame, HostError> {
         let instance_key = self.contract_instance_ledger_key(&id)?;
         let instance = self.retrieve_contract_instance_from_storage(&instance_key)?;
-        Ok(TestContractFrame::new(
-            id.clone(),
-            func,
-            args.to_vec(),
-            instance,
-        ))
+        Ok(TestContractFrame::new(id, func, args.to_vec(), instance))
     }
 
     // Notes on metering: this is covered by the called components.
     fn call_contract_fn(&self, id: &Hash, func: &Symbol, args: &[Val]) -> Result<Val, HostError> {
         // Create key for storage
         let storage_key = self.contract_instance_ledger_key(id)?;
-        let instance = self
-            .retrieve_contract_instance_from_storage(&storage_key)
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &id))?;
+        let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
         Vec::<Val>::charge_bulk_init_cpy(args.len() as u64, self.as_budget())?;
         let args_vec = args.to_vec();
         match &instance.executable {
@@ -675,7 +668,7 @@ impl Host {
                     let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
                     if self
                         .try_borrow_storage_mut()?
-                        .has(&wasm_key, self.budget_ref())?
+                        .has_with_host(&wasm_key, self, None)?
                     {
                         cache.get_module(self, wasm_hash)?
                     } else {

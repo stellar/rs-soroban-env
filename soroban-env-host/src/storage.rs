@@ -9,11 +9,13 @@
 
 use std::rc::Rc;
 
+use crate::budget::AsBudget;
+use crate::host::metered_clone::MeteredClone;
 use crate::{
     budget::Budget,
     host::metered_map::MeteredOrdMap,
     ledger_info::get_key_durability,
-    xdr::{ContractDataDurability, LedgerEntry, LedgerKey, ScErrorCode, ScErrorType},
+    xdr::{ContractDataDurability, LedgerEntry, LedgerKey, ScErrorCode, ScErrorType, ScVal},
     Env, Error, Host, HostError, Val,
 };
 
@@ -221,6 +223,24 @@ impl Storage {
         }
     }
 
+    fn try_get_full_with_host(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        host: &Host,
+        key_val: Option<Val>,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        let res = self
+            .try_get_full(key, host.as_budget())
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))?;
+
+        #[cfg(any(test, feature = "testutils"))]
+        if !host.check_if_entry_is_live(key.as_ref(), &res, key_val)? {
+            return Ok(None);
+        }
+
+        Ok(res)
+    }
+
     /// Attempts to retrieve the [LedgerEntry] associated with a given
     /// [LedgerKey] in the [Storage], returning an error if the key is not
     /// found.
@@ -237,18 +257,31 @@ impl Storage {
         key: &Rc<LedgerKey>,
         budget: &Budget,
     ) -> Result<Rc<LedgerEntry>, HostError> {
-        self.try_get(key, budget)?
+        self.try_get_full(key, budget)?
             .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
+            .map(|e| e.0)
+    }
+    pub(crate) fn get_with_host(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        host: &Host,
+        key_val: Option<Val>,
+    ) -> Result<Rc<LedgerEntry>, HostError> {
+        self.try_get_full_with_host(key, host, key_val)?
+            .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
+            .map(|e| e.0)
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
-    // Like `get`, but distinguishes between missing values (return `Ok(None)`)
+    // Like `get_with_host`, but distinguishes between missing values (return `Ok(None)`)
     // and out-of-footprint values or errors (`Err(...)`).
     pub(crate) fn try_get(
         &mut self,
         key: &Rc<LedgerKey>,
-        budget: &Budget,
+        host: &Host,
+        key_val: Option<Val>,
     ) -> Result<Option<Rc<LedgerEntry>>, HostError> {
-        self.try_get_full(key, budget)
+        self.try_get_full_with_host(key, host, key_val)
             .map(|ok| ok.map(|pair| pair.0))
     }
 
@@ -269,10 +302,14 @@ impl Storage {
     pub(crate) fn get_with_live_until_ledger(
         &mut self,
         key: &Rc<LedgerKey>,
-        budget: &Budget,
+        host: &Host,
+        key_val: Option<Val>,
     ) -> Result<EntryWithLiveUntil, HostError> {
-        self.try_get_full(key, budget)?
-            .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
+        self.try_get_full_with_host(key, host, key_val)
+            .and_then(|maybe_entry| {
+                maybe_entry.ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
+            })
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
     // Helper function `put` and `del` funnel into.
@@ -299,6 +336,30 @@ impl Storage {
         Ok(())
     }
 
+    fn put_opt_with_host(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        val: Option<EntryWithLiveUntil>,
+        host: &Host,
+        key_val: Option<Val>,
+    ) -> Result<(), HostError> {
+        let prev = host.as_budget().get_cpu_insns_consumed().unwrap();
+        #[cfg(any(test, feature = "testutils"))]
+        let _ = host.as_budget().with_observable_shadow_mode(|| {
+            let Ok(Some(entry_with_live_until)) =
+                self.map.get::<Rc<LedgerKey>>(key, host.as_budget())
+            else {
+                return Ok(());
+            };
+            let _ = host.check_if_entry_is_live(key.as_ref(), &entry_with_live_until, key_val)?;
+            Ok(())
+        })?;
+        let curr = host.as_budget().get_cpu_insns_consumed().unwrap();
+        assert_eq!(prev, curr);
+        self.put_opt(key, val, host.as_budget())
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
+    }
+
     /// Attempts to write to the [LedgerEntry] associated with a given
     /// [LedgerKey] in the [Storage].
     ///
@@ -319,6 +380,18 @@ impl Storage {
         self.put_opt(key, Some((val.clone(), live_until_ledger)), budget)
     }
 
+    pub(crate) fn put_with_host(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        val: &Rc<LedgerEntry>,
+        live_until_ledger: Option<u32>,
+        host: &Host,
+        key_val: Option<Val>,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("storage put");
+        self.put_opt_with_host(key, Some((val.clone(), live_until_ledger)), host, key_val)
+    }
+
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
     /// in the [Storage].
     ///
@@ -331,6 +404,17 @@ impl Storage {
     pub fn del(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<(), HostError> {
         let _span = tracy_span!("storage del");
         self.put_opt(key, None, budget)
+    }
+
+    pub(crate) fn del_with_host(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        host: &Host,
+        key_val: Option<Val>,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("storage del");
+        self.put_opt_with_host(key, None, host, key_val)
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
     /// Attempts to determine the presence of a [LedgerEntry] associated with a
@@ -355,9 +439,24 @@ impl Storage {
             .is_some())
     }
 
+    pub(crate) fn has_with_host(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        host: &Host,
+        key_val: Option<Val>,
+    ) -> Result<bool, HostError> {
+        let _span = tracy_span!("storage has");
+        Ok(self.try_get_full_with_host(key, host, key_val)?.is_some())
+    }
+
     /// Extends `key` to live `extend_to` ledgers from now (not counting the
-    /// current ledger) if the current live_until_ledger for the entry is
+    /// current ledger) if the current `live_until_ledger_seq` for the entry is
     /// `threshold` ledgers or less away from the current ledger.
+    ///
+    /// If attempting to extend an entry past `Host::max_live_until_ledger()`
+    /// - if the entry is `Persistent`, the entries's new
+    ///   `live_until_ledger_seq` is clamped to it.
+    /// - if the entry is `Temporary`, returns error.
     ///
     /// This operation is only defined within a host as it relies on ledger
     /// state.
@@ -370,6 +469,7 @@ impl Storage {
         key: Rc<LedgerKey>,
         threshold: u32,
         extend_to: u32,
+        key_val: Option<Val>,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("extend key");
         Self::check_supported_ledger_key_type(&key)?;
@@ -385,7 +485,7 @@ impl Storage {
 
         // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
-        let (entry, old_live_until) = self.get_with_live_until_ledger(&key, host.budget_ref())?;
+        let (entry, old_live_until) = self.get_with_live_until_ledger(&key, &host, key_val)?;
         let old_live_until = old_live_until.ok_or_else(|| {
             host.err(
                 ScErrorType::Storage,
@@ -423,6 +523,11 @@ impl Storage {
                 if matches!(durability, ContractDataDurability::Persistent) {
                     new_live_until = host.max_live_until_ledger()?;
                 } else {
+                    //  for `Temporary` entries TTL has to be exact - most of
+                    //  the time entry has to live until the exact specified
+                    //  ledger, or else something bad would happen (e.g. nonce
+                    //  expiring before the corresponding signature, thus
+                    //  allowing replay and double spend).
                     return Err(host.err(
                         ScErrorType::Storage,
                         ScErrorCode::InvalidAction,
@@ -489,5 +594,159 @@ impl Storage {
             }
         };
         Ok(())
+    }
+}
+
+fn get_key_type_string_for_error(lk: &LedgerKey) -> &str {
+    match lk {
+        LedgerKey::ContractData(cd) => match cd.key {
+            ScVal::LedgerKeyContractInstance => "contract instance",
+            ScVal::LedgerKeyNonce(_) => "nonce",
+            _ => "contract data key",
+        },
+        LedgerKey::ContractCode(_) => "contract code",
+        LedgerKey::Account(_) => "account",
+        LedgerKey::Trustline(_) => "account trustline",
+        // This shouldn't normally trigger, but it's safer to just return
+        // a safe default instead of an error in case if new key types are
+        // accessed.
+        _ => "ledger key",
+    }
+}
+
+impl Host {
+    fn decorate_storage_error(
+        &self,
+        err: HostError,
+        lk: &LedgerKey,
+        key_val: Option<Val>,
+    ) -> HostError {
+        let mut err = err;
+        self.with_debug_mode(|| {
+            if !err.error.is_type(ScErrorType::Storage) {
+                return Ok(());
+            }
+            if !err.error.is_code(ScErrorCode::ExceededLimit)
+                && !err.error.is_code(ScErrorCode::MissingValue)
+            {
+                return Ok(());
+            }
+
+            let key_type_str = get_key_type_string_for_error(lk);
+            // Accessing an entry outside of the footprint is a non-recoverable error, thus
+            // there is no way to observe the object pool being changed (host will continue
+            // propagating an error until there are no frames left and control is never
+            // returned to guest). This allows us to build a nicer error message.
+            // For the missing values we unfortunately can only safely use the existing `Val`s
+            // to enhance errors.
+            let can_create_new_objects = err.error.is_code(ScErrorCode::ExceededLimit);
+            let args = self
+                .get_args_for_error(lk, key_val, can_create_new_objects)
+                .unwrap_or_else(|_| vec![]);
+            if err.error.is_code(ScErrorCode::ExceededLimit) {
+                err = self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::ExceededLimit,
+                    format!("trying to access {} outside of the footprint", key_type_str).as_str(),
+                    args.as_slice(),
+                );
+            } else if err.error.is_code(ScErrorCode::MissingValue) {
+                err = self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::MissingValue,
+                    format!("trying to get non-existing value for {}", key_type_str).as_str(),
+                    args.as_slice(),
+                );
+            }
+
+            Ok(())
+        });
+        err
+    }
+
+    fn get_args_for_error(
+        &self,
+        lk: &LedgerKey,
+        key_val: Option<Val>,
+        can_create_new_objects: bool,
+    ) -> Result<Vec<Val>, HostError> {
+        let mut res = vec![];
+        match lk {
+            LedgerKey::ContractData(cd) => {
+                if can_create_new_objects {
+                    let address_val = self
+                        .add_host_object(cd.contract.metered_clone(self.as_budget())?)?
+                        .into();
+                    res.push(address_val);
+                }
+                match &cd.key {
+                    ScVal::LedgerKeyContractInstance => (),
+                    ScVal::LedgerKeyNonce(n) => {
+                        if can_create_new_objects {
+                            res.push(self.add_host_object(n.nonce)?.into());
+                        }
+                    }
+                    _ => {
+                        if let Some(key) = key_val {
+                            res.push(key);
+                        }
+                    }
+                }
+            }
+            LedgerKey::ContractCode(c) => {
+                if can_create_new_objects {
+                    res.push(
+                        self.add_host_object(self.scbytes_from_hash(&c.hash)?)?
+                            .into(),
+                    );
+                }
+            }
+            LedgerKey::Account(_) | LedgerKey::Trustline(_) => {
+                if can_create_new_objects {
+                    res.push(self.account_address_from_key(lk)?)
+                }
+            }
+            // This shouldn't normally trigger, but it's safer to just return
+            // a safe default instead of an error in case if new key types are
+            // accessed.
+            _ => (),
+        };
+        Ok(res)
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    fn check_if_entry_is_live(
+        &self,
+        key: &LedgerKey,
+        entry_with_live_until: &Option<EntryWithLiveUntil>,
+        key_val: Option<Val>,
+    ) -> Result<bool, HostError> {
+        let Some((_, Some(live_until_ledger))) = &entry_with_live_until else {
+            return Ok(true);
+        };
+        let ledger_seq = self
+            .with_ledger_info(|li| Ok(li.sequence_number))
+            .unwrap_or_default();
+        if *live_until_ledger >= ledger_seq {
+            return Ok(true);
+        }
+        match get_key_durability(key) {
+            Some(ContractDataDurability::Temporary) => Ok(false),
+            Some(ContractDataDurability::Persistent) => {
+                let key_type_str = get_key_type_string_for_error(key);
+                let args = self
+                    .as_budget()
+                    .with_observable_shadow_mode(|| self.get_args_for_error(key, key_val, true))
+                    .unwrap_or_else(|_| vec![]);
+                let msg = format!("[testing-only] Accessed {} key that has been archived. Important: this error may only appear in tests; in the real network contracts aren't called at all if any archived entry is accessed.", key_type_str);
+                Err(self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
+                    msg.as_str(),
+                    args.as_slice(),
+                ))
+            }
+            None => Ok(true),
+        }
     }
 }

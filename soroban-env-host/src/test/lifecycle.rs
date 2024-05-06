@@ -24,9 +24,9 @@ use crate::testutils::{generate_account_id, generate_bytes_array};
 fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
     let storage_key = host.contract_instance_ledger_key(&contract_id).unwrap();
     host.with_mut_storage(|s: &mut Storage| {
-        assert!(s.has(&storage_key, host.as_budget()).unwrap());
+        assert!(s.has_with_host(&storage_key, &host, None).unwrap());
 
-        match &s.get(&storage_key, host.as_budget()).unwrap().data {
+        match &s.get_with_host(&storage_key, host, None).unwrap().data {
             LedgerEntryData::ContractData(e) => match &e.val {
                 ScVal::ContractInstance(i) => match &i.executable {
                     ContractExecutable::Wasm(h) => Ok(h.clone()),
@@ -43,9 +43,9 @@ fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
 fn get_contract_wasm(host: &Host, wasm_hash: Hash) -> Vec<u8> {
     let storage_key = host.contract_code_ledger_key(&wasm_hash).unwrap();
     host.with_mut_storage(|s: &mut Storage| {
-        assert!(s.has(&storage_key, host.as_budget()).unwrap());
+        assert!(s.has_with_host(&storage_key, &host, None).unwrap());
 
-        match &s.get(&storage_key, host.as_budget()).unwrap().data {
+        match &s.get_with_host(&storage_key, host, None).unwrap().data {
             LedgerEntryData::ContractCode(code_entry) => Ok(code_entry.code.to_vec()),
             _ => panic!("expected contract WASM code"),
         }
@@ -658,9 +658,8 @@ mod cap_54_55_56 {
         }
         fn reload(self, host: &Host) -> Result<Self, HostError> {
             host.with_mut_storage(|storage| {
-                let budget = host.budget_cloned();
-                let contract_entry = storage.get(&self.contract_key, &budget)?;
-                let wasm_entry = storage.get(&self.wasm_key, &budget)?;
+                let contract_entry = storage.get_with_host(&self.contract_key, host, None)?;
+                let wasm_entry = storage.get_with_host(&self.wasm_key, host, None)?;
                 Ok(ContractAndWasmEntries {
                     contract_key: self.contract_key,
                     contract_entry,
@@ -675,9 +674,8 @@ mod cap_54_55_56 {
             let wasm_key = host.contract_code_ledger_key(&wasm_hash)?;
 
             host.with_mut_storage(|storage| {
-                let budget = host.budget_cloned();
-                let contract_entry = storage.get(&contract_key, &budget)?;
-                let wasm_entry = storage.get(&wasm_key, &budget)?;
+                let contract_entry = storage.get_with_host(&contract_key, host, None)?;
+                let wasm_entry = storage.get_with_host(&wasm_key, host, None)?;
                 Ok(ContractAndWasmEntries {
                     contract_key,
                     contract_entry,

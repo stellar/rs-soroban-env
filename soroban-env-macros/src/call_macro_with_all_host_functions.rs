@@ -93,9 +93,15 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
 
             let r#return = format_ident!("{}", &f.r#return);
 
-            quote! {
-                #[doc = #docs]
-                { #export, #min_proto, #max_proto, fn #name(#(#args),*) -> #r#return }
+            if docs.is_empty() {
+                quote! {
+                    { #export, #min_proto, #max_proto, fn #name(#(#args),*) -> #r#return }
+                }
+            } else {
+                quote! {
+                    #[doc = #docs]
+                    { #export, #min_proto, #max_proto, fn #name(#(#args),*) -> #r#return }
+                }
             }
         });
 
