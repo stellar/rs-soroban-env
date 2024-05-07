@@ -15,8 +15,8 @@ proc-macro = true
 [dependencies]
 stellar-xdr = { workspace = true, features = ["curr", "std"] }
 syn = {version="=2.0.39",features=["full"]}
-quote = "=1.0.33"
-proc-macro2 = "1.0.69"
+quote = "1.0.36"
+proc-macro2 ="1.0.82"
 itertools = "=0.11.0"
 serde = { version = "=1.0.192", features = ["derive"] }
 serde_json = "=1.0.108"
