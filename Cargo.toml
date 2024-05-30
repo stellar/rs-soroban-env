@@ -39,11 +39,16 @@ version = "=21.2.0"
 # rev = "d0138770652a615e3cd99447f2f2727658c17450"
 default-features = false
 
-[workspace.dependencies.wasmi]
+[workspace.dependencies.wasmi-031]
 package = "soroban-wasmi"
 version = "=0.31.1-soroban.20.0.1"
 git = "https://github.com/stellar/wasmi"
 rev = "0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
+
+[workspace.dependencies.wasmi-032]
+package = "soroban-wasmi"
+version = "=0.32.0-soroban.22.0.0"
+path = "../wasmi/crates/wasmi"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # stellar-xdr = { path = "../rs-stellar-xdr/" }
