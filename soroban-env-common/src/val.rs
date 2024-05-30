@@ -402,61 +402,68 @@ impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(u32);
 impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(i32);
 impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(Error);
 
-#[cfg(feature = "wasmi")]
-pub trait WasmiMarshal: Sized {
-    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self>;
-    fn marshal_from_self(self) -> wasmi::Value;
-}
+macro_rules! decl_wasmi_marshal_blocks {
+    ($marshal_trait:ident, $wasmi_val:path, $wasmi_i64:path) => {
+        #[cfg(feature = "wasmi")]
+        pub trait $marshal_trait: Sized {
+            fn try_marshal_from_value(v: $wasmi_val) -> Option<Self>;
+            fn marshal_from_self(self) -> $wasmi_val;
+        }
 
-#[cfg(feature = "wasmi")]
-impl WasmiMarshal for Val {
-    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-        if let wasmi::Value::I64(i) = v {
-            let v = Val::from_payload(i as u64);
-            if v.is_good() {
-                Some(v)
-            } else {
-                None
+        #[cfg(feature = "wasmi")]
+        impl $marshal_trait for Val {
+            fn try_marshal_from_value(v: $wasmi_val) -> Option<Self> {
+                if let $wasmi_i64(i) = v {
+                    let v = Val::from_payload(i as u64);
+                    if v.is_good() {
+                        Some(v)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             }
-        } else {
-            None
-        }
-    }
 
-    fn marshal_from_self(self) -> wasmi::Value {
-        wasmi::Value::I64(self.get_payload() as i64)
-    }
+            fn marshal_from_self(self) -> $wasmi_val {
+                $wasmi_i64(self.get_payload() as i64)
+            }
+        }
+
+        #[cfg(feature = "wasmi")]
+        impl $marshal_trait for u64 {
+            fn try_marshal_from_value(v: $wasmi_val) -> Option<Self> {
+                if let $wasmi_i64(i) = v {
+                    Some(i as u64)
+                } else {
+                    None
+                }
+            }
+
+            fn marshal_from_self(self) -> $wasmi_val {
+                $wasmi_i64(self as i64)
+            }
+        }
+
+        #[cfg(feature = "wasmi")]
+        impl $marshal_trait for i64 {
+            fn try_marshal_from_value(v: $wasmi_val) -> Option<Self> {
+                if let $wasmi_i64(i) = v {
+                    Some(i)
+                } else {
+                    None
+                }
+            }
+
+            fn marshal_from_self(self) -> $wasmi_val {
+                $wasmi_i64(self)
+            }
+        }
+    };
 }
 
-#[cfg(feature = "wasmi")]
-impl WasmiMarshal for u64 {
-    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-        if let wasmi::Value::I64(i) = v {
-            Some(i as u64)
-        } else {
-            None
-        }
-    }
-
-    fn marshal_from_self(self) -> wasmi::Value {
-        wasmi::Value::I64(self as i64)
-    }
-}
-
-#[cfg(feature = "wasmi")]
-impl WasmiMarshal for i64 {
-    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-        if let wasmi::Value::I64(i) = v {
-            Some(i)
-        } else {
-            None
-        }
-    }
-
-    fn marshal_from_self(self) -> wasmi::Value {
-        wasmi::Value::I64(self)
-    }
-}
+decl_wasmi_marshal_blocks!(WasmiMarshal031, wasmi_031::Value, wasmi_031::Value::I64);
+decl_wasmi_marshal_blocks!(WasmiMarshal032, wasmi_032::Val, wasmi_032::Val::I64);
 
 // Manually implement all the residual pieces: ValConverts
 // and Froms.

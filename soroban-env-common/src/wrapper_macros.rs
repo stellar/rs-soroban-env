@@ -80,12 +80,14 @@ macro_rules! impl_tryfroms_and_tryfromvals_delegating_to_valconvert {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! impl_wrapper_wasmi_conversions {
-    ($wrapper:ty) => {
+    ($wrapper:ty, $marshal_trait:ident, $wasmi_val:path) => {
         // wasmi / VM argument support
         #[cfg(feature = "wasmi")]
-        impl $crate::WasmiMarshal for $wrapper {
-            fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-                if let Some(val) = $crate::Val::try_marshal_from_value(v) {
+        impl $crate::$marshal_trait for $wrapper {
+            fn try_marshal_from_value(v: $wasmi_val) -> Option<Self> {
+                if let Some(val) =
+                    <$crate::Val as $crate::$marshal_trait>::try_marshal_from_value(v)
+                {
                     if <Self as $crate::val::ValConvert>::is_val_type(val) {
                         return Some(unsafe {
                             <Self as $crate::val::ValConvert>::unchecked_from_val(val)
@@ -95,8 +97,8 @@ macro_rules! impl_wrapper_wasmi_conversions {
                 None
             }
 
-            fn marshal_from_self(self) -> wasmi::Value {
-                $crate::Val::marshal_from_self(self.to_val())
+            fn marshal_from_self(self) -> $wasmi_val {
+                <$crate::Val as $crate::$marshal_trait>::marshal_from_self(self.to_val())
             }
         }
     };
@@ -175,7 +177,8 @@ macro_rules! impl_val_wrapper_base {
             }
         }
         $crate::impl_wrapper_as_and_to_val!($T);
-        $crate::impl_wrapper_wasmi_conversions!($T);
+        $crate::impl_wrapper_wasmi_conversions!($T, WasmiMarshal031, wasmi_031::Value);
+        $crate::impl_wrapper_wasmi_conversions!($T, WasmiMarshal032, wasmi_032::Val);
         $crate::impl_tryfroms_and_tryfromvals_delegating_to_valconvert!($T);
     };
 }
@@ -185,11 +188,11 @@ macro_rules! impl_val_wrapper_base {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! declare_wasmi_marshal_for_enum {
-    ($ENUM:ident) => {
+    ($ENUM:ident, $marshal_trait:ident, $wasmi_val:path, $wasmi_i64:path) => {
         #[cfg(feature = "wasmi")]
-        impl $crate::WasmiMarshal for $ENUM {
-            fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-                if let wasmi::Value::I64(i) = v {
+        impl $crate::$marshal_trait for $ENUM {
+            fn try_marshal_from_value(v: $wasmi_val) -> Option<Self> {
+                if let $wasmi_i64(i) = v {
                     use num_traits::FromPrimitive;
                     $ENUM::from_i64(i)
                 } else {
@@ -197,8 +200,8 @@ macro_rules! declare_wasmi_marshal_for_enum {
                 }
             }
 
-            fn marshal_from_self(self) -> wasmi::Value {
-                wasmi::Value::I64(self as i64)
+            fn marshal_from_self(self) -> $wasmi_val {
+                $wasmi_i64(self as i64)
             }
         }
     };

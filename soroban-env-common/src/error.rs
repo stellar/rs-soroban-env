@@ -22,7 +22,8 @@ pub struct Error(Val);
 impl_wrapper_tag_based_valconvert!(Error);
 impl_wrapper_tag_based_constructors!(Error);
 impl_wrapper_as_and_to_val!(Error);
-impl_wrapper_wasmi_conversions!(Error);
+impl_wrapper_wasmi_conversions!(Error, WasmiMarshal031, wasmi_031::Value);
+impl_wrapper_wasmi_conversions!(Error, WasmiMarshal032, wasmi_032::Val);
 
 impl Hash for Error {
     #[inline(always)]

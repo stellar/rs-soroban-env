@@ -30,4 +30,15 @@ impl TryFrom<StorageType> for ContractDataDurability {
     }
 }
 
-declare_wasmi_marshal_for_enum!(StorageType);
+declare_wasmi_marshal_for_enum!(
+    StorageType,
+    WasmiMarshal031,
+    wasmi_031::Value,
+    wasmi_031::Value::I64
+);
+declare_wasmi_marshal_for_enum!(
+    StorageType,
+    WasmiMarshal032,
+    wasmi_032::Val,
+    wasmi_032::Val::I64
+);
