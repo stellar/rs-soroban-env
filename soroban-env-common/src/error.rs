@@ -169,112 +169,188 @@ impl From<Error> for crate::xdr::Error {
         crate::xdr::Error::Unsupported
     }
 }
+macro_rules! decl_wasmi_error_conversions {
+    ($wasmi_crate:ident, $errkind:ident, $get_errkind:ident,
+        $fuelcase:ident, $trapcase:ident,
+        $get_trapcode:ident) => {
+        #[cfg(feature = "wasmi")]
+        impl From<$wasmi_crate::core::TrapCode> for Error {
+            fn from(code: $wasmi_crate::core::TrapCode) -> Self {
+                let ec = match code {
+                    $wasmi_crate::core::TrapCode::UnreachableCodeReached => {
+                        ScErrorCode::InvalidAction
+                    }
 
-#[cfg(feature = "wasmi")]
-impl From<wasmi::core::TrapCode> for Error {
-    fn from(code: wasmi::core::TrapCode) -> Self {
-        let ec = match code {
-            wasmi::core::TrapCode::UnreachableCodeReached => ScErrorCode::InvalidAction,
+                    $wasmi_crate::core::TrapCode::MemoryOutOfBounds
+                    | $wasmi_crate::core::TrapCode::TableOutOfBounds => ScErrorCode::IndexBounds,
 
-            wasmi::core::TrapCode::MemoryOutOfBounds | wasmi::core::TrapCode::TableOutOfBounds => {
-                ScErrorCode::IndexBounds
+                    $wasmi_crate::core::TrapCode::IndirectCallToNull => ScErrorCode::MissingValue,
+
+                    $wasmi_crate::core::TrapCode::IntegerDivisionByZero
+                    | $wasmi_crate::core::TrapCode::IntegerOverflow
+                    | $wasmi_crate::core::TrapCode::BadConversionToInteger => {
+                        ScErrorCode::ArithDomain
+                    }
+
+                    $wasmi_crate::core::TrapCode::BadSignature => ScErrorCode::UnexpectedType,
+
+                    $wasmi_crate::core::TrapCode::StackOverflow
+                    | $wasmi_crate::core::TrapCode::OutOfFuel
+                    | $wasmi_crate::core::TrapCode::GrowthOperationLimited => {
+                        return Error::from_type_and_code(
+                            ScErrorType::Budget,
+                            ScErrorCode::ExceededLimit,
+                        )
+                    }
+                };
+                return Error::from_type_and_code(ScErrorType::WasmVm, ec);
             }
-
-            wasmi::core::TrapCode::IndirectCallToNull => ScErrorCode::MissingValue,
-
-            wasmi::core::TrapCode::IntegerDivisionByZero
-            | wasmi::core::TrapCode::IntegerOverflow
-            | wasmi::core::TrapCode::BadConversionToInteger => ScErrorCode::ArithDomain,
-
-            wasmi::core::TrapCode::BadSignature => ScErrorCode::UnexpectedType,
-
-            wasmi::core::TrapCode::StackOverflow
-            | wasmi::core::TrapCode::OutOfFuel
-            | wasmi::core::TrapCode::GrowthOperationLimited => {
-                return Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
-            }
-        };
-        return Error::from_type_and_code(ScErrorType::WasmVm, ec);
-    }
-}
-
-#[cfg(feature = "wasmi")]
-impl From<wasmi::errors::FuncError> for Error {
-    fn from(err: wasmi::errors::FuncError) -> Self {
-        let ec = match err {
-            wasmi::errors::FuncError::ExportedFuncNotFound => ScErrorCode::MissingValue,
-            wasmi::errors::FuncError::MismatchingParameterType
-            | wasmi::errors::FuncError::MismatchingResultType => ScErrorCode::UnexpectedType,
-            wasmi::errors::FuncError::MismatchingParameterLen
-            | wasmi::errors::FuncError::MismatchingResultLen => ScErrorCode::UnexpectedSize,
-        };
-        return Error::from_type_and_code(ScErrorType::WasmVm, ec);
-    }
-}
-
-#[cfg(feature = "wasmi")]
-impl From<wasmi::Error> for Error {
-    fn from(e: wasmi::Error) -> Self {
-        const EXCEEDED_LIMIT: Error =
-            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit);
-        const INDEX_BOUND: Error =
-            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds);
-
-        match e {
-            wasmi::Error::Memory(e) => match e {
-                wasmi::errors::MemoryError::OutOfBoundsAllocation
-                | wasmi::errors::MemoryError::OutOfBoundsGrowth => return EXCEEDED_LIMIT,
-                wasmi::errors::MemoryError::OutOfBoundsAccess => return INDEX_BOUND,
-                _ => (),
-            },
-            wasmi::Error::Table(e) => match e {
-                wasmi::errors::TableError::GrowOutOfBounds { .. } => return EXCEEDED_LIMIT,
-                wasmi::errors::TableError::AccessOutOfBounds { .. }
-                | wasmi::errors::TableError::CopyOutOfBounds => return INDEX_BOUND,
-                _ => (),
-            },
-            wasmi::Error::Instantiation(e) => match e {
-                wasmi::errors::InstantiationError::Memory(me) => match me {
-                    wasmi::errors::MemoryError::OutOfBoundsAllocation
-                    | wasmi::errors::MemoryError::OutOfBoundsGrowth => return EXCEEDED_LIMIT,
-                    wasmi::errors::MemoryError::OutOfBoundsAccess => return INDEX_BOUND,
-                    _ => (),
-                },
-                wasmi::errors::InstantiationError::Table(te) => match te {
-                    wasmi::errors::TableError::GrowOutOfBounds { .. } => return EXCEEDED_LIMIT,
-                    wasmi::errors::TableError::AccessOutOfBounds { .. }
-                    | wasmi::errors::TableError::CopyOutOfBounds => return INDEX_BOUND,
-                    _ => (),
-                },
-                _ => (),
-            },
-            wasmi::Error::Store(e) => {
-                if let wasmi::errors::FuelError::OutOfFuel = e {
-                    return EXCEEDED_LIMIT;
-                }
-            }
-            wasmi::Error::Trap(trap) => {
-                if let Some(code) = trap.trap_code() {
-                    return code.into();
-                }
-            }
-            wasmi::Error::Func(e) => {
-                return e.into();
-            }
-            wasmi::Error::Global(e) => {
-                if matches!(e, wasmi::errors::GlobalError::TypeMismatch { .. }) {
-                    return Error::from_type_and_code(
-                        ScErrorType::WasmVm,
-                        ScErrorCode::UnexpectedType,
-                    );
-                }
-            }
-            _ => (),
         }
 
-        Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
-    }
+        #[cfg(feature = "wasmi")]
+        impl From<$wasmi_crate::errors::FuncError> for Error {
+            fn from(err: $wasmi_crate::errors::FuncError) -> Self {
+                (&err).into()
+            }
+        }
+
+        #[cfg(feature = "wasmi")]
+        impl From<&$wasmi_crate::errors::FuncError> for Error {
+            fn from(err: &$wasmi_crate::errors::FuncError) -> Self {
+                let ec = match err {
+                    $wasmi_crate::errors::FuncError::ExportedFuncNotFound => {
+                        ScErrorCode::MissingValue
+                    }
+                    $wasmi_crate::errors::FuncError::MismatchingParameterType
+                    | $wasmi_crate::errors::FuncError::MismatchingResultType => {
+                        ScErrorCode::UnexpectedType
+                    }
+                    $wasmi_crate::errors::FuncError::MismatchingParameterLen
+                    | $wasmi_crate::errors::FuncError::MismatchingResultLen => {
+                        ScErrorCode::UnexpectedSize
+                    }
+                };
+                return Error::from_type_and_code(ScErrorType::WasmVm, ec);
+            }
+        }
+
+        #[cfg(feature = "wasmi")]
+        impl From<$wasmi_crate::Error> for Error {
+            fn from(e: $wasmi_crate::Error) -> Self {
+                const EXCEEDED_LIMIT: Error =
+                    Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit);
+                const INDEX_BOUND: Error =
+                    Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds);
+
+                match $get_errkind(&e) {
+                    $errkind::Memory(e) => match e {
+                        $wasmi_crate::errors::MemoryError::OutOfBoundsAllocation
+                        | $wasmi_crate::errors::MemoryError::OutOfBoundsGrowth => {
+                            return EXCEEDED_LIMIT
+                        }
+                        $wasmi_crate::errors::MemoryError::OutOfBoundsAccess => return INDEX_BOUND,
+                        _ => (),
+                    },
+                    $errkind::Table(e) => match e {
+                        $wasmi_crate::errors::TableError::GrowOutOfBounds { .. } => {
+                            return EXCEEDED_LIMIT
+                        }
+                        $wasmi_crate::errors::TableError::AccessOutOfBounds { .. }
+                        | $wasmi_crate::errors::TableError::CopyOutOfBounds => return INDEX_BOUND,
+                        _ => (),
+                    },
+                    $errkind::Instantiation(e) => match e {
+                        $wasmi_crate::errors::InstantiationError::Memory(me) => match me {
+                            $wasmi_crate::errors::MemoryError::OutOfBoundsAllocation
+                            | $wasmi_crate::errors::MemoryError::OutOfBoundsGrowth => {
+                                return EXCEEDED_LIMIT
+                            }
+                            $wasmi_crate::errors::MemoryError::OutOfBoundsAccess => {
+                                return INDEX_BOUND
+                            }
+                            _ => (),
+                        },
+                        $wasmi_crate::errors::InstantiationError::Table(te) => match te {
+                            $wasmi_crate::errors::TableError::GrowOutOfBounds { .. } => {
+                                return EXCEEDED_LIMIT
+                            }
+                            $wasmi_crate::errors::TableError::AccessOutOfBounds { .. }
+                            | $wasmi_crate::errors::TableError::CopyOutOfBounds => {
+                                return INDEX_BOUND
+                            }
+                            _ => (),
+                        },
+                        _ => (),
+                    },
+                    $errkind::$fuelcase(e) => {
+                        if let $wasmi_crate::errors::FuelError::OutOfFuel = e {
+                            return EXCEEDED_LIMIT;
+                        }
+                    }
+                    $errkind::$trapcase(trap) => {
+                        if let Some(code) = $get_trapcode(trap) {
+                            return code.into();
+                        }
+                    }
+                    $errkind::Func(e) => {
+                        return e.into();
+                    }
+                    $errkind::Global(e) => {
+                        if matches!(e, $wasmi_crate::errors::GlobalError::TypeMismatch { .. }) {
+                            return Error::from_type_and_code(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::UnexpectedType,
+                            );
+                        }
+                    }
+                    _ => (),
+                }
+
+                Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+            }
+        }
+    };
 }
+
+#[cfg(feature = "wasmi")]
+type WasmiErr031 = wasmi_031::Error;
+#[cfg(feature = "wasmi")]
+type WasmiErr032 = wasmi_032::errors::ErrorKind;
+#[cfg(feature = "wasmi")]
+fn get_wasmi_031_error_kind(e: &wasmi_031::Error) -> &WasmiErr031 {
+    e
+}
+#[cfg(feature = "wasmi")]
+fn get_wasmi_032_error_kind(e: &wasmi_032::Error) -> &WasmiErr032 {
+    e.kind()
+}
+#[cfg(feature = "wasmi")]
+fn get_wasmi_031_trap_code(trap: &wasmi_031::core::Trap) -> Option<wasmi_031::core::TrapCode> {
+    trap.trap_code()
+}
+#[cfg(feature = "wasmi")]
+fn get_wasmi_032_trap_code(trap: &wasmi_032::core::TrapCode) -> Option<wasmi_032::core::TrapCode> {
+    Some(trap.clone())
+}
+
+decl_wasmi_error_conversions!(
+    wasmi_031,
+    WasmiErr031,
+    get_wasmi_031_error_kind,
+    Store,
+    Trap,
+    get_wasmi_031_trap_code
+);
+decl_wasmi_error_conversions!(
+    wasmi_032,
+    WasmiErr032,
+    get_wasmi_032_error_kind,
+    Fuel,
+    TrapCode,
+    get_wasmi_032_trap_code
+);
+
+fn foo(e: wasmi_031::Error) {}
 
 #[cfg(feature = "wasmi")]
 impl From<wasmparser::BinaryReaderError> for Error {
