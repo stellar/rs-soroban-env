@@ -1794,7 +1794,13 @@ impl AccountAuthorizationTracker {
         let nonce = if !is_transaction_source_account {
             let random_nonce: i64 =
                 host.with_recording_auth_nonce_prng(|p| Ok(p.gen_range(0..=i64::MAX)))?;
-            host.consume_nonce(address, random_nonce, 0)?;
+            // We use the `max_live_until_ledger` as the nonce lifetime here
+            // in order to account for a maximum possible rent fee (given maximum
+            // possible signature expiration). However, we don't want to actually
+            // store that as nonce expiration ledger in the recording tracker,
+            // as users are able (and encouraged) to customize the signature
+            // expiration after simulation and before signing the auth payload.
+            host.consume_nonce(address, random_nonce, host.max_live_until_ledger()?)?;
             Some((random_nonce, 0))
         } else {
             None

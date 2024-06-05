@@ -115,7 +115,7 @@ fn sign_auth_entry(
                     invocation: out.root_invocation.clone(),
                     nonce: creds.nonce,
                     signature_expiration_ledger: ledger_info.sequence_number
-                        + ledger_info.min_temp_entry_ttl
+                        + ledger_info.max_entry_ttl
                         - 1,
                 });
             let signature_payload: [u8; 32] =
@@ -126,7 +126,7 @@ fn sign_auth_entry(
                 .unwrap();
             creds.signature = signer.sign(&dummy_host, &signature_payload);
             creds.signature_expiration_ledger =
-                ledger_info.sequence_number + ledger_info.min_temp_entry_ttl - 1;
+                ledger_info.sequence_number + ledger_info.max_entry_ttl - 1;
         }
     }
     out
