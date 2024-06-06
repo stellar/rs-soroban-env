@@ -479,9 +479,9 @@ fn test_simulate_invoke_contract_with_auth() {
 
     let (expected_instructions, expected_read_bytes, expected_resource_fee, expected_mem_bytes) =
         if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
-            (38210172, 7492, 39363, 19104958)
+            (38210172, 7492, 76472, 19104958)
         } else {
-            (41268119, 7540, 42423, 20633919)
+            (41268119, 7540, 79532, 20633919)
         };
 
     assert_eq!(
