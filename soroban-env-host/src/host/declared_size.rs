@@ -30,7 +30,6 @@ use crate::{
     VecObject, Void, I256, U256,
 };
 use std::{cell::RefCell, rc::Rc};
-use wasmi::Value;
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
 // and comparison. It should be the upperbound (across various compilations and platforms) of the
@@ -103,7 +102,8 @@ impl_declared_size_type!(StringObject, 8);
 impl_declared_size_type!(Symbol, 8);
 impl_declared_size_type!(SymbolSmall, 8);
 impl_declared_size_type!(SymbolObject, 8);
-impl_declared_size_type!(Value, 16);
+impl_declared_size_type!(wasmi_031::Value, 16);
+impl_declared_size_type!(wasmi_032::Val, 16);
 
 // other env types
 impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT);
@@ -383,7 +383,8 @@ mod test {
         expect!["8"].assert_eq(size_of::<Symbol>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<SymbolSmall>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<SymbolObject>().to_string().as_str());
-        expect!["16"].assert_eq(size_of::<Value>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<wasmi_031::Value>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<wasmi_032::Val>().to_string().as_str());
 
         // other env types
         expect!["32"].assert_eq(size_of::<SymbolStr>().to_string().as_str());
@@ -610,7 +611,8 @@ mod test {
         assert_mem_size_le_declared_size!(Symbol);
         assert_mem_size_le_declared_size!(SymbolSmall);
         assert_mem_size_le_declared_size!(SymbolObject);
-        assert_mem_size_le_declared_size!(Value);
+        assert_mem_size_le_declared_size!(wasmi_031::Value);
+        assert_mem_size_le_declared_size!(wasmi_032::Val);
 
         // other env types
         assert_mem_size_le_declared_size!(SymbolStr);

@@ -1,6 +1,7 @@
 use super::{
     func_info::HOST_FUNCTIONS,
-    parsed_module::{ParsedModule, VersionedContractCodeCostInputs},
+    parsed_module::{ParsedModule, VersionedContractCodeCostInputs, VersionedParsedModule},
+    Wasmi031, Wasmi032, WasmiVersion, WASMI_032_PROTOCOL_VERSION,
 };
 use crate::{
     budget::{get_wasmi_config, AsBudget},
@@ -9,7 +10,71 @@ use crate::{
     Host, HostError, MeteredOrdMap,
 };
 use std::{collections::BTreeSet, rc::Rc};
-use wasmi::Engine;
+
+pub enum ModuleCache {
+    ModuleCache031(VersionedModuleCache<Wasmi031>),
+    ModuleCache032(VersionedModuleCache<Wasmi032>),
+}
+
+impl ModuleCache {
+    pub fn new(host: &Host) -> Result<Self, HostError> {
+        if host.ledger_version()? < WASMI_032_PROTOCOL_VERSION {
+            Ok(ModuleCache::ModuleCache031(
+                VersionedModuleCache::<Wasmi031>::new(host)?,
+            ))
+        } else {
+            Ok(ModuleCache::ModuleCache032(
+                VersionedModuleCache::<Wasmi032>::new(host)?,
+            ))
+        }
+    }
+
+    pub fn add_stored_contracts(&mut self, host: &Host) -> Result<(), HostError> {
+        match self {
+            ModuleCache::ModuleCache031(cache) => cache.add_stored_contracts(host),
+            ModuleCache::ModuleCache032(cache) => cache.add_stored_contracts(host),
+        }
+    }
+
+    pub fn parse_and_cache_module(
+        &mut self,
+        host: &Host,
+        contract_id: &Hash,
+        wasm: &[u8],
+        cost_inputs: VersionedContractCodeCostInputs,
+    ) -> Result<(), HostError> {
+        match self {
+            ModuleCache::ModuleCache031(cache) => {
+                cache.parse_and_cache_module(host, contract_id, wasm, cost_inputs)
+            }
+            ModuleCache::ModuleCache032(cache) => {
+                cache.parse_and_cache_module(host, contract_id, wasm, cost_inputs)
+            }
+        }
+    }
+
+    pub fn with_import_symbols<T>(
+        &self,
+        host: &Host,
+        callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
+        match self {
+            ModuleCache::ModuleCache031(cache) => cache.with_import_symbols(host, callback),
+            ModuleCache::ModuleCache032(cache) => cache.with_import_symbols(host, callback),
+        }
+    }
+
+    pub fn get_module(
+        &self,
+        host: &Host,
+        wasm_hash: &Hash,
+    ) -> Result<Option<ParsedModule>, HostError> {
+        match self {
+            ModuleCache::ModuleCache031(cache) => cache.get_module(host, wasm_hash),
+            ModuleCache::ModuleCache032(cache) => cache.get_module(host, wasm_hash),
+        }
+    }
+}
 
 /// A [ModuleCache] is a cache of a set of Wasm modules that have been parsed
 /// but not yet instantiated, along with a shared and reusable [Engine] storing
@@ -17,18 +82,18 @@ use wasmi::Engine;
 /// single [Host]'s lifecycle (at least) added all at once, since each wasmi
 /// [Engine] is locked during execution and no new modules can be added to it.
 #[derive(Clone, Default)]
-pub struct ModuleCache {
-    pub(crate) engine: Engine,
-    modules: MeteredOrdMap<Hash, Rc<ParsedModule>, Host>,
+pub(crate) struct VersionedModuleCache<V: WasmiVersion> {
+    pub(crate) engine: V::Engine,
+    modules: MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
 }
 
-impl ModuleCache {
+impl<V: WasmiVersion> VersionedModuleCache<V> {
     // ModuleCache should not be active until protocol version 21.
     pub const MIN_LEDGER_VERSION: u32 = 21;
 
     pub fn new(host: &Host) -> Result<Self, HostError> {
         let config = get_wasmi_config(host.as_budget())?;
-        let engine = Engine::new(&config);
+        let engine = V::Engine::new(&config);
         let modules = MeteredOrdMap::new();
         let mut cache = Self { engine, modules };
         cache.add_stored_contracts(host)?;
@@ -134,7 +199,7 @@ impl ModuleCache {
         callback(&import_symbols)
     }
 
-    pub fn make_linker(&self, host: &Host) -> Result<wasmi::Linker<Host>, HostError> {
+    pub fn make_linker(&self, host: &Host) -> Result<V::Linker, HostError> {
         self.with_import_symbols(host, |symbols| Host::make_linker(&self.engine, symbols))
     }
 
@@ -142,9 +207,9 @@ impl ModuleCache {
         &self,
         host: &Host,
         wasm_hash: &Hash,
-    ) -> Result<Option<Rc<ParsedModule>>, HostError> {
+    ) -> Result<Option<ParsedModule>, HostError> {
         if let Some(m) = self.modules.get(wasm_hash, host)? {
-            Ok(Some(m.clone()))
+            Ok(Some(V::inject_versioned_parsed_module(m)))
         } else {
             Ok(None)
         }

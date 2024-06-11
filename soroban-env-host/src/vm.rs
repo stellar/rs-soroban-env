@@ -18,31 +18,176 @@ mod parsed_module;
 pub(crate) use dispatch::dummy0;
 #[cfg(test)]
 pub(crate) use dispatch::protocol_gated_dummy;
+use parsed_module::VersionedParsedModule;
 
 use crate::{
-    budget::{get_wasmi_config, AsBudget, Budget},
+    budget::{get_wasmi_config, AsBudget, Budget, WasmiConfig},
+    err,
     host::{
         error::TryBorrowOrErr,
         metered_clone::MeteredContainer,
         metered_hash::{CountingHasher, MeteredHash},
     },
     xdr::{ContractCostType, Hash, ScErrorCode, ScErrorType},
-    ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
+    ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal031,
+    WasmiMarshal032,
 };
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
 use fuel_refillable::FuelRefillable;
-use func_info::HOST_FUNCTIONS;
+use func_info::{HostFuncInfo, HOST_FUNCTIONS};
 
 pub use module_cache::ModuleCache;
 pub use parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
 
-use wasmi::{Instance, Linker, Memory, Store, Value};
-
 use crate::VmCaller;
-use wasmi::{Caller, StoreContextMut};
 
-impl wasmi::core::HostError for HostError {}
+impl wasmi_031::core::HostError for HostError {}
+impl wasmi_032::core::HostError for HostError {}
+
+// We want to simultaneously switch all the types in this module and its support
+// modules between wasmi 0.31 and 0.32. We do this by defining a trait that
+// abstracts over the differences between the two versions, and then we define
+// two structs that implement that trait for the two versions. We then use the
+// trait as a type parameter in the structs and functions in this module, and
+// define any helper functions that will vary by-version on the trait rather
+// than as free functions.
+//
+// The other approach that might work here is macro-based (as we do elsewhere)
+// but my hunch is that the ability to refer back through the trait to other
+// types in the same version of wasmi will make it easier to parameterize this
+// module than having to make the entire module a macro. We'll see.
+
+trait WasmiVersion {
+    type Engine;
+    type Instance;
+    type Module;
+    type Linker;
+    type Store;
+    type Memory;
+    type Value;
+    type Error;
+
+    fn new_engine(config: &WasmiConfig) -> Self::Engine;
+    fn new_linker(engine: &Self::Engine) -> Self::Linker;
+    fn new_module(engine: &Self::Engine, wasm: &[u8]) -> Result<Self::Module, Self::Error>;
+    fn new_store(engine: &Self::Engine, host: Host) -> Self::Store;
+    fn link_fn(linker: &mut Self::Linker, fi: &HostFuncInfo) -> Result<(), Self::Error>;
+    fn inject_versioned_parsed_module(vpm: &Rc<VersionedParsedModule<Self>>) -> ParsedModule;
+    fn check_max_args(host: &Host, m: &Self::Module) -> Result<(), HostError>;
+}
+
+struct Wasmi031;
+struct Wasmi032;
+
+fn check_max_args(host: &Host, results_len: usize, params_len: usize) -> Result<(), HostError> {
+    if results_len > MAX_VM_ARGS {
+        return Err(err!(
+            host,
+            (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+            "Too many return values in Wasm export",
+            results_len
+        ));
+    }
+    if params_len > MAX_VM_ARGS {
+        return Err(err!(
+            host,
+            (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+            "Too many arguments in Wasm export",
+            params_len
+        ));
+    }
+    Ok(())
+}
+
+impl WasmiVersion for Wasmi031 {
+    type Engine = wasmi_031::Engine;
+    type Instance = wasmi_031::Instance;
+    type Module = wasmi_031::Module;
+    type Linker = wasmi_031::Linker<Host>;
+    type Store = wasmi_031::Store<Host>;
+    type Memory = wasmi_031::Memory;
+    type Value = wasmi_031::Value;
+    type Error = wasmi_031::Error;
+
+    fn new_engine(config: &WasmiConfig) -> Self::Engine {
+        Self::Engine::new(&config.config_031)
+    }
+    fn new_linker(engine: &Self::Engine) -> Self::Linker {
+        Self::Linker::new(engine)
+    }
+
+    fn new_module(engine: &Self::Engine, wasm: &[u8]) -> Result<Self::Module, Self::Error> {
+        Self::Module::new(engine, wasm)
+    }
+    fn new_store(engine: &Self::Engine, host: Host) -> Self::Store {
+        Self::Store::new(engine, host)
+    }
+    fn link_fn(linker: &mut Self::Linker, fi: &HostFuncInfo) -> Result<(), Self::Error> {
+        fi.wrap_031(linker)?;
+        Ok(())
+    }
+
+    fn inject_versioned_parsed_module(vpm: &Rc<VersionedParsedModule<Self>>) -> ParsedModule {
+        ParsedModule::ParsedModule031(vpm.clone())
+    }
+
+    fn check_max_args(host: &Host, m: &Self::Module) -> Result<(), HostError> {
+        for e in m.exports() {
+            match e.ty() {
+                wasmi_031::ExternType::Func(f) => {
+                    check_max_args(host, f.results().len(), f.params().len())?
+                }
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+}
+
+impl WasmiVersion for Wasmi032 {
+    type Engine = wasmi_032::Engine;
+    type Instance = wasmi_032::Instance;
+    type Module = wasmi_032::Module;
+    type Linker = wasmi_032::Linker<Host>;
+    type Store = wasmi_032::Store<Host>;
+    type Memory = wasmi_032::Memory;
+    type Value = wasmi_032::Val;
+    type Error = wasmi_032::Error;
+
+    fn new_engine(config: &WasmiConfig) -> Self::Engine {
+        Self::Engine::new(&config.config_032)
+    }
+    fn new_linker(engine: &Self::Engine) -> Self::Linker {
+        Self::Linker::new(engine)
+    }
+    fn new_module(engine: &Self::Engine, wasm: &[u8]) -> Result<Self::Module, Self::Error> {
+        Self::Module::new(engine, wasm)
+    }
+    fn new_store(engine: &Self::Engine, host: Host) -> Self::Store {
+        Self::Store::new(engine, host)
+    }
+
+    fn link_fn(linker: &mut Self::Linker, fi: &HostFuncInfo) -> Result<(), Self::Error> {
+        fi.wrap_032(linker)?;
+        Ok(())
+    }
+
+    fn inject_versioned_parsed_module(vpm: &Rc<VersionedParsedModule<Self>>) -> ParsedModule {
+        ParsedModule::ParsedModule032(vpm.clone())
+    }
+    fn check_max_args(host: &Host, m: &Self::Module) -> Result<(), HostError> {
+        for e in m.exports() {
+            match e.ty() {
+                wasmi_032::ExternType::Func(f) => {
+                    check_max_args(host, f.results().len(), f.params().len())?
+                }
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+}
 
 const MAX_VM_ARGS: usize = 32;
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
@@ -73,7 +218,7 @@ impl Drop for VmInstantiationTimer {
     }
 }
 
-/// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
+/// A [Vm] is a thin wrapper around an Instance of a Wasm Module. Multiple
 /// [Vm]s may be held in a single [Host], and each contains a single WASM module
 /// instantiation.
 ///
@@ -84,13 +229,20 @@ impl Drop for VmInstantiationTimer {
 /// only the functions declared in [Env](crate::Env) as imports, if requested by the
 /// WASM module. Any other lookups on any tables other than import functions
 /// will fail.
-pub struct Vm {
+pub enum Vm {
+    Vm031(VersionedVm<Wasmi031>),
+    Vm032(VersionedVm<Wasmi032>),
+}
+
+const WASMI_032_PROTOCOL_VERSION: u32 = 22;
+
+pub(crate) struct VersionedVm<V: WasmiVersion> {
     pub(crate) contract_id: Hash,
     #[allow(dead_code)]
-    pub(crate) module: Rc<ParsedModule>,
-    store: RefCell<Store<Host>>,
-    instance: Instance,
-    pub(crate) memory: Option<Memory>,
+    module: Rc<VersionedParsedModule<V>>,
+    store: RefCell<V::Store>,
+    instance: V::Instance,
+    memory: Option<V::Memory>,
 }
 
 impl std::hash::Hash for Vm {
@@ -100,14 +252,14 @@ impl std::hash::Hash for Vm {
 }
 
 impl Host {
-    pub(crate) fn make_linker(
-        engine: &wasmi::Engine,
+    pub(crate) fn make_linker<V: WasmiVersion>(
+        engine: &V::Engine,
         symbols: &BTreeSet<(&str, &str)>,
-    ) -> Result<Linker<Host>, HostError> {
-        let mut linker = Linker::new(&engine);
+    ) -> Result<V::Linker, HostError> {
+        let mut linker = V::new_linker(&engine);
         for hf in HOST_FUNCTIONS {
             if symbols.contains(&(hf.mod_str, hf.fn_str)) {
-                (hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le))?;
+                V::link_fn(&mut linker, hf)?
             }
         }
         Ok(linker)
@@ -126,6 +278,61 @@ pub(crate) enum ModuleParseCostMode {
 }
 
 impl Vm {
+    pub fn from_parsed_module<V: WasmiVersion>(
+        host: &Host,
+        contract_id: Hash,
+        parsed_module: Rc<ParsedModule>,
+    ) -> Result<Rc<Self>, HostError> {
+        match parsed_module {
+            ParsedModule::ParsedModule031(pm031) => Ok(Rc::new(Vm::Vm031(
+                VersionedVm::<Wasmi031>::from_parsed_module(host, contract_id, pm031),
+            ))),
+            ParsedModule::ParsedModule032(pm032) => Ok(Rc::new(Vm::Vm032(
+                VersionedVm::<Wasmi032>::from_parsed_module(host, contract_id, pm032),
+            ))),
+        }
+    }
+
+    pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Rc<Self>, HostError> {
+        if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
+            VersionedVm::<Wasmi031>::new(host, contract_id, wasm)
+        } else {
+            VersionedVm::<Wasmi032>::new(host, contract_id, wasm)
+        }
+    }
+
+    pub(crate) fn invoke_function_raw(
+        self: &Rc<Self>,
+        host: &Host,
+        func_sym: &Symbol,
+        args: &[Val],
+    ) -> Result<Val, HostError> {
+        match self {
+            Vm::Vm031(vm) => vm.invoke_function_raw(host, func_sym, args),
+            Vm::Vm032(vm) => vm.invoke_function_raw(host, func_sym, args),
+        }
+    }
+
+    pub(crate) fn get_memory(&self, host: &Host) -> Result<wasmi_031::Memory, HostError> {
+        match self {
+            Vm::Vm031(vm) => vm.get_memory(host),
+            Vm::Vm032(vm) => vm.get_memory(host),
+        }
+    }
+
+    pub(crate) fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
+        match self {
+            Vm::Vm031(vm) => vm.custom_section(name),
+            Vm::Vm032(vm) => vm.custom_section(name),
+        }
+    }
+
+    pub(crate) fn memory_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
+        match self {
+            Vm::Vm031(vm) => vm.memory_hash_and_size(budget),
+            Vm::Vm032(vm) => vm.memory_hash_and_size(budget),
+        }
+    }
     #[cfg(feature = "testutils")]
     pub fn get_all_host_functions() -> Vec<(&'static str, &'static str, u32)> {
         HOST_FUNCTIONS
@@ -133,19 +340,21 @@ impl Vm {
             .map(|hf| (hf.mod_str, hf.fn_str, hf.arity))
             .collect()
     }
+}
 
+impl<V: WasmiVersion> VersionedVm<V> {
     /// Instantiates a VM given the arguments provided in [`Self::new`],
     /// or [`Self::new_from_module_cache`]
     fn instantiate(
         host: &Host,
         contract_id: Hash,
-        parsed_module: Rc<ParsedModule>,
-        linker: &Linker<Host>,
+        parsed_module: Rc<VersionedParsedModule<V>>,
+        linker: &V::Linker,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::instantiate");
 
         let engine = parsed_module.module.engine();
-        let mut store = Store::new(engine, host.clone());
+        let mut store = V::new_store(engine, host.clone());
 
         parsed_module.cost_inputs.charge_for_instantiation(host)?;
 
@@ -355,7 +564,7 @@ impl Vm {
         ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
     }
 
-    pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {
+    pub(crate) fn get_memory(&self, host: &Host) -> Result<V::Memory, HostError> {
         match self.memory {
             Some(mem) => Ok(mem),
             None => Err(host.err(

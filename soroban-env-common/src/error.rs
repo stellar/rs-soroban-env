@@ -351,8 +351,6 @@ decl_wasmi_error_conversions!(
     get_wasmi_032_trap_code
 );
 
-fn foo(e: wasmi_031::Error) {}
-
 #[cfg(feature = "wasmi")]
 impl From<wasmparser::BinaryReaderError> for Error {
     fn from(_: wasmparser::BinaryReaderError) -> Self {

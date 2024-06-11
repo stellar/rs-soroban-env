@@ -26,25 +26,50 @@ use core::marker::PhantomData;
 /// everywhere.
 
 #[cfg(feature = "wasmi")]
-pub struct VmCaller<'a, T>(pub Option<wasmi::Caller<'a, T>>);
+pub enum VmCaller<'a, T> {
+    NoVm,
+    Vm031(wasmi_031::Caller<'a, T>),
+    Vm032(wasmi_032::Caller<'a, T>),
+}
+
 #[cfg(feature = "wasmi")]
 impl<'a, T> VmCaller<'a, T> {
     pub fn none() -> Self {
-        VmCaller(None)
+        VmCaller::NoVm
     }
-    pub fn try_ref(&self) -> Result<&wasmi::Caller<'a, T>, Error> {
-        match &self.0 {
-            Some(caller) => Ok(caller),
-            None => Err(Error::from_type_and_code(
+    pub fn try_ref_031(&self) -> Result<&wasmi_031::Caller<'a, T>, Error> {
+        match self {
+            VmCaller::Vm031(caller) => Ok(caller),
+            _ => Err(Error::from_type_and_code(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
             )),
         }
     }
-    pub fn try_mut(&mut self) -> Result<&mut wasmi::Caller<'a, T>, Error> {
-        match &mut self.0 {
-            Some(caller) => Ok(caller),
-            None => Err(Error::from_type_and_code(
+
+    pub fn try_ref_032(&self) -> Result<&wasmi_032::Caller<'a, T>, Error> {
+        match self {
+            VmCaller::Vm032(caller) => Ok(caller),
+            _ => Err(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+            )),
+        }
+    }
+    pub fn try_mut_031(&mut self) -> Result<&mut wasmi_031::Caller<'a, T>, Error> {
+        match self {
+            VmCaller::Vm031(caller) => Ok(caller),
+            _ => Err(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+            )),
+        }
+    }
+
+    pub fn try_mut_032(&mut self) -> Result<&mut wasmi_032::Caller<'a, T>, Error> {
+        match self {
+            VmCaller::Vm032(caller) => Ok(caller),
+            _ => Err(Error::from_type_and_code(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
             )),
@@ -93,7 +118,7 @@ macro_rules! host_function_helper {
 // x-macro (call_macro_with_all_host_functions) and produces a suite of method
 // declarations, which it places in the body of the declaration of the
 // VmCallerEnv trait.
-macro_rules! generate_vmcaller_checked_env_trait {
+macro_rules! generate_vmcaller_env_trait {
     {
         $(
             // This outer pattern matches a single 'mod' block of the token-tree
@@ -155,7 +180,7 @@ macro_rules! generate_vmcaller_checked_env_trait {
 }
 
 // Here we invoke the x-macro passing generate_env_trait as its callback macro.
-call_macro_with_all_host_functions! { generate_vmcaller_checked_env_trait }
+call_macro_with_all_host_functions! { generate_vmcaller_env_trait }
 
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: impl<E> Env for VmCallerEnv<E>

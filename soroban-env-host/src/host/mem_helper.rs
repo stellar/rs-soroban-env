@@ -17,6 +17,71 @@ pub(crate) struct MemFnArgs {
     pub(crate) len: u32,
 }
 
+impl Vm {
+    fn read_memory<'a>(
+        &self,
+        host: &Host,
+        vmcaller: &mut VmCaller<'a, Host>,
+        offset: usize,
+        buffer: &mut [u8],
+    ) -> Result<(), HostError> {
+        match self {
+            Vm::Vm031(vm) => host.map_err(
+                vm.get_memory(host)?
+                    .read(vmcaller.try_ref_031()?, offset, buffer)
+                    .map_err(|e| wasmi_031::Error::Memory(e)),
+            ),
+            Vm::Vm032(vm) => host.map_err(
+                vm.get_memory(host)?
+                    .read(vmcaller.try_ref_032()?, offset, buffer)
+                    .map_err(|e| wasmi_032::Error::Memory(e)),
+            ),
+        }
+    }
+    fn write_memory<'a>(
+        &self,
+        host: &Host,
+        vmcaller: &mut VmCaller<'a, Host>,
+        offset: usize,
+        buffer: &[u8],
+    ) -> Result<(), HostError> {
+        match self {
+            Vm::Vm031(vm) => host.map_err(
+                vm.get_memory(host)?
+                    .write(vmcaller.try_mut_031()?, offset, buffer)
+                    .map_err(|e| wasmi_031::Error::Memory(e)),
+            ),
+            Vm::Vm032(vm) => host.map_err(
+                vm.get_memory(host)?
+                    .write(vmcaller.try_mut_032()?, offset, buffer)
+                    .map_err(|e| wasmi_032::Error::Memory(e)),
+            ),
+        }
+    }
+
+    fn get_mem_data<'a>(
+        &self,
+        host: &Host,
+        vmcaller: &VmCaller<'a, Host>,
+    ) -> Result<&[u8], HostError> {
+        match self {
+            Vm::Vm031(vm) => Ok(vm.get_memory(host)?.data(vmcaller.try_ref_031()?)),
+            Vm::Vm032(vm) => Ok(vm.get_memory(host)?.data(vmcaller.try_ref_032()?)),
+        }
+    }
+
+    fn get_mem_data_mut<'a>(
+        &self,
+        host: &Host,
+        vmcaller: &mut VmCaller<'a, Host>,
+    ) -> Result<&mut [u8], HostError> {
+        match self {
+            Vm::Vm031(vm) => Ok(vm.get_memory(host)?.data_mut(vmcaller.try_mut_031()?)),
+            Vm::Vm032(vm) => Ok(vm.get_memory(host)?.data_mut(vmcaller.try_mut_032()?)),
+        }
+    }
+}
+
 impl Host {
     // Notes on metering: free
     // Helper for the first step in most functions that operate on linear
@@ -49,11 +114,7 @@ impl Host {
         buf: &[u8],
     ) -> Result<(), HostError> {
         self.charge_budget(ContractCostType::MemCpy, Some(buf.len() as u64))?;
-        let mem = vm.get_memory(self)?;
-        self.map_err(
-            mem.write(vmcaller.try_mut()?, mem_pos as usize, buf)
-                .map_err(|me| wasmi::Error::Memory(me)),
-        )
+        vm.write_memory(self, vmcaller, mem_pos as usize, buf)
     }
 
     pub(crate) fn metered_vm_read_bytes_from_linear_memory(
@@ -64,11 +125,7 @@ impl Host {
         buf: &mut [u8],
     ) -> Result<(), HostError> {
         self.charge_budget(ContractCostType::MemCpy, Some(buf.len() as u64))?;
-        let mem = vm.get_memory(self)?;
-        self.map_err(
-            mem.read(vmcaller.try_mut()?, mem_pos as usize, buf)
-                .map_err(|me| wasmi::Error::Memory(me)),
-        )
+        vm.read_memory(self, vmcaller, mem_pos as usize, buf)
     }
 
     // Note on metering: covers the cost of memcpy from bytes into the linear memory.
@@ -93,7 +150,7 @@ impl Host {
             .ok_or_else(|| self.err_arith_overflow())?;
         let mem_range = (mem_pos as usize)..(mem_end as usize);
 
-        let mem_data = vm.get_memory(self)?.data_mut(vmcaller.try_mut()?);
+        let mem_data = vm.get_mem_data_mut(self, vmcaller)?;
         let mem_slice = mem_data
             .get_mut(mem_range)
             .ok_or_else(|| self.err_oob_linear_memory())?;
@@ -137,7 +194,7 @@ impl Host {
             .ok_or_else(|| self.err_arith_overflow())?;
         let mem_range = (mem_pos as usize)..(mem_end as usize);
 
-        let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
+        let mem_data = vm.get_mem_data(self, vmcaller)?;
         let mem_slice = mem_data
             .get(mem_range)
             .ok_or_else(|| self.err_oob_linear_memory())?;
@@ -186,7 +243,7 @@ impl Host {
         num_slices: usize,
         mut callback: impl FnMut(usize, &[u8]) -> Result<(), HostError>,
     ) -> Result<(), HostError> {
-        let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
+        let mem_data = vm.get_mem_data(self, vmcaller)?;
         // charge the cost of copying the slices (pointers to the content, not
         // the content themselves) upfront.
         self.charge_budget(
