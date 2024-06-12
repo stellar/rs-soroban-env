@@ -18,11 +18,9 @@ mod parsed_module;
 pub(crate) use dispatch::dummy0;
 #[cfg(test)]
 pub(crate) use dispatch::protocol_gated_dummy;
-use parsed_module::VersionedParsedModule;
 
 use crate::{
     budget::{get_wasmi_config, AsBudget, Budget, WasmiConfig},
-    err,
     host::{
         error::TryBorrowOrErr,
         metered_clone::MeteredContainer,
@@ -38,6 +36,8 @@ use fuel_refillable::FuelRefillable;
 use func_info::{HostFuncInfo, HOST_FUNCTIONS};
 
 pub use module_cache::ModuleCache;
+use module_cache::VersionedModuleCache;
+use parsed_module::VersionedParsedModule;
 pub use parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
 
 use crate::VmCaller;
@@ -45,149 +45,8 @@ use crate::VmCaller;
 impl wasmi_031::core::HostError for HostError {}
 impl wasmi_032::core::HostError for HostError {}
 
-// We want to simultaneously switch all the types in this module and its support
-// modules between wasmi 0.31 and 0.32. We do this by defining a trait that
-// abstracts over the differences between the two versions, and then we define
-// two structs that implement that trait for the two versions. We then use the
-// trait as a type parameter in the structs and functions in this module, and
-// define any helper functions that will vary by-version on the trait rather
-// than as free functions.
-//
-// The other approach that might work here is macro-based (as we do elsewhere)
-// but my hunch is that the ability to refer back through the trait to other
-// types in the same version of wasmi will make it easier to parameterize this
-// module than having to make the entire module a macro. We'll see.
-
-trait WasmiVersion {
-    type Engine;
-    type Instance;
-    type Module;
-    type Linker;
-    type Store;
-    type Memory;
-    type Value;
-    type Error;
-
-    fn new_engine(config: &WasmiConfig) -> Self::Engine;
-    fn new_linker(engine: &Self::Engine) -> Self::Linker;
-    fn new_module(engine: &Self::Engine, wasm: &[u8]) -> Result<Self::Module, Self::Error>;
-    fn new_store(engine: &Self::Engine, host: Host) -> Self::Store;
-    fn link_fn(linker: &mut Self::Linker, fi: &HostFuncInfo) -> Result<(), Self::Error>;
-    fn inject_versioned_parsed_module(vpm: &Rc<VersionedParsedModule<Self>>) -> ParsedModule;
-    fn check_max_args(host: &Host, m: &Self::Module) -> Result<(), HostError>;
-}
-
-struct Wasmi031;
-struct Wasmi032;
-
-fn check_max_args(host: &Host, results_len: usize, params_len: usize) -> Result<(), HostError> {
-    if results_len > MAX_VM_ARGS {
-        return Err(err!(
-            host,
-            (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-            "Too many return values in Wasm export",
-            results_len
-        ));
-    }
-    if params_len > MAX_VM_ARGS {
-        return Err(err!(
-            host,
-            (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-            "Too many arguments in Wasm export",
-            params_len
-        ));
-    }
-    Ok(())
-}
-
-impl WasmiVersion for Wasmi031 {
-    type Engine = wasmi_031::Engine;
-    type Instance = wasmi_031::Instance;
-    type Module = wasmi_031::Module;
-    type Linker = wasmi_031::Linker<Host>;
-    type Store = wasmi_031::Store<Host>;
-    type Memory = wasmi_031::Memory;
-    type Value = wasmi_031::Value;
-    type Error = wasmi_031::Error;
-
-    fn new_engine(config: &WasmiConfig) -> Self::Engine {
-        Self::Engine::new(&config.config_031)
-    }
-    fn new_linker(engine: &Self::Engine) -> Self::Linker {
-        Self::Linker::new(engine)
-    }
-
-    fn new_module(engine: &Self::Engine, wasm: &[u8]) -> Result<Self::Module, Self::Error> {
-        Self::Module::new(engine, wasm)
-    }
-    fn new_store(engine: &Self::Engine, host: Host) -> Self::Store {
-        Self::Store::new(engine, host)
-    }
-    fn link_fn(linker: &mut Self::Linker, fi: &HostFuncInfo) -> Result<(), Self::Error> {
-        fi.wrap_031(linker)?;
-        Ok(())
-    }
-
-    fn inject_versioned_parsed_module(vpm: &Rc<VersionedParsedModule<Self>>) -> ParsedModule {
-        ParsedModule::ParsedModule031(vpm.clone())
-    }
-
-    fn check_max_args(host: &Host, m: &Self::Module) -> Result<(), HostError> {
-        for e in m.exports() {
-            match e.ty() {
-                wasmi_031::ExternType::Func(f) => {
-                    check_max_args(host, f.results().len(), f.params().len())?
-                }
-                _ => (),
-            }
-        }
-        Ok(())
-    }
-}
-
-impl WasmiVersion for Wasmi032 {
-    type Engine = wasmi_032::Engine;
-    type Instance = wasmi_032::Instance;
-    type Module = wasmi_032::Module;
-    type Linker = wasmi_032::Linker<Host>;
-    type Store = wasmi_032::Store<Host>;
-    type Memory = wasmi_032::Memory;
-    type Value = wasmi_032::Val;
-    type Error = wasmi_032::Error;
-
-    fn new_engine(config: &WasmiConfig) -> Self::Engine {
-        Self::Engine::new(&config.config_032)
-    }
-    fn new_linker(engine: &Self::Engine) -> Self::Linker {
-        Self::Linker::new(engine)
-    }
-    fn new_module(engine: &Self::Engine, wasm: &[u8]) -> Result<Self::Module, Self::Error> {
-        Self::Module::new(engine, wasm)
-    }
-    fn new_store(engine: &Self::Engine, host: Host) -> Self::Store {
-        Self::Store::new(engine, host)
-    }
-
-    fn link_fn(linker: &mut Self::Linker, fi: &HostFuncInfo) -> Result<(), Self::Error> {
-        fi.wrap_032(linker)?;
-        Ok(())
-    }
-
-    fn inject_versioned_parsed_module(vpm: &Rc<VersionedParsedModule<Self>>) -> ParsedModule {
-        ParsedModule::ParsedModule032(vpm.clone())
-    }
-    fn check_max_args(host: &Host, m: &Self::Module) -> Result<(), HostError> {
-        for e in m.exports() {
-            match e.ty() {
-                wasmi_032::ExternType::Func(f) => {
-                    check_max_args(host, f.results().len(), f.params().len())?
-                }
-                _ => (),
-            }
-        }
-        Ok(())
-    }
-}
+mod wasmi_versions;
+use wasmi_versions::{Wasmi031, Wasmi032, WasmiVersion};
 
 const MAX_VM_ARGS: usize = 32;
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
@@ -411,17 +270,17 @@ impl<V: WasmiVersion> VersionedVm<V> {
 
         let not_started_instance = {
             let _span0 = tracy_span!("instantiate module");
-            host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
+            host.map_err(V::linker_instantiate(
+                linker,
+                &mut store,
+                &parsed_module.module,
+            ))?
         };
 
-        let instance = host.map_err(
-            not_started_instance
-                .ensure_no_start(&mut store)
-                .map_err(|ie| wasmi::Error::Instantiation(ie)),
-        )?;
+        let instance = host.map_err(V::ensure_no_start(not_started_instance, &mut store))?;
 
-        let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
-            ext.into_memory()
+        let memory = if let Some(ext) = V::get_export(instance, &mut store, "memory") {
+            V::export_to_memory(ext)
         } else {
             None
         };
@@ -445,9 +304,11 @@ impl<V: WasmiVersion> VersionedVm<V> {
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::from_parsed_module");
         VmInstantiationTimer::new(host.clone());
-        if let Some(linker) = &*host.try_borrow_linker()? {
+        if let Some(module_cache) = &*host.try_borrow_module_cache()? {
+            let linker = V::downcast_module_cache(module_cache)?.linker;
             Self::instantiate(host, contract_id, parsed_module, linker)
         } else {
+            let parsed_module = V::downcast_parsed_module(&*parsed_module)?;
             let linker = parsed_module.make_linker(host)?;
             Self::instantiate(host, contract_id, parsed_module, &linker)
         }
@@ -584,16 +445,17 @@ impl<V: WasmiVersion> VersionedVm<V> {
         self: &Rc<Self>,
         host: &Host,
         func_sym: &Symbol,
-        inputs: &[Value],
+        inputs: &[V::Value],
     ) -> Result<Val, HostError> {
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
 
         // resolve the function entity to be called
         let func_ss: SymbolStr = func_sym.try_into_val(host)?;
-        let ext = match self
-            .instance
-            .get_export(&*self.store.try_borrow_or_err()?, func_ss.as_ref())
-        {
+        let ext = match V::get_export(
+            &self.instance,
+            &*self.store.try_borrow_or_err()?,
+            func_ss.as_ref(),
+        ) {
             None => {
                 return Err(host.err(
                     ScErrorType::WasmVm,
@@ -604,7 +466,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
             }
             Some(e) => e,
         };
-        let func = match ext.into_func() {
+        let func = match V::export_to_func(ext) {
             None => {
                 return Err(host.err(
                     ScErrorType::WasmVm,
@@ -626,12 +488,13 @@ impl<V: WasmiVersion> VersionedVm<V> {
         }
 
         // call the function
-        let mut wasm_ret: [Value; 1] = [Value::I64(0)];
+        let mut wasm_ret: [V::Value; 1] = [V::VALUE_ZERO];
         self.store.try_borrow_mut_or_err()?.add_fuel_to_vm(host)?;
         // Metering: the `func.call` will trigger `wasmi::Call` (or `CallIndirect`) instruction,
         // which is technically covered by wasmi fuel metering. So we are double charging a bit
         // here (by a few 100s cpu insns). It is better to be safe.
-        let res = func.call(
+        let res = V::call_func(
+            func,
             &mut *self.store.try_borrow_mut_or_err()?,
             inputs,
             &mut wasm_ret,
@@ -646,45 +509,9 @@ impl<V: WasmiVersion> VersionedVm<V> {
             .return_fuel_to_host(host)?;
 
         if let Err(e) = res {
-            use std::borrow::Cow;
-
             // When a call fails with a wasmi::Error::Trap that carries a HostError
             // we propagate that HostError as is, rather than producing something new.
-
-            match e {
-                wasmi::Error::Trap(trap) => {
-                    if let Some(code) = trap.trap_code() {
-                        let err = code.into();
-                        let mut msg = Cow::Borrowed("VM call trapped");
-                        host.with_debug_mode(|| {
-                            msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
-                            Ok(())
-                        });
-                        return Err(host.error(err, &msg, &[func_sym.to_val()]));
-                    }
-                    if let Some(he) = trap.downcast::<HostError>() {
-                        host.log_diagnostics(
-                            "VM call trapped with HostError",
-                            &[func_sym.to_val(), he.error.to_val()],
-                        );
-                        return Err(he);
-                    }
-                    return Err(host.err(
-                        ScErrorType::WasmVm,
-                        ScErrorCode::InternalError,
-                        "VM trapped but propagation failed",
-                        &[],
-                    ));
-                }
-                e => {
-                    let mut msg = Cow::Borrowed("VM call failed");
-                    host.with_debug_mode(|| {
-                        msg = Cow::Owned(format!("VM call failed: {:?}", &e));
-                        Ok(())
-                    });
-                    return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
-                }
-            }
+            return Err(V::handle_call_error(host, func_sym, e));
         }
         host.relative_to_absolute(
             Val::try_marshal_from_value(wasm_ret[0].clone()).ok_or(ConversionError)?,
@@ -698,11 +525,11 @@ impl<V: WasmiVersion> VersionedVm<V> {
         args: &[Val],
     ) -> Result<Val, HostError> {
         let _span = tracy_span!("Vm::invoke_function_raw");
-        Vec::<Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
-        let wasm_args: Vec<Value> = args
+        Vec::<V::Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
+        let wasm_args: Vec<V::Value> = args
             .iter()
             .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
-            .collect::<Result<Vec<Value>, HostError>>()?;
+            .collect::<Result<Vec<V::Value>, HostError>>()?;
         self.metered_func_call(host, func_sym, wasm_args.as_slice())
     }
 
@@ -719,11 +546,24 @@ impl<V: WasmiVersion> VersionedVm<V> {
     where
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
     {
-        let store: &mut Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
-        let mut ctx: StoreContextMut<Host> = store.into();
-        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
-        let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
-        f(&mut vmcaller)
+        match self {
+            Vm::Vm031(vm) => {
+                let store: &mut wasmi_031::Store<Host> = &mut vm.store.try_borrow_mut_or_err()?;
+                let mut ctx: wasmi_031::StoreContextMut<Host> = store.into();
+                let caller: wasmi_031::Caller<Host> =
+                    wasmi_031::Caller::new(&mut ctx, Some(&self.instance));
+                let mut vmcaller: VmCaller<Host> = VmCaller::Vm031(caller);
+                f(&mut vmcaller)
+            }
+            Vm::Vm032(vm) => {
+                let store: &mut wasmi_032::Store<Host> = &mut vm.store.try_borrow_mut_or_err()?;
+                let mut ctx: wasmi_032::StoreContextMut<Host> = store.into();
+                let caller: wasmi_032::Caller<Host> =
+                    wasmi_032::Caller::new(&mut ctx, Some(&self.instance));
+                let mut vmcaller: VmCaller<Host> = VmCaller::Vm032(caller);
+                f(&mut vmcaller)
+            }
+        }
     }
 
     #[cfg(feature = "bench")]
@@ -756,7 +596,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
     // but there's no obvious way to observe them.
     pub(crate) fn exports_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
         use std::hash::Hasher;
-        use wasmi::{Extern, StoreContext};
+        use wasmi_031::{Extern, StoreContext};
         self.with_vmcaller(|vmcaller| {
             let ctx: StoreContext<'_, _> = vmcaller.try_ref()?.into();
             let mut size: usize = 0;

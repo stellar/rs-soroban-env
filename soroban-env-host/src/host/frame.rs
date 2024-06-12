@@ -899,7 +899,7 @@ impl Host {
                             // because we're not actually running a VM, but we
                             // prioritize emulation fidelity over honesty here.
                             let mut error: Error =
-                                Error::from(wasmi::core::TrapCode::UnreachableCodeReached);
+                                Error::from(wasmi_031::core::TrapCode::UnreachableCodeReached);
 
                             let mut recovered_error_from_panic_refcell = false;
                             if let Ok(panic) = panic.try_borrow() {

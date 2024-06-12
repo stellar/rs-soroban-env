@@ -29,41 +29,6 @@ impl ModuleCache {
         }
     }
 
-    pub fn add_stored_contracts(&mut self, host: &Host) -> Result<(), HostError> {
-        match self {
-            ModuleCache::ModuleCache031(cache) => cache.add_stored_contracts(host),
-            ModuleCache::ModuleCache032(cache) => cache.add_stored_contracts(host),
-        }
-    }
-
-    pub fn parse_and_cache_module(
-        &mut self,
-        host: &Host,
-        contract_id: &Hash,
-        wasm: &[u8],
-        cost_inputs: VersionedContractCodeCostInputs,
-    ) -> Result<(), HostError> {
-        match self {
-            ModuleCache::ModuleCache031(cache) => {
-                cache.parse_and_cache_module(host, contract_id, wasm, cost_inputs)
-            }
-            ModuleCache::ModuleCache032(cache) => {
-                cache.parse_and_cache_module(host, contract_id, wasm, cost_inputs)
-            }
-        }
-    }
-
-    pub fn with_import_symbols<T>(
-        &self,
-        host: &Host,
-        callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
-    ) -> Result<T, HostError> {
-        match self {
-            ModuleCache::ModuleCache031(cache) => cache.with_import_symbols(host, callback),
-            ModuleCache::ModuleCache032(cache) => cache.with_import_symbols(host, callback),
-        }
-    }
-
     pub fn get_module(
         &self,
         host: &Host,
@@ -85,6 +50,7 @@ impl ModuleCache {
 pub(crate) struct VersionedModuleCache<V: WasmiVersion> {
     pub(crate) engine: V::Engine,
     modules: MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
+    pub(crate) linker: V::Linker,
 }
 
 impl<V: WasmiVersion> VersionedModuleCache<V> {
@@ -95,12 +61,20 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
         let config = get_wasmi_config(host.as_budget())?;
         let engine = V::Engine::new(&config);
         let modules = MeteredOrdMap::new();
-        let mut cache = Self { engine, modules };
-        cache.add_stored_contracts(host)?;
-        Ok(cache)
+        Self::add_stored_contracts(engine, &mut modules, host)?;
+        let linker = Self::make_linker(&engine, &modules, host)?;
+        Ok(Self {
+            engine,
+            modules,
+            linker,
+        })
     }
 
-    pub fn add_stored_contracts(&mut self, host: &Host) -> Result<(), HostError> {
+    fn add_stored_contracts(
+        engine: &V::Engine,
+        modules: &mut MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
+        host: &Host,
+    ) -> Result<(), HostError> {
         use crate::xdr::{ContractCodeEntry, ContractCodeEntryExt, LedgerEntryData, LedgerKey};
         let storage = host.try_borrow_storage()?;
         for (k, v) in storage.map.iter(host.as_budget())? {
@@ -141,7 +115,14 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
                                 v1.cost_inputs.metered_clone(host.as_budget())?,
                             ),
                         };
-                        self.parse_and_cache_module(host, hash, code, code_cost_inputs)?;
+                        Self::parse_and_cache_module(
+                            engine,
+                            modules,
+                            host,
+                            hash,
+                            code,
+                            code_cost_inputs,
+                        )?;
                     }
                 }
             }
@@ -149,14 +130,15 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
         Ok(())
     }
 
-    pub fn parse_and_cache_module(
-        &mut self,
+    fn parse_and_cache_module(
+        engine: &V::Engine,
+        modules: &mut MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
         host: &Host,
         contract_id: &Hash,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<(), HostError> {
-        if self.modules.contains_key(contract_id, host)? {
+        if modules.contains_key(contract_id, host)? {
             return Err(host.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -164,20 +146,18 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
                 &[],
             ));
         }
-        let parsed_module = ParsedModule::new(host, &self.engine, &wasm, cost_inputs)?;
-        self.modules =
-            self.modules
-                .insert(contract_id.metered_clone(host)?, parsed_module, host)?;
+        let parsed_module = ParsedModule::new(host, engine, &wasm, cost_inputs)?;
+        *modules = modules.insert(contract_id.metered_clone(host)?, parsed_module, host)?;
         Ok(())
     }
 
-    pub fn with_import_symbols<T>(
-        &self,
+    fn with_module_set_import_symbols<T>(
         host: &Host,
+        modules: &MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
         callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
     ) -> Result<T, HostError> {
         let mut import_symbols = BTreeSet::new();
-        for module in self.modules.values(host)? {
+        for module in modules.values(host)? {
             module.with_import_symbols(host, |module_symbols| {
                 for hf in HOST_FUNCTIONS {
                     let sym = (hf.mod_str, hf.fn_str);
@@ -199,8 +179,14 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
         callback(&import_symbols)
     }
 
-    pub fn make_linker(&self, host: &Host) -> Result<V::Linker, HostError> {
-        self.with_import_symbols(host, |symbols| Host::make_linker(&self.engine, symbols))
+    fn make_linker(
+        engine: &V::Engine,
+        modules: &MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
+        host: &Host,
+    ) -> Result<V::Linker, HostError> {
+        Self::with_module_set_import_symbols(host, modules, |symbols| {
+            Host::make_linker(engine, symbols)
+        })
     }
 
     pub fn get_module(
@@ -209,7 +195,7 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
         wasm_hash: &Hash,
     ) -> Result<Option<ParsedModule>, HostError> {
         if let Some(m) = self.modules.get(wasm_hash, host)? {
-            Ok(Some(V::inject_versioned_parsed_module(m)))
+            Ok(Some(V::upcast_versioned_parsed_module(m)))
         } else {
             Ok(None)
         }
