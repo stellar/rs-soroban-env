@@ -9,31 +9,52 @@ use crate::{
     U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use core::fmt::Debug;
-use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
-use wasmi::{
-    core::{Trap, TrapCode::BadSignature},
-    Value,
-};
+use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal031, WasmiMarshal032};
 
-pub(crate) trait RelativeObjectConversion: WasmiMarshal {
+pub(crate) trait RelativeObjectConversion: WasmiMarshal031 + WasmiMarshal032 {
     fn absolute_to_relative(self, _host: &Host) -> Result<Self, HostError> {
         Ok(self)
     }
     fn relative_to_absolute(self, _host: &Host) -> Result<Self, HostError> {
         Ok(self)
     }
-    fn try_marshal_from_relative_value(v: wasmi::Value, host: &Host) -> Result<Self, Trap> {
-        let val = Self::try_marshal_from_value(v).ok_or_else(|| {
-            Trap::from(HostError::from(Error::from_type_and_code(
+    fn try_marshal_from_relative_value_031(
+        v: wasmi_031::Value,
+        host: &Host,
+    ) -> Result<Self, wasmi_031::core::Trap> {
+        let val = <Self as WasmiMarshal031>::try_marshal_from_value(v).ok_or_else(|| {
+            wasmi_031::core::Trap::from(HostError::from(Error::from_type_and_code(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
             )))
         })?;
         Ok(val.relative_to_absolute(host)?)
     }
-    fn marshal_relative_from_self(self, host: &Host) -> Result<wasmi::Value, Trap> {
+    fn try_marshal_from_relative_value_032(
+        v: wasmi_032::Val,
+        host: &Host,
+    ) -> Result<Self, wasmi_032::core::Trap> {
+        let val = <Self as WasmiMarshal032>::try_marshal_from_value(v).ok_or_else(|| {
+            wasmi_032::core::Trap::from(HostError::from(Error::from_type_and_code(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+            )))
+        })?;
+        Ok(val.relative_to_absolute(host)?)
+    }
+    fn marshal_relative_from_self_031(
+        self,
+        host: &Host,
+    ) -> Result<wasmi_031::Value, wasmi_031::core::Trap> {
         let rel = self.absolute_to_relative(host)?;
-        Ok(Self::marshal_from_self(rel))
+        Ok(<Self as WasmiMarshal031>::marshal_from_self(rel))
+    }
+    fn marshal_relative_from_self_032(
+        self,
+        host: &Host,
+    ) -> Result<wasmi_032::Val, wasmi_032::core::Trap> {
+        let rel = self.absolute_to_relative(host)?;
+        Ok(<Self as WasmiMarshal032>::marshal_from_self(rel))
     }
 }
 
@@ -133,7 +154,7 @@ impl RelativeObjectConversion for U32Val {}
 // This is a callback macro that pattern-matches the token-tree passed by the
 // x-macro (call_macro_with_all_host_functions) and produces a suite of
 // dispatch-function definitions.
-macro_rules! generate_dispatch_functions {
+macro_rules! generate_dispatch_functions_031 {
     {
         $(
             // This outer pattern matches a single 'mod' block of the token-tree
@@ -191,8 +212,8 @@ macro_rules! generate_dispatch_functions {
                 // expansion, flattening all functions from all 'mod' blocks
                 // into a set of functions.
                 $(#[$fn_attr])*
-                pub(crate) fn $fn_id(mut caller: wasmi::Caller<Host>, $($arg:i64),*) ->
-                    Result<(i64,), Trap>
+                pub(crate) fn $fn_id(mut caller: wasmi_031::Caller<Host>, $($arg:i64),*) ->
+                    Result<(i64,), wasmi_031::core::Trap>
                 {
                     let _span = tracy_span!(core::stringify!($fn_id));
 
@@ -210,7 +231,7 @@ macro_rules! generate_dispatch_functions {
                     {
                         #[allow(unused)]
                         let trace_args = ($(
-                            match <$type>::try_marshal_from_relative_value(Value::I64($arg), &host) {
+                            match <$type>::try_marshal_from_relative_value(wasmi_031::Value::I64($arg), &host) {
                                 Ok(val) => TraceArg::Ok(val),
                                 Err(_) => TraceArg::Bad($arg),
                             }
@@ -222,13 +243,13 @@ macro_rules! generate_dispatch_functions {
                     // This is where the VM -> Host boundary is crossed.
                     // We first return all fuels from the VM back to the host such that
                     // the host maintains control of the budget.
-                    FuelRefillable::return_fuel_to_host(&mut caller, &host).map_err(|he| Trap::from(he))?;
+                    FuelRefillable::return_fuel_to_host(&mut caller, &host).map_err(|he| wasmi_031::core::Trap::from(he))?;
 
                     // Charge for the host function dispatching: conversion between VM fuel and
                     // host budget, marshalling values. This does not account for the actual work
                     // being done in those functions, which are metered individually by the implementation.
                     host.charge_budget(ContractCostType::DispatchHostFunction, None)?;
-                    let mut vmcaller = VmCaller(Some(caller));
+                    let mut vmcaller = VmCaller::Vm031(caller);
                     // The odd / seemingly-redundant use of `wasmi::Value` here
                     // as intermediates -- rather than just passing Vals --
                     // has to do with the fact that some host functions are
@@ -238,7 +259,7 @@ macro_rules! generate_dispatch_functions {
                     // happens to be a natural switching point for that: we have
                     // conversions to and from both Val and i64 / u64 for
                     // wasmi::Value.
-                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::check_env_arg(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?, &host)?),*);
+                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::check_env_arg(<$type>::try_marshal_from_relative_value_031(wasmi_031::Value::I64($arg), &host)?, &host)?),*);
 
                     if host.tracing_enabled()
                     {
@@ -258,11 +279,11 @@ macro_rules! generate_dispatch_functions {
                     let res = match res {
                         Ok(ok) => {
                             let ok = ok.check_env_arg(&host)?;
-                            let val: Value = ok.marshal_relative_from_self(&host)?;
-                            if let Value::I64(v) = val {
+                            let val: wasmi_031::Value = ok.marshal_relative_from_sel_031(&host)?;
+                            if let wasmi_031::Value::I64(v) = val {
                                 Ok((v,))
                             } else {
-                                Err(BadSignature.into())
+                                Err(wasmi_031::core::Trap::BadSignature.into())
                             }
                         },
                         Err(hosterr) => {
@@ -271,15 +292,15 @@ macro_rules! generate_dispatch_functions {
                                 host.error(hosterr.error,
                                            concat!("escalating error to VM trap from failed host function call: ",
                                                    stringify!($fn_id)), &[]);
-                            let trap: Trap = escalation.into();
+                            let trap: wasmi_031::core::Trap = escalation.into();
                             Err(trap)
                         }
                     };
 
                     // This is where the Host->VM boundary is crossed.
                     // We supply the remaining host budget as fuel to the VM.
-                    let caller = vmcaller.try_mut().map_err(|e| Trap::from(HostError::from(e)))?;
-                    FuelRefillable::add_fuel_to_vm(caller, &host).map_err(|he| Trap::from(he))?;
+                    let caller = vmcaller.try_mut().map_err(|e| wasmi_031::core::Trap::from(HostError::from(e)))?;
+                    FuelRefillable::add_fuel_to_vm(caller, &host).map_err(|he| wasmi_031::core::Trap::from(he))?;
 
                     res
                 }
@@ -288,5 +309,104 @@ macro_rules! generate_dispatch_functions {
     };
 }
 
-// Here we invoke the x-macro passing generate_dispatch_functions as its callback macro.
-call_macro_with_all_host_functions! { generate_dispatch_functions }
+pub(crate) mod dispatch_031 {
+    use super::*;
+    // Here we invoke the x-macro passing generate_dispatch_functions as its callback macro.
+    call_macro_with_all_host_functions! { generate_dispatch_functions_031 }
+}
+
+// Wasmi 0.32 is _just_ different enough that it's a complete pain to try abstracting over
+// the differences in dispatch functions. So we just do the macro again here.
+
+macro_rules! generate_dispatch_functions_032 {
+    {
+        $(
+            $(#[$mod_attr:meta])*
+            mod $mod_name:ident $mod_str:literal
+            {
+                $(
+                    $(#[$fn_attr:meta])*
+                    { $fn_str:literal, $($min_proto:literal)?, $($max_proto:literal)?, fn $fn_id:ident ($($arg:ident:$type:ty),*) -> $ret:ty }
+                )*
+            }
+        )*
+    }
+    =>
+    {
+        $(
+            $(
+                $(#[$fn_attr])*
+                pub(crate) fn $fn_id(mut caller: wasmi_032::Caller<Host>, $($arg:i64),*) ->
+                    Result<(i64,), wasmi_032::Error>
+                {
+                    let _span = tracy_span!(core::stringify!($fn_id));
+                    let host = caller.data().clone();
+
+                    $( host.check_protocol_version_lower_bound($min_proto)?; )?
+                    $( host.check_protocol_version_upper_bound($max_proto)?; )?
+
+                    if host.tracing_enabled()
+                    {
+                        #[allow(unused)]
+                        let trace_args = ($(
+                            match <$type>::try_marshal_from_relative_value_032(wasmi_032::Val::I64($arg), &host) {
+                                Ok(val) => TraceArg::Ok(val),
+                                Err(_) => TraceArg::Bad($arg),
+                            }
+                        ),*);
+                        let hook_args: &[&dyn std::fmt::Debug] = homogenize_tuple!(trace_args, ($($arg),*));
+                        host.trace_env_call(&core::stringify!($fn_id), hook_args)?;
+                    }
+
+                    FuelRefillable::return_fuel_to_host(&mut caller, &host).map_err(|he| wasmi_032::core::Trap::from(he))?;
+
+                    host.charge_budget(ContractCostType::DispatchHostFunction, None)?;
+                    let mut vmcaller = VmCaller::Vm032(caller);
+
+                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::check_env_arg(<$type>::try_marshal_from_relative_value_032(wasmi_032::Val::I64($arg), &host)?, &host)?),*);
+
+                    if host.tracing_enabled()
+                    {
+                        let dyn_res: Result<&dyn core::fmt::Debug,&HostError> = match &res {
+                            Ok(ref ok) => Ok(ok),
+                            Err(err) => Err(err)
+                        };
+                        host.trace_env_ret(&core::stringify!($fn_id), &dyn_res)?;
+                    }
+
+                    let res = host.augment_err_result(res);
+
+                    let res = match res {
+                        Ok(ok) => {
+                            let ok = ok.check_env_arg(&host)?;
+                            let val: wasmi_032::Val = ok.marshal_relative_from_self(&host)?;
+                            if let wasmi_032::Val::I64(v) = val {
+                                Ok((v,))
+                            } else {
+                                Err(wasmi_032::core::Trap::BadSignature.into())
+                            }
+                        },
+                        Err(hosterr) => {
+                            let escalation: HostError =
+                                host.error(hosterr.error,
+                                           concat!("escalating error to VM trap from failed host function call: ",
+                                                   stringify!($fn_id)), &[]);
+                            let trap: wasmi_032::core::Trap = escalation.into();
+                            Err(trap)
+                        }
+                    };
+
+                    let caller = vmcaller.try_mut().map_err(|e| wasmi_032::core::Trap::from(HostError::from(e)))?;
+                    FuelRefillable::add_fuel_to_vm(caller, &host).map_err(|he| wasmi_032::core::Trap::from(he))?;
+
+                    res
+                }
+            )*
+        )*
+    };
+}
+
+pub(crate) mod dispatch_032 {
+    use super::*;
+    call_macro_with_all_host_functions! { generate_dispatch_functions_032 }
+}
