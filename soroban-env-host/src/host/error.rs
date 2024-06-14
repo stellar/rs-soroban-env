@@ -348,8 +348,7 @@ impl Host {
     /// this if we want to record the diagnostic information.
     pub(crate) fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
     where
-        Error: From<E>,
-        E: Debug,
+        E: Debug + Into<crate::Error>,
     {
         res.map_err(|e| {
             use std::borrow::Cow;

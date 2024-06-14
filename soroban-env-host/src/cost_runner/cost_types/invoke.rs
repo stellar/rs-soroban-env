@@ -19,7 +19,7 @@ const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
 impl CostRunner for InvokeVmFunctionRun {
     const COST_TYPE: CostType = CostType::Contract(InvokeVmFunction);
 
-    type SampleType = (Rc<Vm>, Vec<Value>);
+    type SampleType = (Vm, Vec<Value>);
 
     type RecycledType = (Option<Val>, Self::SampleType);
 
@@ -52,9 +52,9 @@ impl CostRunner for InvokeHostFunctionRun {
 
     const RUN_ITERATIONS: u64 = 1000;
 
-    type SampleType = Rc<Vm>;
+    type SampleType = Vm;
 
-    type RecycledType = Rc<Vm>;
+    type RecycledType = Vm;
 
     fn run_iter(_host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         black_box(

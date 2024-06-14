@@ -187,7 +187,7 @@ impl fmt::Display for WasmInsnType {
 
 #[derive(Clone)]
 pub struct WasmInsnSample {
-    pub vm: Rc<Vm>,
+    pub vm: Vm,
     pub insns: u64,
     pub overhead: u64,
 }
@@ -195,7 +195,7 @@ pub struct WasmInsnSample {
 #[derive(Clone)]
 pub struct WasmInsnExecSample {
     pub args: ScVec,
-    pub vm: Rc<Vm>,
+    pub vm: Vm,
 }
 
 const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {

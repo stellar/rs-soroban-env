@@ -3,7 +3,7 @@ use std::{hint::black_box, rc::Rc};
 
 #[derive(Clone)]
 pub struct VmMemRunSample {
-    pub vm: Rc<Vm>,
+    pub vm: Vm,
     pub buf: Vec<u8>,
 }
 

@@ -357,9 +357,20 @@ impl<V: WasmiVersion> VersionedParsedModule<V> {
             ))
         }
     }
+}
 
-    // Do a second, manual parse of the Wasm blob to extract cost parameters we're
-    // interested in.
+impl ParsedModule {
+    pub fn get_cost_inputs(&self) -> &VersionedContractCodeCostInputs {
+        match self {
+            Self::ParsedModule031(m) => &m.cost_inputs,
+            Self::ParsedModule032(m) => &m.cost_inputs,
+        }
+    }
+
+    // Do a second, manual parse of the Wasm blob to extract cost parameters
+    // we're interested in. This is wasmi-version agnostic, so goes in an impl
+    // on ParsedModule itself, not VersionedParsedModule.
+
     pub fn extract_refined_contract_cost_inputs(
         host: &Host,
         wasm: &[u8],

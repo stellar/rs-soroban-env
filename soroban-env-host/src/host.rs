@@ -26,7 +26,7 @@ mod comparison;
 mod conversion;
 pub(crate) mod crypto;
 mod data_helper;
-mod declared_size;
+pub(crate) mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 pub(crate) mod ledger_info_helper;

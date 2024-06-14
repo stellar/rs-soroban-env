@@ -231,7 +231,7 @@ macro_rules! generate_dispatch_functions_031 {
                     {
                         #[allow(unused)]
                         let trace_args = ($(
-                            match <$type>::try_marshal_from_relative_value(wasmi_031::Value::I64($arg), &host) {
+                            match <$type>::try_marshal_from_relative_value_031(wasmi_031::Value::I64($arg), &host) {
                                 Ok(val) => TraceArg::Ok(val),
                                 Err(_) => TraceArg::Bad($arg),
                             }
@@ -279,7 +279,7 @@ macro_rules! generate_dispatch_functions_031 {
                     let res = match res {
                         Ok(ok) => {
                             let ok = ok.check_env_arg(&host)?;
-                            let val: wasmi_031::Value = ok.marshal_relative_from_sel_031(&host)?;
+                            let val: wasmi_031::Value = ok.marshal_relative_from_self_031(&host)?;
                             if let wasmi_031::Value::I64(v) = val {
                                 Ok((v,))
                             } else {
@@ -299,7 +299,7 @@ macro_rules! generate_dispatch_functions_031 {
 
                     // This is where the Host->VM boundary is crossed.
                     // We supply the remaining host budget as fuel to the VM.
-                    let caller = vmcaller.try_mut().map_err(|e| wasmi_031::core::Trap::from(HostError::from(e)))?;
+                    let caller = vmcaller.try_mut_031().map_err(|e| wasmi_031::core::Trap::from(HostError::from(e)))?;
                     FuelRefillable::add_fuel_to_vm(caller, &host).map_err(|he| wasmi_031::core::Trap::from(he))?;
 
                     res

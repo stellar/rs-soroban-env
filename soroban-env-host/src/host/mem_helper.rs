@@ -6,13 +6,13 @@ use crate::{
     Compare, Host, HostError, Symbol, SymbolObject, SymbolSmall, SymbolStr, U32Val, Vm, VmCaller,
 };
 
-use std::{cmp::Ordering, rc::Rc};
+use std::cmp::Ordering;
 
 /// Helper type for host functions that receive a position and length pair and
 /// expect to operate on a VM. Pos and len are not validated and len may be a
 /// count of bytes, Vals or slices depending on the host function.
 pub(crate) struct MemFnArgs {
-    pub(crate) vm: Rc<Vm>,
+    pub(crate) vm: Vm,
     pub(crate) pos: u32,
     pub(crate) len: u32,
 }
@@ -34,7 +34,7 @@ impl Vm {
             Vm::Vm032(vm) => host.map_err(
                 vm.get_memory(host)?
                     .read(vmcaller.try_ref_032()?, offset, buffer)
-                    .map_err(|e| wasmi_032::Error::Memory(e)),
+                    .map_err(|e| wasmi_032::Error::from(e)),
             ),
         }
     }
@@ -54,7 +54,7 @@ impl Vm {
             Vm::Vm032(vm) => host.map_err(
                 vm.get_memory(host)?
                     .write(vmcaller.try_mut_032()?, offset, buffer)
-                    .map_err(|e| wasmi_032::Error::Memory(e)),
+                    .map_err(|e| wasmi_032::Error::from(e)),
             ),
         }
     }
@@ -94,7 +94,7 @@ impl Host {
         let len: u32 = len.into();
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM { vm, .. } => {
-                let vm = Rc::clone(&vm);
+                let vm = vm.clone();
                 Ok(MemFnArgs { vm, pos, len })
             }
             _ => Err(self.err(
@@ -109,7 +109,7 @@ impl Host {
     pub(crate) fn metered_vm_write_bytes_to_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mem_pos: u32,
         buf: &[u8],
     ) -> Result<(), HostError> {
@@ -120,7 +120,7 @@ impl Host {
     pub(crate) fn metered_vm_read_bytes_from_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mem_pos: u32,
         buf: &mut [u8],
     ) -> Result<(), HostError> {
@@ -134,7 +134,7 @@ impl Host {
     pub(crate) fn metered_vm_write_vals_to_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mem_pos: u32,
         buf: &[VAL],
         to_le_bytes: impl Fn(&VAL) -> Result<[u8; VAL_SZ], HostError>,
@@ -178,7 +178,7 @@ impl Host {
     pub(crate) fn metered_vm_read_vals_from_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mem_pos: u32,
         buf: &mut [VAL],
         from_le_bytes: impl Fn(&[u8; VAL_SZ]) -> Result<VAL, HostError>,
@@ -238,7 +238,7 @@ impl Host {
     pub(crate) fn metered_vm_scan_slices_in_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mut mem_pos: u32,
         num_slices: usize,
         mut callback: impl FnMut(usize, &[u8]) -> Result<(), HostError>,

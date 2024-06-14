@@ -1285,7 +1285,7 @@ impl AuthorizationManager {
         let _span = tracy_span!("push auth frame");
         let (contract_id, function_name) = match frame {
             Frame::ContractVM { vm, fn_name, .. } => {
-                (vm.contract_id.metered_clone(host)?, *fn_name)
+                (vm.get_contract_id().metered_clone(host)?, *fn_name)
             }
             // Skip the top-level host function stack frames as they don't
             // contain all the necessary information.

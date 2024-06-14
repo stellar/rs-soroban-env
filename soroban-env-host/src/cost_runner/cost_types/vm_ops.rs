@@ -10,7 +10,7 @@ use std::{hint::black_box, rc::Rc};
 pub struct VmInstantiationSample {
     pub id: Option<Hash>,
     pub wasm: Vec<u8>,
-    pub module: Rc<ParsedModule>,
+    pub module: ParsedModule,
 }
 
 // Protocol 20 coarse and unified cost model
@@ -23,7 +23,7 @@ impl CostRunner for VmInstantiationRun {
 
     type SampleType = VmInstantiationSample;
 
-    type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
+    type RecycledType = (Option<Vm>, Vec<u8>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         let vm = black_box(
@@ -73,7 +73,7 @@ mod v21 {
 
                 type SampleType = VmInstantiationSample;
 
-                type RecycledType = (Option<Rc<ParsedModule>>, Vec<u8>);
+                type RecycledType = (Option<ParsedModule>, Vec<u8>);
 
                 fn run_iter(
                     host: &crate::Host,
@@ -113,7 +113,7 @@ mod v21 {
 
                 type SampleType = VmInstantiationSample;
 
-                type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
+                type RecycledType = (Option<Vm>, Vec<u8>);
 
                 fn run_iter(
                     host: &crate::Host,

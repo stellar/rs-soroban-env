@@ -11,21 +11,21 @@ use crate::{
 };
 use std::{collections::BTreeSet, rc::Rc};
 
+#[derive(Clone)]
 pub enum ModuleCache {
-    ModuleCache031(VersionedModuleCache<Wasmi031>),
-    ModuleCache032(VersionedModuleCache<Wasmi032>),
+    ModuleCache031(Rc<VersionedModuleCache<Wasmi031>>),
+    ModuleCache032(Rc<VersionedModuleCache<Wasmi032>>),
 }
 
 impl ModuleCache {
+    // ModuleCache should not be active until protocol version 21.
+    pub const MIN_LEDGER_VERSION: u32 = 21;
+
     pub fn new(host: &Host) -> Result<Self, HostError> {
-        if host.ledger_version()? < WASMI_032_PROTOCOL_VERSION {
-            Ok(ModuleCache::ModuleCache031(
-                VersionedModuleCache::<Wasmi031>::new(host)?,
-            ))
+        if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
+            VersionedModuleCache::<Wasmi031>::new(host).map(ModuleCache::ModuleCache031)
         } else {
-            Ok(ModuleCache::ModuleCache032(
-                VersionedModuleCache::<Wasmi032>::new(host)?,
-            ))
+            VersionedModuleCache::<Wasmi032>::new(host).map(ModuleCache::ModuleCache032)
         }
     }
 
@@ -54,20 +54,17 @@ pub(crate) struct VersionedModuleCache<V: WasmiVersion> {
 }
 
 impl<V: WasmiVersion> VersionedModuleCache<V> {
-    // ModuleCache should not be active until protocol version 21.
-    pub const MIN_LEDGER_VERSION: u32 = 21;
-
-    pub fn new(host: &Host) -> Result<Self, HostError> {
+    fn new(host: &Host) -> Result<Rc<Self>, HostError> {
         let config = get_wasmi_config(host.as_budget())?;
-        let engine = V::Engine::new(&config);
-        let modules = MeteredOrdMap::new();
-        Self::add_stored_contracts(engine, &mut modules, host)?;
+        let engine = V::new_engine(&config);
+        let mut modules = MeteredOrdMap::new();
+        Self::add_stored_contracts(&engine, &mut modules, host)?;
         let linker = Self::make_linker(&engine, &modules, host)?;
-        Ok(Self {
+        Ok(Rc::new(Self {
             engine,
             modules,
             linker,
-        })
+        }))
     }
 
     fn add_stored_contracts(
@@ -146,7 +143,7 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
                 &[],
             ));
         }
-        let parsed_module = ParsedModule::new(host, engine, &wasm, cost_inputs)?;
+        let parsed_module = VersionedParsedModule::<V>::new(host, engine, &wasm, cost_inputs)?;
         *modules = modules.insert(contract_id.metered_clone(host)?, parsed_module, host)?;
         Ok(())
     }
@@ -185,7 +182,7 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
         host: &Host,
     ) -> Result<V::Linker, HostError> {
         Self::with_module_set_import_symbols(host, modules, |symbols| {
-            Host::make_linker(engine, symbols)
+            Host::make_linker::<V>(engine, symbols)
         })
     }
 

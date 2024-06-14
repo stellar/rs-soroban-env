@@ -88,9 +88,10 @@ impl Drop for VmInstantiationTimer {
 /// only the functions declared in [Env](crate::Env) as imports, if requested by the
 /// WASM module. Any other lookups on any tables other than import functions
 /// will fail.
+#[derive(Clone)]
 pub enum Vm {
-    Vm031(VersionedVm<Wasmi031>),
-    Vm032(VersionedVm<Wasmi032>),
+    Vm031(Rc<VersionedVm<Wasmi031>>),
+    Vm032(Rc<VersionedVm<Wasmi032>>),
 }
 
 const WASMI_032_PROTOCOL_VERSION: u32 = 22;
@@ -106,7 +107,7 @@ pub(crate) struct VersionedVm<V: WasmiVersion> {
 
 impl std::hash::Hash for Vm {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.contract_id.hash(state);
+        self.get_contract_id().hash(state);
     }
 }
 
@@ -137,31 +138,31 @@ pub(crate) enum ModuleParseCostMode {
 }
 
 impl Vm {
-    pub fn from_parsed_module<V: WasmiVersion>(
+    pub fn from_parsed_module(
         host: &Host,
         contract_id: Hash,
-        parsed_module: Rc<ParsedModule>,
-    ) -> Result<Rc<Self>, HostError> {
+        parsed_module: &ParsedModule,
+    ) -> Result<Self, HostError> {
         match parsed_module {
-            ParsedModule::ParsedModule031(pm031) => Ok(Rc::new(Vm::Vm031(
-                VersionedVm::<Wasmi031>::from_parsed_module(host, contract_id, pm031),
-            ))),
-            ParsedModule::ParsedModule032(pm032) => Ok(Rc::new(Vm::Vm032(
-                VersionedVm::<Wasmi032>::from_parsed_module(host, contract_id, pm032),
-            ))),
+            ParsedModule::ParsedModule031(pm031) => {
+                VersionedVm::<Wasmi031>::from_parsed_module(host, contract_id, pm031).map(Vm::Vm031)
+            }
+            ParsedModule::ParsedModule032(pm032) => {
+                VersionedVm::<Wasmi032>::from_parsed_module(host, contract_id, pm032).map(Vm::Vm032)
+            }
         }
     }
 
-    pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Rc<Self>, HostError> {
+    pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Self, HostError> {
         if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
-            VersionedVm::<Wasmi031>::new(host, contract_id, wasm)
+            VersionedVm::<Wasmi031>::new(host, contract_id, wasm).map(Vm::Vm031)
         } else {
-            VersionedVm::<Wasmi032>::new(host, contract_id, wasm)
+            VersionedVm::<Wasmi032>::new(host, contract_id, wasm).map(Vm::Vm032)
         }
     }
 
     pub(crate) fn invoke_function_raw(
-        self: &Rc<Self>,
+        &self,
         host: &Host,
         func_sym: &Symbol,
         args: &[Val],
@@ -169,13 +170,6 @@ impl Vm {
         match self {
             Vm::Vm031(vm) => vm.invoke_function_raw(host, func_sym, args),
             Vm::Vm032(vm) => vm.invoke_function_raw(host, func_sym, args),
-        }
-    }
-
-    pub(crate) fn get_memory(&self, host: &Host) -> Result<wasmi_031::Memory, HostError> {
-        match self {
-            Vm::Vm031(vm) => vm.get_memory(host),
-            Vm::Vm032(vm) => vm.get_memory(host),
         }
     }
 
@@ -192,6 +186,47 @@ impl Vm {
             Vm::Vm032(vm) => vm.memory_hash_and_size(budget),
         }
     }
+    pub(crate) fn get_contract_id(&self) -> &Hash {
+        match self {
+            Vm::Vm031(vm) => &vm.contract_id,
+            Vm::Vm032(vm) => &vm.contract_id,
+        }
+    }
+    pub(crate) fn new_with_cost_inputs(
+        host: &Host,
+        contract_id: Hash,
+        wasm: &[u8],
+        cost_inputs: VersionedContractCodeCostInputs,
+        cost_mode: ModuleParseCostMode,
+    ) -> Result<Self, HostError> {
+        if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
+            VersionedVm::<Wasmi031>::new_with_cost_inputs(
+                host,
+                contract_id,
+                wasm,
+                cost_inputs,
+                cost_mode,
+            )
+            .map(Vm::Vm031)
+        } else {
+            VersionedVm::<Wasmi032>::new_with_cost_inputs(
+                host,
+                contract_id,
+                wasm,
+                cost_inputs,
+                cost_mode,
+            )
+            .map(Vm::Vm032)
+        }
+    }
+
+    pub(crate) fn get_module(&self) -> ParsedModule {
+        match self {
+            Vm::Vm031(vm) => ParsedModule::ParsedModule031(vm.module.clone()),
+            Vm::Vm032(vm) => ParsedModule::ParsedModule032(vm.module.clone()),
+        }
+    }
+
     #[cfg(feature = "testutils")]
     pub fn get_all_host_functions() -> Vec<(&'static str, &'static str, u32)> {
         HOST_FUNCTIONS
@@ -207,7 +242,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
     fn instantiate(
         host: &Host,
         contract_id: Hash,
-        parsed_module: Rc<VersionedParsedModule<V>>,
+        parsed_module: &Rc<VersionedParsedModule<V>>,
         linker: &V::Linker,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::instantiate");
@@ -279,7 +314,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
 
         let instance = host.map_err(V::ensure_no_start(not_started_instance, &mut store))?;
 
-        let memory = if let Some(ext) = V::get_export(instance, &mut store, "memory") {
+        let memory = if let Some(ext) = V::get_export(&instance, &mut store, "memory") {
             V::export_to_memory(ext)
         } else {
             None
@@ -290,7 +325,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
         // boundary.
         Ok(Rc::new(Self {
             contract_id,
-            module: parsed_module,
+            module: parsed_module.clone(),
             store: RefCell::new(store),
             instance,
             memory,
@@ -300,15 +335,14 @@ impl<V: WasmiVersion> VersionedVm<V> {
     pub fn from_parsed_module(
         host: &Host,
         contract_id: Hash,
-        parsed_module: Rc<ParsedModule>,
+        parsed_module: &Rc<VersionedParsedModule<V>>,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::from_parsed_module");
         VmInstantiationTimer::new(host.clone());
         if let Some(module_cache) = &*host.try_borrow_module_cache()? {
-            let linker = V::downcast_module_cache(module_cache)?.linker;
+            let linker = V::downcast_module_cache(host, module_cache)?.linker;
             Self::instantiate(host, contract_id, parsed_module, linker)
         } else {
-            let parsed_module = V::downcast_parsed_module(&*parsed_module)?;
             let linker = parsed_module.make_linker(host)?;
             Self::instantiate(host, contract_id, parsed_module, &linker)
         }
@@ -358,7 +392,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
         VmInstantiationTimer::new(host.clone());
         let parsed_module = Self::parse_module(host, wasm, cost_inputs, cost_mode)?;
         let linker = parsed_module.make_linker(host)?;
-        Self::instantiate(host, contract_id, parsed_module, &linker)
+        Self::instantiate(host, contract_id, &parsed_module, &linker)
     }
 
     #[cfg(not(any(test, feature = "recording_mode")))]
@@ -367,8 +401,8 @@ impl<V: WasmiVersion> VersionedVm<V> {
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
         _cost_mode: ModuleParseCostMode,
-    ) -> Result<Rc<ParsedModule>, HostError> {
-        ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
+    ) -> Result<Rc<VersionedParsedModule<V>>, HostError> {
+        VersionedParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
     }
 
     /// This method exists to support [crate::storage::FootprintMode::Recording]
@@ -412,17 +446,17 @@ impl<V: WasmiVersion> VersionedVm<V> {
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
         cost_mode: ModuleParseCostMode,
-    ) -> Result<Rc<ParsedModule>, HostError> {
+    ) -> Result<Rc<VersionedParsedModule<V>>, HostError> {
         if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording
             && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
         {
             if host.in_storage_recording_mode()? {
                 return host.budget_ref().with_observable_shadow_mode(|| {
-                    ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
+                    VersionedParsedModule::<V>::new_with_isolated_engine(host, wasm, cost_inputs)
                 });
             }
         }
-        ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
+        VersionedParsedModule::<V>::new_with_isolated_engine(host, wasm, cost_inputs)
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<V::Memory, HostError> {

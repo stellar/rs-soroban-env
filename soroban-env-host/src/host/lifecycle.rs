@@ -187,7 +187,10 @@ impl Host {
                 // At this point we do a secondary parse on what we've checked to be a valid
                 // module in order to extract a refined cost model, which we'll store in the
                 // code entry's ext field, for future parsing and instantiations.
-                _check_vm.module.cost_inputs.charge_for_parsing(self)?;
+                _check_vm
+                    .get_module()
+                    .get_cost_inputs()
+                    .charge_for_parsing(self)?;
                 ext = crate::xdr::ContractCodeEntryExt::V1(crate::xdr::ContractCodeEntryV1 {
                     ext: ExtensionPoint::V0,
                     cost_inputs: crate::vm::ParsedModule::extract_refined_contract_cost_inputs(

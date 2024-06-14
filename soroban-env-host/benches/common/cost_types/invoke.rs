@@ -25,7 +25,7 @@ pub(crate) struct InvokeVmFunctionMeasure;
 impl HostCostMeasurement for InvokeVmFunctionMeasure {
     type Runner = InvokeVmFunctionRun;
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, _input: u64) -> (Rc<Vm>, Vec<Value>) {
+    fn new_random_case(host: &Host, _rng: &mut StdRng, _input: u64) -> (Vm, Vec<Value>) {
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_empty_invoke();
         let vm = Vm::new(&host, id, &code).unwrap();
@@ -44,7 +44,7 @@ pub(crate) struct InvokeHostFunctionMeasure;
 impl HostCostMeasurement for InvokeHostFunctionMeasure {
     type Runner = InvokeHostFunctionRun;
 
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Rc<Vm> {
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Vm {
         InvokeVmFunctionMeasure::new_random_case(host, rng, input).0
     }
 }

@@ -119,7 +119,7 @@ pub(crate) fn load_calibrated_fuel_costs_031() -> wasmi_031::FuelCosts {
     fuel_costs
 }
 
-pub(crate) fn load_calibrated_fuel_costs_032() -> wasmi_031::FuelCosts {
+pub(crate) fn load_calibrated_fuel_costs_032() -> wasmi_032::FuelCosts {
     let fuel_costs = wasmi_032::FuelCosts::default();
     // TODO: calibrate 0.32 fuel costs
     fuel_costs
@@ -130,7 +130,7 @@ pub(crate) fn load_calibrated_fuel_costs_032() -> wasmi_031::FuelCosts {
 // protocol version -- so we need to create both configs.
 pub(crate) struct WasmiConfig {
     pub(crate) config_031: wasmi_031::Config,
-    pub(crate) config_032: wasmi_031::Config,
+    pub(crate) config_032: wasmi_032::Config,
 }
 
 pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<WasmiConfig, HostError> {
