@@ -172,18 +172,13 @@ impl<V: WasmiVersion> VersionedParsedModule<V> {
         // we'll leave some future-proofing room here. The important point
         // is to not be introducing a DoS vector.
         const SYM_LEN_LIMIT: usize = 10;
-        let symbols: BTreeSet<(&str, &str)> = self
-            .module
-            .imports()
-            .filter_map(|i| {
-                if i.ty().func().is_some() {
-                    let mod_str = i.module();
-                    let fn_str = i.name();
-                    if mod_str.len() < SYM_LEN_LIMIT && fn_str.len() < SYM_LEN_LIMIT {
-                        return Some((mod_str, fn_str));
-                    }
+        let symbols: BTreeSet<(&str, &str)> = V::module_func_imports(&self.module)
+            .filter_map(|(mod_str, fn_str)| {
+                if mod_str.len() < SYM_LEN_LIMIT && fn_str.len() < SYM_LEN_LIMIT {
+                    Some((mod_str, fn_str))
+                } else {
+                    None
                 }
-                None
             })
             .collect();
         // We approximate the cost of `BTreeSet` with the cost of initializng a
@@ -200,7 +195,7 @@ impl<V: WasmiVersion> VersionedParsedModule<V> {
 
     pub fn make_linker(&self, host: &Host) -> Result<V::Linker, HostError> {
         self.with_import_symbols(host, |symbols| {
-            Host::make_linker(self.module.engine(), symbols)
+            Host::make_linker::<V>(V::get_module_engine(&self.module), symbols)
         })
     }
 
@@ -314,24 +309,14 @@ impl<V: WasmiVersion> VersionedParsedModule<V> {
         Ok(())
     }
 
-    fn module_custom_section(m: &V::Module, name: impl AsRef<str>) -> Option<&[u8]> {
-        m.custom_sections().iter().find_map(|s| {
-            if &*s.name == name.as_ref() {
-                Some(&*s.data)
-            } else {
-                None
-            }
-        })
-    }
-
     /// Returns the raw bytes content of a named custom section from the Wasm
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
-        Self::module_custom_section(&self.module, name)
+        V::module_custom_section(&self.module, name)
     }
 
     fn check_meta_section(host: &Host, m: &V::Module) -> Result<u64, HostError> {
-        if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
+        if let Some(env_meta) = V::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut limits = DEFAULT_XDR_RW_LIMITS;
             limits.len = env_meta.len();
             let mut cursor = Limited::new(Cursor::new(env_meta), limits);

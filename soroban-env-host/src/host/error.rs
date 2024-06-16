@@ -36,6 +36,18 @@ impl Into<Error> for HostError {
     }
 }
 
+impl From<HostError> for wasmi_031::Error {
+    fn from(e: HostError) -> Self {
+        wasmi_031::Error::Trap(wasmi_031::core::Trap::from(e))
+    }
+}
+
+impl From<HostError> for wasmi_032::Error {
+    fn from(e: HostError) -> Self {
+        wasmi_032::Error::host(e)
+    }
+}
+
 impl DebugInfo {
     fn write_events(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO: maybe make this something users can adjust?

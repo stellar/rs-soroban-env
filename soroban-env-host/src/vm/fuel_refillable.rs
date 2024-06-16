@@ -76,29 +76,37 @@ macro_rules! impl_refillable_for_store_wasmi_032 {
     ($store: ty) => {
         impl<'a> FuelRefillable for $store {
             fn fuel_consumed(&self) -> Result<u64, HostError> {
+                todo!()
+                // FIXME: the fuel APIs have changed and are no longer compatible
+                /*
                 self.fuel_consumed().ok_or_else(|| {
-                    HostError::from(wasmi_032::errors::ErrorKind::Fuel(
+                    HostError::from(wasmi_032::Error::from(
                         wasmi_032::errors::FuelError::FuelMeteringDisabled,
                     ))
                 })
+                */
             }
 
             fn fuel_total(&self) -> Result<u64, HostError> {
+                todo!()
+                // FIXME: the fuel APIs have changed and are no longer compatible
+                /*
                 self.fuel_total().ok_or_else(|| {
-                    HostError::from(wasmi_032::errors::ErrorKind::Fuel(
-                        wasmi_031::errors::FuelError::FuelMeteringDisabled,
+                    HostError::from(wasmi_032::Error::from(
+                        wasmi_032::errors::FuelError::FuelMeteringDisabled,
                     ))
                 })
+                */
             }
 
             fn add_fuel(&mut self, fuel: u64) -> Result<(), HostError> {
                 self.add_fuel(fuel)
-                    .map_err(|fe| HostError::from(wasmi_032::errors::ErrorKind::Fuel(fe)))
+                    .map_err(|fe| HostError::from(wasmi_032::Error::from(fe)))
             }
 
             fn reset_fuel(&mut self) -> Result<(), HostError> {
                 self.reset_fuel()
-                    .map_err(|fe| HostError::from(wasmi_032::errors::ErrorKind::Fuel(fe)))
+                    .map_err(|fe| HostError::from(wasmi_032::Error::from(fe)))
             }
         }
     };

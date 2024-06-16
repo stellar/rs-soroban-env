@@ -33,9 +33,9 @@ pub(crate) trait RelativeObjectConversion: WasmiMarshal031 + WasmiMarshal032 {
     fn try_marshal_from_relative_value_032(
         v: wasmi_032::Val,
         host: &Host,
-    ) -> Result<Self, wasmi_032::core::Trap> {
+    ) -> Result<Self, wasmi_032::Error> {
         let val = <Self as WasmiMarshal032>::try_marshal_from_value(v).ok_or_else(|| {
-            wasmi_032::core::Trap::from(HostError::from(Error::from_type_and_code(
+            wasmi_032::Error::host(HostError::from(Error::from_type_and_code(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
             )))
@@ -52,8 +52,10 @@ pub(crate) trait RelativeObjectConversion: WasmiMarshal031 + WasmiMarshal032 {
     fn marshal_relative_from_self_032(
         self,
         host: &Host,
-    ) -> Result<wasmi_032::Val, wasmi_032::core::Trap> {
-        let rel = self.absolute_to_relative(host)?;
+    ) -> Result<wasmi_032::Val, wasmi_032::Error> {
+        let rel = self
+            .absolute_to_relative(host)
+            .map_err(|he| wasmi_032::Error::host(he))?;
         Ok(<Self as WasmiMarshal032>::marshal_from_self(rel))
     }
 }
@@ -283,7 +285,7 @@ macro_rules! generate_dispatch_functions_031 {
                             if let wasmi_031::Value::I64(v) = val {
                                 Ok((v,))
                             } else {
-                                Err(wasmi_031::core::Trap::BadSignature.into())
+                                Err(wasmi_031::core::TrapCode::BadSignature.into())
                             }
                         },
                         Err(hosterr) => {
@@ -358,7 +360,7 @@ macro_rules! generate_dispatch_functions_032 {
                         host.trace_env_call(&core::stringify!($fn_id), hook_args)?;
                     }
 
-                    FuelRefillable::return_fuel_to_host(&mut caller, &host).map_err(|he| wasmi_032::core::Trap::from(he))?;
+                    FuelRefillable::return_fuel_to_host(&mut caller, &host)?;
 
                     host.charge_budget(ContractCostType::DispatchHostFunction, None)?;
                     let mut vmcaller = VmCaller::Vm032(caller);
@@ -379,11 +381,11 @@ macro_rules! generate_dispatch_functions_032 {
                     let res = match res {
                         Ok(ok) => {
                             let ok = ok.check_env_arg(&host)?;
-                            let val: wasmi_032::Val = ok.marshal_relative_from_self(&host)?;
+                            let val: wasmi_032::Val = ok.marshal_relative_from_self_032(&host)?;
                             if let wasmi_032::Val::I64(v) = val {
                                 Ok((v,))
                             } else {
-                                Err(wasmi_032::core::Trap::BadSignature.into())
+                                Err(wasmi_032::core::TrapCode::BadSignature.into())
                             }
                         },
                         Err(hosterr) => {
@@ -391,13 +393,13 @@ macro_rules! generate_dispatch_functions_032 {
                                 host.error(hosterr.error,
                                            concat!("escalating error to VM trap from failed host function call: ",
                                                    stringify!($fn_id)), &[]);
-                            let trap: wasmi_032::core::Trap = escalation.into();
-                            Err(trap)
+                            let err: wasmi_032::Error = wasmi_032::Error::host(escalation);
+                            Err(err)
                         }
                     };
 
-                    let caller = vmcaller.try_mut().map_err(|e| wasmi_032::core::Trap::from(HostError::from(e)))?;
-                    FuelRefillable::add_fuel_to_vm(caller, &host).map_err(|he| wasmi_032::core::Trap::from(he))?;
+                    let caller = vmcaller.try_mut_032().map_err(|e| HostError::from(e))?;
+                    FuelRefillable::add_fuel_to_vm(caller, &host)?;
 
                     res
                 }

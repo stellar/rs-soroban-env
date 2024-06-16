@@ -16,8 +16,10 @@ mod parsed_module;
 
 #[cfg(feature = "bench")]
 pub(crate) use dispatch::dummy0;
-#[cfg(test)]
-pub(crate) use dispatch::protocol_gated_dummy;
+
+// FIXME: re-enable when fixing protocol_gate tests
+// #[cfg(test)]
+// pub(crate) use dispatch::dispatch_031::protocol_gated_dummy;
 
 use crate::{
     budget::{get_wasmi_config, AsBudget, Budget, WasmiConfig},
@@ -27,8 +29,7 @@ use crate::{
         metered_hash::{CountingHasher, MeteredHash},
     },
     xdr::{ContractCostType, Hash, ScErrorCode, ScErrorType},
-    ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal031,
-    WasmiMarshal032,
+    ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val,
 };
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
@@ -119,7 +120,8 @@ impl Host {
         let mut linker = V::new_linker(&engine);
         for hf in HOST_FUNCTIONS {
             if symbols.contains(&(hf.mod_str, hf.fn_str)) {
-                V::link_fn(&mut linker, hf)?
+                V::link_fn(&mut linker, hf)
+                    .map_err(|e| <V::Error as Into<crate::Error>>::into(e))?
             }
         }
         Ok(linker)
@@ -180,12 +182,6 @@ impl Vm {
         }
     }
 
-    pub(crate) fn memory_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
-        match self {
-            Vm::Vm031(vm) => vm.memory_hash_and_size(budget),
-            Vm::Vm032(vm) => vm.memory_hash_and_size(budget),
-        }
-    }
     pub(crate) fn get_contract_id(&self) -> &Hash {
         match self {
             Vm::Vm031(vm) => &vm.contract_id,
@@ -247,12 +243,10 @@ impl<V: WasmiVersion> VersionedVm<V> {
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::instantiate");
 
-        let engine = parsed_module.module.engine();
+        let engine = V::get_module_engine(&parsed_module.module);
         let mut store = V::new_store(engine, host.clone());
 
         parsed_module.cost_inputs.charge_for_instantiation(host)?;
-
-        store.limiter(|host| host);
 
         {
             // We perform instantiation-time protocol version gating of
@@ -341,7 +335,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
         VmInstantiationTimer::new(host.clone());
         if let Some(module_cache) = &*host.try_borrow_module_cache()? {
             let linker = V::downcast_module_cache(host, module_cache)?.linker;
-            Self::instantiate(host, contract_id, parsed_module, linker)
+            Self::instantiate(host, contract_id, parsed_module, &linker)
         } else {
             let linker = parsed_module.make_linker(host)?;
             Self::instantiate(host, contract_id, parsed_module, &linker)
@@ -528,7 +522,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
         // which is technically covered by wasmi fuel metering. So we are double charging a bit
         // here (by a few 100s cpu insns). It is better to be safe.
         let res = V::call_func(
-            func,
+            &func,
             &mut *self.store.try_borrow_mut_or_err()?,
             inputs,
             &mut wasm_ret,
@@ -548,7 +542,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
             return Err(V::handle_call_error(host, func_sym, e));
         }
         host.relative_to_absolute(
-            Val::try_marshal_from_value(wasm_ret[0].clone()).ok_or(ConversionError)?,
+            V::try_unmarshal_value_to_val(wasm_ret[0].clone()).ok_or(ConversionError)?,
         )
     }
 
@@ -562,7 +556,10 @@ impl<V: WasmiVersion> VersionedVm<V> {
         Vec::<V::Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
         let wasm_args: Vec<V::Value> = args
             .iter()
-            .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
+            .map(|i| {
+                host.absolute_to_relative(*i)
+                    .map(|v| V::marshal_val_to_value(v))
+            })
             .collect::<Result<Vec<V::Value>, HostError>>()?;
         self.metered_func_call(host, func_sym, wasm_args.as_slice())
     }
@@ -572,7 +569,35 @@ impl<V: WasmiVersion> VersionedVm<V> {
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
         self.module.custom_section(name)
     }
+}
 
+impl VersionedVm<Wasmi031> {
+    fn with_caller_031<F, T>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(wasmi_031::Caller<Host>) -> Result<T, HostError>,
+    {
+        let store: &mut wasmi_031::Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
+        let mut ctx: wasmi_031::StoreContextMut<Host> = store.into();
+        let mut caller: wasmi_031::Caller<Host> =
+            wasmi_031::Caller::new(&mut ctx, Some(&self.instance));
+        f(caller)
+    }
+}
+
+impl VersionedVm<Wasmi032> {
+    fn with_caller_032<F, T>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(wasmi_032::Caller<Host>) -> Result<T, HostError>,
+    {
+        let store: &mut wasmi_032::Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
+        let mut ctx: wasmi_032::StoreContextMut<Host> = store.into();
+        let mut caller: wasmi_032::Caller<Host> =
+            wasmi_032::Caller::new(&mut ctx, Some(&self.instance));
+        f(caller)
+    }
+}
+
+impl Vm {
     /// Utility function that synthesizes a `VmCaller<Host>` configured to point
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
@@ -581,22 +606,14 @@ impl<V: WasmiVersion> VersionedVm<V> {
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
     {
         match self {
-            Vm::Vm031(vm) => {
-                let store: &mut wasmi_031::Store<Host> = &mut vm.store.try_borrow_mut_or_err()?;
-                let mut ctx: wasmi_031::StoreContextMut<Host> = store.into();
-                let caller: wasmi_031::Caller<Host> =
-                    wasmi_031::Caller::new(&mut ctx, Some(&self.instance));
+            Vm::Vm031(vm) => vm.with_caller_031(|caller| {
                 let mut vmcaller: VmCaller<Host> = VmCaller::Vm031(caller);
                 f(&mut vmcaller)
-            }
-            Vm::Vm032(vm) => {
-                let store: &mut wasmi_032::Store<Host> = &mut vm.store.try_borrow_mut_or_err()?;
-                let mut ctx: wasmi_032::StoreContextMut<Host> = store.into();
-                let caller: wasmi_032::Caller<Host> =
-                    wasmi_032::Caller::new(&mut ctx, Some(&self.instance));
+            }),
+            Vm::Vm032(vm) => vm.with_caller_032(|caller| {
                 let mut vmcaller: VmCaller<Host> = VmCaller::Vm032(caller);
                 f(&mut vmcaller)
-            }
+            }),
         }
     }
 
@@ -613,16 +630,32 @@ impl<V: WasmiVersion> VersionedVm<V> {
 
     pub(crate) fn memory_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
         use std::hash::Hasher;
-        if let Some(mem) = self.memory {
-            self.with_vmcaller(|vmcaller| {
-                let mut state = CountingHasher::default();
-                let data = mem.data(vmcaller.try_ref()?);
-                data.metered_hash(&mut state, budget)?;
-                Ok((state.finish(), data.len()))
-            })
-        } else {
-            Ok((0, 0))
-        }
+        let mut state = CountingHasher::default();
+        let len = match self {
+            Vm::Vm031(vm) => {
+                if let Some(mem) = vm.memory {
+                    vm.with_caller_031(|caller| {
+                        let data = mem.data(&caller);
+                        data.metered_hash(&mut state, budget)?;
+                        Ok(data.len())
+                    })?
+                } else {
+                    return Ok((0, 0));
+                }
+            }
+            Vm::Vm032(vm) => {
+                if let Some(mem) = vm.memory {
+                    vm.with_caller_032(|caller| {
+                        let data = mem.data(&caller);
+                        data.metered_hash(&mut state, budget)?;
+                        Ok(data.len())
+                    })?
+                } else {
+                    return Ok((0, 0));
+                }
+            }
+        };
+        Ok((state.finish(), len))
     }
 
     // This is pretty weak: we just observe the state that wasmi exposes through
@@ -630,45 +663,74 @@ impl<V: WasmiVersion> VersionedVm<V> {
     // but there's no obvious way to observe them.
     pub(crate) fn exports_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
         use std::hash::Hasher;
-        use wasmi_031::{Extern, StoreContext};
-        self.with_vmcaller(|vmcaller| {
-            let ctx: StoreContext<'_, _> = vmcaller.try_ref()?.into();
-            let mut size: usize = 0;
-            let mut state = CountingHasher::default();
-            for export in self.instance.exports(vmcaller.try_ref()?) {
-                size = size.saturating_add(1);
-                export.name().metered_hash(&mut state, budget)?;
+        let mut state = CountingHasher::default();
+        let mut size: usize = 0;
 
-                match export.into_extern() {
-                    // Funcs are immutable, memory we hash separately above.
-                    Extern::Func(_) | Extern::Memory(_) => (),
+        // This is a slight fudge to avoid having to define a ton of additional
+        // MeteredHash impls for wasmi substructures, since there is a bounded
+        // size on the string representation of a value, we're comfortable going
+        // temporarily over budget here.
+        fn hash_impl_debug(
+            d: &impl core::fmt::Debug,
+            state: &mut CountingHasher,
+            budget: &Budget,
+        ) -> Result<(), HostError> {
+            let s = format!("{:?}", d);
+            budget.charge(ContractCostType::MemAlloc, Some(s.len() as u64))?;
+            s.metered_hash(state, budget)
+        }
 
-                    Extern::Table(t) => {
-                        let sz = t.size(&ctx);
-                        sz.metered_hash(&mut state, budget)?;
-                        size = size.saturating_add(sz as usize);
-                        for i in 0..sz {
-                            if let Some(elem) = t.get(&ctx, i) {
-                                // This is a slight fudge to avoid having to
-                                // define a ton of additional MeteredHash impls
-                                // for wasmi substructures, since there is a
-                                // bounded size on the string representation of
-                                // a value, we're comfortable going temporarily
-                                // over budget here.
-                                let s = format!("{:?}", elem);
-                                budget.charge(ContractCostType::MemAlloc, Some(s.len() as u64))?;
-                                s.metered_hash(&mut state, budget)?;
+        match self {
+            Vm::Vm031(vm) => {
+                vm.with_caller_031(|caller| {
+                    for export in vm.instance.exports(&caller) {
+                        size = size.saturating_add(1);
+                        export.name().metered_hash(&mut state, budget)?;
+                        match export.into_extern() {
+                            // Funcs are immutable, memory we hash separately above.
+                            wasmi_031::Extern::Func(_) | wasmi_031::Extern::Memory(_) => (),
+                            wasmi_031::Extern::Table(t) => {
+                                let sz = t.size(&caller);
+                                sz.metered_hash(&mut state, budget)?;
+                                size = size.saturating_add(sz as usize);
+                                for i in 0..sz {
+                                    if let Some(elem) = t.get(&caller, i) {
+                                        hash_impl_debug(&elem, &mut state, budget)?;
+                                    }
+                                }
+                            }
+                            wasmi_031::Extern::Global(g) => {
+                                hash_impl_debug(&g.get(&caller), &mut state, budget)?;
                             }
                         }
                     }
-                    Extern::Global(g) => {
-                        let s = format!("{:?}", g.get(&ctx));
-                        budget.charge(ContractCostType::MemAlloc, Some(s.len() as u64))?;
-                        s.metered_hash(&mut state, budget)?;
+                    Ok(())
+                })?
+            }
+            Vm::Vm032(vm) => vm.with_caller_032(|caller| {
+                for export in vm.instance.exports(&caller) {
+                    size = size.saturating_add(1);
+                    export.name().metered_hash(&mut state, budget)?;
+                    match export.into_extern() {
+                        wasmi_032::Extern::Func(_) | wasmi_032::Extern::Memory(_) => (),
+                        wasmi_032::Extern::Table(t) => {
+                            let sz = t.size(&caller);
+                            sz.metered_hash(&mut state, budget)?;
+                            size = size.saturating_add(sz as usize);
+                            for i in 0..sz {
+                                if let Some(elem) = t.get(&caller, i) {
+                                    hash_impl_debug(&elem, &mut state, budget)?;
+                                }
+                            }
+                        }
+                        wasmi_032::Extern::Global(g) => {
+                            hash_impl_debug(&g.get(&caller), &mut state, budget)?;
+                        }
                     }
                 }
-            }
-            Ok((state.finish(), size))
-        })
+                Ok(())
+            })?,
+        }
+        Ok((state.finish(), size))
     }
 }

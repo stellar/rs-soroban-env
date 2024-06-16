@@ -341,7 +341,7 @@ impl Host {
         .unwrap();
 
         // Second step: generate some accounts to sign things with.
-        let signing_keys = (0..n_signers)
+        let signing_keys: Vec<SigningKey> = (0..n_signers)
             .map(|_| generate_signing_key(&host))
             .collect();
         for signing_key in &signing_keys {
