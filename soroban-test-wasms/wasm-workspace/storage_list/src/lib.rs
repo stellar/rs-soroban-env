@@ -5,6 +5,8 @@ use soroban_sdk::{contract, contractimpl, contracttype, Env, Vec};
 #[contracttype]
 pub enum DataKey {
     List,
+    U32,
+    U64,
 }
 
 #[contract]
@@ -21,6 +23,20 @@ impl Test {
             .persistent()
             .get(&DataKey::List)
             .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn set_u32(env: Env, v: u32) {
+        env.storage().persistent().set(&DataKey::U32, &v);
+    }
+    pub fn get_u32(env: Env) {
+        env.storage().persistent().get(&DataKey::U32).unwrap()
+    }
+
+    pub fn set_u64(env: Env, v: u64) {
+        env.storage().persistent().set(&DataKey::U64, &v);
+    }
+    pub fn get_u64(env: Env) {
+        env.storage().persistent().get(&DataKey::U64).unwrap()
     }
 }
 
