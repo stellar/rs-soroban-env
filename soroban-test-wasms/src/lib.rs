@@ -101,4 +101,6 @@ mod curr {
 
     pub const INCREMENT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/increment.wasm").as_slice();
+    pub const STORAGE_LIST: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/storage_list.wasm").as_slice();
 }
