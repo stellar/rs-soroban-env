@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Env, Bytes, BytesN};
+use soroban_sdk::{contract, contractimpl, Bytes, BytesN, Env};
 
 pub(crate) const EXTEND_AMOUNT: u32 = 1036800; // 60 days
 pub(crate) const BALANCE_TTL_THRESHOLD: u32 = EXTEND_AMOUNT;
@@ -18,10 +18,14 @@ impl WriteBytesContract {
     pub fn write(env: Env, xdr_bytes: Bytes) -> BytesN<32> {
         let hash = env.crypto().sha256(&xdr_bytes);
         env.storage().temporary().set(&hash, &xdr_bytes);
-        env.storage().temporary().extend_ttl(&hash, BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
+        env.storage()
+            .temporary()
+            .extend_ttl(&hash, BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
 
-        env.storage().instance().extend_ttl(BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
 
-        hash
+        hash.into()
     }
 }

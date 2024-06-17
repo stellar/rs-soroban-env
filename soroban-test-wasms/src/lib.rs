@@ -98,4 +98,9 @@ mod curr {
 
     pub const DEPLOYER_TEST_CONTRACT: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/test_deployer.wasm").as_slice();
+
+    pub const INCREMENT: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/increment.wasm").as_slice();
+    pub const STORAGE_LIST: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/storage_list.wasm").as_slice();
 }

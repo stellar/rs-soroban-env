@@ -27,8 +27,9 @@ use crate::{
     Env, EnvBase, Host, HostError, LedgerInfo, Symbol, TryFromVal, TryIntoVal, Val,
 };
 use ed25519_dalek::SigningKey;
+use hex_literal::hex;
 use soroban_test_wasms::{
-    ERR, INVOKE_CONTRACT, SAC_REENTRY_TEST_CONTRACT, SIMPLE_ACCOUNT_CONTRACT,
+    ERR, INCREMENT, INVOKE_CONTRACT, SAC_REENTRY_TEST_CONTRACT, SIMPLE_ACCOUNT_CONTRACT,
 };
 use stellar_strkey::ed25519;
 
@@ -3051,6 +3052,64 @@ fn test_custom_account_auth() {
     assert!(contract
         .mint(&new_admin, user_address.clone(), 100)
         .is_err());
+}
+
+#[allow(clippy::type_complexity)]
+fn secp256r1_sign_fn<'a>(
+    host: &'a Host,
+    signing_key: &'a p256::ecdsa::SigningKey,
+) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
+    use crate::builtin_contracts::testutils::sign_payload_for_secp256r1;
+    Box::new(|payload: &[u8]| -> Val {
+        sign_payload_for_secp256r1(host, signing_key, payload).into()
+    })
+}
+
+#[test]
+fn test_account_with_p256_signer() -> Result<(), HostError> {
+    use p256::ecdsa::SigningKey;
+
+    let host = Host::test_host_with_recording_footprint();
+    host.set_ledger_info(LedgerInfo {
+        protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
+        sequence_number: 123,
+        timestamp: 123456,
+        network_id: [5; 32],
+        base_reserve: 5_000_000,
+        min_persistent_entry_ttl: 4096,
+        min_temp_entry_ttl: 16,
+        max_entry_ttl: 6_312_000,
+    })?;
+    host.enable_debug()?;
+
+    let contract_addr_obj = host.register_test_contract_wasm(INCREMENT);
+    let contract_addr: Address = contract_addr_obj.try_into_val(&host)?;
+    // key pair taken from RFC 6979 Appendix 2.5 (NIST P-256 + SHA-256)
+    // <https://tools.ietf.org/html/rfc6979#appendix-A.2.5>
+    let x = hex!("C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721");
+    let signing_key = SigningKey::from_bytes(&x.into()).unwrap();
+    let admin = TestSigner::AccountContract(AccountContractSigner {
+        address: contract_addr.clone(),
+        sign: secp256r1_sign_fn(&host, &signing_key),
+    });
+    // initialize the contract by calling its `init` with the secp256r1 public key
+    let verifying_key = host.bytes_new_from_slice(&hex!("0460FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB67903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299"))?;
+    let _ = host.call(
+        contract_addr_obj.clone(),
+        Symbol::try_from_small_str("init")?,
+        test_vec!(&host, verifying_key).into(),
+    )?;
+
+    authorize_single_invocation(&host, &admin, &contract_addr, "increment", test_vec![&host]);
+
+    let v = host.call(
+        contract_addr_obj,
+        Symbol::try_from_small_str("increment")?,
+        test_vec![&host].into(),
+    )?;
+
+    assert_eq!(v.get_payload(), Val::from_u32(1).as_val().get_payload());
+    Ok(())
 }
 
 #[test]

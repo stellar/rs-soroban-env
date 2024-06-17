@@ -10,12 +10,44 @@ use crate::{
     budget::AsBudget, events::HostEvent, test::observe::ObservedHost, xdr::ScErrorType,
     ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
 };
-use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
+use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, STORAGE_LIST, VEC};
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(ADD_I32);
+    let a = 4i32;
+    let b = 7i32;
+    let c = 0x7fffffff_i32;
+
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("add")?,
+        host.test_vec_obj(&[a, b])?,
+    )?;
+    assert_eq!(i32::try_from_val(&*host, &res)?, a + b);
+    // overflow
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("add")?,
+        host.test_vec_obj(&[a, c])?,
+    );
+    let code = (ScErrorType::WasmVm, ScErrorCode::InvalidAction);
+
+    eprintln!(
+        "time ellapsed in nano-seconds for VmInstantiation: {}",
+        host.as_budget()
+            .get_time(ContractCostType::VmInstantiation)?
+    );
+
+    assert!(HostError::result_matches_err(res, code));
+    Ok(())
+}
+
+#[test]
+fn invoke_storage_list() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let contract_id_obj = host.register_test_contract_wasm(STORAGE_LIST);
     let a = 4i32;
     let b = 7i32;
     let c = 0x7fffffff_i32;

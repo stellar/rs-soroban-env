@@ -300,7 +300,8 @@ impl ParsedModule {
                 host,
                 (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
                 "contract protocol number is newer than host",
-                got_proto
+                got_proto,
+                want_proto
             ));
         }
         Ok(())

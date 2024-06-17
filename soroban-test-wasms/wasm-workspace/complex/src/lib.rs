@@ -33,7 +33,10 @@ impl Contract {
             time: ledger.timestamp(),
         };
         let data = symbol_short!("data");
-        let hash = e.crypto().sha256(&my_ledger.network_id.clone().into());
+        let hash: BytesN<32> = e
+            .crypto()
+            .sha256(&my_ledger.network_id.clone().into())
+            .into();
         let mut buf: [u8; 32] = [0; 32];
         hash.copy_into_slice(&mut buf);
         let vec_with_half_hash = Vec::from_slice(&e, &[Bytes::from_slice(&e, &buf[0..16])]);
