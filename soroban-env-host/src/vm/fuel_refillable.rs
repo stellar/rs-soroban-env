@@ -99,14 +99,16 @@ macro_rules! impl_refillable_for_store_wasmi_032 {
                 */
             }
 
-            fn add_fuel(&mut self, fuel: u64) -> Result<(), HostError> {
-                self.add_fuel(fuel)
-                    .map_err(|fe| HostError::from(wasmi_032::Error::from(fe)))
+            fn add_fuel(&mut self, _fuel: u64) -> Result<(), HostError> {
+                // self.add_fuel(fuel)
+                //     .map_err(|fe| HostError::from(wasmi_032::Error::from(fe)))
+                todo!()
             }
 
             fn reset_fuel(&mut self) -> Result<(), HostError> {
-                self.reset_fuel()
-                    .map_err(|fe| HostError::from(wasmi_032::Error::from(fe)))
+                // self.reset_fuel()
+                //     .map_err(|fe| HostError::from(wasmi_032::Error::from(fe)))
+                todo!()
             }
         }
     };

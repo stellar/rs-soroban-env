@@ -12,9 +12,24 @@ use crate::{
 use std::{collections::BTreeSet, rc::Rc};
 
 #[derive(Clone)]
-pub enum ModuleCache {
-    ModuleCache031(Rc<VersionedModuleCache<Wasmi031>>),
-    ModuleCache032(Rc<VersionedModuleCache<Wasmi032>>),
+pub struct ModuleCache(pub(crate) McVer);
+
+#[derive(Clone)]
+pub enum McVer {
+    Mc031(Rc<VersionedModuleCache<Wasmi031>>),
+    Mc032(Rc<VersionedModuleCache<Wasmi032>>),
+}
+
+impl From<Rc<VersionedModuleCache<Wasmi031>>> for ModuleCache {
+    fn from(mc: Rc<VersionedModuleCache<Wasmi031>>) -> Self {
+        ModuleCache(McVer::Mc031(mc))
+    }
+}
+
+impl From<Rc<VersionedModuleCache<Wasmi032>>> for ModuleCache {
+    fn from(mc: Rc<VersionedModuleCache<Wasmi032>>) -> Self {
+        ModuleCache(McVer::Mc032(mc))
+    }
 }
 
 impl ModuleCache {
@@ -23,9 +38,9 @@ impl ModuleCache {
 
     pub fn new(host: &Host) -> Result<Self, HostError> {
         if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
-            VersionedModuleCache::<Wasmi031>::new(host).map(ModuleCache::ModuleCache031)
+            VersionedModuleCache::<Wasmi031>::new(host).map(Into::into)
         } else {
-            VersionedModuleCache::<Wasmi032>::new(host).map(ModuleCache::ModuleCache032)
+            VersionedModuleCache::<Wasmi032>::new(host).map(Into::into)
         }
     }
 
@@ -34,9 +49,9 @@ impl ModuleCache {
         host: &Host,
         wasm_hash: &Hash,
     ) -> Result<Option<ParsedModule>, HostError> {
-        match self {
-            ModuleCache::ModuleCache031(cache) => cache.get_module(host, wasm_hash),
-            ModuleCache::ModuleCache032(cache) => cache.get_module(host, wasm_hash),
+        match &self.0 {
+            McVer::Mc031(cache) => cache.get_module(host, wasm_hash),
+            McVer::Mc032(cache) => cache.get_module(host, wasm_hash),
         }
     }
 }
@@ -48,7 +63,6 @@ impl ModuleCache {
 /// [Engine] is locked during execution and no new modules can be added to it.
 #[derive(Clone, Default)]
 pub(crate) struct VersionedModuleCache<V: WasmiVersion> {
-    pub(crate) engine: V::Engine,
     modules: MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
     pub(crate) linker: V::Linker,
 }
@@ -60,11 +74,7 @@ impl<V: WasmiVersion> VersionedModuleCache<V> {
         let mut modules = MeteredOrdMap::new();
         Self::add_stored_contracts(&engine, &mut modules, host)?;
         let linker = Self::make_linker(&engine, &modules, host)?;
-        Ok(Rc::new(Self {
-            engine,
-            modules,
-            linker,
-        }))
+        Ok(Rc::new(Self { modules, linker }))
     }
 
     fn add_stored_contracts(

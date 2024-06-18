@@ -3,7 +3,7 @@ use crate::common::HostCostMeasurement;
 use rand::rngs::StdRng;
 use soroban_env_host::{
     cost_runner::{VmInstantiationRun, VmInstantiationSample},
-    vm::{ParsedModule, VersionedContractCodeCostInputs},
+    vm::{PmVer, VersionedContractCodeCostInputs},
     xdr, Host,
 };
 

@@ -135,9 +135,23 @@ impl VersionedContractCodeCostInputs {
 /// as well as a protocol number and set of [ContractCodeCostInputs] extracted
 /// from the module when it was parsed.
 
-pub enum ParsedModule {
-    ParsedModule031(Rc<VersionedParsedModule<Wasmi031>>),
-    ParsedModule032(Rc<VersionedParsedModule<Wasmi032>>),
+pub struct ParsedModule(pub(crate) PmVer);
+
+pub(crate) enum PmVer {
+    Pm031(Rc<VersionedParsedModule<Wasmi031>>),
+    Pm032(Rc<VersionedParsedModule<Wasmi032>>),
+}
+
+impl From<Rc<VersionedParsedModule<Wasmi031>>> for ParsedModule {
+    fn from(m: Rc<VersionedParsedModule<Wasmi031>>) -> Self {
+        Self(PmVer::Pm031(m))
+    }
+}
+
+impl From<Rc<VersionedParsedModule<Wasmi032>>> for ParsedModule {
+    fn from(m: Rc<VersionedParsedModule<Wasmi032>>) -> Self {
+        Self(PmVer::Pm032(m))
+    }
 }
 
 pub(crate) struct VersionedParsedModule<V: WasmiVersion> {
@@ -346,9 +360,9 @@ impl<V: WasmiVersion> VersionedParsedModule<V> {
 
 impl ParsedModule {
     pub fn get_cost_inputs(&self) -> &VersionedContractCodeCostInputs {
-        match self {
-            Self::ParsedModule031(m) => &m.cost_inputs,
-            Self::ParsedModule032(m) => &m.cost_inputs,
+        match &self.0 {
+            PmVer::Pm031(m) => &m.cost_inputs,
+            PmVer::Pm032(m) => &m.cost_inputs,
         }
     }
 
