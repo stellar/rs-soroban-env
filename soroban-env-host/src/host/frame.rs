@@ -17,6 +17,7 @@ use crate::{
 
 #[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
+#[cfg(any(test, feature = "testutils"))]
 use std::rc::Rc;
 
 /// Determines the re-entry mode for calling a contract.

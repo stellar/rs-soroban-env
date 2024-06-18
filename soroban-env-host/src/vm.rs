@@ -41,6 +41,7 @@ use module_cache::{McVer, VersionedModuleCache};
 pub use parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
 use parsed_module::{PmVer, VersionedParsedModule};
 
+#[cfg(feature = "bench")]
 use crate::VmCaller;
 
 impl wasmi_031::core::HostError for HostError {}
@@ -619,6 +620,7 @@ impl Vm {
     /// Utility function that synthesizes a `VmCaller<Host>` configured to point
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
+    #[cfg(feature = "bench")]
     pub(crate) fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
