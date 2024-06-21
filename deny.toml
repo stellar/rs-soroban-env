@@ -53,7 +53,7 @@ exclude = [
    # dev-deps or non-produciton configs.
    "tracking-allocator",
    # Temporary
-   "ed25519-dalek"
+   "curve25519-dalek"
 ]
 
 # If true, metadata will be collected with `--all-features`. Note that this can't
