@@ -61,8 +61,10 @@ impl Observations {
         let path = full_path(protocol, testname);
         let obs: BTreeMap<String, String> = if path.exists() {
             println!("reading {}", path.display());
-            let file = File::open(&path).expect(&format!("unable to open {}", path.display()));
-            serde_json::from_reader(file).expect(&format!("failed to parse {}", path.display()))
+            let file =
+                File::open(&path).unwrap_or_else(|_| panic!("unable to open {}", path.display()));
+            serde_json::from_reader(file)
+                .unwrap_or_else(|_| panic!("failed to parse {}", path.display()))
         } else {
             BTreeMap::new()
         };
@@ -72,9 +74,10 @@ impl Observations {
     fn save(&self, protocol: u32, testname: &str) {
         let path = full_path(protocol, testname);
         println!("writing {}", path.display());
-        let file = File::create(&path).expect(&format!("unable to create {}", path.display()));
+        let file =
+            File::create(&path).unwrap_or_else(|_| panic!("unable to create {}", path.display()));
         serde_json::to_writer_pretty(file, &self.0)
-            .expect(&format!("error writing {}", path.display()));
+            .unwrap_or_else(|_| panic!("error writing {}", path.display()));
     }
 
     // Check records the new observation by appending it to the vector

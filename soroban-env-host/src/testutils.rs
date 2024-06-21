@@ -755,7 +755,6 @@ pub(crate) mod wasm {
         let num_pages = num_vals * 8 / 0x10_000 + 1;
         let mut me = ModEmitter::from_configs(num_pages, 128);
         let bytes: Vec<u8> = (0..num_vals)
-            .into_iter()
             .map(|_| initial.get_payload().to_le_bytes())
             .flat_map(|a| a.into_iter())
             .collect();
@@ -774,19 +773,16 @@ pub(crate) mod wasm {
         let mut me = ModEmitter::from_configs(num_pages, 128);
 
         let key_bytes: Vec<u8> = (0..num_vals)
-            .into_iter()
             .map(|i| format!("{:0>width$}", i, width = 8))
             .flat_map(|s| s.into_bytes().into_iter())
             .collect();
 
         let val_bytes: Vec<u8> = (0..num_vals)
-            .into_iter()
             .map(|_| initial.get_payload().to_le_bytes())
             .flat_map(|a| a.into_iter())
             .collect();
 
         let slices: Vec<u8> = (0..num_vals)
-            .into_iter()
             .map(|ptr| {
                 let slice = 8_u64 << 32 | (ptr * 8) as u64;
                 slice.to_le_bytes()
@@ -796,8 +792,8 @@ pub(crate) mod wasm {
 
         let bytes: Vec<u8> = key_bytes
             .into_iter()
-            .chain(val_bytes.into_iter())
-            .chain(slices.into_iter())
+            .chain(val_bytes)
+            .chain(slices)
             .collect();
 
         me.define_data_segment(0, bytes);
@@ -937,7 +933,7 @@ pub(crate) mod wasm {
         let me = ModEmitter::default_with_test_protocol();
         let fe = me.func_with_arity_and_ret(Arity(0), Arity(0), 0);
         let (mut me, fid) = fe.finish();
-        me.export_func(fid.clone(), "start");
+        me.export_func(fid, "start");
         me.start(fid);
         me.finish_no_validate()
     }

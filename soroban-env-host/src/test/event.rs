@@ -290,7 +290,7 @@ fn too_many_event_topics() -> Result<(), HostError> {
     // created, recording the contract event a cheap operation.
     budget.reset_default()?;
     for i in 0..100 {
-        host.contract_event(topics.clone(), Val::from_u32(i).to_val())?;
+        host.contract_event(topics, Val::from_u32(i).to_val())?;
     }
     assert_le!(budget.get_cpu_insns_consumed()?, 200_000);
     assert_le!(budget.get_mem_bytes_consumed()?, 10000);

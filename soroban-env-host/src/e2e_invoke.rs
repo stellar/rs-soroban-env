@@ -211,12 +211,18 @@ pub fn extract_rent_changes(ledger_changes: &[LedgerEntryChange]) -> Vec<LedgerE
         .filter_map(|entry_change| {
             // Rent changes are only relevant to non-removed entries with
             // a ttl.
-            if let (Some(ttl_change), Some(encoded_new_value)) =
+            if let (Some(ttl_change), optional_encoded_new_value) =
                 (&entry_change.ttl_change, &entry_change.encoded_new_value)
             {
+                let new_size_bytes = if let Some(encoded_new_value) = optional_encoded_new_value {
+                    encoded_new_value.len() as u32
+                } else {
+                    entry_change.old_entry_size_bytes
+                };
+
                 // Skip the entry if 1. it is not extended and 2. the entry size has not increased
                 if ttl_change.old_live_until_ledger >= ttl_change.new_live_until_ledger
-                    && entry_change.old_entry_size_bytes >= encoded_new_value.len() as u32
+                    && entry_change.old_entry_size_bytes >= new_size_bytes
                 {
                     return None;
                 }
@@ -226,7 +232,7 @@ pub fn extract_rent_changes(ledger_changes: &[LedgerEntryChange]) -> Vec<LedgerE
                         ContractDataDurability::Persistent
                     ),
                     old_size_bytes: entry_change.old_entry_size_bytes,
-                    new_size_bytes: encoded_new_value.len() as u32,
+                    new_size_bytes,
                     old_live_until_ledger: ttl_change.old_live_until_ledger,
                     new_live_until_ledger: ttl_change.new_live_until_ledger,
                 })
