@@ -98,6 +98,6 @@ impl<E: Env> TryFromVal<E, ()> for [Val; 0] {
     type Error = crate::Error;
 
     fn try_from_val(_env: &E, _v: &()) -> Result<Self, Self::Error> {
-        Ok([Val::VOID.into(); 0])
+        Ok([])
     }
 }
