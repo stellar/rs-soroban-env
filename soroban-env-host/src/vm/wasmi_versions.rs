@@ -15,8 +15,8 @@ use crate::{
     err,
     host::declared_size::DeclaredSizeForMetering,
     vm::{
-        fuel_refillable::FuelRefillable, HostFuncInfo, ModuleCache, ParsedModule,
-        VersionedModuleCache, McVer, VersionedParsedModule, WasmiConfig, MAX_VM_ARGS,
+        fuel_refillable::FuelRefillable, HostFuncInfo, McVer, ModuleCache, ParsedModule,
+        VersionedModuleCache, VersionedParsedModule, WasmiConfig, MAX_VM_ARGS,
     },
     xdr::{ScErrorCode, ScErrorType},
     Host, HostError, Symbol, WasmiMarshal031, WasmiMarshal032,
@@ -368,7 +368,6 @@ impl WasmiVersion for Wasmi032 {
     }
 
     fn handle_call_error(host: &Host, func_sym: &Symbol, e: Self::Error) -> HostError {
-        
         if let Some(code) = e.as_trap_code() {
             let err = code.into();
             let mut msg = Cow::Borrowed("VM call trapped");
@@ -430,7 +429,7 @@ impl WasmiVersion for Wasmi032 {
 
     fn module_custom_section(m: &Self::Module, name: impl AsRef<str>) -> Option<&[u8]> {
         m.exports();
-        m.custom_sections().iter().find_map(|s| {
+        m.custom_sections().find_map(|s| {
             if &*s.name == name.as_ref() {
                 Some(&*s.data)
             } else {
