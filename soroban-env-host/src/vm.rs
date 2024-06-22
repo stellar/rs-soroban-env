@@ -461,7 +461,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
         cost_mode: ModuleParseCostMode,
     ) -> Result<Rc<VersionedParsedModule<V>>, HostError> {
         if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording
-            && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
+            && ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?)
         {
             if host.in_storage_recording_mode()? {
                 return host.budget_ref().with_observable_shadow_mode(|| {

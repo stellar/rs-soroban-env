@@ -83,7 +83,7 @@ impl VersionedContractCodeCostInputs {
                 // VmInstantiation cost type was repurposed to only cover the
                 // cost of parsing, so we have to charge the "second half" cost
                 // of instantiation separately here.
-                if _host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+                if ModuleCache::should_use_for_protocol(_host.get_ledger_protocol_version()?) {
                     _host.charge_budget(
                         ContractCostType::VmCachedInstantiation,
                         Some(*wasm_bytes as u64),
@@ -201,7 +201,7 @@ impl<V: WasmiVersion> VersionedParsedModule<V> {
         // parsing phase, so there is no DOS factor. We don't charge for
         // insertion/lookups, since they should be cheap and number of
         // operations on the set is limited.
-        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+        if ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
             Vec::<(&str, &str)>::charge_bulk_init_cpy(symbols.len() as u64, host)?;
         }
         callback(&symbols)

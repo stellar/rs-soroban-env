@@ -351,7 +351,7 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(45405);
                 }
                 ContractCostType::VmCachedInstantiation => {
-                    if proto < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+                    if !crate::vm::ModuleCache::should_use_for_protocol(proto) {
                         cpu.const_term = 451626;
                         cpu.lin_term = ScaledU64(45405);
                     } else {
@@ -548,7 +548,7 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(5064);
                 }
                 ContractCostType::VmCachedInstantiation => {
-                    if proto < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+                    if !crate::vm::ModuleCache::should_use_for_protocol(proto) {
                         mem.const_term = 130065;
                         mem.lin_term = ScaledU64(5064);
                     } else {

@@ -183,7 +183,7 @@ impl Host {
                 Hash(hash_bytes.metered_clone(self)?),
                 wasm_bytes_m.as_slice(),
             )?;
-            if self.get_ledger_protocol_version()? >= super::ModuleCache::MIN_LEDGER_VERSION {
+            if super::ModuleCache::should_use_for_protocol(self.get_ledger_protocol_version()?) {
                 // At this point we do a secondary parse on what we've checked to be a valid
                 // module in order to extract a refined cost model, which we'll store in the
                 // code entry's ext field, for future parsing and instantiations.
@@ -217,7 +217,7 @@ impl Host {
 
         // We may also, in the cache-supporting protocol, overwrite the contract if its ext field changed.
         if !should_put_contract
-            && self.get_ledger_protocol_version()? >= super::ModuleCache::MIN_LEDGER_VERSION
+            && super::ModuleCache::should_use_for_protocol(self.get_ledger_protocol_version()?)
         {
             let entry = storage.get_with_host(&code_key, self, None)?;
             if let crate::xdr::LedgerEntryData::ContractCode(ContractCodeEntry {

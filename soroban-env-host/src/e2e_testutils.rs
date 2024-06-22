@@ -67,7 +67,7 @@ pub fn wasm_entry_non_validated(wasm: &[u8]) -> LedgerEntry {
 pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
     wasm_entry_with_refined_contract_cost_inputs(
         wasm,
-        e2e_test_protocol_version() >= ModuleCache::MIN_LEDGER_VERSION,
+        ModuleCache::should_use_for_protocol(e2e_test_protocol_version()),
     )
 }
 
@@ -126,7 +126,7 @@ impl CreateContractData {
         Self::new_with_refined_contract_cost_inputs(
             salt,
             wasm,
-            e2e_test_protocol_version() >= ModuleCache::MIN_LEDGER_VERSION,
+            ModuleCache::should_use_for_protocol(e2e_test_protocol_version()),
         )
     }
     pub fn new_with_refined_contract_cost_inputs(

@@ -454,7 +454,7 @@ fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
 
     // constructing a big map will cause budget limit exceeded error
     let num_vals =
-        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+        if !crate::vm::ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
             60_000
         } else {
             1_000_000

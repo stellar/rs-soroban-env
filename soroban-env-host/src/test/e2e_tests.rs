@@ -650,7 +650,7 @@ fn test_wasm_upload_success_in_recording_mode() {
     );
     assert!(res.auth.is_empty());
     let (expected_insns, expected_write_bytes) =
-        if ledger_info.protocol_version >= ModuleCache::MIN_LEDGER_VERSION {
+        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
             (1767136, 684)
         } else {
             (1060474, 636)
@@ -692,11 +692,12 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    let expected_instructions = if ledger_info.protocol_version >= ModuleCache::MIN_LEDGER_VERSION {
-        1093647
-    } else {
-        1093647
-    };
+    let expected_instructions =
+        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
+            1093647
+        } else {
+            1093647
+        };
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1031,7 +1032,7 @@ fn test_create_contract_success_in_recording_mode() {
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
     let (expected_insns, expected_read_bytes) =
-        if ledger_info.protocol_version >= ModuleCache::MIN_LEDGER_VERSION {
+        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
             (453719, 684)
         } else {
             (449458, 636)
@@ -1098,7 +1099,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
     let (expected_insns, expected_read_bytes) =
-        if ledger_info.protocol_version >= ModuleCache::MIN_LEDGER_VERSION {
+        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
             (455160, 684)
         } else {
             (450899, 636)
@@ -1532,7 +1533,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         ]
     );
     let (expected_insns, expected_read_bytes) =
-        if ledger_info.protocol_version >= ModuleCache::MIN_LEDGER_VERSION {
+        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
             (1431216, 3132)
         } else {
             (2221742, 3084)
@@ -1600,7 +1601,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         ]
     );
     let (expected_insns, expected_read_bytes) =
-        if ledger_info.protocol_version >= ModuleCache::MIN_LEDGER_VERSION {
+        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
             (1543254, 3212)
         } else {
             (2333780, 3164)

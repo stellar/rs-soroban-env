@@ -372,7 +372,7 @@ impl Host {
     }
 
     pub fn build_module_cache_if_needed(&self) -> Result<(), HostError> {
-        if self.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
+        if ModuleCache::should_use_for_protocol(self.get_ledger_protocol_version()?)
             && self.try_borrow_module_cache()?.is_none()
         {
             let cache = ModuleCache::new(self)?;

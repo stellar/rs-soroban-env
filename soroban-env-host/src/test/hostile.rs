@@ -528,7 +528,7 @@ fn excessive_logging() -> Result<(), HostError> {
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
-    if host.get_ledger_protocol_version()? >= crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+    if crate::vm::ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
         host.switch_to_enforcing_storage()?;
     }
 
@@ -643,7 +643,7 @@ fn excessive_logging() -> Result<(), HostError> {
     "#]];
 
     let expected_budget =
-        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+        if !crate::vm::ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
             expected_budget_p20
         } else {
             expected_budget_p21

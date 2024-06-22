@@ -36,6 +36,13 @@ impl ModuleCache {
     // ModuleCache should not be active until protocol version 21.
     pub const MIN_LEDGER_VERSION: u32 = 21;
 
+    // ModuleCache possibly stop being used at protcol 22?
+    pub const MAX_LEDGER_VERSION: u32 = 21;
+
+    pub fn should_use_for_protocol(protocol_version: u32) -> bool {
+        protocol_version >= Self::MIN_LEDGER_VERSION && protocol_version <= Self::MAX_LEDGER_VERSION
+    }
+
     pub fn new(host: &Host) -> Result<Self, HostError> {
         if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
             VersionedModuleCache::<Wasmi031>::new(host).map(Into::into)
