@@ -2,6 +2,8 @@ pub(crate) mod observe;
 
 mod address;
 mod auth;
+#[cfg(feature = "testutils")]
+mod backtrace;
 mod basic;
 mod budget_metering;
 mod bytes;
