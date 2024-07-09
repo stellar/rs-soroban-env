@@ -1409,7 +1409,7 @@ dependencies = [
  "serde",
  "soroban-env-macros",
  "soroban-wasmi 0.31.1-soroban.20.0.1",
- "soroban-wasmi 0.32.0-soroban.22.0.0",
+ "soroban-wasmi 0.34.0-soroban.22.0.0",
  "static_assertions",
  "stellar-xdr",
  "tracy-client",
@@ -1465,7 +1465,7 @@ dependencies = [
  "soroban-synth-wasm",
  "soroban-test-wasms",
  "soroban-wasmi 0.31.1-soroban.20.0.1",
- "soroban-wasmi 0.32.0-soroban.22.0.0",
+ "soroban-wasmi 0.34.0-soroban.22.0.0",
  "static_assertions",
  "stellar-strkey",
  "stellar-xdr",
@@ -1538,7 +1538,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-wasmi"
-version = "0.32.0-soroban.22.0.0"
+version = "0.34.0-soroban.22.0.0"
 dependencies = [
  "arrayvec",
  "multi-stash",
@@ -1547,7 +1547,7 @@ dependencies = [
  "smallvec",
  "spin",
  "wasmi_collections",
- "wasmi_core 0.32.0-soroban.22.0.0",
+ "wasmi_core 0.34.0-soroban.22.0.0",
  "wasmparser-nostd",
 ]
 
@@ -1945,7 +1945,7 @@ source = "git+https://github.com/stellar/wasmi?rev=0ed3f3dee30dc41ebe21972399e0a
 
 [[package]]
 name = "wasmi_collections"
-version = "0.32.0-soroban.22.0.0"
+version = "0.34.0-soroban.22.0.0"
 dependencies = [
  "ahash",
  "hashbrown 0.14.1",
@@ -1965,7 +1965,7 @@ dependencies = [
 
 [[package]]
 name = "wasmi_core"
-version = "0.32.0-soroban.22.0.0"
+version = "0.34.0-soroban.22.0.0"
 dependencies = [
  "downcast-rs",
  "libm",

@@ -1,3 +1,5 @@
+use wasmi_032::EnforcedLimits;
+
 use crate::{
     budget::{AsBudget, Budget},
     host::error::TryBorrowOrErr,
@@ -167,9 +169,9 @@ pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<WasmiConfig, HostError
         .wasm_tail_call(false)
         .wasm_extended_const(false)
         .floats(false)
-        .set_fuel_costs(fuel_costs_032);
-
-    let config = WasmiConfig {
+        .set_fuel_costs(fuel_costs_032)
+        .enforced_limits(EnforcedLimits::strict());
+        let config = WasmiConfig {
         config_031,
         config_032,
     };

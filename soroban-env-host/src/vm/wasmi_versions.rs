@@ -430,8 +430,8 @@ impl WasmiVersion for Wasmi032 {
     fn module_custom_section(m: &Self::Module, name: impl AsRef<str>) -> Option<&[u8]> {
         m.exports();
         m.custom_sections().find_map(|s| {
-            if &*s.name == name.as_ref() {
-                Some(&*s.data)
+            if s.name() == name.as_ref() {
+                Some(s.data())
             } else {
                 None
             }
