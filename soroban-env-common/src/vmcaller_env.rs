@@ -29,7 +29,7 @@ use core::marker::PhantomData;
 pub enum VmCaller<'a, T> {
     NoVm,
     Vm031(wasmi_031::Caller<'a, T>),
-    Vm032(wasmi_032::Caller<'a, T>),
+    Vm034(wasmi_034::Caller<'a, T>),
 }
 
 #[cfg(feature = "wasmi")]
@@ -47,9 +47,9 @@ impl<'a, T> VmCaller<'a, T> {
         }
     }
 
-    pub fn try_ref_032(&self) -> Result<&wasmi_032::Caller<'a, T>, Error> {
+    pub fn try_ref_034(&self) -> Result<&wasmi_034::Caller<'a, T>, Error> {
         match self {
-            VmCaller::Vm032(caller) => Ok(caller),
+            VmCaller::Vm034(caller) => Ok(caller),
             _ => Err(Error::from_type_and_code(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -66,9 +66,9 @@ impl<'a, T> VmCaller<'a, T> {
         }
     }
 
-    pub fn try_mut_032(&mut self) -> Result<&mut wasmi_032::Caller<'a, T>, Error> {
+    pub fn try_mut_034(&mut self) -> Result<&mut wasmi_034::Caller<'a, T>, Error> {
         match self {
-            VmCaller::Vm032(caller) => Ok(caller),
+            VmCaller::Vm034(caller) => Ok(caller),
             _ => Err(Error::from_type_and_code(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,

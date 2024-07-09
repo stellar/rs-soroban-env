@@ -17,7 +17,7 @@ exclude = ["observations/"]
 soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi", "shallow-val-hash"] }
 wasmi-031 = { workspace = true }
-wasmi-032 = { workspace = true }
+wasmi-034 = { workspace = true }
 wasmparser = { workspace = true }
 stellar-strkey = "=0.0.8"
 static_assertions = "=1.1.0"

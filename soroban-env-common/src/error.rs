@@ -23,7 +23,7 @@ impl_wrapper_tag_based_valconvert!(Error);
 impl_wrapper_tag_based_constructors!(Error);
 impl_wrapper_as_and_to_val!(Error);
 impl_wrapper_wasmi_conversions!(Error, WasmiMarshal031, wasmi_031::Value);
-impl_wrapper_wasmi_conversions!(Error, WasmiMarshal032, wasmi_032::Val);
+impl_wrapper_wasmi_conversions!(Error, WasmiMarshal034, wasmi_034::Val);
 
 impl Hash for Error {
     #[inline(always)]
@@ -316,13 +316,13 @@ macro_rules! decl_wasmi_error_conversions {
 #[cfg(feature = "wasmi")]
 type WasmiErr031 = wasmi_031::Error;
 #[cfg(feature = "wasmi")]
-type WasmiErr032 = wasmi_032::errors::ErrorKind;
+type WasmiErr034 = wasmi_034::errors::ErrorKind;
 #[cfg(feature = "wasmi")]
 fn get_wasmi_031_error_kind(e: &wasmi_031::Error) -> &WasmiErr031 {
     e
 }
 #[cfg(feature = "wasmi")]
-fn get_wasmi_032_error_kind(e: &wasmi_032::Error) -> &WasmiErr032 {
+fn get_wasmi_034_error_kind(e: &wasmi_034::Error) -> &WasmiErr034 {
     e.kind()
 }
 #[cfg(feature = "wasmi")]
@@ -330,7 +330,7 @@ fn get_wasmi_031_trap_code(trap: &wasmi_031::core::Trap) -> Option<wasmi_031::co
     trap.trap_code()
 }
 #[cfg(feature = "wasmi")]
-fn get_wasmi_032_trap_code(trap: &wasmi_032::core::TrapCode) -> Option<wasmi_032::core::TrapCode> {
+fn get_wasmi_034_trap_code(trap: &wasmi_034::core::TrapCode) -> Option<wasmi_034::core::TrapCode> {
     Some(trap.clone())
 }
 
@@ -343,12 +343,12 @@ decl_wasmi_error_conversions!(
     get_wasmi_031_trap_code
 );
 decl_wasmi_error_conversions!(
-    wasmi_032,
-    WasmiErr032,
-    get_wasmi_032_error_kind,
+    wasmi_034,
+    WasmiErr034,
+    get_wasmi_034_error_kind,
     Fuel,
     TrapCode,
-    get_wasmi_032_trap_code
+    get_wasmi_034_trap_code
 );
 
 #[cfg(feature = "wasmi")]

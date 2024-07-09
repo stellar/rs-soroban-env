@@ -45,10 +45,10 @@ use parsed_module::{PmVer, VersionedParsedModule};
 use crate::VmCaller;
 
 impl wasmi_031::core::HostError for HostError {}
-impl wasmi_032::core::HostError for HostError {}
+impl wasmi_034::core::HostError for HostError {}
 
 mod wasmi_versions;
-use wasmi_versions::{Wasmi031, Wasmi032, WasmiVersion};
+use wasmi_versions::{Wasmi031, Wasmi034, WasmiVersion};
 
 const MAX_VM_ARGS: usize = 32;
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
@@ -97,7 +97,7 @@ pub struct Vm(pub(crate) VmVer);
 #[derive(Clone)]
 pub(crate) enum VmVer {
     Vm031(Rc<VersionedVm<Wasmi031>>),
-    Vm032(Rc<VersionedVm<Wasmi032>>),
+    Vm034(Rc<VersionedVm<Wasmi034>>),
 }
 
 impl From<Rc<VersionedVm<Wasmi031>>> for Vm {
@@ -106,13 +106,13 @@ impl From<Rc<VersionedVm<Wasmi031>>> for Vm {
     }
 }
 
-impl From<Rc<VersionedVm<Wasmi032>>> for Vm {
-    fn from(vm: Rc<VersionedVm<Wasmi032>>) -> Self {
-        Vm(VmVer::Vm032(vm))
+impl From<Rc<VersionedVm<Wasmi034>>> for Vm {
+    fn from(vm: Rc<VersionedVm<Wasmi034>>) -> Self {
+        Vm(VmVer::Vm034(vm))
     }
 }
 
-const WASMI_032_PROTOCOL_VERSION: u32 = 22;
+const WASMI_034_PROTOCOL_VERSION: u32 = 22;
 
 pub(crate) struct VersionedVm<V: WasmiVersion> {
     pub(crate) contract_id: Hash,
@@ -167,18 +167,18 @@ impl Vm {
                 VersionedVm::<Wasmi031>::from_parsed_module(host, contract_id, pm031)
                     .map(Into::into)
             }
-            PmVer::Pm032(pm032) => {
-                VersionedVm::<Wasmi032>::from_parsed_module(host, contract_id, pm032)
+            PmVer::Pm034(pm034) => {
+                VersionedVm::<Wasmi034>::from_parsed_module(host, contract_id, pm034)
                     .map(Into::into)
             }
         }
     }
 
     pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Self, HostError> {
-        if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
+        if host.get_ledger_protocol_version()? < WASMI_034_PROTOCOL_VERSION {
             VersionedVm::<Wasmi031>::new(host, contract_id, wasm).map(Into::into)
         } else {
-            VersionedVm::<Wasmi032>::new(host, contract_id, wasm).map(Into::into)
+            VersionedVm::<Wasmi034>::new(host, contract_id, wasm).map(Into::into)
         }
     }
 
@@ -190,21 +190,21 @@ impl Vm {
     ) -> Result<Val, HostError> {
         match &self.0 {
             VmVer::Vm031(vm) => vm.invoke_function_raw(host, func_sym, args),
-            VmVer::Vm032(vm) => vm.invoke_function_raw(host, func_sym, args),
+            VmVer::Vm034(vm) => vm.invoke_function_raw(host, func_sym, args),
         }
     }
 
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
         match &self.0 {
             VmVer::Vm031(vm) => vm.custom_section(name),
-            VmVer::Vm032(vm) => vm.custom_section(name),
+            VmVer::Vm034(vm) => vm.custom_section(name),
         }
     }
 
     pub(crate) fn get_contract_id(&self) -> &Hash {
         match &self.0 {
             VmVer::Vm031(vm) => &vm.contract_id,
-            VmVer::Vm032(vm) => &vm.contract_id,
+            VmVer::Vm034(vm) => &vm.contract_id,
         }
     }
     pub(crate) fn new_with_cost_inputs(
@@ -214,7 +214,7 @@ impl Vm {
         cost_inputs: VersionedContractCodeCostInputs,
         cost_mode: ModuleParseCostMode,
     ) -> Result<Self, HostError> {
-        if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
+        if host.get_ledger_protocol_version()? < WASMI_034_PROTOCOL_VERSION {
             VersionedVm::<Wasmi031>::new_with_cost_inputs(
                 host,
                 contract_id,
@@ -224,7 +224,7 @@ impl Vm {
             )
             .map(Into::into)
         } else {
-            VersionedVm::<Wasmi032>::new_with_cost_inputs(
+            VersionedVm::<Wasmi034>::new_with_cost_inputs(
                 host,
                 contract_id,
                 wasm,
@@ -238,7 +238,7 @@ impl Vm {
     pub(crate) fn get_module(&self) -> ParsedModule {
         match &self.0 {
             VmVer::Vm031(vm) => vm.module.clone().into(),
-            VmVer::Vm032(vm) => vm.module.clone().into(),
+            VmVer::Vm034(vm) => vm.module.clone().into(),
         }
     }
 
@@ -603,15 +603,15 @@ impl VersionedVm<Wasmi031> {
     }
 }
 
-impl VersionedVm<Wasmi032> {
-    fn with_caller_032<F, T>(&self, f: F) -> Result<T, HostError>
+impl VersionedVm<Wasmi034> {
+    fn with_caller_034<F, T>(&self, f: F) -> Result<T, HostError>
     where
-        F: FnOnce(wasmi_032::Caller<Host>) -> Result<T, HostError>,
+        F: FnOnce(wasmi_034::Caller<Host>) -> Result<T, HostError>,
     {
-        let store: &mut wasmi_032::Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
-        let mut ctx: wasmi_032::StoreContextMut<Host> = store.into();
-        let caller: wasmi_032::Caller<Host> =
-            wasmi_032::Caller::new(&mut ctx, Some(&self.instance));
+        let store: &mut wasmi_034::Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
+        let mut ctx: wasmi_034::StoreContextMut<Host> = store.into();
+        let caller: wasmi_034::Caller<Host> =
+            wasmi_034::Caller::new(&mut ctx, Some(&self.instance));
         f(caller)
     }
 }
@@ -630,8 +630,8 @@ impl Vm {
                 let mut vmcaller: VmCaller<Host> = VmCaller::Vm031(caller);
                 f(&mut vmcaller)
             }),
-            VmVer::Vm032(vm) => vm.with_caller_032(|caller| {
-                let mut vmcaller: VmCaller<Host> = VmCaller::Vm032(caller);
+            VmVer::Vm034(vm) => vm.with_caller_034(|caller| {
+                let mut vmcaller: VmCaller<Host> = VmCaller::Vm034(caller);
                 f(&mut vmcaller)
             }),
         }
@@ -663,9 +663,9 @@ impl Vm {
                     return Ok((0, 0));
                 }
             }
-            VmVer::Vm032(vm) => {
+            VmVer::Vm034(vm) => {
                 if let Some(mem) = vm.memory {
-                    vm.with_caller_032(|caller| {
+                    vm.with_caller_034(|caller| {
                         let data = mem.data(&caller);
                         data.metered_hash(&mut state, budget)?;
                         Ok(data.len())
@@ -727,13 +727,13 @@ impl Vm {
                     Ok(())
                 })?
             }
-            VmVer::Vm032(vm) => vm.with_caller_032(|caller| {
+            VmVer::Vm034(vm) => vm.with_caller_034(|caller| {
                 for export in vm.instance.exports(&caller) {
                     size = size.saturating_add(1);
                     export.name().metered_hash(&mut state, budget)?;
                     match export.into_extern() {
-                        wasmi_032::Extern::Func(_) | wasmi_032::Extern::Memory(_) => (),
-                        wasmi_032::Extern::Table(t) => {
+                        wasmi_034::Extern::Func(_) | wasmi_034::Extern::Memory(_) => (),
+                        wasmi_034::Extern::Table(t) => {
                             let sz = t.size(&caller);
                             sz.metered_hash(&mut state, budget)?;
                             size = size.saturating_add(sz as usize);
@@ -743,7 +743,7 @@ impl Vm {
                                 }
                             }
                         }
-                        wasmi_032::Extern::Global(g) => {
+                        wasmi_034::Extern::Global(g) => {
                             hash_impl_debug(&g.get(&caller), &mut state, budget)?;
                         }
                     }

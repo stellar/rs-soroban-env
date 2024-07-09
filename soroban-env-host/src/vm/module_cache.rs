@@ -1,7 +1,7 @@
 use super::{
     func_info::HOST_FUNCTIONS,
     parsed_module::{ParsedModule, VersionedContractCodeCostInputs, VersionedParsedModule},
-    Wasmi031, Wasmi032, WasmiVersion, WASMI_032_PROTOCOL_VERSION,
+    Wasmi031, Wasmi034, WasmiVersion, WASMI_034_PROTOCOL_VERSION,
 };
 use crate::{
     budget::{get_wasmi_config, AsBudget},
@@ -17,7 +17,7 @@ pub struct ModuleCache(pub(crate) McVer);
 #[derive(Clone)]
 pub enum McVer {
     Mc031(Rc<VersionedModuleCache<Wasmi031>>),
-    Mc032(Rc<VersionedModuleCache<Wasmi032>>),
+    Mc034(Rc<VersionedModuleCache<Wasmi034>>),
 }
 
 impl From<Rc<VersionedModuleCache<Wasmi031>>> for ModuleCache {
@@ -26,9 +26,9 @@ impl From<Rc<VersionedModuleCache<Wasmi031>>> for ModuleCache {
     }
 }
 
-impl From<Rc<VersionedModuleCache<Wasmi032>>> for ModuleCache {
-    fn from(mc: Rc<VersionedModuleCache<Wasmi032>>) -> Self {
-        ModuleCache(McVer::Mc032(mc))
+impl From<Rc<VersionedModuleCache<Wasmi034>>> for ModuleCache {
+    fn from(mc: Rc<VersionedModuleCache<Wasmi034>>) -> Self {
+        ModuleCache(McVer::Mc034(mc))
     }
 }
 
@@ -41,10 +41,10 @@ impl ModuleCache {
     }
 
     pub fn new(host: &Host) -> Result<Self, HostError> {
-        if host.get_ledger_protocol_version()? < WASMI_032_PROTOCOL_VERSION {
+        if host.get_ledger_protocol_version()? < WASMI_034_PROTOCOL_VERSION {
             VersionedModuleCache::<Wasmi031>::new(host).map(Into::into)
         } else {
-            VersionedModuleCache::<Wasmi032>::new(host).map(Into::into)
+            VersionedModuleCache::<Wasmi034>::new(host).map(Into::into)
         }
     }
 
@@ -55,7 +55,7 @@ impl ModuleCache {
     ) -> Result<Option<ParsedModule>, HostError> {
         match &self.0 {
             McVer::Mc031(cache) => cache.get_module(host, wasm_hash),
-            McVer::Mc032(cache) => cache.get_module(host, wasm_hash),
+            McVer::Mc034(cache) => cache.get_module(host, wasm_hash),
         }
     }
 }

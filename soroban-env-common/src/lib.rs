@@ -114,7 +114,7 @@ pub use val::{ConversionError, Tag, Val};
 #[cfg(feature = "wasmi")]
 pub use val::WasmiMarshal031;
 #[cfg(feature = "wasmi")]
-pub use val::WasmiMarshal032;
+pub use val::WasmiMarshal034;
 pub use val::{AddressObject, MapObject, VecObject};
 pub use val::{Bool, Void};
 

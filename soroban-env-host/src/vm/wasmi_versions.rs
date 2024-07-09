@@ -19,7 +19,7 @@ use crate::{
         VersionedModuleCache, VersionedParsedModule, WasmiConfig, MAX_VM_ARGS,
     },
     xdr::{ScErrorCode, ScErrorType},
-    Host, HostError, Symbol, WasmiMarshal031, WasmiMarshal032,
+    Host, HostError, Symbol, WasmiMarshal031, WasmiMarshal034,
 };
 use std::{borrow::Cow, rc::Rc};
 
@@ -79,7 +79,7 @@ pub(crate) trait WasmiVersion: Sized {
 }
 
 pub(crate) struct Wasmi031;
-pub(crate) struct Wasmi032;
+pub(crate) struct Wasmi034;
 
 fn check_max_args(host: &Host, results_len: usize, params_len: usize) -> Result<(), HostError> {
     if results_len > MAX_VM_ARGS {
@@ -280,22 +280,22 @@ impl WasmiVersion for Wasmi031 {
     }
 }
 
-impl WasmiVersion for Wasmi032 {
-    type Engine = wasmi_032::Engine;
-    type InstancePre = wasmi_032::InstancePre;
-    type Instance = wasmi_032::Instance;
-    type Module = wasmi_032::Module;
-    type Linker = wasmi_032::Linker<Host>;
-    type Store = wasmi_032::Store<Host>;
-    type Memory = wasmi_032::Memory;
-    type Value = wasmi_032::Val;
-    type Error = wasmi_032::Error;
-    type Extern = wasmi_032::Extern;
-    type Func = wasmi_032::Func;
-    const VALUE_ZERO: Self::Value = wasmi_032::Val::I64(0);
+impl WasmiVersion for Wasmi034 {
+    type Engine = wasmi_034::Engine;
+    type InstancePre = wasmi_034::InstancePre;
+    type Instance = wasmi_034::Instance;
+    type Module = wasmi_034::Module;
+    type Linker = wasmi_034::Linker<Host>;
+    type Store = wasmi_034::Store<Host>;
+    type Memory = wasmi_034::Memory;
+    type Value = wasmi_034::Val;
+    type Error = wasmi_034::Error;
+    type Extern = wasmi_034::Extern;
+    type Func = wasmi_034::Func;
+    const VALUE_ZERO: Self::Value = wasmi_034::Val::I64(0);
 
     fn new_engine(config: &WasmiConfig) -> Self::Engine {
-        Self::Engine::new(&config.config_032)
+        Self::Engine::new(&config.config_034)
     }
     fn new_linker(engine: &Self::Engine) -> Self::Linker {
         Self::Linker::new(engine)
@@ -310,7 +310,7 @@ impl WasmiVersion for Wasmi032 {
     }
 
     fn link_fn(linker: &mut Self::Linker, fi: &HostFuncInfo) -> Result<(), Self::Error> {
-        (fi.wrap_032)(linker)?;
+        (fi.wrap_034)(linker)?;
         Ok(())
     }
 
@@ -320,7 +320,7 @@ impl WasmiVersion for Wasmi032 {
     fn check_max_args(host: &Host, m: &Self::Module) -> Result<(), HostError> {
         for e in m.exports() {
             match e.ty() {
-                wasmi_032::ExternType::Func(f) => {
+                wasmi_034::ExternType::Func(f) => {
                     check_max_args(host, f.results().len(), f.params().len())?
                 }
                 _ => (),
@@ -405,7 +405,7 @@ impl WasmiVersion for Wasmi032 {
         mc: &'mc ModuleCache,
     ) -> Result<&'mc Rc<VersionedModuleCache<Self>>, HostError> {
         match &mc.0 {
-            McVer::Mc032(vmc) => Ok(vmc),
+            McVer::Mc034(vmc) => Ok(vmc),
             _ => Err(err!(
                 host,
                 (ScErrorType::WasmVm, ScErrorCode::InternalError),
@@ -420,11 +420,11 @@ impl WasmiVersion for Wasmi032 {
     }
 
     fn marshal_val_to_value(val: crate::Val) -> Self::Value {
-        WasmiMarshal032::marshal_from_self(val)
+        WasmiMarshal034::marshal_from_self(val)
     }
 
     fn try_unmarshal_value_to_val(value: Self::Value) -> Option<crate::Val> {
-        <crate::Val as WasmiMarshal032>::try_marshal_from_value(value)
+        <crate::Val as WasmiMarshal034>::try_marshal_from_value(value)
     }
 
     fn module_custom_section(m: &Self::Module, name: impl AsRef<str>) -> Option<&[u8]> {

@@ -38,7 +38,7 @@ declare_wasmi_marshal_for_enum!(
 );
 declare_wasmi_marshal_for_enum!(
     StorageType,
-    WasmiMarshal032,
-    wasmi_032::Val,
-    wasmi_032::Val::I64
+    WasmiMarshal034,
+    wasmi_034::Val,
+    wasmi_034::Val::I64
 );

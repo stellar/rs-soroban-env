@@ -1,4 +1,4 @@
-use wasmi_032::EnforcedLimits;
+use wasmi_034::EnforcedLimits;
 
 use crate::{
     budget::{AsBudget, Budget},
@@ -106,7 +106,7 @@ macro_rules! impl_resourcelimiter_for_host {
 }
 
 impl_resourcelimiter_for_host!(wasmi_031);
-impl_resourcelimiter_for_host!(wasmi_032);
+impl_resourcelimiter_for_host!(wasmi_034);
 
 // These values are calibrated and set by us. Calibration is done with a given
 // wasmi version, and as long as the version is pinned, these values aren't
@@ -121,8 +121,8 @@ pub(crate) fn load_calibrated_fuel_costs_031() -> wasmi_031::FuelCosts {
     fuel_costs
 }
 
-pub(crate) fn load_calibrated_fuel_costs_032() -> wasmi_032::FuelCosts {
-    let fuel_costs = wasmi_032::FuelCosts::default();
+pub(crate) fn load_calibrated_fuel_costs_034() -> wasmi_034::FuelCosts {
+    let fuel_costs = wasmi_034::FuelCosts::default();
     // TODO: calibrate 0.32 fuel costs
     fuel_costs
 }
@@ -132,7 +132,7 @@ pub(crate) fn load_calibrated_fuel_costs_032() -> wasmi_032::FuelCosts {
 // protocol version -- so we need to create both configs.
 pub(crate) struct WasmiConfig {
     pub(crate) config_031: wasmi_031::Config,
-    pub(crate) config_032: wasmi_032::Config,
+    pub(crate) config_034: wasmi_034::Config,
 }
 
 pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<WasmiConfig, HostError> {
@@ -156,9 +156,9 @@ pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<WasmiConfig, HostError
         .fuel_consumption_mode(wasmi_031::FuelConsumptionMode::Eager)
         .set_fuel_costs(fuel_costs_031);
 
-    let mut config_032 = wasmi_032::Config::default();
-    let fuel_costs_032 = budget.0.try_borrow_or_err()?.fuel_costs_032;
-    config_032
+    let mut config_034 = wasmi_034::Config::default();
+    let fuel_costs_034 = budget.0.try_borrow_or_err()?.fuel_costs_034;
+    config_034
         .consume_fuel(true)
         .wasm_bulk_memory(true)
         .wasm_mutable_global(true)
@@ -169,11 +169,11 @@ pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<WasmiConfig, HostError
         .wasm_tail_call(false)
         .wasm_extended_const(false)
         .floats(false)
-        .set_fuel_costs(fuel_costs_032)
+        .set_fuel_costs(fuel_costs_034)
         .enforced_limits(EnforcedLimits::strict());
         let config = WasmiConfig {
         config_031,
-        config_032,
+        config_034,
     };
 
     Ok(config)

@@ -22,11 +22,11 @@ pub(crate) struct HostFuncInfo {
     )
         -> Result<&mut wasmi_031::Linker<Host>, wasmi_031::errors::LinkerError>,
 
-    /// Same but for wasmi_032::Linker
-    pub(crate) wrap_032: fn(
-        &mut wasmi_032::Linker<Host>,
+    /// Same but for wasmi_034::Linker
+    pub(crate) wrap_034: fn(
+        &mut wasmi_034::Linker<Host>,
     )
-        -> Result<&mut wasmi_032::Linker<Host>, wasmi_032::errors::LinkerError>,
+        -> Result<&mut wasmi_034::Linker<Host>, wasmi_034::errors::LinkerError>,
 
     /// Minimal supported protocol version of this host function
     pub(crate) min_proto: Option<u32>,
@@ -54,7 +54,7 @@ macro_rules! host_function_info_helper {
             fn_str: $fn_id,
             arity: fn_arity!($args),
             wrap_031: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_031::$func_id),
-            wrap_032: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_032::$func_id),
+            wrap_034: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_034::$func_id),
             min_proto: Some($min_proto),
             max_proto: Some($max_proto),
         }
@@ -65,7 +65,7 @@ macro_rules! host_function_info_helper {
             fn_str: $fn_id,
             arity: fn_arity!($args),
             wrap_031: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_031::$func_id),
-            wrap_032: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_032::$func_id),
+            wrap_034: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_034::$func_id),
             min_proto: Some($min_proto),
             max_proto: None,
         }
@@ -76,7 +76,7 @@ macro_rules! host_function_info_helper {
             fn_str: $fn_id,
             arity: fn_arity!($args),
             wrap_031: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_031::$func_id),
-            wrap_032: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_032::$func_id),
+            wrap_034: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_034::$func_id),
             min_proto: None,
             max_proto: Some($max_proto),
         }
@@ -87,7 +87,7 @@ macro_rules! host_function_info_helper {
             fn_str: $fn_id,
             arity: fn_arity!($args),
             wrap_031: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_031::$func_id),
-            wrap_032: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_032::$func_id),
+            wrap_034: |linker| linker.func_wrap($mod_str, $fn_id, dispatch::dispatch_034::$func_id),
             min_proto: None,
             max_proto: None,
         }

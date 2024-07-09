@@ -6,7 +6,7 @@ use crate::{
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };
 
-use super::{ModuleCache, Wasmi031, Wasmi032, WasmiVersion};
+use super::{ModuleCache, Wasmi031, Wasmi034, WasmiVersion};
 use std::{collections::BTreeSet, io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
@@ -139,7 +139,7 @@ pub struct ParsedModule(pub(crate) PmVer);
 
 pub(crate) enum PmVer {
     Pm031(Rc<VersionedParsedModule<Wasmi031>>),
-    Pm032(Rc<VersionedParsedModule<Wasmi032>>),
+    Pm034(Rc<VersionedParsedModule<Wasmi034>>),
 }
 
 impl From<Rc<VersionedParsedModule<Wasmi031>>> for ParsedModule {
@@ -148,9 +148,9 @@ impl From<Rc<VersionedParsedModule<Wasmi031>>> for ParsedModule {
     }
 }
 
-impl From<Rc<VersionedParsedModule<Wasmi032>>> for ParsedModule {
-    fn from(m: Rc<VersionedParsedModule<Wasmi032>>) -> Self {
-        Self(PmVer::Pm032(m))
+impl From<Rc<VersionedParsedModule<Wasmi034>>> for ParsedModule {
+    fn from(m: Rc<VersionedParsedModule<Wasmi034>>) -> Self {
+        Self(PmVer::Pm034(m))
     }
 }
 
@@ -362,7 +362,7 @@ impl ParsedModule {
     pub fn get_cost_inputs(&self) -> &VersionedContractCodeCostInputs {
         match &self.0 {
             PmVer::Pm031(m) => &m.cost_inputs,
-            PmVer::Pm032(m) => &m.cost_inputs,
+            PmVer::Pm034(m) => &m.cost_inputs,
         }
     }
 
