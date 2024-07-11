@@ -532,6 +532,61 @@ fn excessive_logging() -> Result<(), HostError> {
         host.switch_to_enforcing_storage()?;
     }
 
+    let expected_budget_p22 = expect![[r#"
+        =================================================================
+        Cpu limit: 2000000; used: 215017
+        Mem limit: 500000; used: 166764
+        =================================================================
+        CostType                           cpu_insns      mem_bytes      
+        WasmInsnExec                       12             0              
+        MemAlloc                           17058          67344          
+        MemCpy                             2866           0              
+        MemCmp                             512            0              
+        DispatchHostFunction               310            0              
+        VisitObject                        244            0              
+        ValSer                             0              0              
+        ValDeser                           0              0              
+        ComputeSha256Hash                  3738           0              
+        ComputeEd25519PubKey               0              0              
+        VerifyEd25519Sig                   0              0              
+        VmInstantiation                    0              0              
+        VmCachedInstantiation              0              0              
+        InvokeVmFunction                   1948           14             
+        ComputeKeccak256Hash               0              0              
+        DecodeEcdsaCurve256Sig             0              0              
+        RecoverEcdsaSecp256k1Key           0              0              
+        Int256AddSub                       0              0              
+        Int256Mul                          0              0              
+        Int256Div                          0              0              
+        Int256Pow                          0              0              
+        Int256Shift                        0              0              
+        ChaCha20DrawBytes                  0              0              
+        ParseWasmInstructions              74665          17967          
+        ParseWasmFunctions                 4224           370            
+        ParseWasmGlobals                   1377           104            
+        ParseWasmTableEntries              29989          6285           
+        ParseWasmTypes                     8292           505            
+        ParseWasmDataSegments              0              0              
+        ParseWasmElemSegments              0              0              
+        ParseWasmImports                   5483           806            
+        ParseWasmExports                   6709           568            
+        ParseWasmDataSegmentBytes          0              0              
+        InstantiateWasmInstructions        43030          70704          
+        InstantiateWasmFunctions           59             114            
+        InstantiateWasmGlobals             83             53             
+        InstantiateWasmTableEntries        3300           1025           
+        InstantiateWasmTypes               0              0              
+        InstantiateWasmDataSegments        0              0              
+        InstantiateWasmElemSegments        0              0              
+        InstantiateWasmImports             6476           762            
+        InstantiateWasmExports             4642           143            
+        InstantiateWasmDataSegmentBytes    0              0              
+        Sec1DecodePointUncompressed        0              0              
+        VerifyEcdsaSecp256r1Sig            0              0              
+        =================================================================
+
+    "#]];
+
     let expected_budget_p21 = expect![[r#"
         =================================================================
         Cpu limit: 2000000; used: 215305
@@ -642,12 +697,12 @@ fn excessive_logging() -> Result<(), HostError> {
 
     "#]];
 
-    let expected_budget =
-        if !crate::vm::ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
-            expected_budget_p20
-        } else {
-            expected_budget_p21
-        };
+    let expected_budget = match host.get_ledger_protocol_version()? {
+        20 => expected_budget_p20,
+        21 => expected_budget_p21,
+        22 => expected_budget_p22,
+        _ => panic!("unexpected protocol version"),
+    };
 
     // moderate logging
     {
@@ -1364,20 +1419,28 @@ fn test_stack_depth_stability() {
     const MAX_WASM_STACK_DEPTH: u32 = 1024;
 
     let host = observe_host!(Host::test_host_with_recording_footprint());
+
+    let max_ok_depth = if host.get_ledger_protocol_version().unwrap() < 22 {
+        MAX_WASM_STACK_DEPTH - 1
+    } else {
+        MAX_WASM_STACK_DEPTH - 2
+    };
+    let first_bad_depth = max_ok_depth + 1;
+
     host.as_budget().reset_unlimited().unwrap();
     let contract_id = host.register_test_contract_wasm(HOSTILE);
     assert!(host
         .call(
             contract_id,
             Symbol::try_from_small_str("deepstack").unwrap(),
-            test_vec![&*host, MAX_WASM_STACK_DEPTH - 1].into(),
+            test_vec![&*host, max_ok_depth].into(),
         )
         .is_ok());
     assert!(HostError::result_matches_err(
         host.call(
             contract_id,
             Symbol::try_from_small_str("deepstack").unwrap(),
-            test_vec![&*host, MAX_WASM_STACK_DEPTH].into(),
+            test_vec![&*host, first_bad_depth].into(),
         ),
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));

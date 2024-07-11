@@ -331,7 +331,7 @@ fn get_wasmi_031_trap_code(trap: &wasmi_031::core::Trap) -> Option<wasmi_031::co
 }
 #[cfg(feature = "wasmi")]
 fn get_wasmi_034_trap_code(trap: &wasmi_034::core::TrapCode) -> Option<wasmi_034::core::TrapCode> {
-    Some(trap.clone())
+    Some(*trap)
 }
 
 decl_wasmi_error_conversions!(

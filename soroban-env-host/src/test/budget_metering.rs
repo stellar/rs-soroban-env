@@ -105,19 +105,26 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     host.call(id_obj, sym, args)?;
-    let (cpu_count, cpu_consumed, mem_consumed, wasm_mem_alloc) = host.with_budget(|budget| {
-        Ok((
-            budget
-                .get_tracker(ContractCostType::WasmInsnExec)?
-                .iterations,
-            budget.get_cpu_insns_consumed()?,
-            budget.get_mem_bytes_consumed()?,
-            budget.get_wasm_mem_alloc()?,
-        ))
-    })?;
+    let (cpu_iterations, cpu_consumed, mem_consumed, wasm_mem_alloc) =
+        host.with_budget(|budget| {
+            Ok((
+                budget
+                    .get_tracker(ContractCostType::WasmInsnExec)?
+                    .iterations,
+                budget.get_cpu_insns_consumed()?,
+                budget.get_mem_bytes_consumed()?,
+                budget.get_wasm_mem_alloc()?,
+            ))
+        })?;
+    let (expected_cpu_iterations, expected_cpu_consumed) =
+        if host.get_ledger_protocol_version()? < 22 {
+            (4005, 24030)
+        } else {
+            (1999, 11994)
+        };
     assert_eq!(
-        (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
-        (4005, 24030, 65536, 73718)
+        (cpu_iterations, cpu_consumed, wasm_mem_alloc, mem_consumed),
+        (expected_cpu_iterations, expected_cpu_consumed, 65536, 73718)
     );
 
     // giving it the exact required amount will succeed

@@ -1534,7 +1534,11 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
     );
     let (expected_insns, expected_read_bytes) =
         if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
-            (1431216, 3132)
+            if ledger_info.protocol_version < 22 {
+                (1431216, 3132)
+            } else {
+                (1428888, 3132)
+            }
         } else {
             (2221742, 3084)
         };
@@ -1602,7 +1606,11 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
     );
     let (expected_insns, expected_read_bytes) =
         if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
-            (1543254, 3212)
+            if ledger_info.protocol_version < 22 {
+                (1543254, 3212)
+            } else {
+                (1542278, 3212)
+            }
         } else {
             (2333780, 3164)
         };

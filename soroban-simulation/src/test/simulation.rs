@@ -478,10 +478,11 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(!res.diagnostic_events.is_empty());
 
     let (expected_instructions, expected_read_bytes, expected_resource_fee, expected_mem_bytes) =
-        if ledger_info.protocol_version == CURRENT_PROTOCOL_VERSION {
-            (38210172, 7492, 76472, 19104958)
-        } else {
-            (41268119, 7540, 79532, 20633919)
+        match ledger_info.protocol_version {
+            20 => (38210172, 7492, 76472, 19104958),
+            21 => (41268119, 7540, 79532, 20633919),
+            22 => (24486119, 7540, 79532, 12242919),
+            _ => panic!("unexpected protocol version"),
         };
 
     assert_eq!(

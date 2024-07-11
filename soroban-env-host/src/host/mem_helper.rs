@@ -19,10 +19,10 @@ pub(crate) struct MemFnArgs {
 }
 
 impl Vm {
-    fn read_memory<'a>(
+    fn read_memory(
         &self,
         host: &Host,
-        vmcaller: &mut VmCaller<'a, Host>,
+        vmcaller: &mut VmCaller<'_, Host>,
         offset: usize,
         buffer: &mut [u8],
     ) -> Result<(), HostError> {
@@ -39,10 +39,10 @@ impl Vm {
             ),
         }
     }
-    fn write_memory<'a>(
+    fn write_memory(
         &self,
         host: &Host,
-        vmcaller: &mut VmCaller<'a, Host>,
+        vmcaller: &mut VmCaller<'_, Host>,
         offset: usize,
         buffer: &[u8],
     ) -> Result<(), HostError> {
@@ -59,10 +59,10 @@ impl Vm {
             ),
         }
     }
-    fn with_mem_data<'a, F, R>(
+    fn with_mem_data<F, R>(
         &self,
         host: &Host,
-        vmcaller: &VmCaller<'a, Host>,
+        vmcaller: &VmCaller<'_, Host>,
         f: F,
     ) -> Result<R, HostError>
     where
@@ -73,10 +73,10 @@ impl Vm {
             VmVer::Vm034(vm) => f(vm.get_memory(host)?.data(vmcaller.try_ref_034()?)),
         }
     }
-    fn with_mem_data_mut<'a, F, R>(
+    fn with_mem_data_mut<F, R>(
         &self,
         host: &Host,
-        vmcaller: &mut VmCaller<'a, Host>,
+        vmcaller: &mut VmCaller<'_, Host>,
         f: F,
     ) -> Result<R, HostError>
     where
