@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directories: 
+      - "/"
+      - "/soroban-bench-utils"
+      - "/soroban-builtin-sdk-macros"
+      - "/soroban-env-common"
+      - "/soroban-env-guest"
+      - "/soroban-env-host"
+      - "/soroban-env-macros"
+      - "/soroban-simulation"
+      - "/soroban-synth-wasm"
+      - "/soroban-test-wasms"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "02:00"
+    open-pull-requests-limit: 2
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+        - "patch"
+        - "minor"
+      major:
+        applies-to: version-updates
+        update-types:
+        - "major"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "02:00"
+    open-pull-requests-limit: 2
+    groups:
+      all-actions:
+        applies-to: version-updates
+        patterns: [ "*" ]
