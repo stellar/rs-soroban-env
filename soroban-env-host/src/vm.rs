@@ -15,7 +15,9 @@ mod module_cache;
 mod parsed_module;
 
 #[cfg(feature = "bench")]
-pub(crate) use dispatch::dummy0;
+pub(crate) use dispatch::dispatch_031::dummy0 as dummy0_031;
+#[cfg(feature = "bench")]
+pub(crate) use dispatch::dispatch_034::dummy0 as dummy0_034;
 
 // FIXME: re-enable when fixing protocol_gate tests
 // #[cfg(test)]
@@ -39,6 +41,10 @@ use func_info::{HostFuncInfo, HOST_FUNCTIONS};
 pub use module_cache::ModuleCache;
 use module_cache::{McVer, VersionedModuleCache};
 pub use parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
+
+#[cfg(feature = "bench")]
+pub(crate) use parsed_module::{PmVer, VersionedParsedModule};
+#[cfg(not(feature = "bench"))]
 use parsed_module::{PmVer, VersionedParsedModule};
 
 #[cfg(feature = "bench")]
@@ -48,6 +54,9 @@ impl wasmi_031::core::HostError for HostError {}
 impl wasmi_034::core::HostError for HostError {}
 
 mod wasmi_versions;
+#[cfg(feature = "bench")]
+pub(crate) use wasmi_versions::{Wasmi031, Wasmi034, WasmiVersion};
+#[cfg(not(feature = "bench"))]
 use wasmi_versions::{Wasmi031, Wasmi034, WasmiVersion};
 
 const MAX_VM_ARGS: usize = 32;
@@ -591,7 +600,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
 }
 
 impl VersionedVm<Wasmi031> {
-    fn with_caller_031<F, T>(&self, f: F) -> Result<T, HostError>
+    pub(crate) fn with_caller_031<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(wasmi_031::Caller<Host>) -> Result<T, HostError>,
     {
@@ -604,7 +613,7 @@ impl VersionedVm<Wasmi031> {
 }
 
 impl VersionedVm<Wasmi034> {
-    fn with_caller_034<F, T>(&self, f: F) -> Result<T, HostError>
+    pub(crate) fn with_caller_034<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(wasmi_034::Caller<Host>) -> Result<T, HostError>,
     {
@@ -621,6 +630,7 @@ impl Vm {
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
     #[cfg(feature = "bench")]
+    #[allow(dead_code)]
     pub(crate) fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
@@ -635,17 +645,6 @@ impl Vm {
                 f(&mut vmcaller)
             }),
         }
-    }
-
-    #[cfg(feature = "bench")]
-    pub(crate) fn with_caller<F, T>(&self, f: F) -> Result<T, HostError>
-    where
-        F: FnOnce(Caller<Host>) -> Result<T, HostError>,
-    {
-        let store: &mut Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
-        let mut ctx: StoreContextMut<Host> = store.into();
-        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
-        f(caller)
     }
 
     pub(crate) fn memory_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {

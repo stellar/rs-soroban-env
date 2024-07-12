@@ -4,7 +4,7 @@ use crate::{
     xdr::{ContractCostType::VmInstantiation, Hash},
     Vm,
 };
-use std::{hint::black_box, rc::Rc};
+use std::hint::black_box;
 
 #[derive(Clone)]
 pub struct VmInstantiationSample {
@@ -31,7 +31,7 @@ impl CostRunner for VmInstantiationRun {
                 host,
                 sample.id.unwrap(),
                 &sample.wasm[..],
-                sample.module.cost_inputs.clone(),
+                sample.module.get_cost_inputs().clone(),
                 ModuleParseCostMode::Normal,
             )
             .unwrap(),
@@ -53,7 +53,7 @@ impl CostRunner for VmInstantiationRun {
 pub use v21::*;
 mod v21 {
     use super::*;
-    use crate::vm::ParsedModule;
+    use crate::vm::{ParsedModule, PmVer, VersionedParsedModule, Wasmi031, Wasmi034};
     use crate::xdr::ContractCostType::{
         InstantiateWasmDataSegmentBytes, InstantiateWasmDataSegments, InstantiateWasmElemSegments,
         InstantiateWasmExports, InstantiateWasmFunctions, InstantiateWasmGlobals,
@@ -80,15 +80,24 @@ mod v21 {
                     _iter: u64,
                     sample: Self::SampleType,
                 ) -> Self::RecycledType {
-                    let module = black_box(
-                        ParsedModule::new(
+                    let module = black_box(match &sample.module.0 {
+                        PmVer::Pm031(pm) => VersionedParsedModule::<Wasmi031>::new(
                             host,
-                            sample.module.module.engine(),
+                            pm.module.engine(),
                             &sample.wasm[..],
-                            sample.module.cost_inputs.clone(),
+                            pm.cost_inputs.clone(),
                         )
-                        .unwrap(),
-                    );
+                        .unwrap()
+                        .into(),
+                        PmVer::Pm034(pm) => VersionedParsedModule::<Wasmi034>::new(
+                            host,
+                            pm.module.engine(),
+                            &sample.wasm[..],
+                            pm.cost_inputs.clone(),
+                        )
+                        .unwrap()
+                        .into(),
+                    });
                     (Some(module), sample.wasm)
                 }
 
@@ -121,7 +130,7 @@ mod v21 {
                     sample: Self::SampleType,
                 ) -> Self::RecycledType {
                     let vm = black_box(
-                        Vm::from_parsed_module(host, sample.id.unwrap(), sample.module).unwrap(),
+                        Vm::from_parsed_module(host, sample.id.unwrap(), &sample.module).unwrap(),
                     );
                     (Some(vm), sample.wasm)
                 }

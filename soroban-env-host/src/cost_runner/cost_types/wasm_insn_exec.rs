@@ -3,7 +3,7 @@ use crate::{
     xdr::{Name, ScVec},
     Symbol, Val, Vm,
 };
-use std::{fmt, hint::black_box, rc::Rc};
+use std::{fmt, hint::black_box};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// This is a subset of WASM instructions we are interested in for calibration.

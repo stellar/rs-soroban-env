@@ -6,8 +6,6 @@ use soroban_env_host::{
     Host, Symbol, Vm,
 };
 use soroban_synth_wasm::{Arity, ModEmitter};
-use std::rc::Rc;
-use wasmi::Value;
 
 const MAX_VM_ARGS: usize = 32;
 
@@ -25,12 +23,17 @@ pub(crate) struct InvokeVmFunctionMeasure;
 impl HostCostMeasurement for InvokeVmFunctionMeasure {
     type Runner = InvokeVmFunctionRun;
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, _input: u64) -> (Vm, Vec<Value>) {
+    fn new_random_case(
+        host: &Host,
+        _rng: &mut StdRng,
+        _input: u64,
+    ) -> (Vm, Vec<wasmi_031::Value>, Vec<wasmi_034::Val>) {
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_empty_invoke();
         let vm = Vm::new(&host, id, &code).unwrap();
-        let args = vec![Value::I64(0); MAX_VM_ARGS];
-        (vm, args)
+        let args_031 = vec![wasmi_031::Value::I64(0); MAX_VM_ARGS];
+        let args_034 = vec![wasmi_034::Val::I64(0); MAX_VM_ARGS];
+        (vm, args_031, args_034)
     }
 }
 

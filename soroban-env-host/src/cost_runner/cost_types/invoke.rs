@@ -1,13 +1,12 @@
 use soroban_env_common::ConversionError;
-use wasmi::Value;
 
 use crate::{
     cost_runner::{CostRunner, CostType},
-    vm::dummy0,
+    vm::{dummy0_031, dummy0_034, VmVer},
     xdr::ContractCostType::{DispatchHostFunction, InvokeVmFunction},
     HostError, Symbol, Val, Vm,
 };
-use std::{hint::black_box, rc::Rc};
+use std::hint::black_box;
 
 pub struct InvokeVmFunctionRun;
 
@@ -19,19 +18,20 @@ const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
 impl CostRunner for InvokeVmFunctionRun {
     const COST_TYPE: CostType = CostType::Contract(InvokeVmFunction);
 
-    type SampleType = (Vm, Vec<Value>);
+    type SampleType = (Vm, Vec<wasmi_031::Value>, Vec<wasmi_034::Val>);
 
     type RecycledType = (Option<Val>, Self::SampleType);
 
     const RUN_ITERATIONS: u64 = 100;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let rv = black_box(
-            sample
-                .0
-                .metered_func_call(host, &TEST_SYM, sample.1.as_slice())
-                .unwrap(),
-        );
+        let rv = black_box({
+            match &sample.0 .0 {
+                VmVer::Vm031(vm) => vm.metered_func_call(host, &TEST_SYM, sample.1.as_slice()),
+                VmVer::Vm034(vm) => vm.metered_func_call(host, &TEST_SYM, sample.2.as_slice()),
+            }
+            .unwrap()
+        });
         (Some(rv), sample)
     }
 
@@ -58,9 +58,15 @@ impl CostRunner for InvokeHostFunctionRun {
 
     fn run_iter(_host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         black_box(
-            sample
-                .with_caller(|caller| dummy0(caller).map_err(|_| HostError::from(ConversionError)))
-                .unwrap(),
+            match &sample.0 {
+                VmVer::Vm031(vm) => vm.with_caller_031(|caller| {
+                    dummy0_031(caller).map_err(|_| HostError::from(ConversionError))
+                }),
+                VmVer::Vm034(vm) => vm.with_caller_034(|caller| {
+                    dummy0_034(caller).map_err(|_| HostError::from(ConversionError))
+                }),
+            }
+            .unwrap(),
         );
         black_box(sample)
     }

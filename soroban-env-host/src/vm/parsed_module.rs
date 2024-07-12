@@ -135,8 +135,10 @@ impl VersionedContractCodeCostInputs {
 /// as well as a protocol number and set of [ContractCodeCostInputs] extracted
 /// from the module when it was parsed.
 
+#[derive(Clone)]
 pub struct ParsedModule(pub(crate) PmVer);
 
+#[derive(Clone)]
 pub(crate) enum PmVer {
     Pm031(Rc<VersionedParsedModule<Wasmi031>>),
     Pm034(Rc<VersionedParsedModule<Wasmi034>>),
@@ -592,5 +594,19 @@ impl ParsedModule {
             }
         }
         Ok(())
+    }
+
+    pub fn new_with_isolated_engine(
+        host: &Host,
+        wasm: &[u8],
+        cost_inputs: VersionedContractCodeCostInputs,
+    ) -> Result<Self, HostError> {
+        if host.get_ledger_protocol_version()? < 22 {
+            VersionedParsedModule::<Wasmi031>::new_with_isolated_engine(host, wasm, cost_inputs)
+                .map(|m| m.into())
+        } else {
+            VersionedParsedModule::<Wasmi034>::new_with_isolated_engine(host, wasm, cost_inputs)
+                .map(|m| m.into())
+        }
     }
 }
