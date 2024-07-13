@@ -1,5 +1,5 @@
 use rand::{rngs::StdRng, RngCore};
-use soroban_env_host::{budget::AsBudget, meta, Host, LedgerInfo, Val, I256};
+use soroban_env_host::{budget::AsBudget, Host, LedgerInfo, Val, I256};
 
 pub(crate) fn test_host() -> Host {
     let host = Host::default();
