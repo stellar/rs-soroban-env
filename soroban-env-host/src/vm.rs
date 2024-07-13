@@ -166,6 +166,10 @@ pub(crate) enum ModuleParseCostMode {
 }
 
 impl Vm {
+    pub fn protocol_uses_legacy_stack_vm(protocol: u32) -> bool {
+        protocol < WASMI_034_PROTOCOL_VERSION
+    }
+
     pub fn from_parsed_module(
         host: &Host,
         contract_id: Hash,
@@ -184,7 +188,7 @@ impl Vm {
     }
 
     pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Self, HostError> {
-        if host.get_ledger_protocol_version()? < WASMI_034_PROTOCOL_VERSION {
+        if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
             VersionedVm::<Wasmi031>::new(host, contract_id, wasm).map(Into::into)
         } else {
             VersionedVm::<Wasmi034>::new(host, contract_id, wasm).map(Into::into)
@@ -223,7 +227,7 @@ impl Vm {
         cost_inputs: VersionedContractCodeCostInputs,
         cost_mode: ModuleParseCostMode,
     ) -> Result<Self, HostError> {
-        if host.get_ledger_protocol_version()? < WASMI_034_PROTOCOL_VERSION {
+        if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
             VersionedVm::<Wasmi031>::new_with_cost_inputs(
                 host,
                 contract_id,

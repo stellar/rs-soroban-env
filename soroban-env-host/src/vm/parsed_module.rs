@@ -601,7 +601,7 @@ impl ParsedModule {
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Self, HostError> {
-        if host.get_ledger_protocol_version()? < 22 {
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
             VersionedParsedModule::<Wasmi031>::new_with_isolated_engine(host, wasm, cost_inputs)
                 .map(|m| m.into())
         } else {

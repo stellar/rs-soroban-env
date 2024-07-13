@@ -485,8 +485,6 @@ fn test_simulate_invoke_contract_with_auth() {
             _ => panic!("unexpected protocol version"),
         };
 
-    dbg!(ledger_info.protocol_version);
-    dbg!(expected_resource_fee);
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {

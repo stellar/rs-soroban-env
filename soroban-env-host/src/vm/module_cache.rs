@@ -1,13 +1,13 @@
 use super::{
     func_info::HOST_FUNCTIONS,
     parsed_module::{ParsedModule, VersionedContractCodeCostInputs, VersionedParsedModule},
-    Wasmi031, Wasmi034, WasmiVersion, WASMI_034_PROTOCOL_VERSION,
+    Wasmi031, Wasmi034, WasmiVersion,
 };
 use crate::{
     budget::{get_wasmi_config, AsBudget},
     host::metered_clone::{MeteredClone, MeteredContainer},
     xdr::{Hash, ScErrorCode, ScErrorType},
-    Host, HostError, MeteredOrdMap,
+    Host, HostError, MeteredOrdMap, Vm,
 };
 use std::{collections::BTreeSet, rc::Rc};
 
@@ -41,7 +41,7 @@ impl ModuleCache {
     }
 
     pub fn new(host: &Host) -> Result<Self, HostError> {
-        if host.get_ledger_protocol_version()? < WASMI_034_PROTOCOL_VERSION {
+        if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
             VersionedModuleCache::<Wasmi031>::new(host).map(Into::into)
         } else {
             VersionedModuleCache::<Wasmi034>::new(host).map(Into::into)

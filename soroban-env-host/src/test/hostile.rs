@@ -1420,11 +1420,12 @@ fn test_stack_depth_stability() {
 
     let host = observe_host!(Host::test_host_with_recording_footprint());
 
-    let max_ok_depth = if host.get_ledger_protocol_version().unwrap() < 22 {
-        MAX_WASM_STACK_DEPTH - 1
-    } else {
-        MAX_WASM_STACK_DEPTH - 2
-    };
+    let max_ok_depth =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version().unwrap()) {
+            MAX_WASM_STACK_DEPTH - 1
+        } else {
+            MAX_WASM_STACK_DEPTH - 2
+        };
     let first_bad_depth = max_ok_depth + 1;
 
     host.as_budget().reset_unlimited().unwrap();

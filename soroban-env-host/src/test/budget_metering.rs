@@ -117,7 +117,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
             ))
         })?;
     let (expected_cpu_iterations, expected_cpu_consumed) =
-        if host.get_ledger_protocol_version()? < 22 {
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
             (4005, 24030)
         } else {
             (1999, 11994)

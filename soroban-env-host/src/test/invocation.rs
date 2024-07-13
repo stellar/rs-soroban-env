@@ -8,7 +8,7 @@ use soroban_env_common::{
 
 use crate::{
     budget::AsBudget, events::HostEvent, test::observe::ObservedHost, xdr::ScErrorType,
-    ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
+    ContractFunctionSet, Error, Host, HostError, Symbol, Tag, Vm,
 };
 use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
 
@@ -369,7 +369,7 @@ fn unrecoverable_error_with_cross_contract_try_call() -> Result<(), HostError> {
         host.register_test_contract_wasm(ADD_I32);
     let invoke_contract_id_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
 
-    let not_enough_cpu = if host.get_ledger_protocol_version()? < 22 {
+    let not_enough_cpu = if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
         5789
     } else {
         1000
@@ -403,7 +403,7 @@ fn unrecoverable_error_with_cross_contract_try_call() -> Result<(), HostError> {
 fn unrecoverable_error_with_try_call() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(ADD_I32);
-    let too_little_cpu = if host.get_ledger_protocol_version()? < 22 {
+    let too_little_cpu = if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
         2015
     } else {
         100
