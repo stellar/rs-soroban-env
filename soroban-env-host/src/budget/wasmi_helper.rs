@@ -135,7 +135,10 @@ pub(crate) struct WasmiConfig {
     pub(crate) config_034: wasmi_034::Config,
 }
 
-pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<WasmiConfig, HostError> {
+pub(crate) fn get_wasmi_config(
+    budget: &Budget,
+    cmode: wasmi_034::CompilationMode,
+) -> Result<WasmiConfig, HostError> {
     // Turn off most optional wasm features, leaving on some post-MVP features
     // commonly enabled by Rust and Clang. Make sure all unused features are
     // explicited turned off, so that we don't get "opted in" by a future wasmi
@@ -183,7 +186,7 @@ pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<WasmiConfig, HostError
         .floats(false)
         .set_fuel_costs(fuel_costs_034)
         .enforced_limits(enforced_limits)
-        .compilation_mode(wasmi_034::CompilationMode::Lazy);
+        .compilation_mode(cmode);
     let config = WasmiConfig {
         config_031,
         config_034,

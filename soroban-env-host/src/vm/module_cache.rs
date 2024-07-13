@@ -73,7 +73,7 @@ pub(crate) struct VersionedModuleCache<V: WasmiVersion> {
 
 impl<V: WasmiVersion> VersionedModuleCache<V> {
     fn new(host: &Host) -> Result<Rc<Self>, HostError> {
-        let config = get_wasmi_config(host.as_budget())?;
+        let config = get_wasmi_config(host.as_budget(), wasmi_034::CompilationMode::Lazy)?;
         let engine = V::new_engine(&config);
         let mut modules = MeteredOrdMap::new();
         Self::add_stored_contracts(&engine, &mut modules, host)?;

@@ -221,7 +221,8 @@ impl<V: WasmiVersion> VersionedParsedModule<V> {
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<Self>, HostError> {
         use crate::budget::AsBudget;
-        let config = crate::vm::get_wasmi_config(host.as_budget())?;
+        let config =
+            crate::vm::get_wasmi_config(host.as_budget(), wasmi_034::CompilationMode::Eager)?;
         let engine = V::new_engine(&config);
         Self::new(host, &engine, wasm, cost_inputs)
     }
