@@ -9,7 +9,6 @@ updates:
       - "/soroban-env-guest"
       - "/soroban-env-host"
       - "/soroban-env-macros"
-      - "/soroban-simulation"
       - "/soroban-synth-wasm"
       - "/soroban-test-wasms"
     schedule:
