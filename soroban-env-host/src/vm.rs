@@ -264,6 +264,7 @@ impl Vm {
     }
 
     #[cfg(feature = "testutils")]
+    #[allow(clippy::type_complexity)]
     pub fn get_all_host_functions_with_supported_protocol_range(
     ) -> Vec<(&'static str, &'static str, u32, Option<u32>, Option<u32>)> {
         HOST_FUNCTIONS
