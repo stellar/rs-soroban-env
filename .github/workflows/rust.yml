@@ -111,7 +111,7 @@ jobs:
         TEST_PROTOCOL: ${{ matrix.test-protocol }}
 
   publish-dry-run:
-    if: github.event_name == 'push' || startsWith(github.head_ref, 'release/')
+    # if: github.event_name == 'push' || startsWith(github.head_ref, 'release/')
     strategy:
       matrix:
         sys:
@@ -119,7 +119,7 @@ jobs:
           target: wasm32-unknown-unknown
         - os: ubuntu-latest
           target: x86_64-unknown-linux-gnu
-    uses: stellar/actions/.github/workflows/rust-publish-dry-run.yml@main
+    uses: stellar/actions/.github/workflows/rust-publish-dry-run.yml@publish-dry-run-revival
     with:
       runs-on: ${{ matrix.sys.os }}
       target: ${{ matrix.sys.target }}
