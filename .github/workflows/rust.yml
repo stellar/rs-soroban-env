@@ -120,7 +120,7 @@ jobs:
           target: wasm32-unknown-unknown
         - os: ubuntu-latest
           target: x86_64-unknown-linux-gnu
-    uses: stellar/actions/.github/workflows/rust-publish-dry-run.yml@25a734c0262793ed28ae1724783e7456cf9293b9
+    uses: stellar/actions/.github/workflows/rust-publish-dry-run.yml@cf3ed9c26a5fc74581c21e59a5c49bc52a6011f1
     with:
       runs-on: ${{ matrix.sys.os }}
       target: ${{ matrix.sys.target }}
