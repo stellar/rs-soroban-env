@@ -119,7 +119,16 @@ jobs:
           target: wasm32-unknown-unknown
         - os: ubuntu-latest
           target: x86_64-unknown-linux-gnu
-    uses: stellar/actions/.github/workflows/rust-publish-dry-run.yml@main
+    uses: stellar/actions/.github/workflows/rust-publish-dry-run-v2.yml@main
     with:
+      crates: >
+        soroban-builtin-sdk-macros,
+        soroban-env-macros,
+        soroban-env-common,
+        soroban-env-host,
+        soroban-synth-wasm,
+        soroban-env-guest,
+        soroban-simulation
+
       runs-on: ${{ matrix.sys.os }}
       target: ${{ matrix.sys.target }}
