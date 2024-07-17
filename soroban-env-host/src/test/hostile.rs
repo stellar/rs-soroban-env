@@ -485,10 +485,15 @@ fn many_large_segments_exceeds_budget() -> Result<(), HostError> {
 fn too_many_segments_exceeds_budget() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let res = instantiate_with_page_and_segment_count(&host, 1, 50_000_000, 1);
-    assert!(HostError::result_matches_err(
-        res,
-        Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
-    ));
+
+    let expected_error =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        } else {
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        };
+
+    assert!(HostError::result_matches_err(res, expected_error,));
     Ok(())
 }
 
@@ -1060,9 +1065,15 @@ fn test_duplicate_function_import() -> Result<(), HostError> {
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
+    let expected_error =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        } else {
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        };
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        expected_error
     ));
     Ok(())
 }
@@ -1327,7 +1338,7 @@ fn test_large_number_of_tables() -> Result<(), HostError> {
 #[test]
 fn test_large_number_of_func_types() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let wasm = wasm_util::wasm_module_with_many_func_types(100001);
+    let wasm = wasm_util::wasm_module_with_many_func_types(500001);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         generate_account_id(&host),
