@@ -59,7 +59,6 @@ pub(crate) use wasmi_versions::{Wasmi031, Wasmi034, WasmiVersion};
 #[cfg(not(feature = "bench"))]
 use wasmi_versions::{Wasmi031, Wasmi034, WasmiVersion};
 
-const MAX_VM_ARGS: usize = 32;
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
 
 struct VmInstantiationTimer {
@@ -166,6 +165,9 @@ pub(crate) enum ModuleParseCostMode {
 }
 
 impl Vm {
+
+    pub const MAX_VM_ARGS: usize = 32;
+
     pub fn protocol_uses_legacy_stack_vm(protocol: u32) -> bool {
         protocol < WASMI_034_PROTOCOL_VERSION
     }
@@ -548,7 +550,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
             Some(e) => e,
         };
 
-        if inputs.len() > MAX_VM_ARGS {
+        if inputs.len() > Vm::MAX_VM_ARGS {
             return Err(host.err(
                 ScErrorType::WasmVm,
                 ScErrorCode::InvalidInput,

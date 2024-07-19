@@ -16,7 +16,7 @@ use crate::{
     host::declared_size::DeclaredSizeForMetering,
     vm::{
         fuel_refillable::FuelRefillable, HostFuncInfo, McVer, ModuleCache, ParsedModule,
-        VersionedModuleCache, VersionedParsedModule, WasmiConfig, MAX_VM_ARGS,
+        VersionedModuleCache, VersionedParsedModule, WasmiConfig, Vm
     },
     xdr::{ScErrorCode, ScErrorType},
     Host, HostError, Symbol, WasmiMarshal031, WasmiMarshal034,
@@ -82,7 +82,7 @@ pub(crate) struct Wasmi031;
 pub(crate) struct Wasmi034;
 
 fn check_max_args(host: &Host, results_len: usize, params_len: usize) -> Result<(), HostError> {
-    if results_len > MAX_VM_ARGS {
+    if results_len > Vm::MAX_VM_ARGS {
         return Err(err!(
             host,
             (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
@@ -90,7 +90,7 @@ fn check_max_args(host: &Host, results_len: usize, params_len: usize) -> Result<
             results_len
         ));
     }
-    if params_len > MAX_VM_ARGS {
+    if params_len > Vm::MAX_VM_ARGS {
         return Err(err!(
             host,
             (ScErrorType::WasmVm, ScErrorCode::InvalidInput),

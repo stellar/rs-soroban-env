@@ -76,6 +76,47 @@ pub fn wasm_module_with_n_insns(n: usize) -> Vec<u8> {
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
 }
+
+// This is a speclialized version of wasm_module_with_n_insns that is used to
+// benchmark wasmi lazy compilation. It has a bunch of content but also tests
+// its input and returns immediately if zero. It doesn't _do_ anything.
+pub fn wasm_module_with_m_fns_each_with_n_insns_returning_early(
+    m: usize,
+    n: usize,
+) -> Vec<u8> {
+    let mut me = ModEmitter::bench_default();
+    for i in 0..m {
+        let mut fe = me.func(Arity(Vm::MAX_VM_ARGS as u32), 0);
+        let arg = fe.args[0];
+        let pass = Symbol::try_from_small_str("pass").unwrap();
+        fe.push(arg.0);
+        fe.i64_eqz();
+        fe.if_then(|fe| {
+            fe.push(pass);
+            fe.ret()
+        });
+        fe.push(Operand::Const64(1));
+        // We actually emit 4 instructions per loop iteration, so we need to divide by 4.
+        let n = 1 + (n / 4);
+        for j in 0..n {
+            fe.push(arg.0);
+            fe.push(Operand::Const64(j as i64));
+            fe.i64_mul();
+            fe.i64_add();
+        }
+        fe.drop();
+        fe.push(pass);
+        me = fe.finish_and_export(format!("test{}", i).as_str());
+    }
+    me.finish()
+}
+
+pub fn wasm_module_with_empty_invoke() -> Vec<u8> {
+    let mut fe = ModEmitter::default().func(Arity(Vm::MAX_VM_ARGS as u32), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
 pub fn wasm_module_with_n_globals(n: usize) -> Vec<u8> {
     let mut me = ModEmitter::bench_default();
     for i in 0..n {

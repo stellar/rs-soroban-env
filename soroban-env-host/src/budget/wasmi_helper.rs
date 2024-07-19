@@ -123,7 +123,16 @@ pub(crate) fn load_calibrated_fuel_costs_031() -> wasmi_031::FuelCosts {
 
 pub(crate) fn load_calibrated_fuel_costs_034() -> wasmi_034::FuelCosts {
     let fuel_costs = wasmi_034::FuelCosts::default();
-    // TODO: calibrate 0.32 fuel costs
+    // Wasmi 0.34 has a simplified fuel-cost schedule, based on its new
+    // register-machine architecture. It is simply this: 1 fuel per wasm
+    // instruction, and each fuel represents moving 8 registers or 64 bytes.
+    //
+    // All this is hard-wired now (see FuelCosts::default) and it seems broadly
+    // _correct_ in terms of the actual runtime costs we see in wasmi: it costs
+    // _about_ 8-16 CPU instructions per fuel when we look at instructions we
+    // can even calibrate, and wasmi's own benchmarks suggest it runs about
+    // 8-16x slower than native code. So we will just leave their calibration
+    // as-is and hope it's not too wildly off in practice.
     fuel_costs
 }
 
@@ -137,7 +146,7 @@ pub(crate) struct WasmiConfig {
 
 pub(crate) fn get_wasmi_config(
     budget: &Budget,
-    cmode: wasmi_034::CompilationMode,
+    mut cmode: wasmi_034::CompilationMode,
 ) -> Result<WasmiConfig, HostError> {
     // Turn off most optional wasm features, leaving on some post-MVP features
     // commonly enabled by Rust and Clang. Make sure all unused features are
@@ -162,6 +171,7 @@ pub(crate) fn get_wasmi_config(
     let mut config_034 = wasmi_034::Config::default();
     let fuel_costs_034 = budget.0.try_borrow_or_err()?.fuel_costs_034;
     let enforced_limits = if cfg!(feature = "bench") {
+        // Disable limits when benchmarking, to allow large inputs.
         EnforcedLimits::default()
     } else {
         let mut limits = EnforcedLimits::strict();
@@ -172,6 +182,13 @@ pub(crate) fn get_wasmi_config(
         limits.max_data_segments = Some(10000);
         limits
     };
+
+    if cfg!(feature = "bench") {
+        // Allow overriding compilation mode for special benchmark mode.
+        if std::env::var("CHECK_LAZY_COMPILATION_COSTS").is_ok() {
+            cmode = wasmi_034::CompilationMode::Lazy;
+        }
+    }
 
     config_034
         .consume_fuel(true)
