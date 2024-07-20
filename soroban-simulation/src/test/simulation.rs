@@ -481,8 +481,7 @@ fn test_simulate_invoke_contract_with_auth() {
         match ledger_info.protocol_version {
             20 => (38210172, 7492, 76472, 19104958),
             21 => (41268119, 7540, 79532, 20633919),
-            22 => (24486119, 7540, 62750, 12242919),
-            _ => panic!("unexpected protocol version"),
+            _ => (24486119, 7540, 62750, 12242919),
         };
 
     assert_eq!(

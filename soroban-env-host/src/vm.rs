@@ -165,7 +165,6 @@ pub(crate) enum ModuleParseCostMode {
 }
 
 impl Vm {
-
     pub const MAX_VM_ARGS: usize = 32;
 
     pub fn protocol_uses_legacy_stack_vm(protocol: u32) -> bool {

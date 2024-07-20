@@ -492,12 +492,12 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
     );
 
     // constructing a big bytes will cause budget limit exceeded error
-    let num_bytes: u32 =
-        if !crate::vm::ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
-            480_000
-        } else {
-            8_000_000
-        };
+    let proto = host.get_ledger_protocol_version()?;
+    let num_bytes: u32 = match proto {
+        20 => 480_000,
+        21 => 8_000_000,
+        _ => 20_000_000,
+    };
     let wasm_long = wasm::wasm_module_with_large_bytes_from_linear_memory(num_bytes, 7);
     host.clear_module_cache()?;
     host.budget_ref().reset_unlimited()?;

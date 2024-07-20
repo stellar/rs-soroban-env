@@ -24,14 +24,21 @@ pub enum InvokeVmFunctionMode {
 impl CostRunner for InvokeVmFunctionRun {
     const COST_TYPE: CostType = CostType::Contract(InvokeVmFunction);
 
-    type SampleType = (Vm, Vec<wasmi_031::Value>, Vec<wasmi_034::Val>, InvokeVmFunctionMode);
+    type SampleType = (
+        Vm,
+        Vec<wasmi_031::Value>,
+        Vec<wasmi_034::Val>,
+        InvokeVmFunctionMode,
+    );
 
     type RecycledType = (Option<Val>, Self::SampleType);
 
     const RUN_ITERATIONS: u64 = 100;
 
     fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let sym = if let InvokeVmFunctionMode::Normal = sample.3 { TEST_SYM } else {
+        let sym = if let InvokeVmFunctionMode::Normal = sample.3 {
+            TEST_SYM
+        } else {
             Symbol::try_from_small_str(format!("test{}", iter).as_str()).unwrap()
         };
         let rv = black_box({

@@ -16,7 +16,7 @@ use crate::{
     host::declared_size::DeclaredSizeForMetering,
     vm::{
         fuel_refillable::FuelRefillable, HostFuncInfo, McVer, ModuleCache, ParsedModule,
-        VersionedModuleCache, VersionedParsedModule, WasmiConfig, Vm
+        VersionedModuleCache, VersionedParsedModule, Vm, WasmiConfig,
     },
     xdr::{ScErrorCode, ScErrorType},
     Host, HostError, Symbol, WasmiMarshal031, WasmiMarshal034,

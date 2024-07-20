@@ -2,7 +2,6 @@ use crate::builtin_contracts::testutils::AccountContractSigner;
 use crate::e2e_testutils::{account_entry, bytes_sc_val, upload_wasm_host_fn};
 use crate::testutils::simple_account_sign_fn;
 use crate::vm::ModuleCache;
-use crate::Vm;
 use crate::{
     budget::Budget,
     builtin_contracts::testutils::TestSigner,
@@ -650,12 +649,11 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    let (expected_insns, expected_write_bytes) =
-        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
-            (1767136, 684)
-        } else {
-            (1060474, 636)
-        };
+    let (expected_insns, expected_write_bytes) = match ledger_info.protocol_version {
+        20 => (1060474, 636),
+        21 => (1767136, 684),
+        _ => (687178, 684),
+    };
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -693,12 +691,11 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    let expected_instructions =
-        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
-            1093647
-        } else {
-            1093647
-        };
+    let expected_instructions = match ledger_info.protocol_version {
+        20 => 1093647,
+        21 => 1093647,
+        _ => 446951,
+    };
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1533,16 +1530,11 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    let (expected_insns, expected_read_bytes) =
-        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
-            if Vm::protocol_uses_legacy_stack_vm(ledger_info.protocol_version) {
-                (1431216, 3132)
-            } else {
-                (1428888, 3132)
-            }
-        } else {
-            (2221742, 3084)
-        };
+    let (expected_insns, expected_read_bytes) = match ledger_info.protocol_version {
+        20 => (2221742, 3084),
+        21 => (1431216, 3132),
+        _ => (1164711, 3132),
+    };
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1605,16 +1597,11 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    let (expected_insns, expected_read_bytes) =
-        if ModuleCache::should_use_for_protocol(ledger_info.protocol_version) {
-            if Vm::protocol_uses_legacy_stack_vm(ledger_info.protocol_version) {
-                (1543254, 3212)
-            } else {
-                (1542278, 3212)
-            }
-        } else {
-            (2333780, 3164)
-        };
+    let (expected_insns, expected_read_bytes) = match ledger_info.protocol_version {
+        20 => (2333780, 3164),
+        21 => (1543254, 3212),
+        _ => (1278101, 3212),
+    };
     assert_eq!(
         extend_res.resources,
         SorobanResources {

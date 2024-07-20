@@ -598,8 +598,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     match proto {
         20 => expected_p20.assert_eq(&actual),
         21 => expected_p21.assert_eq(&actual),
-        22 => expected_p22.assert_eq(&actual),
-        _ => panic!("Unexpected protocol version: {}", proto),
+        _ => expected_p22.assert_eq(&actual),
     }
 
     assert_eq!(

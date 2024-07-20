@@ -1,14 +1,13 @@
 use crate::common::HostCostMeasurement;
 use rand::rngs::StdRng;
 use soroban_env_host::{
-    cost_runner::{CostRunner, InvokeHostFunctionRun, InvokeVmFunctionRun, InvokeVmFunctionMode},
+    cost_runner::{CostRunner, InvokeHostFunctionRun, InvokeVmFunctionMode, InvokeVmFunctionRun},
     xdr::Hash,
     Host, Vm,
 };
 
 use super::{
-    wasm_module_with_empty_invoke,
-    wasm_module_with_m_fns_each_with_n_insns_returning_early,
+    wasm_module_with_empty_invoke, wasm_module_with_m_fns_each_with_n_insns_returning_early,
 };
 
 pub(crate) struct InvokeVmFunctionMeasure;
@@ -99,7 +98,12 @@ impl HostCostMeasurement for InvokeVmFunctionMeasure {
         host: &Host,
         _rng: &mut StdRng,
         input: u64,
-    ) -> (Vm, Vec<wasmi_031::Value>, Vec<wasmi_034::Val>, InvokeVmFunctionMode) {
+    ) -> (
+        Vm,
+        Vec<wasmi_031::Value>,
+        Vec<wasmi_034::Val>,
+        InvokeVmFunctionMode,
+    ) {
         let id: Hash = [0; 32].into();
 
         let (code, mode) = if std::env::var("CHECK_LAZY_COMPILATION_COSTS").is_ok() {
@@ -131,7 +135,10 @@ impl HostCostMeasurement for InvokeVmFunctionMeasure {
 
             (code, InvokeVmFunctionMode::CheckLazyCompilationCosts)
         } else {
-            (wasm_module_with_empty_invoke(), InvokeVmFunctionMode::Normal)
+            (
+                wasm_module_with_empty_invoke(),
+                InvokeVmFunctionMode::Normal,
+            )
         };
 
         let vm = Vm::new(&host, id, &code).unwrap();

@@ -80,10 +80,7 @@ pub fn wasm_module_with_n_insns(n: usize) -> Vec<u8> {
 // This is a speclialized version of wasm_module_with_n_insns that is used to
 // benchmark wasmi lazy compilation. It has a bunch of content but also tests
 // its input and returns immediately if zero. It doesn't _do_ anything.
-pub fn wasm_module_with_m_fns_each_with_n_insns_returning_early(
-    m: usize,
-    n: usize,
-) -> Vec<u8> {
+pub fn wasm_module_with_m_fns_each_with_n_insns_returning_early(m: usize, n: usize) -> Vec<u8> {
     let mut me = ModEmitter::bench_default();
     for i in 0..m {
         let mut fe = me.func(Arity(Vm::MAX_VM_ARGS as u32), 0);
