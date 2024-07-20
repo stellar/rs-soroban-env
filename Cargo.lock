@@ -1539,6 +1539,7 @@ dependencies = [
 [[package]]
 name = "soroban-wasmi"
 version = "0.34.0-soroban.22.0.0"
+source = "git+https://github.com/stellar/wasmi?rev=ee843540fe63ab4a1d42ba5b5ebf010fc131f221#ee843540fe63ab4a1d42ba5b5ebf010fc131f221"
 dependencies = [
  "arrayvec",
  "multi-stash",
@@ -1946,6 +1947,7 @@ source = "git+https://github.com/stellar/wasmi?rev=0ed3f3dee30dc41ebe21972399e0a
 [[package]]
 name = "wasmi_collections"
 version = "0.34.0-soroban.22.0.0"
+source = "git+https://github.com/stellar/wasmi?rev=ee843540fe63ab4a1d42ba5b5ebf010fc131f221#ee843540fe63ab4a1d42ba5b5ebf010fc131f221"
 dependencies = [
  "ahash",
  "hashbrown 0.14.1",
@@ -1966,6 +1968,7 @@ dependencies = [
 [[package]]
 name = "wasmi_core"
 version = "0.34.0-soroban.22.0.0"
+source = "git+https://github.com/stellar/wasmi?rev=ee843540fe63ab4a1d42ba5b5ebf010fc131f221#ee843540fe63ab4a1d42ba5b5ebf010fc131f221"
 dependencies = [
  "downcast-rs",
  "libm",
