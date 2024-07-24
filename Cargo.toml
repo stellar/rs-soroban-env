@@ -50,6 +50,7 @@ package = "soroban-wasmi"
 version = "=0.34.0-soroban.22.0.0"
 git = "https://github.com/stellar/wasmi"
 rev = "ee843540fe63ab4a1d42ba5b5ebf010fc131f221"
+features = ["no-hash-maps"]
 # path = "../wasmi/crates/wasmi"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
