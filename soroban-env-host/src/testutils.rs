@@ -698,6 +698,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_multiple_data_segments(
+        host: &crate::Host,
         num_pages: u32,
         num_sgmts: u32,
         seg_size: u32,
@@ -707,8 +708,11 @@ pub(crate) mod wasm {
         // we just make sure the total memory can fit one segments the segments
         // will just cycle through the space and possibly override earlier ones
         let max_segments = (mem_len / seg_size.max(1)).max(1);
+        let fixed_mem_offset =
+            crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version().unwrap());
         for i in 0..num_sgmts % max_segments {
-            me.define_data_segment(i, vec![0; seg_size as usize]);
+            let mem_offset = if fixed_mem_offset { 0 } else { i };
+            me.define_data_segment(mem_offset, vec![0; seg_size as usize]);
         }
         // a local wasm function
         let mut fe = me.func(Arity(0), 0);

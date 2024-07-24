@@ -446,7 +446,8 @@ fn instantiate_with_page_and_segment_count(
     num_sgmts: u32,
     seg_size: u32,
 ) -> Result<crate::AddressObject, HostError> {
-    let wasm = wasm_util::wasm_module_with_multiple_data_segments(num_pages, num_sgmts, seg_size);
+    let wasm =
+        wasm_util::wasm_module_with_multiple_data_segments(host, num_pages, num_sgmts, seg_size);
     host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
@@ -1330,7 +1331,12 @@ fn test_large_number_of_tables() -> Result<(), HostError> {
 #[test]
 fn test_large_number_of_func_types() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let wasm = wasm_util::wasm_module_with_many_func_types(500001);
+    let n_types = if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+        100001
+    } else {
+        500001
+    };
+    let wasm = wasm_util::wasm_module_with_many_func_types(n_types);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         generate_account_id(&host),
