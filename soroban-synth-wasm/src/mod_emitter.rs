@@ -413,6 +413,7 @@ impl ModEmitter {
         if !self.exports.is_empty() {
             self.module.section(&self.exports);
         }
+        #[cfg(feature = "adversarial")]
         if let Some(start) = self.start {
             self.module.section(&start);
         }

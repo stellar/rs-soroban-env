@@ -481,3 +481,6 @@ from.test.allow_apis = [
     "hash",
     "thread",
 ]
+
+[pkg.string-interner]
+allow_unsafe = true
