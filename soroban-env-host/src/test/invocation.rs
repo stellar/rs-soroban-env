@@ -318,13 +318,11 @@ fn wasm_invoke_return_err_variants() -> Result<(), HostError> {
         if let Err(got_err) = call_res {
             assert_eq!(got_err.error, expected_err)
         } else {
-            dbg!(&call_res);
             panic!("got Ok when expected Err from call({})", fname)
         }
         if let Ok(got_err) = try_call_res {
             assert!(got_err.shallow_eq(&expected_err.to_val()))
         } else {
-            dbg!(&try_call_res);
             panic!("got Err when expected Ok from try_call({})", fname)
         }
     }

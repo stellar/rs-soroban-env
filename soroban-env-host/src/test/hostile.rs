@@ -485,8 +485,8 @@ fn many_large_segments_exceeds_budget() -> Result<(), HostError> {
 #[test]
 fn too_many_segments_exceeds_budget() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
     let res = instantiate_with_page_and_segment_count(&host, 1, 50_000_000, 1);
-
     assert!(HostError::result_matches_err(
         res,
         Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
@@ -1000,10 +1000,13 @@ fn test_multiple_memory() -> Result<(), HostError> {
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
-    assert!(HostError::result_matches_err(
-        res,
-        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
-    ));
+    let expected_error =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        } else {
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        };
+    assert!(HostError::result_matches_err(res, expected_error));
     Ok(())
 }
 
@@ -1136,10 +1139,13 @@ fn test_too_large_data_count() -> Result<(), HostError> {
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
-    assert!(HostError::result_matches_err(
-        res,
-        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
-    ));
+    let expected_error =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        } else {
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        };
+    assert!(HostError::result_matches_err(res, expected_error));
 
     Ok(())
 }

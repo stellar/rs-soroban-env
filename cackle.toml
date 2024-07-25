@@ -132,6 +132,7 @@ allow_apis = [
     "rand",
 ]
 test.allow_apis = [
+    "fs",
     "hash",
 ]
 
@@ -366,6 +367,10 @@ allow_unsafe = true
 
 [pkg.perf-event]
 allow_unsafe = true
+from.test.allow_apis = [
+    "fs",
+    "thread",
+]
 
 [pkg.rustc_version]
 from.build.allow_apis = [
@@ -402,7 +407,6 @@ allow_unsafe = true
 [pkg.wasmparser]
 allow_unsafe = true
 from.test.allow_apis = [
-    "hash",
 ]
 
 [pkg.crate-git-revision]
@@ -414,9 +418,15 @@ from.build.allow_apis = [
 
 [pkg.soroban-env-common]
 allow_unsafe = true
+from.test.allow_apis = [
+    "hash",
+]
 
 [pkg.soroban-bench-utils]
 allow_unsafe = true
+from.test.allow_apis = [
+    "time",
+]
 
 [pkg.derive_arbitrary]
 allow_proc_macro = true
@@ -459,4 +469,15 @@ from.test.allow_apis = [
 [pkg.wycheproof]
 from.test.allow_apis = [
     "hash",
+]
+
+[pkg.soroban-synth-wasm]
+from.test.allow_apis = [
+    "env",
+]
+
+[pkg.stellar-xdr]
+from.test.allow_apis = [
+    "hash",
+    "thread",
 ]

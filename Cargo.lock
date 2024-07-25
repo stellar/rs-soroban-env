@@ -1413,7 +1413,7 @@ dependencies = [
  "static_assertions",
  "stellar-xdr",
  "tracy-client",
- "wasmparser",
+ "wasmparser-nostd",
 ]
 
 [[package]]
@@ -1474,7 +1474,7 @@ dependencies = [
  "thousands",
  "tracy-client",
  "wasm-encoder",
- "wasmparser",
+ "wasmparser-nostd",
  "wasmprinter",
  "wycheproof",
 ]
@@ -1516,7 +1516,7 @@ dependencies = [
  "soroban-env-macros",
  "stellar-xdr",
  "wasm-encoder",
- "wasmparser",
+ "wasmparser-nostd",
  "wasmprinter",
 ]
 

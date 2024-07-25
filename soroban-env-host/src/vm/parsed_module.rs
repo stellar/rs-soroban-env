@@ -377,16 +377,7 @@ impl ParsedModule {
         host: &Host,
         wasm: &[u8],
     ) -> Result<crate::xdr::ContractCodeCostInputs, HostError> {
-        use wasmparser::{ElementItems, ElementKind, Parser, Payload::*, TableInit};
-
-        if !Parser::is_core_wasm(wasm) {
-            return Err(host.err(
-                ScErrorType::WasmVm,
-                ScErrorCode::InvalidInput,
-                "unsupported non-core wasm module",
-                &[],
-            ));
-        }
+        use wasmparser::{ElementItems, ElementKind, Parser, Payload::*};
 
         let mut costs = crate::xdr::ContractCodeCostInputs {
             ext: crate::xdr::ExtensionPoint::V0,
@@ -484,14 +475,7 @@ impl ParsedModule {
                 TableSection(s) => {
                     for table in s {
                         let table = host.map_err(table)?;
-                        costs.n_table_entries =
-                            costs.n_table_entries.saturating_add(table.ty.initial);
-                        match table.init {
-                            TableInit::RefNull => (),
-                            TableInit::Expr(ref expr) => {
-                                Self::check_const_expr_simple(&host, &expr)?;
-                            }
-                        }
+                        costs.n_table_entries = costs.n_table_entries.saturating_add(table.initial);
                     }
                 }
                 GlobalSection(s) => {
@@ -516,7 +500,7 @@ impl ParsedModule {
                             ElementItems::Functions(fs) => {
                                 elements = elements.saturating_add(fs.count());
                             }
-                            ElementItems::Expressions(_, exprs) => {
+                            ElementItems::Expressions(exprs) => {
                                 elements = elements.saturating_add(exprs.count());
                                 for expr in exprs {
                                     let expr = host.map_err(expr)?;

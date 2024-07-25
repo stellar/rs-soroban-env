@@ -30,7 +30,7 @@ soroban-env-host = { version = "=21.2.0", path = "soroban-env-host" }
 soroban-env-macros = { version = "=21.2.0", path = "soroban-env-macros" }
 soroban-builtin-sdk-macros = { version = "=21.2.0", path = "soroban-builtin-sdk-macros" }
 # NB: this must match the wasmparser version wasmi is using
-wasmparser = "=0.116.1"
+wasmparser = {version = "0.100.2", package = "wasmparser-nostd", default-features = false}
 
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]

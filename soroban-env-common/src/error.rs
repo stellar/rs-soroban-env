@@ -170,10 +170,21 @@ impl From<Error> for crate::xdr::Error {
         crate::xdr::Error::Unsupported
     }
 }
+
+#[cfg(feature = "wasmi")]
+const EXCEEDED_LIMIT: Error =
+    Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit);
+
+#[cfg(feature = "wasmi")]
+const INDEX_BOUND: Error = Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds);
+
+#[cfg(feature = "wasmi")]
+const INVALID_ACTION: Error =
+    Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction);
+
 macro_rules! decl_wasmi_error_conversions {
     ($wasmi_crate:ident, $errkind:ident, $get_errkind:ident,
-        $fuelcase:ident, $trapcase:ident,
-        $get_trapcode:ident) => {
+        $handle_residual_cases:ident) => {
         #[cfg(feature = "wasmi")]
         impl From<$wasmi_crate::core::TrapCode> for Error {
             fn from(code: $wasmi_crate::core::TrapCode) -> Self {
@@ -198,10 +209,7 @@ macro_rules! decl_wasmi_error_conversions {
                     $wasmi_crate::core::TrapCode::StackOverflow
                     | $wasmi_crate::core::TrapCode::OutOfFuel
                     | $wasmi_crate::core::TrapCode::GrowthOperationLimited => {
-                        return Error::from_type_and_code(
-                            ScErrorType::Budget,
-                            ScErrorCode::ExceededLimit,
-                        )
+                        return EXCEEDED_LIMIT
                     }
                 };
                 return Error::from_type_and_code(ScErrorType::WasmVm, ec);
@@ -238,12 +246,8 @@ macro_rules! decl_wasmi_error_conversions {
         #[cfg(feature = "wasmi")]
         impl From<$wasmi_crate::Error> for Error {
             fn from(e: $wasmi_crate::Error) -> Self {
-                const EXCEEDED_LIMIT: Error =
-                    Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit);
-                const INDEX_BOUND: Error =
-                    Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds);
-
-                match $get_errkind(&e) {
+                let kind = $get_errkind(&e);
+                match kind {
                     $errkind::Memory(e) => match e {
                         $wasmi_crate::errors::MemoryError::OutOfBoundsAllocation
                         | $wasmi_crate::errors::MemoryError::OutOfBoundsGrowth => {
@@ -283,16 +287,6 @@ macro_rules! decl_wasmi_error_conversions {
                         },
                         _ => (),
                     },
-                    $errkind::$fuelcase(e) => {
-                        if let $wasmi_crate::errors::FuelError::OutOfFuel = e {
-                            return EXCEEDED_LIMIT;
-                        }
-                    }
-                    $errkind::$trapcase(trap) => {
-                        if let Some(code) = $get_trapcode(trap) {
-                            return code.into();
-                        }
-                    }
                     $errkind::Func(e) => {
                         return e.into();
                     }
@@ -306,8 +300,7 @@ macro_rules! decl_wasmi_error_conversions {
                     }
                     _ => (),
                 }
-
-                Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+                $handle_residual_cases(kind)
             }
         }
     };
@@ -326,29 +319,43 @@ fn get_wasmi_034_error_kind(e: &wasmi_034::Error) -> &WasmiErr034 {
     e.kind()
 }
 #[cfg(feature = "wasmi")]
-fn get_wasmi_031_trap_code(trap: &wasmi_031::core::Trap) -> Option<wasmi_031::core::TrapCode> {
-    trap.trap_code()
+fn handle_residual_cases_031(e: &WasmiErr031) -> Error {
+    match e {
+        WasmiErr031::Trap(trap) => {
+            if let Some(code) = trap.trap_code() {
+                return code.into();
+            }
+        }
+        WasmiErr031::Store(wasmi_031::errors::FuelError::OutOfFuel) => {
+            return EXCEEDED_LIMIT;
+        }
+        _ => (),
+    }
+    INVALID_ACTION
 }
+
 #[cfg(feature = "wasmi")]
-fn get_wasmi_034_trap_code(trap: &wasmi_034::core::TrapCode) -> Option<wasmi_034::core::TrapCode> {
-    Some(*trap)
+fn handle_residual_cases_034(e: &WasmiErr034) -> Error {
+    match e {
+        WasmiErr034::TrapCode(code) => (*code).into(),
+        WasmiErr034::Limits(_) | WasmiErr034::Fuel(wasmi_034::errors::FuelError::OutOfFuel) => {
+            EXCEEDED_LIMIT
+        }
+        _ => INVALID_ACTION,
+    }
 }
 
 decl_wasmi_error_conversions!(
     wasmi_031,
     WasmiErr031,
     get_wasmi_031_error_kind,
-    Store,
-    Trap,
-    get_wasmi_031_trap_code
+    handle_residual_cases_031
 );
 decl_wasmi_error_conversions!(
     wasmi_034,
     WasmiErr034,
     get_wasmi_034_error_kind,
-    Fuel,
-    TrapCode,
-    get_wasmi_034_trap_code
+    handle_residual_cases_034
 );
 
 #[cfg(feature = "wasmi")]
