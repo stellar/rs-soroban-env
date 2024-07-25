@@ -16,3 +16,6 @@ tracking-allocator = "=0.4.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 perf-event = "0.4.7"
+
+[features]
+tracy = ["soroban-env-common/tracy"]
