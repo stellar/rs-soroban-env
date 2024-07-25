@@ -1,15 +1,14 @@
 use crate::vm::ParsedModule;
 use crate::xdr::{
-    AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractDataDurability,
-    ContractDataEntry, ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress,
-    CreateContractArgs, ExtensionPoint, HashIdPreimage, HashIdPreimageContractId, HostFunction,
-    InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-    LedgerKeyContractCode, LedgerKeyContractData, Limits, PublicKey, ScAddress, ScBytes,
-    ScContractInstance, ScMapEntry, ScSymbol, ScVal, SequenceNumber, SorobanAuthorizationEntry,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Thresholds,
-    Uint256, WriteXdr,
+    AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractCodeEntryExt,
+    ContractCodeEntryV1, ContractDataDurability, ContractDataEntry, ContractExecutable,
+    ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, CreateContractArgsV2,
+    ExtensionPoint, HashIdPreimage, HashIdPreimageContractId, HostFunction, InvokeContractArgs,
+    LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyContractCode,
+    LedgerKeyContractData, Limits, PublicKey, ScAddress, ScBytes, ScContractInstance, ScMapEntry,
+    ScSymbol, ScVal, SequenceNumber, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256, WriteXdr,
 };
-use crate::xdr::{ContractCodeEntryExt, ContractCodeEntryV1};
 use crate::{Host, LedgerInfo};
 use sha2::{Digest, Sha256};
 
@@ -121,6 +120,7 @@ impl CreateContractData {
     pub fn new(salt: [u8; 32], wasm: &[u8]) -> Self {
         Self::new_with_refined_contract_cost_inputs(salt, wasm, true)
     }
+
     pub fn new_with_refined_contract_cost_inputs(
         salt: [u8; 32],
         wasm: &[u8],
@@ -206,9 +206,10 @@ pub fn create_contract_auth(
     SorobanAuthorizationEntry {
         credentials: SorobanCredentials::SourceAccount,
         root_invocation: SorobanAuthorizedInvocation {
-            function: SorobanAuthorizedFunction::CreateContractHostFn(CreateContractArgs {
+            function: SorobanAuthorizedFunction::CreateContractV2HostFn(CreateContractArgsV2 {
                 contract_id_preimage: contract_id_preimage.clone(),
                 executable: ContractExecutable::Wasm(get_wasm_hash(wasm).try_into().unwrap()),
+                constructor_args: Default::default(),
             }),
             sub_invocations: Default::default(),
         },

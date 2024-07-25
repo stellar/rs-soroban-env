@@ -99,14 +99,14 @@ p256 = {version = "0.13.2", default-features = false, features = ["alloc"]}
 
 [dev-dependencies.stellar-xdr]
 version = "=21.2.0"
-# git = "https://github.com/stellar/rs-stellar-xdr"
-# rev = "d0138770652a615e3cd99447f2f2727658c17450"
+git = "https://github.com/stellar/rs-stellar-xdr"
+rev = "953ad1c6103146121871a3e2fa5aaca3d6256891"
 default-features = false
 features = ["arbitrary"]
 
 [features]
 testutils = ["soroban-env-common/testutils", "recording_mode", "dep:backtrace"]
-next = ["soroban-env-common/next"]
+next = ["soroban-env-common/next", "stellar-xdr/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_mode = []
 bench = []

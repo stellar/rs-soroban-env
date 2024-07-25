@@ -392,6 +392,7 @@ impl Vm {
         host: &Host,
         func_sym: &Symbol,
         inputs: &[Value],
+        treat_missing_function_as_noop: bool,
     ) -> Result<Val, HostError> {
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
 
@@ -402,12 +403,16 @@ impl Vm {
             .get_export(&*self.store.try_borrow_or_err()?, func_ss.as_ref())
         {
             None => {
-                return Err(host.err(
-                    ScErrorType::WasmVm,
-                    ScErrorCode::MissingValue,
-                    "invoking unknown export",
-                    &[func_sym.to_val()],
-                ))
+                if treat_missing_function_as_noop {
+                    return Ok(Val::VOID.into());
+                } else {
+                    return Err(host.err(
+                        ScErrorType::WasmVm,
+                        ScErrorCode::MissingValue,
+                        "trying to invoke non-existent contract function",
+                        &[func_sym.to_val()],
+                    ));
+                }
             }
             Some(e) => e,
         };
@@ -416,7 +421,7 @@ impl Vm {
                 return Err(host.err(
                     ScErrorType::WasmVm,
                     ScErrorCode::UnexpectedType,
-                    "export is not a function",
+                    "trying to invoke Wasm export that is not a function",
                     &[func_sym.to_val()],
                 ))
             }
@@ -427,7 +432,7 @@ impl Vm {
             return Err(host.err(
                 ScErrorType::WasmVm,
                 ScErrorCode::InvalidInput,
-                "Too many arguments in wasm invocation",
+                "Too many arguments in Wasm invocation",
                 &[func_sym.to_val()],
             ));
         }
@@ -498,6 +503,7 @@ impl Vm {
         host: &Host,
         func_sym: &Symbol,
         args: &[Val],
+        treat_missing_function_as_noop: bool,
     ) -> Result<Val, HostError> {
         let _span = tracy_span!("Vm::invoke_function_raw");
         Vec::<Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
@@ -505,7 +511,12 @@ impl Vm {
             .iter()
             .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
             .collect::<Result<Vec<Value>, HostError>>()?;
-        self.metered_func_call(host, func_sym, wasm_args.as_slice())
+        self.metered_func_call(
+            host,
+            func_sym,
+            wasm_args.as_slice(),
+            treat_missing_function_as_noop,
+        )
     }
 
     /// Returns the raw bytes content of a named custom section from the WASM

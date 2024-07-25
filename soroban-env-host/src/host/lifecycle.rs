@@ -1,18 +1,23 @@
+use soroban_env_common::TryIntoVal;
+
 use crate::{
     err,
     host::{
         metered_clone::{MeteredAlloc, MeteredClone},
-        metered_write_xdr, ContractReentryMode, CreateContractArgs,
+        metered_write_xdr, ContractReentryMode,
     },
     vm::Vm,
     xdr::{
         Asset, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractIdPreimage,
-        ContractIdPreimageFromAddress, ExtensionPoint, Hash, LedgerKey, LedgerKeyContractCode,
-        ScAddress, ScErrorCode, ScErrorType,
+        ContractIdPreimageFromAddress, CreateContractArgsV2, ExtensionPoint, Hash, LedgerKey,
+        LedgerKeyContractCode, ScAddress, ScErrorCode, ScErrorType,
     },
-    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal,
+    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, Val,
 };
 use std::rc::Rc;
+
+const CONSTRUCTOR_FUNCTION_NAME: &str = "__constructor";
+const CONSTRUCTOR_SUPPORT_PROTOCOL: u32 = 22;
 
 impl Host {
     // Notes on metering: this is covered by the called components.
@@ -52,6 +57,66 @@ impl Host {
         Ok(())
     }
 
+    fn call_constructor(
+        &self,
+        contract_id: &Hash,
+        constructor_args: Vec<Val>,
+    ) -> Result<(), HostError> {
+        // Wasms built for the protocol versions before constructor support
+        // are always treated as having a default no-op constructor with 0
+        // arguments.
+        let contract_protocol = self.get_contract_protocol_version(&contract_id)?;
+        if contract_protocol < CONSTRUCTOR_SUPPORT_PROTOCOL {
+            if constructor_args.is_empty() {
+                return Ok(());
+            }
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InvalidAction,
+                "trying to call non-default constructor on a contract that doesn't support constructors (built prior to protocol 22)",
+                &[],
+            ));
+        }
+        let res = self
+            .call_n_internal(
+                contract_id,
+                CONSTRUCTOR_FUNCTION_NAME.try_into_val(self)?,
+                constructor_args.as_slice(),
+                CallParams {
+                    reentry_mode: ContractReentryMode::Prohibited,
+                    internal_host_call: true,
+                    // Allow 0-argument constructors to be missing, but don't allow passing any arguments
+                    // into a contract without constructor.
+                    treat_missing_function_as_noop: constructor_args.is_empty(),
+                },
+            )
+            .map_err(|err| {
+                // Convert any recoverable error to 'generic' host error
+                // in order to not accidentally leak the constructor errors
+                // to the upstream contracts.
+                if err.is_recoverable() {
+                    // Also log the original error for diagnostics.
+                    self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InvalidAction,
+                        "constructor invocation has failed with error",
+                        &[err.error.to_val()],
+                    )
+                } else {
+                    err
+                }
+            })?;
+        if !res.is_void() {
+            return Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "constructor returned non-void value",
+                &[res],
+            ));
+        }
+        Ok(())
+    }
+
     fn maybe_initialize_stellar_asset_contract(
         &self,
         contract_id: &Hash,
@@ -66,8 +131,7 @@ impl Host {
                 &[self
                     .add_host_object(self.scbytes_from_vec(asset_bytes)?)?
                     .into()],
-                ContractReentryMode::Prohibited,
-                false,
+                CallParams::default_external_call(),
             )?;
             Ok(())
         } else {
@@ -78,7 +142,8 @@ impl Host {
     pub(crate) fn create_contract_internal(
         &self,
         deployer: Option<AddressObject>,
-        args: CreateContractArgs,
+        args: CreateContractArgsV2,
+        constructor_args: Vec<Val>,
     ) -> Result<AddressObject, HostError> {
         let has_deployer = deployer.is_some();
         if has_deployer {
@@ -91,7 +156,7 @@ impl Host {
         // to manually manage auth manager frames (we don't need to authorize
         // any other host fns and it doesn't seem useful to create extra frames
         // for them just to make auth work in a single case).
-        let res = self.create_contract_with_optional_auth(deployer, args);
+        let res = self.create_contract_with_optional_auth(deployer, args, constructor_args);
         if has_deployer {
             self.try_borrow_authorization_manager()?
                 .pop_frame(self, None)?;
@@ -102,7 +167,8 @@ impl Host {
     fn create_contract_with_optional_auth(
         &self,
         deployer: Option<AddressObject>,
-        args: CreateContractArgs,
+        args: CreateContractArgsV2,
+        constructor_args: Vec<Val>,
     ) -> Result<AddressObject, HostError> {
         if let Some(deployer_address) = deployer {
             self.try_borrow_authorization_manager()?.require_auth(
@@ -114,10 +180,13 @@ impl Host {
 
         let id_preimage =
             self.get_full_contract_id_preimage(args.contract_id_preimage.metered_clone(self)?)?;
-        let hash_id = Hash(self.metered_hash_xdr(&id_preimage)?);
-        self.create_contract_with_id(hash_id.metered_clone(self)?, args.executable)?;
-        self.maybe_initialize_stellar_asset_contract(&hash_id, &args.contract_id_preimage)?;
-        self.add_host_object(ScAddress::Contract(hash_id))
+        let contract_id = Hash(self.metered_hash_xdr(&id_preimage)?);
+        self.create_contract_with_id(contract_id.metered_clone(self)?, args.executable.clone())?;
+        self.maybe_initialize_stellar_asset_contract(&contract_id, &args.contract_id_preimage)?;
+        if matches!(args.executable, ContractExecutable::Wasm(_)) {
+            self.call_constructor(&contract_id, constructor_args)?;
+        }
+        self.add_host_object(ScAddress::Contract(contract_id))
     }
 
     pub(crate) fn get_contract_id_hash(
@@ -241,6 +310,7 @@ impl Host {
 }
 
 use super::crypto;
+use super::frame::CallParams;
 #[cfg(any(test, feature = "testutils"))]
 use super::ContractFunctionSet;
 

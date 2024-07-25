@@ -326,6 +326,15 @@ impl TryFromVal<Host, Val> for Address {
     }
 }
 
+impl TryFromVal<Host, ScAddress> for Address {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, addr: &ScAddress) -> Result<Self, Self::Error> {
+        let obj = env.add_host_object(addr.clone())?;
+        Address::try_from_val(env, &obj)
+    }
+}
+
 impl TryFromVal<Host, Address> for Val {
     type Error = HostError;
 

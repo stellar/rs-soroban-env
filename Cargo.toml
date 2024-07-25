@@ -35,8 +35,8 @@ wasmparser = "=0.116.1"
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]
 version = "=21.2.0"
-# git = "https://github.com/stellar/rs-stellar-xdr"
-# rev = "d0138770652a615e3cd99447f2f2727658c17450"
+git = "https://github.com/stellar/rs-stellar-xdr"
+rev = "953ad1c6103146121871a3e2fa5aaca3d6256891"
 default-features = false
 
 [workspace.dependencies.wasmi]
@@ -47,7 +47,8 @@ rev = "122a74a7c491929e5ac9de876099154ef7c06d06"
 features = ["no-hash-maps"]
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
-# stellar-xdr = { path = "../rs-stellar-xdr/" }
+# [patch.crates-io]
+# stellar-xdr = { path = "../rs-stellar-xdr" }
 # [patch."https://github.com/stellar/wasmi"]
 # soroban-wasmi = { path = "../wasmi/crates/wasmi/" }
 # soroban-wasmi_core = { path = "../wasmi/crates/core/" }

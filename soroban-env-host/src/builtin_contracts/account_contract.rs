@@ -10,7 +10,10 @@ use crate::{
         contract_error::ContractError,
     },
     err,
-    host::{frame::ContractReentryMode, Host},
+    host::{
+        frame::{CallParams, ContractReentryMode},
+        Host,
+    },
     xdr::{
         self, AccountId, ContractIdPreimage, Hash, ScErrorCode, ScErrorType, ThresholdIndexes,
         Uint256,
@@ -42,9 +45,18 @@ pub(crate) struct CreateContractHostFnContext {
 
 #[derive(Clone)]
 #[contracttype]
-enum AuthorizationContext {
+pub(crate) struct CreateContractWithConstructorHostFnContext {
+    pub(crate) executable: ContractExecutable,
+    pub(crate) salt: BytesN<32>,
+    pub(crate) constructor_args: HostVec,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub(crate) enum AuthorizationContext {
     Contract(ContractAuthorizationContext),
     CreateContractHostFn(CreateContractHostFnContext),
+    CreateContractWithCtorHostFn(CreateContractWithConstructorHostFnContext),
 }
 
 #[derive(Clone)]
@@ -90,12 +102,23 @@ impl AuthorizationContext {
                         &[],
                     )),
                 };
-                Ok(AuthorizationContext::CreateContractHostFn(
-                    CreateContractHostFnContext {
-                        executable: ContractExecutable::Wasm(wasm_hash),
-                        salt,
-                    },
-                ))
+                if args.constructor_args.is_empty() {
+                    Ok(AuthorizationContext::CreateContractHostFn(
+                        CreateContractHostFnContext {
+                            executable: ContractExecutable::Wasm(wasm_hash),
+                            salt,
+                        },
+                    ))
+                } else {
+                    let args_vec = host.scvals_to_val_vec(&args.constructor_args.as_slice())?;
+                    Ok(AuthorizationContext::CreateContractWithCtorHostFn(
+                        CreateContractWithConstructorHostFnContext {
+                            executable: ContractExecutable::Wasm(wasm_hash),
+                            salt,
+                            constructor_args: args_vec.try_into_val(host)?,
+                        },
+                    ))
+                }
             }
         }
     }
@@ -133,10 +156,13 @@ pub(crate) fn check_account_contract_auth(
             account_contract,
             ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(host)?,
             &[payload_obj.into(), signature, auth_context_vec.into()],
-            // Allow self reentry for this function in order to be able to do
-            // wallet admin ops using the auth framework itself.
-            ContractReentryMode::SelfAllowed,
-            true,
+            CallParams {
+                // Allow self reentry for this function in order to be able to do
+                // wallet admin ops using the auth framework itself.
+                reentry_mode: ContractReentryMode::SelfAllowed,
+                internal_host_call: true,
+                treat_missing_function_as_noop: false,
+            },
         )?
         .try_into()?)
 }
