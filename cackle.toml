@@ -484,3 +484,18 @@ from.test.allow_apis = [
 
 [pkg.string-interner]
 allow_unsafe = true
+
+[pkg.zerocopy]
+allow_unsafe = true
+
+[pkg.multi-stash]
+allow_unsafe = true
+
+[pkg.ahash]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.arrayvec]
+allow_unsafe = true
