@@ -19,9 +19,8 @@ pub(crate) use dispatch::dispatch_031::dummy0 as dummy0_031;
 #[cfg(feature = "bench")]
 pub(crate) use dispatch::dispatch_034::dummy0 as dummy0_034;
 
-// FIXME: re-enable when fixing protocol_gate tests
-// #[cfg(test)]
-// pub(crate) use dispatch::dispatch_031::protocol_gated_dummy;
+#[cfg(test)]
+pub(crate) use dispatch::dispatch_031::protocol_gated_dummy;
 
 use crate::{
     budget::{get_wasmi_config, AsBudget, Budget, WasmiConfig},
