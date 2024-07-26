@@ -317,7 +317,7 @@ pub(crate) mod dispatch_031 {
     call_macro_with_all_host_functions! { generate_dispatch_functions_031 }
 }
 
-// Wasmi 0.32 is _just_ different enough that it's a complete pain to try abstracting over
+// Wasmi 0.34 is _just_ different enough that it's a complete pain to try abstracting over
 // the differences in dispatch functions. So we just do the macro again here.
 
 macro_rules! generate_dispatch_functions_034 {
