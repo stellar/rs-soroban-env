@@ -1109,8 +1109,6 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
-    // FIXME: remove this attribute when this function is actually used in tests
-    #[allow(dead_code)]
     pub(crate) fn wasm_module_calling_protocol_gated_host_fn(wasm_proto: u32) -> Vec<u8> {
         let mut me = ModEmitter::new();
         me.add_protocol_version_meta(wasm_proto);
