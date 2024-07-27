@@ -1000,7 +1000,9 @@ fn test_multiple_memory() -> Result<(), HostError> {
         generate_bytes_array(&host),
     );
     let expected_error =
-        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?)
+            || cfg!(feature = "bench")
+        {
             Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
         } else {
             Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
@@ -1139,7 +1141,9 @@ fn test_too_large_data_count() -> Result<(), HostError> {
         generate_bytes_array(&host),
     );
     let expected_error =
-        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?)
+            || cfg!(feature = "bench")
+        {
             Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
         } else {
             Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
