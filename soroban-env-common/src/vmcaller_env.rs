@@ -33,6 +33,40 @@ pub enum VmCaller<'a, T> {
 }
 
 #[cfg(feature = "wasmi")]
+impl<'a, T> From<wasmi_031::Caller<'a, T>> for VmCaller<'a, T> {
+    fn from(caller: wasmi_031::Caller<'a, T>) -> Self {
+        VmCaller::Vm031(caller)
+    }
+}
+
+#[cfg(feature = "wasmi")]
+impl<'a, T> From<wasmi_034::Caller<'a, T>> for VmCaller<'a, T> {
+    fn from(caller: wasmi_034::Caller<'a, T>) -> Self {
+        VmCaller::Vm034(caller)
+    }
+}
+
+#[cfg(feature = "wasmi")]
+impl<'a, 'b, T> TryFrom<&'a mut VmCaller<'b, T>> for &'a mut wasmi_031::Caller<'b, T> {
+    type Error = Error;
+    fn try_from(
+        caller: &'a mut VmCaller<'b, T>,
+    ) -> Result<&'a mut wasmi_031::Caller<'b, T>, Self::Error> {
+        caller.try_mut_031()
+    }
+}
+
+#[cfg(feature = "wasmi")]
+impl<'a, 'b, T> TryFrom<&'a mut VmCaller<'b, T>> for &'a mut wasmi_034::Caller<'b, T> {
+    type Error = Error;
+    fn try_from(
+        caller: &'a mut VmCaller<'b, T>,
+    ) -> Result<&'a mut wasmi_034::Caller<'b, T>, Self::Error> {
+        caller.try_mut_034()
+    }
+}
+
+#[cfg(feature = "wasmi")]
 impl<'a, T> VmCaller<'a, T> {
     pub fn none() -> Self {
         VmCaller::NoVm

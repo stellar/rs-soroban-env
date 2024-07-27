@@ -8,7 +8,7 @@
 //! The implementation of WASM types and the WASM bytecode interpreter come from
 //! the [wasmi](https://github.com/paritytech/wasmi) project.
 
-mod dispatch;
+pub mod dispatch;
 mod fuel_refillable;
 mod func_info;
 mod module_cache;
@@ -21,6 +21,7 @@ pub(crate) use dispatch::dispatch_034::dummy0 as dummy0_034;
 
 #[cfg(test)]
 pub(crate) use dispatch::dispatch_031::protocol_gated_dummy;
+pub(crate) use dispatch::RelativeObjectConversion;
 
 use crate::{
     budget::{get_wasmi_config, AsBudget, Budget, WasmiConfig},
@@ -583,9 +584,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
             // we propagate that HostError as is, rather than producing something new.
             return Err(V::handle_call_error(host, func_sym, e));
         }
-        host.relative_to_absolute(
-            V::try_unmarshal_value_to_val(wasm_ret[0].clone()).ok_or(ConversionError)?,
-        )
+        host.relative_to_absolute(V::try_value_to_val(wasm_ret[0].clone()).ok_or(ConversionError)?)
     }
 
     pub(crate) fn invoke_function_raw(
@@ -598,10 +597,7 @@ impl<V: WasmiVersion> VersionedVm<V> {
         Vec::<V::Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
         let wasm_args: Vec<V::Value> = args
             .iter()
-            .map(|i| {
-                host.absolute_to_relative(*i)
-                    .map(|v| V::marshal_val_to_value(v))
-            })
+            .map(|i| host.absolute_to_relative(*i).map(|v| V::val_to_value(v)))
             .collect::<Result<Vec<V::Value>, HostError>>()?;
         self.metered_func_call(host, func_sym, wasm_args.as_slice())
     }
