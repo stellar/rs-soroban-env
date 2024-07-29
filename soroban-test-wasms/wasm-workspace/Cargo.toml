@@ -1,12 +1,12 @@
 # This file defines a workspace that is _periodically_ recompiled as part of
-# updating the WASM files that are then embedded as as bytes constants in the
+# updating the Wasm files that are then embedded as as bytes constants in the
 # surrounding crate `soroban-test-wasms`.
 #
 # Neither the rust crates in this workspace, nor the workspace itself, are (in
 # cargo's mind) part of the outer workspace containing
 # soroban-env-{host,guest,macros,wasm-tests} etc. The inner workspace is
 # excluded from the outer workspace, and the crates within it must be manually
-# built (and should only be built as WASM). See the adjacent `Makefile` for
+# built (and should only be built as Wasm). See the adjacent `Makefile` for
 # invocation.
 #
 # The dependency graph here is complex and subtle and needs to be understood if
@@ -59,23 +59,24 @@ lto = true
 rust-version = "1.74.0"
 
 [workspace.dependencies.soroban-sdk]
-version = "=20.5.0"
-git = "https://github.com/stellar/rs-soroban-sdk"
+version = "=21.4.0"
+# git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]
-version = "=20.3.0"
-git = "https://github.com/stellar/rs-soroban-env"
+version = "=21.2.0"
+# git = "https://github.com/stellar/rs-soroban-env"
 
-# Always build from the local instance of env as we need to rebuild test WASMs
+# Always build from the local instance of env as we need to rebuild test Wasms
 # only due to the env changes.
-[patch."https://github.com/stellar/rs-soroban-env"]
+# [patch."https://github.com/stellar/rs-soroban-env"]
+[patch.crates-io]
 soroban-env-common = { path = "../../soroban-env-common" }
 soroban-env-guest = { path = "../../soroban-env-guest" }
 soroban-env-host = { path = "../../soroban-env-host" }
 
 # Always build using the local SDK. Usually the env change is accompanied with
 # the corresponding SDK change.
-[patch."https://github.com/stellar/rs-soroban-sdk"]
+# [patch."https://github.com/stellar/rs-soroban-sdk"]
 soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
