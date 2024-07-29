@@ -79,8 +79,7 @@ pub const DELEGATED_ACCOUNT_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/20/test_delegated_account.wasm").as_slice();
 pub const ERR: &[u8] = include_bytes!("../wasm-workspace/opt/20/example_err.wasm").as_slice();
 pub const WRITE_BYTES: &[u8] =
-    include_bytes!("../wasm-workspace/opt/20/soroban_write_upgrade_bytes_contract.wasm")
-        .as_slice();
+    include_bytes!("../wasm-workspace/opt/20/soroban_write_upgrade_bytes_contract.wasm").as_slice();
 pub const CONDITIONAL_ACCOUNT_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/20/test_conditional_account.wasm").as_slice();
 pub const SAC_REENTRY_TEST_CONTRACT: &[u8] =
