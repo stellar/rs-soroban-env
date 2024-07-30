@@ -155,7 +155,7 @@ impl<'a> HostTracker<'a> {
         // start the mem measurement
         #[cfg(feature = "tracy")]
         {
-            self.tracy_span = Some(tracy_span!("tracker active"));
+            self.tracy_span = Some(tracy_client::span!("tracker active"));
         }
         self.mem_tracker.0.store(0, Ordering::SeqCst);
         self.alloc_guard = if let Some(t) = token {
