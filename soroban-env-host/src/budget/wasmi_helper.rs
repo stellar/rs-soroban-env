@@ -1,4 +1,4 @@
-use wasmi_034::EnforcedLimits;
+use wasmi_036::EnforcedLimits;
 
 use crate::{
     budget::{AsBudget, Budget},
@@ -106,7 +106,7 @@ macro_rules! impl_resourcelimiter_for_host {
 }
 
 impl_resourcelimiter_for_host!(wasmi_031);
-impl_resourcelimiter_for_host!(wasmi_034);
+impl_resourcelimiter_for_host!(wasmi_036);
 
 // These values are calibrated and set by us. Calibration is done with a given
 // wasmi version, and as long as the version is pinned, these values aren't
@@ -121,9 +121,9 @@ pub(crate) fn load_calibrated_fuel_costs_031() -> wasmi_031::FuelCosts {
     fuel_costs
 }
 
-pub(crate) fn load_calibrated_fuel_costs_034() -> wasmi_034::FuelCosts {
-    let fuel_costs = wasmi_034::FuelCosts::default();
-    // Wasmi 0.34 has a simplified fuel-cost schedule, based on its new
+pub(crate) fn load_calibrated_fuel_costs_036() -> wasmi_036::FuelCosts {
+    let fuel_costs = wasmi_036::FuelCosts::default();
+    // Wasmi 0.36 has a simplified fuel-cost schedule, based on its new
     // register-machine architecture. It is simply this: 1 fuel per wasm
     // instruction, and each fuel represents moving 8 registers or 64 bytes.
     //
@@ -141,12 +141,12 @@ pub(crate) fn load_calibrated_fuel_costs_034() -> wasmi_034::FuelCosts {
 // protocol version -- so we need to create both configs.
 pub(crate) struct WasmiConfig {
     pub(crate) config_031: wasmi_031::Config,
-    pub(crate) config_034: wasmi_034::Config,
+    pub(crate) config_036: wasmi_036::Config,
 }
 
 pub(crate) fn get_wasmi_config(
     budget: &Budget,
-    mut cmode: wasmi_034::CompilationMode,
+    mut cmode: wasmi_036::CompilationMode,
 ) -> Result<WasmiConfig, HostError> {
     // Turn off most optional wasm features, leaving on some post-MVP features
     // commonly enabled by Rust and Clang. Make sure all unused features are
@@ -168,8 +168,8 @@ pub(crate) fn get_wasmi_config(
         .fuel_consumption_mode(wasmi_031::FuelConsumptionMode::Eager)
         .set_fuel_costs(fuel_costs_031);
 
-    let mut config_034 = wasmi_034::Config::default();
-    let fuel_costs_034 = budget.0.try_borrow_or_err()?.fuel_costs_034;
+    let mut config_036 = wasmi_036::Config::default();
+    let fuel_costs_036 = budget.0.try_borrow_or_err()?.fuel_costs_036;
     let enforced_limits = if cfg!(feature = "bench") {
         // Disable limits when benchmarking, to allow large inputs.
         EnforcedLimits::default()
@@ -186,11 +186,11 @@ pub(crate) fn get_wasmi_config(
     if cfg!(feature = "bench") {
         // Allow overriding compilation mode for special benchmark mode.
         if std::env::var("CHECK_LAZY_COMPILATION_COSTS").is_ok() {
-            cmode = wasmi_034::CompilationMode::Lazy;
+            cmode = wasmi_036::CompilationMode::Lazy;
         }
     }
 
-    config_034
+    config_036
         .consume_fuel(true)
         .wasm_bulk_memory(true)
         .wasm_mutable_global(true)
@@ -201,12 +201,12 @@ pub(crate) fn get_wasmi_config(
         .wasm_tail_call(false)
         .wasm_extended_const(false)
         .floats(false)
-        .set_fuel_costs(fuel_costs_034)
+        .set_fuel_costs(fuel_costs_036)
         .enforced_limits(enforced_limits)
         .compilation_mode(cmode);
     let config = WasmiConfig {
         config_031,
-        config_034,
+        config_036,
     };
 
     Ok(config)

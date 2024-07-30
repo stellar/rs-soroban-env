@@ -72,33 +72,33 @@ macro_rules! impl_refillable_for_store_wasmi_031 {
 impl_refillable_for_store_wasmi_031!(wasmi_031::Store<Host>);
 impl_refillable_for_store_wasmi_031!(wasmi_031::Caller<'a, Host>);
 
-macro_rules! impl_refillable_for_store_wasmi_034 {
+macro_rules! impl_refillable_for_store_wasmi_036 {
     ($store: ty) => {
         impl<'a> FuelRefillable for $store {
             fn fuel_consumed(&self) -> Result<u64, HostError> {
                 self.fuel_consumed().ok_or_else(|| {
-                    HostError::from(wasmi_034::Error::from(
-                        wasmi_034::errors::FuelError::FuelMeteringDisabled,
+                    HostError::from(wasmi_036::Error::from(
+                        wasmi_036::errors::FuelError::FuelMeteringDisabled,
                     ))
                 })
             }
 
             fn fuel_total(&self) -> Result<u64, HostError> {
                 self.get_fuel()
-                    .map_err(|fe| HostError::from(wasmi_034::Error::from(fe)))
+                    .map_err(|fe| HostError::from(wasmi_036::Error::from(fe)))
             }
 
             fn add_fuel(&mut self, fuel: u64) -> Result<(), HostError> {
                 self.set_fuel(fuel)
-                    .map_err(|fe| HostError::from(wasmi_034::Error::from(fe)))
+                    .map_err(|fe| HostError::from(wasmi_036::Error::from(fe)))
             }
 
             fn reset_fuel(&mut self) -> Result<(), HostError> {
                 self.set_fuel(0)
-                    .map_err(|fe| HostError::from(wasmi_034::Error::from(fe)))
+                    .map_err(|fe| HostError::from(wasmi_036::Error::from(fe)))
             }
         }
     };
 }
-impl_refillable_for_store_wasmi_034!(wasmi_034::Store<Host>);
-impl_refillable_for_store_wasmi_034!(wasmi_034::Caller<'a, Host>);
+impl_refillable_for_store_wasmi_036!(wasmi_036::Store<Host>);
+impl_refillable_for_store_wasmi_036!(wasmi_036::Caller<'a, Host>);

@@ -463,7 +463,7 @@ macro_rules! decl_wasmi_marshal_blocks {
 }
 
 decl_wasmi_marshal_blocks!(WasmiMarshal031, wasmi_031::Value, wasmi_031::Value::I64);
-decl_wasmi_marshal_blocks!(WasmiMarshal034, wasmi_034::Val, wasmi_034::Val::I64);
+decl_wasmi_marshal_blocks!(WasmiMarshal036, wasmi_036::Val, wasmi_036::Val::I64);
 
 // Manually implement all the residual pieces: ValConverts
 // and Froms.

@@ -9,9 +9,9 @@ use crate::{
     U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use core::fmt::Debug;
-use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal031, WasmiMarshal034};
+use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal031, WasmiMarshal036};
 
-pub(crate) trait RelativeObjectConversion: WasmiMarshal031 + WasmiMarshal034 {
+pub(crate) trait RelativeObjectConversion: WasmiMarshal031 + WasmiMarshal036 {
     fn absolute_to_relative(self, _host: &Host) -> Result<Self, HostError> {
         Ok(self)
     }
@@ -30,12 +30,12 @@ pub(crate) trait RelativeObjectConversion: WasmiMarshal031 + WasmiMarshal034 {
         })?;
         Ok(val.relative_to_absolute(host)?)
     }
-    fn try_marshal_from_relative_value_034(
-        v: wasmi_034::Val,
+    fn try_marshal_from_relative_value_036(
+        v: wasmi_036::Val,
         host: &Host,
-    ) -> Result<Self, wasmi_034::Error> {
-        let val = <Self as WasmiMarshal034>::try_marshal_from_value(v).ok_or_else(|| {
-            wasmi_034::Error::host(HostError::from(Error::from_type_and_code(
+    ) -> Result<Self, wasmi_036::Error> {
+        let val = <Self as WasmiMarshal036>::try_marshal_from_value(v).ok_or_else(|| {
+            wasmi_036::Error::host(HostError::from(Error::from_type_and_code(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
             )))
@@ -49,14 +49,14 @@ pub(crate) trait RelativeObjectConversion: WasmiMarshal031 + WasmiMarshal034 {
         let rel = self.absolute_to_relative(host)?;
         Ok(<Self as WasmiMarshal031>::marshal_from_self(rel))
     }
-    fn marshal_relative_from_self_034(
+    fn marshal_relative_from_self_036(
         self,
         host: &Host,
-    ) -> Result<wasmi_034::Val, wasmi_034::Error> {
+    ) -> Result<wasmi_036::Val, wasmi_036::Error> {
         let rel = self
             .absolute_to_relative(host)
-            .map_err(|he| wasmi_034::Error::host(he))?;
-        Ok(<Self as WasmiMarshal034>::marshal_from_self(rel))
+            .map_err(|he| wasmi_036::Error::host(he))?;
+        Ok(<Self as WasmiMarshal036>::marshal_from_self(rel))
     }
 }
 
@@ -331,14 +331,14 @@ pub(crate) mod dispatch_031 {
 
     call_macro_with_all_host_functions! { generate_dispatch_functions }
 }
-pub(crate) mod dispatch_034 {
+pub(crate) mod dispatch_036 {
     use super::*;
-    use crate::vm::{Wasmi034, WasmiVersion};
-    type V = Wasmi034;
-    type Value = <Wasmi034 as WasmiVersion>::Value;
-    type DispatchCaller<'a> = <Wasmi034 as WasmiVersion>::DispatchCaller<'a>;
-    type DispatchFailure = <Wasmi034 as WasmiVersion>::DispatchFailure;
-    type TrapCode = wasmi_034::core::TrapCode;
+    use crate::vm::{Wasmi036, WasmiVersion};
+    type V = Wasmi036;
+    type Value = <Wasmi036 as WasmiVersion>::Value;
+    type DispatchCaller<'a> = <Wasmi036 as WasmiVersion>::DispatchCaller<'a>;
+    type DispatchFailure = <Wasmi036 as WasmiVersion>::DispatchFailure;
+    type TrapCode = wasmi_036::core::TrapCode;
 
     call_macro_with_all_host_functions! { generate_dispatch_functions }
 }

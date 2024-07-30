@@ -178,7 +178,7 @@ macro_rules! impl_val_wrapper_base {
         }
         $crate::impl_wrapper_as_and_to_val!($T);
         $crate::impl_wrapper_wasmi_conversions!($T, WasmiMarshal031, wasmi_031::Value);
-        $crate::impl_wrapper_wasmi_conversions!($T, WasmiMarshal034, wasmi_034::Val);
+        $crate::impl_wrapper_wasmi_conversions!($T, WasmiMarshal036, wasmi_036::Val);
         $crate::impl_tryfroms_and_tryfromvals_delegating_to_valconvert!($T);
     };
 }

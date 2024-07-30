@@ -1,7 +1,7 @@
 use super::{
     func_info::HOST_FUNCTIONS,
     parsed_module::{ParsedModule, VersionedContractCodeCostInputs, VersionedParsedModule},
-    Wasmi031, Wasmi034, WasmiVersion,
+    Wasmi031, Wasmi036, WasmiVersion,
 };
 use crate::{
     budget::{get_wasmi_config, AsBudget},
@@ -17,7 +17,7 @@ pub struct ModuleCache(pub(crate) McVer);
 #[derive(Clone)]
 pub enum McVer {
     Mc031(Rc<VersionedModuleCache<Wasmi031>>),
-    Mc034(Rc<VersionedModuleCache<Wasmi034>>),
+    Mc036(Rc<VersionedModuleCache<Wasmi036>>),
 }
 
 impl From<Rc<VersionedModuleCache<Wasmi031>>> for ModuleCache {
@@ -26,9 +26,9 @@ impl From<Rc<VersionedModuleCache<Wasmi031>>> for ModuleCache {
     }
 }
 
-impl From<Rc<VersionedModuleCache<Wasmi034>>> for ModuleCache {
-    fn from(mc: Rc<VersionedModuleCache<Wasmi034>>) -> Self {
-        ModuleCache(McVer::Mc034(mc))
+impl From<Rc<VersionedModuleCache<Wasmi036>>> for ModuleCache {
+    fn from(mc: Rc<VersionedModuleCache<Wasmi036>>) -> Self {
+        ModuleCache(McVer::Mc036(mc))
     }
 }
 
@@ -44,7 +44,7 @@ impl ModuleCache {
         if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
             VersionedModuleCache::<Wasmi031>::new(host).map(Into::into)
         } else {
-            VersionedModuleCache::<Wasmi034>::new(host).map(Into::into)
+            VersionedModuleCache::<Wasmi036>::new(host).map(Into::into)
         }
     }
 
@@ -55,7 +55,7 @@ impl ModuleCache {
     ) -> Result<Option<ParsedModule>, HostError> {
         match &self.0 {
             McVer::Mc031(cache) => cache.get_module(host, wasm_hash),
-            McVer::Mc034(cache) => cache.get_module(host, wasm_hash),
+            McVer::Mc036(cache) => cache.get_module(host, wasm_hash),
         }
     }
 }
@@ -73,7 +73,7 @@ pub(crate) struct VersionedModuleCache<V: WasmiVersion> {
 
 impl<V: WasmiVersion> VersionedModuleCache<V> {
     fn new(host: &Host) -> Result<Rc<Self>, HostError> {
-        let config = get_wasmi_config(host.as_budget(), wasmi_034::CompilationMode::Lazy)?;
+        let config = get_wasmi_config(host.as_budget(), wasmi_036::CompilationMode::Lazy)?;
         let engine = V::new_engine(&config);
         let mut modules = MeteredOrdMap::new();
         Self::add_stored_contracts(&engine, &mut modules, host)?;

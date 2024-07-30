@@ -74,7 +74,7 @@ pub(crate) struct InvokeVmFunctionMeasure;
 // cost of compiling different instructions is glossed over.
 //
 // Moreover, an attentive reader will also see that in the transition to wasmi
-// 0.34 we've actually lost the notion of different cost-classes of wasmi
+// 0.36 we've actually lost the notion of different cost-classes of wasmi
 // instructions altogether, so all our per-tier cost calibration is not
 // meaningful anymore. We don't even load a variety of
 // wasmi-fuel-to-our-CPU-instructions ratios anymore.
@@ -101,7 +101,7 @@ impl HostCostMeasurement for InvokeVmFunctionMeasure {
     ) -> (
         Vm,
         Vec<wasmi_031::Value>,
-        Vec<wasmi_034::Val>,
+        Vec<wasmi_036::Val>,
         InvokeVmFunctionMode,
     ) {
         let id: Hash = [0; 32].into();
@@ -143,8 +143,8 @@ impl HostCostMeasurement for InvokeVmFunctionMeasure {
 
         let vm = Vm::new(&host, id, &code).unwrap();
         let args_031 = vec![wasmi_031::Value::I64(0); Vm::MAX_VM_ARGS];
-        let args_034 = vec![wasmi_034::Val::I64(0); Vm::MAX_VM_ARGS];
-        (vm, args_031, args_034, mode)
+        let args_036 = vec![wasmi_036::Val::I64(0); Vm::MAX_VM_ARGS];
+        (vm, args_031, args_036, mode)
     }
 }
 

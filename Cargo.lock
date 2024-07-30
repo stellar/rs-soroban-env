@@ -1410,7 +1410,7 @@ dependencies = [
  "serde",
  "soroban-env-macros",
  "soroban-wasmi 0.31.1-soroban.20.0.1",
- "soroban-wasmi 0.34.0-soroban.22.0.0",
+ "soroban-wasmi 0.36.0-soroban.22.0.0",
  "static_assertions",
  "stellar-xdr",
  "tracy-client",
@@ -1466,7 +1466,7 @@ dependencies = [
  "soroban-synth-wasm",
  "soroban-test-wasms",
  "soroban-wasmi 0.31.1-soroban.20.0.1",
- "soroban-wasmi 0.34.0-soroban.22.0.0",
+ "soroban-wasmi 0.36.0-soroban.22.0.0",
  "static_assertions",
  "stellar-strkey",
  "stellar-xdr",
@@ -1539,8 +1539,8 @@ dependencies = [
 
 [[package]]
 name = "soroban-wasmi"
-version = "0.34.0-soroban.22.0.0"
-source = "git+https://github.com/stellar/wasmi?rev=ee843540fe63ab4a1d42ba5b5ebf010fc131f221#ee843540fe63ab4a1d42ba5b5ebf010fc131f221"
+version = "0.36.0-soroban.22.0.0"
+source = "git+https://github.com/stellar/wasmi?rev=122a74a7c491929e5ac9de876099154ef7c06d06#122a74a7c491929e5ac9de876099154ef7c06d06"
 dependencies = [
  "arrayvec",
  "multi-stash",
@@ -1549,7 +1549,7 @@ dependencies = [
  "smallvec",
  "spin",
  "wasmi_collections",
- "wasmi_core 0.34.0-soroban.22.0.0",
+ "wasmi_core 0.36.0-soroban.22.0.0",
  "wasmparser-nostd",
 ]
 
@@ -1947,8 +1947,8 @@ source = "git+https://github.com/stellar/wasmi?rev=0ed3f3dee30dc41ebe21972399e0a
 
 [[package]]
 name = "wasmi_collections"
-version = "0.34.0-soroban.22.0.0"
-source = "git+https://github.com/stellar/wasmi?rev=ee843540fe63ab4a1d42ba5b5ebf010fc131f221#ee843540fe63ab4a1d42ba5b5ebf010fc131f221"
+version = "0.36.0-soroban.22.0.0"
+source = "git+https://github.com/stellar/wasmi?rev=122a74a7c491929e5ac9de876099154ef7c06d06#122a74a7c491929e5ac9de876099154ef7c06d06"
 dependencies = [
  "ahash",
  "hashbrown 0.14.1",
@@ -1968,8 +1968,8 @@ dependencies = [
 
 [[package]]
 name = "wasmi_core"
-version = "0.34.0-soroban.22.0.0"
-source = "git+https://github.com/stellar/wasmi?rev=ee843540fe63ab4a1d42ba5b5ebf010fc131f221#ee843540fe63ab4a1d42ba5b5ebf010fc131f221"
+version = "0.36.0-soroban.22.0.0"
+source = "git+https://github.com/stellar/wasmi?rev=122a74a7c491929e5ac9de876099154ef7c06d06#122a74a7c491929e5ac9de876099154ef7c06d06"
 dependencies = [
  "downcast-rs",
  "libm",

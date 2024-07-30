@@ -42,9 +42,9 @@ impl From<HostError> for wasmi_031::Error {
     }
 }
 
-impl From<HostError> for wasmi_034::Error {
+impl From<HostError> for wasmi_036::Error {
     fn from(e: HostError) -> Self {
-        wasmi_034::Error::host(e)
+        wasmi_036::Error::host(e)
     }
 }
 

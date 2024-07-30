@@ -95,7 +95,7 @@ impl Budget {
     /// count, we have to preset all the `FuelConfig` entries to 1.
     pub fn reset_fuel_config(&self) -> Result<(), HostError> {
         self.0.try_borrow_mut_or_err()?.fuel_costs_031 = wasmi_031::FuelCosts::default();
-        self.0.try_borrow_mut_or_err()?.fuel_costs_034 = wasmi_034::FuelCosts::default();
+        self.0.try_borrow_mut_or_err()?.fuel_costs_036 = wasmi_036::FuelCosts::default();
         Ok(())
     }
 

@@ -6,7 +6,7 @@ use crate::{
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };
 
-use super::{ModuleCache, Wasmi031, Wasmi034, WasmiVersion};
+use super::{ModuleCache, Wasmi031, Wasmi036, WasmiVersion};
 use std::{collections::BTreeSet, io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
@@ -141,7 +141,7 @@ pub struct ParsedModule(pub(crate) PmVer);
 #[derive(Clone)]
 pub(crate) enum PmVer {
     Pm031(Rc<VersionedParsedModule<Wasmi031>>),
-    Pm034(Rc<VersionedParsedModule<Wasmi034>>),
+    Pm036(Rc<VersionedParsedModule<Wasmi036>>),
 }
 
 impl From<Rc<VersionedParsedModule<Wasmi031>>> for ParsedModule {
@@ -150,9 +150,9 @@ impl From<Rc<VersionedParsedModule<Wasmi031>>> for ParsedModule {
     }
 }
 
-impl From<Rc<VersionedParsedModule<Wasmi034>>> for ParsedModule {
-    fn from(m: Rc<VersionedParsedModule<Wasmi034>>) -> Self {
-        Self(PmVer::Pm034(m))
+impl From<Rc<VersionedParsedModule<Wasmi036>>> for ParsedModule {
+    fn from(m: Rc<VersionedParsedModule<Wasmi036>>) -> Self {
+        Self(PmVer::Pm036(m))
     }
 }
 
@@ -222,7 +222,7 @@ impl<V: WasmiVersion> VersionedParsedModule<V> {
     ) -> Result<Rc<Self>, HostError> {
         use crate::budget::AsBudget;
         let config =
-            crate::vm::get_wasmi_config(host.as_budget(), wasmi_034::CompilationMode::Eager)?;
+            crate::vm::get_wasmi_config(host.as_budget(), wasmi_036::CompilationMode::Eager)?;
         let engine = V::new_engine(&config);
         Self::new(host, &engine, wasm, cost_inputs)
     }
@@ -365,7 +365,7 @@ impl ParsedModule {
     pub fn get_cost_inputs(&self) -> &VersionedContractCodeCostInputs {
         match &self.0 {
             PmVer::Pm031(m) => &m.cost_inputs,
-            PmVer::Pm034(m) => &m.cost_inputs,
+            PmVer::Pm036(m) => &m.cost_inputs,
         }
     }
 
@@ -590,7 +590,7 @@ impl ParsedModule {
             VersionedParsedModule::<Wasmi031>::new_with_isolated_engine(host, wasm, cost_inputs)
                 .map(|m| m.into())
         } else {
-            VersionedParsedModule::<Wasmi034>::new_with_isolated_engine(host, wasm, cost_inputs)
+            VersionedParsedModule::<Wasmi036>::new_with_isolated_engine(host, wasm, cost_inputs)
                 .map(|m| m.into())
         }
     }

@@ -23,7 +23,7 @@ impl_wrapper_tag_based_valconvert!(Error);
 impl_wrapper_tag_based_constructors!(Error);
 impl_wrapper_as_and_to_val!(Error);
 impl_wrapper_wasmi_conversions!(Error, WasmiMarshal031, wasmi_031::Value);
-impl_wrapper_wasmi_conversions!(Error, WasmiMarshal034, wasmi_034::Val);
+impl_wrapper_wasmi_conversions!(Error, WasmiMarshal036, wasmi_036::Val);
 
 impl Hash for Error {
     #[inline(always)]
@@ -309,13 +309,13 @@ macro_rules! decl_wasmi_error_conversions {
 #[cfg(feature = "wasmi")]
 type WasmiErr031 = wasmi_031::Error;
 #[cfg(feature = "wasmi")]
-type WasmiErr034 = wasmi_034::errors::ErrorKind;
+type WasmiErr036 = wasmi_036::errors::ErrorKind;
 #[cfg(feature = "wasmi")]
 fn get_wasmi_031_error_kind(e: &wasmi_031::Error) -> &WasmiErr031 {
     e
 }
 #[cfg(feature = "wasmi")]
-fn get_wasmi_034_error_kind(e: &wasmi_034::Error) -> &WasmiErr034 {
+fn get_wasmi_036_error_kind(e: &wasmi_036::Error) -> &WasmiErr036 {
     e.kind()
 }
 #[cfg(feature = "wasmi")]
@@ -335,10 +335,10 @@ fn handle_residual_cases_031(e: &WasmiErr031) -> Error {
 }
 
 #[cfg(feature = "wasmi")]
-fn handle_residual_cases_034(e: &WasmiErr034) -> Error {
+fn handle_residual_cases_036(e: &WasmiErr036) -> Error {
     match e {
-        WasmiErr034::TrapCode(code) => (*code).into(),
-        WasmiErr034::Limits(_) | WasmiErr034::Fuel(wasmi_034::errors::FuelError::OutOfFuel) => {
+        WasmiErr036::TrapCode(code) => (*code).into(),
+        WasmiErr036::Limits(_) | WasmiErr036::Fuel(wasmi_036::errors::FuelError::OutOfFuel) => {
             EXCEEDED_LIMIT
         }
         _ => INVALID_ACTION,
@@ -352,10 +352,10 @@ decl_wasmi_error_conversions!(
     handle_residual_cases_031
 );
 decl_wasmi_error_conversions!(
-    wasmi_034,
-    WasmiErr034,
-    get_wasmi_034_error_kind,
-    handle_residual_cases_034
+    wasmi_036,
+    WasmiErr036,
+    get_wasmi_036_error_kind,
+    handle_residual_cases_036
 );
 
 #[cfg(feature = "wasmi")]

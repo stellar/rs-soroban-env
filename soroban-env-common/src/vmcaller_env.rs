@@ -29,7 +29,7 @@ use core::marker::PhantomData;
 pub enum VmCaller<'a, T> {
     NoVm,
     Vm031(wasmi_031::Caller<'a, T>),
-    Vm034(wasmi_034::Caller<'a, T>),
+    Vm036(wasmi_036::Caller<'a, T>),
 }
 
 #[cfg(feature = "wasmi")]
@@ -40,9 +40,9 @@ impl<'a, T> From<wasmi_031::Caller<'a, T>> for VmCaller<'a, T> {
 }
 
 #[cfg(feature = "wasmi")]
-impl<'a, T> From<wasmi_034::Caller<'a, T>> for VmCaller<'a, T> {
-    fn from(caller: wasmi_034::Caller<'a, T>) -> Self {
-        VmCaller::Vm034(caller)
+impl<'a, T> From<wasmi_036::Caller<'a, T>> for VmCaller<'a, T> {
+    fn from(caller: wasmi_036::Caller<'a, T>) -> Self {
+        VmCaller::Vm036(caller)
     }
 }
 
@@ -57,12 +57,12 @@ impl<'a, 'b, T> TryFrom<&'a mut VmCaller<'b, T>> for &'a mut wasmi_031::Caller<'
 }
 
 #[cfg(feature = "wasmi")]
-impl<'a, 'b, T> TryFrom<&'a mut VmCaller<'b, T>> for &'a mut wasmi_034::Caller<'b, T> {
+impl<'a, 'b, T> TryFrom<&'a mut VmCaller<'b, T>> for &'a mut wasmi_036::Caller<'b, T> {
     type Error = Error;
     fn try_from(
         caller: &'a mut VmCaller<'b, T>,
-    ) -> Result<&'a mut wasmi_034::Caller<'b, T>, Self::Error> {
-        caller.try_mut_034()
+    ) -> Result<&'a mut wasmi_036::Caller<'b, T>, Self::Error> {
+        caller.try_mut_036()
     }
 }
 
@@ -81,9 +81,9 @@ impl<'a, T> VmCaller<'a, T> {
         }
     }
 
-    pub fn try_ref_034(&self) -> Result<&wasmi_034::Caller<'a, T>, Error> {
+    pub fn try_ref_036(&self) -> Result<&wasmi_036::Caller<'a, T>, Error> {
         match self {
-            VmCaller::Vm034(caller) => Ok(caller),
+            VmCaller::Vm036(caller) => Ok(caller),
             _ => Err(Error::from_type_and_code(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -100,9 +100,9 @@ impl<'a, T> VmCaller<'a, T> {
         }
     }
 
-    pub fn try_mut_034(&mut self) -> Result<&mut wasmi_034::Caller<'a, T>, Error> {
+    pub fn try_mut_036(&mut self) -> Result<&mut wasmi_036::Caller<'a, T>, Error> {
         match self {
-            VmCaller::Vm034(caller) => Ok(caller),
+            VmCaller::Vm036(caller) => Ok(caller),
             _ => Err(Error::from_type_and_code(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,

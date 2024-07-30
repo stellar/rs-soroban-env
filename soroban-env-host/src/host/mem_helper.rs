@@ -32,10 +32,10 @@ impl Vm {
                     .read(vmcaller.try_ref_031()?, offset, buffer)
                     .map_err(|e| wasmi_031::Error::Memory(e)),
             ),
-            VmVer::Vm034(vm) => host.map_err(
+            VmVer::Vm036(vm) => host.map_err(
                 vm.get_memory(host)?
-                    .read(vmcaller.try_ref_034()?, offset, buffer)
-                    .map_err(|e| wasmi_034::Error::from(e)),
+                    .read(vmcaller.try_ref_036()?, offset, buffer)
+                    .map_err(|e| wasmi_036::Error::from(e)),
             ),
         }
     }
@@ -52,10 +52,10 @@ impl Vm {
                     .write(vmcaller.try_mut_031()?, offset, buffer)
                     .map_err(|e| wasmi_031::Error::Memory(e)),
             ),
-            VmVer::Vm034(vm) => host.map_err(
+            VmVer::Vm036(vm) => host.map_err(
                 vm.get_memory(host)?
-                    .write(vmcaller.try_mut_034()?, offset, buffer)
-                    .map_err(|e| wasmi_034::Error::from(e)),
+                    .write(vmcaller.try_mut_036()?, offset, buffer)
+                    .map_err(|e| wasmi_036::Error::from(e)),
             ),
         }
     }
@@ -70,7 +70,7 @@ impl Vm {
     {
         match &self.0 {
             VmVer::Vm031(vm) => f(vm.get_memory(host)?.data(vmcaller.try_ref_031()?)),
-            VmVer::Vm034(vm) => f(vm.get_memory(host)?.data(vmcaller.try_ref_034()?)),
+            VmVer::Vm036(vm) => f(vm.get_memory(host)?.data(vmcaller.try_ref_036()?)),
         }
     }
     fn with_mem_data_mut<F, R>(
@@ -84,7 +84,7 @@ impl Vm {
     {
         match &self.0 {
             VmVer::Vm031(vm) => f(vm.get_memory(host)?.data_mut(vmcaller.try_mut_031()?)),
-            VmVer::Vm034(vm) => f(vm.get_memory(host)?.data_mut(vmcaller.try_mut_034()?)),
+            VmVer::Vm036(vm) => f(vm.get_memory(host)?.data_mut(vmcaller.try_mut_036()?)),
         }
     }
 }

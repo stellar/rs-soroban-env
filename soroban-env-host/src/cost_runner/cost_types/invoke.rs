@@ -2,7 +2,7 @@ use soroban_env_common::ConversionError;
 
 use crate::{
     cost_runner::{CostRunner, CostType},
-    vm::{dummy0_031, dummy0_034, VmVer},
+    vm::{dummy0_031, dummy0_036, VmVer},
     xdr::ContractCostType::{DispatchHostFunction, InvokeVmFunction},
     HostError, Symbol, Val, Vm,
 };
@@ -27,7 +27,7 @@ impl CostRunner for InvokeVmFunctionRun {
     type SampleType = (
         Vm,
         Vec<wasmi_031::Value>,
-        Vec<wasmi_034::Val>,
+        Vec<wasmi_036::Val>,
         InvokeVmFunctionMode,
     );
 
@@ -44,7 +44,7 @@ impl CostRunner for InvokeVmFunctionRun {
         let rv = black_box({
             match &sample.0 .0 {
                 VmVer::Vm031(vm) => vm.metered_func_call(host, &sym, sample.1.as_slice()),
-                VmVer::Vm034(vm) => vm.metered_func_call(host, &sym, sample.2.as_slice()),
+                VmVer::Vm036(vm) => vm.metered_func_call(host, &sym, sample.2.as_slice()),
             }
             .unwrap()
         });
@@ -81,8 +81,8 @@ impl CostRunner for InvokeHostFunctionRun {
                 VmVer::Vm031(vm) => vm.with_caller_031(|caller| {
                     dummy0_031(caller).map_err(|_| HostError::from(ConversionError))
                 }),
-                VmVer::Vm034(vm) => vm.with_caller_034(|caller| {
-                    dummy0_034(caller).map_err(|_| HostError::from(ConversionError))
+                VmVer::Vm036(vm) => vm.with_caller_036(|caller| {
+                    dummy0_036(caller).map_err(|_| HostError::from(ConversionError))
                 }),
             }
             .unwrap(),

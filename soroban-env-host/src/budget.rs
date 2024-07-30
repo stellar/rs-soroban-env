@@ -7,7 +7,7 @@ mod wasmi_helper;
 pub(crate) use limits::DepthLimiter;
 pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use model::{MeteredCostComponent, ScaledU64};
-use wasmi_helper::load_calibrated_fuel_costs_034;
+use wasmi_helper::load_calibrated_fuel_costs_036;
 pub(crate) use wasmi_helper::{get_wasmi_config, load_calibrated_fuel_costs_031, WasmiConfig};
 
 use std::{
@@ -162,7 +162,7 @@ pub(crate) struct BudgetImpl {
     tracker: BudgetTracker,
     is_in_shadow_mode: bool,
     fuel_costs_031: wasmi_031::FuelCosts,
-    fuel_costs_034: wasmi_034::FuelCosts,
+    fuel_costs_036: wasmi_036::FuelCosts,
     depth_limit: u32,
 }
 
@@ -180,7 +180,7 @@ impl BudgetImpl {
             tracker: BudgetTracker::default(),
             is_in_shadow_mode: false,
             fuel_costs_031: load_calibrated_fuel_costs_031(),
-            fuel_costs_034: load_calibrated_fuel_costs_034(),
+            fuel_costs_036: load_calibrated_fuel_costs_036(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         })
     }
@@ -272,7 +272,7 @@ impl Default for BudgetImpl {
             tracker: Default::default(),
             is_in_shadow_mode: false,
             fuel_costs_031: load_calibrated_fuel_costs_031(),
-            fuel_costs_034: load_calibrated_fuel_costs_034(),
+            fuel_costs_036: load_calibrated_fuel_costs_036(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 

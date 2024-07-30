@@ -165,6 +165,8 @@ fn test_load_config_from_snapshot() {
 
 #[test]
 fn test_create_budget() {
+    // This will activate the tracy client in case it's not already activated.
+    let _host = soroban_env_host::Host::default();
     let default_entry = ContractCostParamEntry {
         ext: ExtensionPoint::V0,
         const_term: 0,

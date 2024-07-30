@@ -53,7 +53,7 @@ impl CostRunner for VmInstantiationRun {
 pub use v21::*;
 mod v21 {
     use super::*;
-    use crate::vm::{ParsedModule, PmVer, VersionedParsedModule, Wasmi031, Wasmi034};
+    use crate::vm::{ParsedModule, PmVer, VersionedParsedModule, Wasmi031, Wasmi036};
     use crate::xdr::ContractCostType::{
         InstantiateWasmDataSegmentBytes, InstantiateWasmDataSegments, InstantiateWasmElemSegments,
         InstantiateWasmExports, InstantiateWasmFunctions, InstantiateWasmGlobals,
@@ -89,7 +89,7 @@ mod v21 {
                         )
                         .unwrap()
                         .into(),
-                        PmVer::Pm034(pm) => VersionedParsedModule::<Wasmi034>::new(
+                        PmVer::Pm036(pm) => VersionedParsedModule::<Wasmi036>::new(
                             host,
                             pm.module.engine(),
                             &sample.wasm[..],

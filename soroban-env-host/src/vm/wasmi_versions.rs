@@ -19,7 +19,7 @@ use crate::{
         RelativeObjectConversion, VersionedModuleCache, VersionedParsedModule, Vm, WasmiConfig,
     },
     xdr::{ScErrorCode, ScErrorType},
-    Host, HostError, Symbol, WasmiMarshal031, WasmiMarshal034,
+    Host, HostError, Symbol, WasmiMarshal031, WasmiMarshal036,
 };
 use std::{borrow::Cow, rc::Rc};
 
@@ -92,7 +92,7 @@ pub(crate) trait WasmiVersion: Sized {
 }
 
 pub(crate) struct Wasmi031;
-pub(crate) struct Wasmi034;
+pub(crate) struct Wasmi036;
 
 fn check_max_args(host: &Host, results_len: usize, params_len: usize) -> Result<(), HostError> {
     if results_len > Vm::MAX_VM_ARGS {
@@ -308,26 +308,26 @@ impl WasmiVersion for Wasmi031 {
     }
 }
 
-impl WasmiVersion for Wasmi034 {
-    type Engine = wasmi_034::Engine;
-    type InstancePre = wasmi_034::InstancePre;
-    type Instance = wasmi_034::Instance;
-    type Module = wasmi_034::Module;
-    type Linker = wasmi_034::Linker<Host>;
-    type Store = wasmi_034::Store<Host>;
-    type Memory = wasmi_034::Memory;
-    type Value = wasmi_034::Val;
-    type Error = wasmi_034::Error;
-    type Extern = wasmi_034::Extern;
-    type Func = wasmi_034::Func;
+impl WasmiVersion for Wasmi036 {
+    type Engine = wasmi_036::Engine;
+    type InstancePre = wasmi_036::InstancePre;
+    type Instance = wasmi_036::Instance;
+    type Module = wasmi_036::Module;
+    type Linker = wasmi_036::Linker<Host>;
+    type Store = wasmi_036::Store<Host>;
+    type Memory = wasmi_036::Memory;
+    type Value = wasmi_036::Val;
+    type Error = wasmi_036::Error;
+    type Extern = wasmi_036::Extern;
+    type Func = wasmi_036::Func;
 
-    type DispatchCaller<'a> = wasmi_034::Caller<'a, Host>;
-    type DispatchFailure = wasmi_034::Error;
+    type DispatchCaller<'a> = wasmi_036::Caller<'a, Host>;
+    type DispatchFailure = wasmi_036::Error;
 
-    const VALUE_ZERO: Self::Value = wasmi_034::Val::I64(0);
+    const VALUE_ZERO: Self::Value = wasmi_036::Val::I64(0);
 
     fn new_engine(config: &WasmiConfig) -> Self::Engine {
-        Self::Engine::new(&config.config_034)
+        Self::Engine::new(&config.config_036)
     }
     fn new_linker(engine: &Self::Engine) -> Self::Linker {
         Self::Linker::new(engine)
@@ -342,7 +342,7 @@ impl WasmiVersion for Wasmi034 {
     }
 
     fn link_fn(linker: &mut Self::Linker, fi: &HostFuncInfo) -> Result<(), Self::Error> {
-        (fi.wrap_034)(linker)?;
+        (fi.wrap_036)(linker)?;
         Ok(())
     }
 
@@ -352,7 +352,7 @@ impl WasmiVersion for Wasmi034 {
     fn check_max_args(host: &Host, m: &Self::Module) -> Result<(), HostError> {
         for e in m.exports() {
             match e.ty() {
-                wasmi_034::ExternType::Func(f) => {
+                wasmi_036::ExternType::Func(f) => {
                     check_max_args(host, f.results().len(), f.params().len())?
                 }
                 _ => (),
@@ -437,7 +437,7 @@ impl WasmiVersion for Wasmi034 {
         mc: &'mc ModuleCache,
     ) -> Result<&'mc Rc<VersionedModuleCache<Self>>, HostError> {
         match &mc.0 {
-            McVer::Mc034(vmc) => Ok(vmc),
+            McVer::Mc036(vmc) => Ok(vmc),
             _ => Err(err!(
                 host,
                 (ScErrorType::WasmVm, ScErrorCode::InternalError),
@@ -452,11 +452,11 @@ impl WasmiVersion for Wasmi034 {
     }
 
     fn val_to_value(val: crate::Val) -> Self::Value {
-        WasmiMarshal034::marshal_from_self(val)
+        WasmiMarshal036::marshal_from_self(val)
     }
 
     fn try_value_to_val(value: Self::Value) -> Option<crate::Val> {
-        <crate::Val as WasmiMarshal034>::try_marshal_from_value(value)
+        <crate::Val as WasmiMarshal036>::try_marshal_from_value(value)
     }
 
     fn module_custom_section(m: &Self::Module, name: impl AsRef<str>) -> Option<&[u8]> {
@@ -484,12 +484,12 @@ impl WasmiVersion for Wasmi034 {
         value: Self::Value,
         host: &Host,
     ) -> Result<T, Self::DispatchFailure> {
-        T::try_marshal_from_relative_value_034(value, host)
+        T::try_marshal_from_relative_value_036(value, host)
     }
     fn marshal_relative_from_self<T: RelativeObjectConversion>(
         val: T,
         host: &Host,
     ) -> Result<Self::Value, Self::DispatchFailure> {
-        T::marshal_relative_from_self_034(val, host)
+        T::marshal_relative_from_self_036(val, host)
     }
 }
