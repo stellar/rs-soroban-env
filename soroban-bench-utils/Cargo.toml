@@ -10,6 +10,9 @@ edition = "2021"
 rust-version.workspace = true
 publish = false
 
+[features]
+tracy = []
+
 [dependencies]
 soroban-env-common = { workspace = true }
 tracking-allocator = "=0.4.0"
