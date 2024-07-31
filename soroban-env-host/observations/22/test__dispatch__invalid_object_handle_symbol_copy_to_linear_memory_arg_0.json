@@ -1,0 +1,21 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(128)": "cpu:47",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1040, mem:208, objs:-/1@22f8e1ef",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:219654, mem:307077, objs:-/2@6ca9fecf, store:-/1@e1f87fa, foot:1@310a7b88",
+  "   5 call bytes_new_from_slice(32)": "cpu:220094, mem:307141, objs:-/3@1df324a7",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:221063, mem:307253, objs:-/4@77a1b900",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:222706, mem:307431, objs:-/5@c6e0d1c2, auth:1@50a5375a/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:222998",
+  "  10 call get_ledger_network_id()": "cpu:223048, auth:1@50a5375a/1@b6900f06",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:224078, mem:307543, objs:-/6@4990c789",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:242211, mem:310617, objs:-/7@7dfcceac, store:-/2@2ce6eb2d, foot:2@a6f5de5e, auth:-/1@a1d5218e",
+  "  13 call call(Address(obj#13), Symbol(test), Vec(obj#15))": "cpu:242651, mem:310681, objs:-/8@6cdca4de, auth:-/-",
+  "  14 push VM:e676e76:test(Symbol(obj#123), U32(123), U32(123), U32(123))": "cpu:413754, mem:473088, objs:-/9@605971e5, vm:65536@b1cd98b9/2@2f94d90d, stk:1@e808622e, auth:1@d7dc1364/-",
+  "  15 call symbol_copy_to_linear_memory(Symbol(obj#123), U32(123), U32(123), U32(123))": "cpu:416674, mem:473246, objs:1@d6584255/9@605971e5, vm:-/-, stk:1@ea57b119",
+  "  16 pop VM:e676e76:test -> Err(Error(Value, InvalidInput))": "cpu:417057, vm:65536@b1cd98b9/2@2f94d90d",
+  "  17 ret call -> Err(Error(Value, InvalidInput))": "cpu:417679, mem:473262, objs:-/9@605971e5, vm:-/-, stk:-, auth:-/-",
+  "  18 end": "cpu:417679, mem:473262, prngs:-/9b4a753, objs:-/9@605971e5, vm:-/-, evt:-, store:-/2@2ce6eb2d, foot:2@a6f5de5e, stk:-, auth:-/-"
+}

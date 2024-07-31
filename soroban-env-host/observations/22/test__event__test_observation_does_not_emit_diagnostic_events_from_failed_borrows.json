@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call obj_from_i64(1)": "",
+  "   2 ret obj_from_i64 -> Ok(I64(obj#1))": "cpu:14989, mem:64, objs:-/1@1b9d9a2d",
+  "   3 end": "cpu:14989, mem:64, prngs:-/9b4a753, objs:-/1@1b9d9a2d, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
