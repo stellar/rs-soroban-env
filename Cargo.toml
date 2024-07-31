@@ -21,7 +21,7 @@ exclude = ["soroban-test-wasms/wasm-workspace"]
 # code guarded by `unstable-*` features to make it enabled
 # unconditionally.
 version = "22.0.0"
-rust-version = "1.77.0"
+rust-version = "1.79.0"
 
 [workspace.dependencies]
 soroban-env-common = { version = "=22.0.0", path = "soroban-env-common", default-features = false }
