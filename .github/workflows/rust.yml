@@ -75,7 +75,7 @@ jobs:
         rust: [msrv, latest]
         test-protocol: [20, 21]
         sys:
-        - os: ubuntu-latest
+        - os: ubuntu-latest-16-cores
           target: wasm32-unknown-unknown
           test: false
         - os: ubuntu-latest
