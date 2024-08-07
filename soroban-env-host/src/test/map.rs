@@ -485,7 +485,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
 
     // constructing a big map will cause budget limit exceeded error
     let num_vals =
-        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+        if !crate::vm::ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
             20_000
         } else {
             400_000
@@ -503,7 +503,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
     // with this test in feature=testutils mode (which turns on
     // feature=recording_mode implicitly). The easiest workaround is just to
     // switch to enforcing mode.
-    if host.get_ledger_protocol_version()? >= crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+    if crate::vm::ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
         host.switch_to_enforcing_storage()?;
     }
 

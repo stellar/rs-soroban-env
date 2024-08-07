@@ -1,0 +1,16 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call map_new()": "",
+  "   2 ret map_new -> Ok(Map(obj#1))": "cpu:501, mem:64, objs:-/1@a51fbffa",
+  "   3 call map_put(Map(obj#1), Map(obj#1), Map(obj#1))": "",
+  "   4 ret map_put -> Ok(Map(obj#3))": "cpu:1908, mem:168, objs:-/2@1e261473",
+  "   5 call map_new_from_slices(1)": "",
+  "   6 ret map_new_from_slices -> Ok(Map(obj#5))": "cpu:2981, mem:272, objs:-/3@58bdb096",
+  "   7 call map_put(Map(obj#1), Map(obj#1), Address(obj#1))": "",
+  "   8 call map_put(Map(obj#1), Address(obj#1), Map(obj#1))": "cpu:3164",
+  "   9 call map_new_from_slices(1)": "cpu:3286",
+  "  10 call map_put(Map(obj#1), Map(obj#1), Map(obj#16711681))": "cpu:3874, mem:312",
+  "  11 call map_put(Map(obj#1), Map(obj#16711681), Map(obj#1))": "cpu:4057",
+  "  12 call map_new_from_slices(1)": "cpu:4179",
+  "  13 end": "cpu:4767, mem:352, prngs:-/-, objs:-/3@58bdb096, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

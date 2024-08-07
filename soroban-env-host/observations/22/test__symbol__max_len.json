@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call symbol_new_from_slice(32)": "",
+  "   2 ret symbol_new_from_slice -> Ok(Symbol(obj#1))": "cpu:1017, mem:112, objs:-/1@7b5451b0",
+  "   3 end": "cpu:1017, mem:112, prngs:-/-, objs:-/1@7b5451b0, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

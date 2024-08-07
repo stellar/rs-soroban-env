@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call call(Address(obj#1), Symbol(bytes_new), Vec(obj#5))": "cpu:44489, mem:1814, prngs:-/da694490, objs:-/3@f0860f59, store:-/2@7bc024e1, foot:2@d6be0e71",
+  "   2 push TEST:   0:bytes_new(U64(0))": "cpu:55030, mem:2966, objs:-/4@25344d49, stk:1@cbfac19a, auth:1@20da541b/-",
+  "   3 call prng_bytes_new(U32(32))": "",
+  "   4 ret prng_bytes_new -> Ok(Bytes(obj#9))": "cpu:58472, mem:3078, prngs:a3ae41e/f3d00d54, objs:-/5@5bdb66ac, stk:1@da251c32",
+  "   5 pop TEST:   0:bytes_new -> Ok(Bytes(obj#9))": "",
+  "   6 ret call -> Ok(Bytes(obj#9))": "cpu:58533, prngs:-/f3d00d54, stk:-, auth:-/-",
+  "   7 call bytes_copy_to_slice(Bytes(obj#9), U32(0), 32)": "",
+  "   8 ret bytes_copy_to_slice -> Ok(())": "cpu:58640",
+  "   9 end": "cpu:58640, mem:3078, prngs:-/f3d00d54, objs:-/5@5bdb66ac, vm:-/-, evt:-, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+}

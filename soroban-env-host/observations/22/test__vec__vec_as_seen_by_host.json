@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call obj_cmp(Vec(obj#1), Vec(obj#3))": "cpu:1926, mem:176, objs:-/2@760e4464",
+  "   2 ret obj_cmp -> Ok(0)": "cpu:2213",
+  "   3 end": "cpu:2213, mem:176, prngs:-/-, objs:-/2@760e4464, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

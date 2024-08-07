@@ -1,0 +1,14 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call address_to_strkey(Address(obj#1))": "cpu:440, mem:64, objs:-/1@a8b8cea4",
+  "   2 ret address_to_strkey -> Ok(String(obj#3))": "cpu:1652, mem:235, objs:-/2@6429a459",
+  "   3 call strkey_to_address(String(obj#3))": "cpu:1713",
+  "   4 ret strkey_to_address -> Ok(Address(obj#5))": "cpu:3408, mem:457, objs:-/3@94ada867",
+  "   5 call obj_cmp(Address(obj#1), Address(obj#5))": "",
+  "   6 ret obj_cmp -> Ok(0)": "cpu:3700",
+  "   7 call strkey_to_address(Bytes(obj#7))": "cpu:4140, mem:521, objs:-/4@245777ac",
+  "   8 ret strkey_to_address -> Ok(Address(obj#9))": "cpu:5835, mem:743, objs:-/5@54c60c8",
+  "   9 call obj_cmp(Address(obj#1), Address(obj#9))": "",
+  "  10 ret obj_cmp -> Ok(0)": "cpu:6127",
+  "  11 end": "cpu:6127, mem:743, prngs:-/-, objs:-/5@54c60c8, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

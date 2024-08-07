@@ -36,6 +36,18 @@ impl Into<Error> for HostError {
     }
 }
 
+impl From<HostError> for wasmi_031::Error {
+    fn from(e: HostError) -> Self {
+        wasmi_031::Error::Trap(wasmi_031::core::Trap::from(e))
+    }
+}
+
+impl From<HostError> for wasmi_036::Error {
+    fn from(e: HostError) -> Self {
+        wasmi_036::Error::host(e)
+    }
+}
+
 impl DebugInfo {
     fn write_events(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO: maybe make this something users can adjust?
@@ -348,8 +360,7 @@ impl Host {
     /// this if we want to record the diagnostic information.
     pub(crate) fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
     where
-        Error: From<E>,
-        E: Debug,
+        E: Debug + Into<crate::Error>,
     {
         res.map_err(|e| {
             use std::borrow::Cow;

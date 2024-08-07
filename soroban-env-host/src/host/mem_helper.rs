@@ -2,20 +2,123 @@ use crate::{
     budget::AsBudget,
     host::Frame,
     host_object::MemHostObjectType,
+    vm::VmVer,
     xdr::{ContractCostType, ScErrorCode, ScErrorType, ScSymbol},
     Compare, Host, HostError, Symbol, SymbolObject, SymbolSmall, SymbolStr, U32Val, Vm, VmCaller,
 };
 
-use std::{cmp::Ordering, rc::Rc};
+use std::cmp::Ordering;
 
 /// Helper type for host functions that receive a position and length pair and
 /// expect to operate on a VM. Pos and len are not validated and len may be a
 /// count of bytes, Vals or slices depending on the host function.
 pub(crate) struct MemFnArgs {
-    pub(crate) vm: Rc<Vm>,
+    pub(crate) vm: Vm,
     pub(crate) pos: u32,
     pub(crate) len: u32,
 }
+
+impl Vm {
+    fn read_memory(
+        &self,
+        host: &Host,
+        vmcaller: &mut VmCaller<'_, Host>,
+        offset: usize,
+        buffer: &mut [u8],
+    ) -> Result<(), HostError> {
+        match &self.0 {
+            VmVer::Vm031(vm) => host.map_err(
+                vm.get_memory(host)?
+                    .read(vmcaller.try_ref_031()?, offset, buffer)
+                    .map_err(|e| wasmi_031::Error::Memory(e)),
+            ),
+            VmVer::Vm036(vm) => host.map_err(
+                vm.get_memory(host)?
+                    .read(vmcaller.try_ref_036()?, offset, buffer)
+                    .map_err(|e| wasmi_036::Error::from(e)),
+            ),
+        }
+    }
+    fn write_memory(
+        &self,
+        host: &Host,
+        vmcaller: &mut VmCaller<'_, Host>,
+        offset: usize,
+        buffer: &[u8],
+    ) -> Result<(), HostError> {
+        match &self.0 {
+            VmVer::Vm031(vm) => host.map_err(
+                vm.get_memory(host)?
+                    .write(vmcaller.try_mut_031()?, offset, buffer)
+                    .map_err(|e| wasmi_031::Error::Memory(e)),
+            ),
+            VmVer::Vm036(vm) => host.map_err(
+                vm.get_memory(host)?
+                    .write(vmcaller.try_mut_036()?, offset, buffer)
+                    .map_err(|e| wasmi_036::Error::from(e)),
+            ),
+        }
+    }
+    fn with_mem_data<F, R>(
+        &self,
+        host: &Host,
+        vmcaller: &VmCaller<'_, Host>,
+        f: F,
+    ) -> Result<R, HostError>
+    where
+        F: FnOnce(&[u8]) -> Result<R, HostError>,
+    {
+        match &self.0 {
+            VmVer::Vm031(vm) => f(vm.get_memory(host)?.data(vmcaller.try_ref_031()?)),
+            VmVer::Vm036(vm) => f(vm.get_memory(host)?.data(vmcaller.try_ref_036()?)),
+        }
+    }
+    fn with_mem_data_mut<F, R>(
+        &self,
+        host: &Host,
+        vmcaller: &mut VmCaller<'_, Host>,
+        f: F,
+    ) -> Result<R, HostError>
+    where
+        F: FnOnce(&mut [u8]) -> Result<R, HostError>,
+    {
+        match &self.0 {
+            VmVer::Vm031(vm) => f(vm.get_memory(host)?.data_mut(vmcaller.try_mut_031()?)),
+            VmVer::Vm036(vm) => f(vm.get_memory(host)?.data_mut(vmcaller.try_mut_036()?)),
+        }
+    }
+}
+
+// For future reference:
+//
+// (Note: there is no good place to put this but maybe someone grepping for
+// "memory map" or "stack" or "__heap_base" will find it, please don't
+// delete this comment as I have to re-derive it from primary sources every
+// time I need to remember it):
+//
+// The default rust-wasm memory map looks like:
+//
+//             0x0010_0000        __heap_base
+//             a.k.a. 1MiB        __data_end
+// +----------------+-----------------+-----------------+
+// |          stack |  static data    |  heap           |
+// | <-- grows down |   (fixed)       |  grows up -->   |
+// +----------------+-----------------+-----------------+
+//
+// This is controlled by linker args, specifically
+// -z stack-size=1048576 and --stack-first
+// both of which are passed by the LLD rust backend
+// when writing wasm, see:
+//
+// https://github.com/rust-lang/rust/blob/master/compiler/rustc_target/src/spec/base/wasm.rs
+//
+// In case it seems odd that __heap_base and __data_end are
+// the same, this is (as far as I can tell) just an artifact
+// of --stack_first. The "conventional" wasm memory map has
+// the stack _between_ the data and heap, so those two symbols
+// would normally be different. But if you move the stack to
+// the beginning of memory, then the data and heap are adjacent
+// and so the symbols are the same.
 
 impl Host {
     // Notes on metering: free
@@ -29,7 +132,7 @@ impl Host {
         let len: u32 = len.into();
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM { vm, .. } => {
-                let vm = Rc::clone(&vm);
+                let vm = vm.clone();
                 Ok(MemFnArgs { vm, pos, len })
             }
             _ => Err(self.err(
@@ -44,31 +147,23 @@ impl Host {
     pub(crate) fn metered_vm_write_bytes_to_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mem_pos: u32,
         buf: &[u8],
     ) -> Result<(), HostError> {
         self.charge_budget(ContractCostType::MemCpy, Some(buf.len() as u64))?;
-        let mem = vm.get_memory(self)?;
-        self.map_err(
-            mem.write(vmcaller.try_mut()?, mem_pos as usize, buf)
-                .map_err(|me| wasmi::Error::Memory(me)),
-        )
+        vm.write_memory(self, vmcaller, mem_pos as usize, buf)
     }
 
     pub(crate) fn metered_vm_read_bytes_from_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mem_pos: u32,
         buf: &mut [u8],
     ) -> Result<(), HostError> {
         self.charge_budget(ContractCostType::MemCpy, Some(buf.len() as u64))?;
-        let mem = vm.get_memory(self)?;
-        self.map_err(
-            mem.read(vmcaller.try_mut()?, mem_pos as usize, buf)
-                .map_err(|me| wasmi::Error::Memory(me)),
-        )
+        vm.read_memory(self, vmcaller, mem_pos as usize, buf)
     }
 
     // Note on metering: covers the cost of memcpy from bytes into the linear memory.
@@ -77,7 +172,7 @@ impl Host {
     pub(crate) fn metered_vm_write_vals_to_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mem_pos: u32,
         buf: &[VAL],
         to_le_bytes: impl Fn(&VAL) -> Result<[u8; VAL_SZ], HostError>,
@@ -93,26 +188,27 @@ impl Host {
             .ok_or_else(|| self.err_arith_overflow())?;
         let mem_range = (mem_pos as usize)..(mem_end as usize);
 
-        let mem_data = vm.get_memory(self)?.data_mut(vmcaller.try_mut()?);
-        let mem_slice = mem_data
-            .get_mut(mem_range)
-            .ok_or_else(|| self.err_oob_linear_memory())?;
+        vm.with_mem_data_mut(self, vmcaller, |mem_data| {
+            let mem_slice = mem_data
+                .get_mut(mem_range)
+                .ok_or_else(|| self.err_oob_linear_memory())?;
 
-        self.charge_budget(ContractCostType::MemCpy, Some(byte_len as u64))?;
-        for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ)) {
-            if dst.len() != VAL_SZ {
-                // This should be impossible unless there's an error above, but just in case.
-                return Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                    "chunks_mut produced chunk of unexpected length",
-                    &[],
-                ));
+            self.charge_budget(ContractCostType::MemCpy, Some(byte_len as u64))?;
+            for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ)) {
+                if dst.len() != VAL_SZ {
+                    // This should be impossible unless there's an error above, but just in case.
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "chunks_mut produced chunk of unexpected length",
+                        &[],
+                    ));
+                }
+                let tmp: [u8; VAL_SZ] = to_le_bytes(src)?;
+                dst.copy_from_slice(&tmp);
             }
-            let tmp: [u8; VAL_SZ] = to_le_bytes(src)?;
-            dst.copy_from_slice(&tmp);
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     // Notes on metering: covers the cost of memcpy from linear memory to local slices.
@@ -121,7 +217,7 @@ impl Host {
     pub(crate) fn metered_vm_read_vals_from_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mem_pos: u32,
         buf: &mut [VAL],
         from_le_bytes: impl Fn(&[u8; VAL_SZ]) -> Result<VAL, HostError>,
@@ -137,28 +233,29 @@ impl Host {
             .ok_or_else(|| self.err_arith_overflow())?;
         let mem_range = (mem_pos as usize)..(mem_end as usize);
 
-        let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
-        let mem_slice = mem_data
-            .get(mem_range)
-            .ok_or_else(|| self.err_oob_linear_memory())?;
+        vm.with_mem_data(self, vmcaller, |mem_data| {
+            let mem_slice = mem_data
+                .get(mem_range)
+                .ok_or_else(|| self.err_oob_linear_memory())?;
 
-        self.charge_budget(ContractCostType::MemCpy, Some(byte_len as u64))?;
-        let mut tmp: [u8; VAL_SZ] = [0u8; VAL_SZ];
-        for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ)) {
-            if let Ok(src) = TryInto::<&[u8; VAL_SZ]>::try_into(src) {
-                tmp.copy_from_slice(src);
-                *dst = from_le_bytes(&tmp)?;
-            } else {
-                // This should be impossible unless there's an error above, but just in case.
-                return Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                    "chunks produced chunk of unexpected length",
-                    &[],
-                ));
+            self.charge_budget(ContractCostType::MemCpy, Some(byte_len as u64))?;
+            let mut tmp: [u8; VAL_SZ] = [0u8; VAL_SZ];
+            for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ)) {
+                if let Ok(src) = TryInto::<&[u8; VAL_SZ]>::try_into(src) {
+                    tmp.copy_from_slice(src);
+                    *dst = from_le_bytes(&tmp)?;
+                } else {
+                    // This should be impossible unless there's an error above, but just in case.
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "chunks produced chunk of unexpected length",
+                        &[],
+                    ));
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     // This is the most complex one: it reads a sequence of slices _stored in
@@ -181,56 +278,57 @@ impl Host {
     pub(crate) fn metered_vm_scan_slices_in_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        vm: &Rc<Vm>,
+        vm: &Vm,
         mut mem_pos: u32,
         num_slices: usize,
         mut callback: impl FnMut(usize, &[u8]) -> Result<(), HostError>,
     ) -> Result<(), HostError> {
-        let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
-        // charge the cost of copying the slices (pointers to the content, not
-        // the content themselves) upfront.
-        self.charge_budget(
-            ContractCostType::MemCpy,
-            Some((num_slices as u64).saturating_mul(8)),
-        )?;
+        vm.with_mem_data(self, vmcaller, |mem_data| {
+            // charge the cost of copying the slices (pointers to the content, not
+            // the content themselves) upfront.
+            self.charge_budget(
+                ContractCostType::MemCpy,
+                Some((num_slices as u64).saturating_mul(8)),
+            )?;
 
-        for i in 0..num_slices {
-            // This is _very specific_ about what it's reading: 8 bytes
-            // arranged as a 4 byte pointer followed by a 4 byte length.
+            for i in 0..num_slices {
+                // This is _very specific_ about what it's reading: 8 bytes
+                // arranged as a 4 byte pointer followed by a 4 byte length.
 
-            let next_pos = mem_pos
-                .checked_add(8)
-                .ok_or_else(|| self.err_arith_overflow())?;
-            let slice_ref_range = mem_pos as usize..next_pos as usize;
-            let slice_ref_slice = mem_data
-                .get(slice_ref_range)
-                .ok_or_else(|| self.err_oob_linear_memory())?;
-            mem_pos = next_pos;
-
-            if let Ok(s) = TryInto::<&[u8; 8]>::try_into(slice_ref_slice) {
-                let ptr_bytes: [u8; 4] = s[0..4].try_into().unwrap();
-                let len_bytes: [u8; 4] = s[4..8].try_into().unwrap();
-                let slice_ptr = u32::from_le_bytes(ptr_bytes);
-                let slice_len = u32::from_le_bytes(len_bytes);
-                let slice_end = slice_ptr
-                    .checked_add(slice_len)
+                let next_pos = mem_pos
+                    .checked_add(8)
                     .ok_or_else(|| self.err_arith_overflow())?;
-                let slice_range = slice_ptr as usize..slice_end as usize;
-                let slice = mem_data
-                    .get(slice_range)
+                let slice_ref_range = mem_pos as usize..next_pos as usize;
+                let slice_ref_slice = mem_data
+                    .get(slice_ref_range)
                     .ok_or_else(|| self.err_oob_linear_memory())?;
-                callback(i, slice)?
-            } else {
-                // This should be impossible unless there's an error above, but just in case.
-                return Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                    "slice-scan produced slice of unexpected length",
-                    &[],
-                ));
+                mem_pos = next_pos;
+
+                if let Ok(s) = TryInto::<&[u8; 8]>::try_into(slice_ref_slice) {
+                    let ptr_bytes: [u8; 4] = s[0..4].try_into().unwrap();
+                    let len_bytes: [u8; 4] = s[4..8].try_into().unwrap();
+                    let slice_ptr = u32::from_le_bytes(ptr_bytes);
+                    let slice_len = u32::from_le_bytes(len_bytes);
+                    let slice_end = slice_ptr
+                        .checked_add(slice_len)
+                        .ok_or_else(|| self.err_arith_overflow())?;
+                    let slice_range = slice_ptr as usize..slice_end as usize;
+                    let slice = mem_data
+                        .get(slice_range)
+                        .ok_or_else(|| self.err_oob_linear_memory())?;
+                    callback(i, slice)?
+                } else {
+                    // This should be impossible unless there's an error above, but just in case.
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "slice-scan produced slice of unexpected length",
+                        &[],
+                    ));
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     fn metered_copy_byte_slice(&self, dst: &mut [u8], src: &[u8]) -> Result<(), HostError> {

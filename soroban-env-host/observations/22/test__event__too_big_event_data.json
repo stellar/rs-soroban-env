@@ -1,0 +1,10 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(268435455)": "cpu:0",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:67109823, mem:268435535, objs:-/1@6beed354",
+  "   3 call vec_new_from_slice(1)": "",
+  "   4 ret vec_new_from_slice -> Ok(Vec(obj#3))": "cpu:67110786, mem:268435623, objs:-/2@a751d8e8",
+  "   5 call contract_event(Vec(obj#3), Bytes(obj#1))": "cpu:0, mem:0",
+  "   6 ret contract_event -> Ok(Void)": "cpu:655, mem:65, evt:1@c4ec4a97",
+  "   7 end": "cpu:33556230, mem:268435632, prngs:-/9b4a753, objs:-/2@a751d8e8, vm:-/-, evt:1@c4ec4a97, store:-/-, foot:-, stk:-, auth:-/-"
+}

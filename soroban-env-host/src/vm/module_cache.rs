@@ -1,15 +1,64 @@
 use super::{
     func_info::HOST_FUNCTIONS,
-    parsed_module::{ParsedModule, VersionedContractCodeCostInputs},
+    parsed_module::{ParsedModule, VersionedContractCodeCostInputs, VersionedParsedModule},
+    Wasmi031, Wasmi036, WasmiVersion,
 };
 use crate::{
     budget::{get_wasmi_config, AsBudget},
     host::metered_clone::{MeteredClone, MeteredContainer},
     xdr::{Hash, ScErrorCode, ScErrorType},
-    Host, HostError, MeteredOrdMap,
+    Host, HostError, MeteredOrdMap, Vm,
 };
 use std::{collections::BTreeSet, rc::Rc};
-use wasmi::Engine;
+
+#[derive(Clone)]
+pub struct ModuleCache(pub(crate) McVer);
+
+#[derive(Clone)]
+pub enum McVer {
+    Mc031(Rc<VersionedModuleCache<Wasmi031>>),
+    Mc036(Rc<VersionedModuleCache<Wasmi036>>),
+}
+
+impl From<Rc<VersionedModuleCache<Wasmi031>>> for ModuleCache {
+    fn from(mc: Rc<VersionedModuleCache<Wasmi031>>) -> Self {
+        ModuleCache(McVer::Mc031(mc))
+    }
+}
+
+impl From<Rc<VersionedModuleCache<Wasmi036>>> for ModuleCache {
+    fn from(mc: Rc<VersionedModuleCache<Wasmi036>>) -> Self {
+        ModuleCache(McVer::Mc036(mc))
+    }
+}
+
+impl ModuleCache {
+    // ModuleCache should not be active until protocol version 21.
+    pub const MIN_LEDGER_VERSION: u32 = 21;
+
+    pub fn should_use_for_protocol(protocol_version: u32) -> bool {
+        protocol_version >= Self::MIN_LEDGER_VERSION
+    }
+
+    pub fn new(host: &Host) -> Result<Self, HostError> {
+        if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+            VersionedModuleCache::<Wasmi031>::new(host).map(Into::into)
+        } else {
+            VersionedModuleCache::<Wasmi036>::new(host).map(Into::into)
+        }
+    }
+
+    pub fn get_module(
+        &self,
+        host: &Host,
+        wasm_hash: &Hash,
+    ) -> Result<Option<ParsedModule>, HostError> {
+        match &self.0 {
+            McVer::Mc031(cache) => cache.get_module(host, wasm_hash),
+            McVer::Mc036(cache) => cache.get_module(host, wasm_hash),
+        }
+    }
+}
 
 /// A [ModuleCache] is a cache of a set of Wasm modules that have been parsed
 /// but not yet instantiated, along with a shared and reusable [Engine] storing
@@ -17,25 +66,26 @@ use wasmi::Engine;
 /// single [Host]'s lifecycle (at least) added all at once, since each wasmi
 /// [Engine] is locked during execution and no new modules can be added to it.
 #[derive(Clone, Default)]
-pub struct ModuleCache {
-    pub(crate) engine: Engine,
-    modules: MeteredOrdMap<Hash, Rc<ParsedModule>, Host>,
+pub(crate) struct VersionedModuleCache<V: WasmiVersion> {
+    modules: MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
+    pub(crate) linker: V::Linker,
 }
 
-impl ModuleCache {
-    // ModuleCache should not be active until protocol version 21.
-    pub const MIN_LEDGER_VERSION: u32 = 21;
-
-    pub fn new(host: &Host) -> Result<Self, HostError> {
-        let config = get_wasmi_config(host.as_budget())?;
-        let engine = Engine::new(&config);
-        let modules = MeteredOrdMap::new();
-        let mut cache = Self { engine, modules };
-        cache.add_stored_contracts(host)?;
-        Ok(cache)
+impl<V: WasmiVersion> VersionedModuleCache<V> {
+    fn new(host: &Host) -> Result<Rc<Self>, HostError> {
+        let config = get_wasmi_config(host.as_budget(), wasmi_036::CompilationMode::Lazy)?;
+        let engine = V::new_engine(&config);
+        let mut modules = MeteredOrdMap::new();
+        Self::add_stored_contracts(&engine, &mut modules, host)?;
+        let linker = Self::make_linker(&engine, &modules, host)?;
+        Ok(Rc::new(Self { modules, linker }))
     }
 
-    pub fn add_stored_contracts(&mut self, host: &Host) -> Result<(), HostError> {
+    fn add_stored_contracts(
+        engine: &V::Engine,
+        modules: &mut MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
+        host: &Host,
+    ) -> Result<(), HostError> {
         use crate::xdr::{ContractCodeEntry, ContractCodeEntryExt, LedgerEntryData, LedgerKey};
         let storage = host.try_borrow_storage()?;
         for (k, v) in storage.map.iter(host.as_budget())? {
@@ -76,7 +126,14 @@ impl ModuleCache {
                                 v1.cost_inputs.metered_clone(host.as_budget())?,
                             ),
                         };
-                        self.parse_and_cache_module(host, hash, code, code_cost_inputs)?;
+                        Self::parse_and_cache_module(
+                            engine,
+                            modules,
+                            host,
+                            hash,
+                            code,
+                            code_cost_inputs,
+                        )?;
                     }
                 }
             }
@@ -84,14 +141,15 @@ impl ModuleCache {
         Ok(())
     }
 
-    pub fn parse_and_cache_module(
-        &mut self,
+    fn parse_and_cache_module(
+        engine: &V::Engine,
+        modules: &mut MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
         host: &Host,
         contract_id: &Hash,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<(), HostError> {
-        if self.modules.contains_key(contract_id, host)? {
+        if modules.contains_key(contract_id, host)? {
             return Err(host.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -99,20 +157,18 @@ impl ModuleCache {
                 &[],
             ));
         }
-        let parsed_module = ParsedModule::new(host, &self.engine, &wasm, cost_inputs)?;
-        self.modules =
-            self.modules
-                .insert(contract_id.metered_clone(host)?, parsed_module, host)?;
+        let parsed_module = VersionedParsedModule::<V>::new(host, engine, &wasm, cost_inputs)?;
+        *modules = modules.insert(contract_id.metered_clone(host)?, parsed_module, host)?;
         Ok(())
     }
 
-    pub fn with_import_symbols<T>(
-        &self,
+    fn with_module_set_import_symbols<T>(
         host: &Host,
+        modules: &MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
         callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
     ) -> Result<T, HostError> {
         let mut import_symbols = BTreeSet::new();
-        for module in self.modules.values(host)? {
+        for module in modules.values(host)? {
             module.with_import_symbols(host, |module_symbols| {
                 for hf in HOST_FUNCTIONS {
                     let sym = (hf.mod_str, hf.fn_str);
@@ -134,17 +190,23 @@ impl ModuleCache {
         callback(&import_symbols)
     }
 
-    pub fn make_linker(&self, host: &Host) -> Result<wasmi::Linker<Host>, HostError> {
-        self.with_import_symbols(host, |symbols| Host::make_linker(&self.engine, symbols))
+    fn make_linker(
+        engine: &V::Engine,
+        modules: &MeteredOrdMap<Hash, Rc<VersionedParsedModule<V>>, Host>,
+        host: &Host,
+    ) -> Result<V::Linker, HostError> {
+        Self::with_module_set_import_symbols(host, modules, |symbols| {
+            Host::make_linker::<V>(engine, symbols)
+        })
     }
 
     pub fn get_module(
         &self,
         host: &Host,
         wasm_hash: &Hash,
-    ) -> Result<Option<Rc<ParsedModule>>, HostError> {
+    ) -> Result<Option<ParsedModule>, HostError> {
         if let Some(m) = self.modules.get(wasm_hash, host)? {
-            Ok(Some(m.clone()))
+            Ok(Some(V::upcast_versioned_parsed_module(m)))
         } else {
             Ok(None)
         }

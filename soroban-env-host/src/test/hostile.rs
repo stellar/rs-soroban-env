@@ -446,7 +446,8 @@ fn instantiate_with_page_and_segment_count(
     num_sgmts: u32,
     seg_size: u32,
 ) -> Result<crate::AddressObject, HostError> {
-    let wasm = wasm_util::wasm_module_with_multiple_data_segments(num_pages, num_sgmts, seg_size);
+    let wasm =
+        wasm_util::wasm_module_with_multiple_data_segments(host, num_pages, num_sgmts, seg_size);
     host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
@@ -487,7 +488,7 @@ fn too_many_segments_exceeds_budget() -> Result<(), HostError> {
     let res = instantiate_with_page_and_segment_count(&host, 1, 50_000_000, 1);
     assert!(HostError::result_matches_err(
         res,
-        Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
+        Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
     Ok(())
 }
@@ -528,9 +529,64 @@ fn excessive_logging() -> Result<(), HostError> {
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
-    if host.get_ledger_protocol_version()? >= crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+    if crate::vm::ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
         host.switch_to_enforcing_storage()?;
     }
+
+    let expected_budget_p22 = expect![[r#"
+        =================================================================
+        Cpu limit: 2000000; used: 176218
+        Mem limit: 500000; used: 162637
+        =================================================================
+        CostType                           cpu_insns      mem_bytes      
+        WasmInsnExec                       768            0              
+        MemAlloc                           17058          67344          
+        MemCpy                             2866           0              
+        MemCmp                             512            0              
+        DispatchHostFunction               310            0              
+        VisitObject                        244            0              
+        ValSer                             0              0              
+        ValDeser                           0              0              
+        ComputeSha256Hash                  3738           0              
+        ComputeEd25519PubKey               0              0              
+        VerifyEd25519Sig                   0              0              
+        VmInstantiation                    0              0              
+        VmCachedInstantiation              0              0              
+        InvokeVmFunction                   1948           54             
+        ComputeKeccak256Hash               0              0              
+        DecodeEcdsaCurve256Sig             0              0              
+        RecoverEcdsaSecp256k1Key           0              0              
+        Int256AddSub                       0              0              
+        Int256Mul                          0              0              
+        Int256Div                          0              0              
+        Int256Pow                          0              0              
+        Int256Shift                        0              0              
+        ChaCha20DrawBytes                  0              0              
+        ParseWasmInstructions              42882          13941          
+        ParseWasmFunctions                 1073           222            
+        ParseWasmGlobals                   1377           104            
+        ParseWasmTableEntries              29989          6285           
+        ParseWasmTypes                     8292           387            
+        ParseWasmDataSegments              0              0              
+        ParseWasmElemSegments              0              0              
+        ParseWasmImports                   4177           806            
+        ParseWasmExports                   6251           568            
+        ParseWasmDataSegmentBytes          0              0              
+        InstantiateWasmInstructions        43030          70704          
+        InstantiateWasmFunctions           59             114            
+        InstantiateWasmGlobals             83             53             
+        InstantiateWasmTableEntries        1816           1025           
+        InstantiateWasmTypes               0              0              
+        InstantiateWasmDataSegments        0              0              
+        InstantiateWasmElemSegments        0              0              
+        InstantiateWasmImports             7535           762            
+        InstantiateWasmExports             2210           268            
+        InstantiateWasmDataSegmentBytes    0              0              
+        Sec1DecodePointUncompressed        0              0              
+        VerifyEcdsaSecp256r1Sig            0              0              
+        =================================================================
+
+    "#]];
 
     let expected_budget_p21 = expect![[r#"
         =================================================================
@@ -642,12 +698,11 @@ fn excessive_logging() -> Result<(), HostError> {
 
     "#]];
 
-    let expected_budget =
-        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
-            expected_budget_p20
-        } else {
-            expected_budget_p21
-        };
+    let expected_budget = match host.get_ledger_protocol_version()? {
+        20 => expected_budget_p20,
+        21 => expected_budget_p21,
+        _ => expected_budget_p22,
+    };
 
     // moderate logging
     {
@@ -944,10 +999,15 @@ fn test_multiple_memory() -> Result<(), HostError> {
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
-    assert!(HostError::result_matches_err(
-        res,
-        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
-    ));
+    let expected_error =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?)
+            || cfg!(feature = "bench")
+        {
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        } else {
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        };
+    assert!(HostError::result_matches_err(res, expected_error));
     Ok(())
 }
 
@@ -1005,10 +1065,13 @@ fn test_duplicate_function_import() -> Result<(), HostError> {
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
-    assert!(HostError::result_matches_err(
-        res,
-        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
-    ));
+    let expected_error =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        } else {
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        };
+    assert!(HostError::result_matches_err(res, expected_error));
     Ok(())
 }
 
@@ -1077,10 +1140,15 @@ fn test_too_large_data_count() -> Result<(), HostError> {
         generate_account_id(&host),
         generate_bytes_array(&host),
     );
-    assert!(HostError::result_matches_err(
-        res,
-        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
-    ));
+    let expected_error =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?)
+            || cfg!(feature = "bench")
+        {
+            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+        } else {
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        };
+    assert!(HostError::result_matches_err(res, expected_error));
 
     Ok(())
 }
@@ -1272,7 +1340,12 @@ fn test_large_number_of_tables() -> Result<(), HostError> {
 #[test]
 fn test_large_number_of_func_types() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let wasm = wasm_util::wasm_module_with_many_func_types(100001);
+    let n_types = if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+        100001
+    } else {
+        500001
+    };
+    let wasm = wasm_util::wasm_module_with_many_func_types(n_types);
     let res = host.register_test_contract_wasm_from_source_account(
         wasm.as_slice(),
         generate_account_id(&host),
@@ -1364,20 +1437,29 @@ fn test_stack_depth_stability() {
     const MAX_WASM_STACK_DEPTH: u32 = 1024;
 
     let host = observe_host!(Host::test_host_with_recording_footprint());
+
+    let max_ok_depth =
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version().unwrap()) {
+            MAX_WASM_STACK_DEPTH - 1
+        } else {
+            MAX_WASM_STACK_DEPTH - 2
+        };
+    let first_bad_depth = max_ok_depth + 1;
+
     host.as_budget().reset_unlimited().unwrap();
     let contract_id = host.register_test_contract_wasm(HOSTILE);
     assert!(host
         .call(
             contract_id,
             Symbol::try_from_small_str("deepstack").unwrap(),
-            test_vec![&*host, MAX_WASM_STACK_DEPTH - 1].into(),
+            test_vec![&*host, max_ok_depth].into(),
         )
         .is_ok());
     assert!(HostError::result_matches_err(
         host.call(
             contract_id,
             Symbol::try_from_small_str("deepstack").unwrap(),
-            test_vec![&*host, MAX_WASM_STACK_DEPTH].into(),
+            test_vec![&*host, first_bad_depth].into(),
         ),
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));

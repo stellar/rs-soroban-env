@@ -260,7 +260,6 @@ fn test_observation_does_not_emit_diagnostic_events_from_failed_borrows() -> Res
     drop(storage);
     drop(obs_host);
     let (_, evts) = host.try_finish()?;
-    dbg!(&evts);
     assert_eq!(evts.0.len(), 0);
     Ok(())
 }

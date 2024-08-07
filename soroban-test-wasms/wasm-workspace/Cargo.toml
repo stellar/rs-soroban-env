@@ -56,7 +56,7 @@ codegen-units = 1
 lto = true
 
 [workspace.package]
-rust-version = "1.74.0"
+rust-version = "1.77.0"
 
 [workspace.dependencies.soroban-sdk]
 version = "=20.5.0"

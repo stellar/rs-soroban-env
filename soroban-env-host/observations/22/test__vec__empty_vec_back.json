@@ -1,0 +1,6 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_back(Vec(obj#1))": "cpu:961, mem:80, objs:-/1@3e25b2a0",
+  "   2 ret vec_back -> Err(Error(Object, IndexBounds))": "cpu:1126",
+  "   3 end": "cpu:1126, mem:80, prngs:-/-, objs:-/1@3e25b2a0, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

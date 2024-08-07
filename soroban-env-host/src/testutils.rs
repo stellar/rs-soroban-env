@@ -164,10 +164,24 @@ impl Host {
 
     pub fn current_test_protocol() -> u32 {
         use crate::meta::{get_ledger_protocol_version, INTERFACE_VERSION};
+        let max_supported_protocol = get_ledger_protocol_version(INTERFACE_VERSION);
         if let Ok(vers) = std::env::var("TEST_PROTOCOL") {
-            vers.parse().unwrap()
+            let test_protocol = vers.parse().expect("parsing TEST_PROTOCOL");
+            if test_protocol <= max_supported_protocol {
+                test_protocol
+            } else {
+                let next_advice = if cfg!(feature = "next") {
+                    ""
+                } else {
+                    " (consider building with --feature=next)"
+                };
+                panic!(
+                    "TEST_PROTOCOL={} is higher than the max supported protocol {}{}",
+                    test_protocol, max_supported_protocol, next_advice
+                );
+            }
         } else {
-            get_ledger_protocol_version(INTERFACE_VERSION)
+            max_supported_protocol
         }
     }
 
@@ -341,7 +355,7 @@ impl Host {
         .unwrap();
 
         // Second step: generate some accounts to sign things with.
-        let signing_keys = (0..n_signers)
+        let signing_keys: Vec<SigningKey> = (0..n_signers)
             .map(|_| generate_signing_key(&host))
             .collect();
         for signing_key in &signing_keys {
@@ -698,6 +712,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn wasm_module_with_multiple_data_segments(
+        host: &crate::Host,
         num_pages: u32,
         num_sgmts: u32,
         seg_size: u32,
@@ -707,8 +722,11 @@ pub(crate) mod wasm {
         // we just make sure the total memory can fit one segments the segments
         // will just cycle through the space and possibly override earlier ones
         let max_segments = (mem_len / seg_size.max(1)).max(1);
-        for _i in 0..num_sgmts % max_segments {
-            me.define_data_segment(0, vec![0; seg_size as usize]);
+        let fixed_mem_offset =
+            crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version().unwrap());
+        for i in 0..num_sgmts % max_segments {
+            let mem_offset = if fixed_mem_offset { 0 } else { i };
+            me.define_data_segment(mem_offset, vec![0; seg_size as usize]);
         }
         // a local wasm function
         let mut fe = me.func(Arity(0), 0);
@@ -856,7 +874,7 @@ pub(crate) mod wasm {
         let mut me = ModEmitter::new();
         me.memory(1, None, false, false);
         me.memory(1, None, false, false);
-        me.finish()
+        me.finish_no_validate()
     }
 
     pub fn wasm_module_lying_about_import_function_type() -> Vec<u8> {
@@ -878,7 +896,7 @@ pub(crate) mod wasm {
         for _ in 0..n {
             me.import_func_no_check("t", "_", Arity(0));
         }
-        me.finish()
+        me.finish_no_validate()
     }
 
     pub fn wasm_module_with_nonexistent_function_export() -> Vec<u8> {

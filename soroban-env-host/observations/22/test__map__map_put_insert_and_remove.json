@@ -1,0 +1,20 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call map_put(Map(obj#1), U32(0), U32(0))": "cpu:1021, mem:128, objs:-/1@e0124aa",
+  "   2 ret map_put -> Ok(Map(obj#3))": "cpu:2330, mem:280, objs:-/2@c10480fc",
+  "   3 call map_put(Map(obj#3), U32(2), U32(20))": "",
+  "   4 ret map_put -> Ok(Map(obj#5))": "cpu:3648, mem:456, objs:-/3@b8d93562",
+  "   5 call map_put(Map(obj#5), U32(4), U32(40))": "",
+  "   6 ret map_put -> Ok(Map(obj#7))": "cpu:4978, mem:656, objs:-/4@a2445d13",
+  "   7 call obj_cmp(Map(obj#9), Map(obj#7))": "cpu:6026, mem:856, objs:-/5@37a6c118",
+  "   8 ret obj_cmp -> Ok(0)": "cpu:6327",
+  "   9 call map_del(Map(obj#7), U32(0))": "",
+  "  10 ret map_del -> Ok(Map(obj#11))": "cpu:7646, mem:1032, objs:-/6@f09037e6",
+  "  11 call map_del(Map(obj#11), U32(2))": "",
+  "  12 ret map_del -> Ok(Map(obj#13))": "cpu:8956, mem:1184, objs:-/7@44c90e41",
+  "  13 call map_del(Map(obj#13), U32(4))": "",
+  "  14 ret map_del -> Ok(Map(obj#15))": "cpu:10254, mem:1312, objs:-/8@2ad24f4e",
+  "  15 call obj_cmp(Map(obj#17), Map(obj#15))": "cpu:11275, mem:1440, objs:-/9@d35a620e",
+  "  16 ret obj_cmp -> Ok(0)": "cpu:11567",
+  "  17 end": "cpu:11567, mem:1440, prngs:-/-, objs:-/9@d35a620e, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

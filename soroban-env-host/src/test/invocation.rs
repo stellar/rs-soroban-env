@@ -8,7 +8,7 @@ use soroban_env_common::{
 
 use crate::{
     budget::AsBudget, events::HostEvent, test::observe::ObservedHost, xdr::ScErrorType,
-    ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
+    ContractFunctionSet, Error, Host, HostError, Symbol, Tag, Vm,
 };
 use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
 
@@ -318,13 +318,11 @@ fn wasm_invoke_return_err_variants() -> Result<(), HostError> {
         if let Err(got_err) = call_res {
             assert_eq!(got_err.error, expected_err)
         } else {
-            dbg!(&call_res);
             panic!("got Ok when expected Err from call({})", fname)
         }
         if let Ok(got_err) = try_call_res {
             assert!(got_err.shallow_eq(&expected_err.to_val()))
         } else {
-            dbg!(&try_call_res);
             panic!("got Err when expected Ok from try_call({})", fname)
         }
     }
@@ -369,13 +367,16 @@ fn unrecoverable_error_with_cross_contract_try_call() -> Result<(), HostError> {
         host.register_test_contract_wasm(ADD_I32);
     let invoke_contract_id_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
 
-    let _ = host.clone().test_budget(5789, 10_048_576).enable_model(
-        ContractCostType::WasmInsnExec,
-        6,
-        0,
-        0,
-        0,
-    );
+    let not_enough_cpu = if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+        5789
+    } else {
+        1000
+    };
+
+    let _ = host
+        .clone()
+        .test_budget(not_enough_cpu, 10_048_576)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0);
 
     let a = 4i32;
     let b = 7i32;
@@ -400,14 +401,16 @@ fn unrecoverable_error_with_cross_contract_try_call() -> Result<(), HostError> {
 fn unrecoverable_error_with_try_call() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id_obj = host.register_test_contract_wasm(ADD_I32);
+    let too_little_cpu = if Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+        2015
+    } else {
+        100
+    };
 
-    let _ = host.clone().test_budget(2015, 1_048_576).enable_model(
-        ContractCostType::WasmInsnExec,
-        6,
-        0,
-        0,
-        0,
-    );
+    let _ = host
+        .clone()
+        .test_budget(too_little_cpu, 1_048_576)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0);
 
     let a = 4i32;
     let b = 7i32;

@@ -1,13 +1,12 @@
 use soroban_env_common::ConversionError;
-use wasmi::Value;
 
 use crate::{
     cost_runner::{CostRunner, CostType},
-    vm::dummy0,
+    vm::{dummy0_031, dummy0_036, VmVer},
     xdr::ContractCostType::{DispatchHostFunction, InvokeVmFunction},
     HostError, Symbol, Val, Vm,
 };
-use std::{hint::black_box, rc::Rc};
+use std::hint::black_box;
 
 pub struct InvokeVmFunctionRun;
 
@@ -16,22 +15,39 @@ const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
     _ => panic!(),
 };
 
+#[derive(Clone)]
+pub enum InvokeVmFunctionMode {
+    Normal,
+    CheckLazyCompilationCosts,
+}
+
 impl CostRunner for InvokeVmFunctionRun {
     const COST_TYPE: CostType = CostType::Contract(InvokeVmFunction);
 
-    type SampleType = (Rc<Vm>, Vec<Value>);
+    type SampleType = (
+        Vm,
+        Vec<wasmi_031::Value>,
+        Vec<wasmi_036::Val>,
+        InvokeVmFunctionMode,
+    );
 
     type RecycledType = (Option<Val>, Self::SampleType);
 
     const RUN_ITERATIONS: u64 = 100;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let rv = black_box(
-            sample
-                .0
-                .metered_func_call(host, &TEST_SYM, sample.1.as_slice())
-                .unwrap(),
-        );
+    fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let sym = if let InvokeVmFunctionMode::Normal = sample.3 {
+            TEST_SYM
+        } else {
+            Symbol::try_from_small_str(format!("test{}", iter).as_str()).unwrap()
+        };
+        let rv = black_box({
+            match &sample.0 .0 {
+                VmVer::Vm031(vm) => vm.metered_func_call(host, &sym, sample.1.as_slice()),
+                VmVer::Vm036(vm) => vm.metered_func_call(host, &sym, sample.2.as_slice()),
+            }
+            .unwrap()
+        });
         (Some(rv), sample)
     }
 
@@ -40,6 +56,9 @@ impl CostRunner for InvokeVmFunctionRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
+        if let InvokeVmFunctionMode::CheckLazyCompilationCosts = sample.3 {
+            black_box(Symbol::try_from_small_str(format!("test{}", 99).as_str()).unwrap());
+        }
         black_box(host.charge_budget(InvokeVmFunction, None).unwrap());
         black_box((None, sample))
     }
@@ -52,15 +71,21 @@ impl CostRunner for InvokeHostFunctionRun {
 
     const RUN_ITERATIONS: u64 = 1000;
 
-    type SampleType = Rc<Vm>;
+    type SampleType = Vm;
 
-    type RecycledType = Rc<Vm>;
+    type RecycledType = Vm;
 
     fn run_iter(_host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         black_box(
-            sample
-                .with_caller(|caller| dummy0(caller).map_err(|_| HostError::from(ConversionError)))
-                .unwrap(),
+            match &sample.0 {
+                VmVer::Vm031(vm) => vm.with_caller_031(|caller| {
+                    dummy0_031(caller).map_err(|_| HostError::from(ConversionError))
+                }),
+                VmVer::Vm036(vm) => vm.with_caller_036(|caller| {
+                    dummy0_036(caller).map_err(|_| HostError::from(ConversionError))
+                }),
+            }
+            .unwrap(),
         );
         black_box(sample)
     }

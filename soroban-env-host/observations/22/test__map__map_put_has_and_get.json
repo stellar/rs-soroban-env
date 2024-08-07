@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call map_has(Map(obj#1), U32(3))": "cpu:1021, mem:128, objs:-/1@fba13d84",
+  "   2 ret map_has -> Ok(False)": "cpu:1194",
+  "   3 call map_put(Map(obj#1), U32(3), U32(6))": "",
+  "   4 ret map_put -> Ok(Map(obj#3))": "cpu:2503, mem:280, objs:-/2@2fc9d134",
+  "   5 call map_has(Map(obj#3), U32(3))": "",
+  "   6 ret map_has -> Ok(True)": "cpu:2676",
+  "   7 call map_get(Map(obj#3), U32(3))": "",
+  "   8 ret map_get -> Ok(U32(6))": "cpu:2894",
+  "   9 end": "cpu:2894, mem:280, prngs:-/-, objs:-/2@2fc9d134, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

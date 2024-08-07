@@ -17,6 +17,7 @@ use crate::{
 
 #[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
+#[cfg(any(test, feature = "testutils"))]
 use std::rc::Rc;
 
 /// Determines the re-entry mode for calling a contract.
@@ -110,7 +111,7 @@ pub(crate) struct Context {
 #[derive(Clone, Hash)]
 pub(crate) enum Frame {
     ContractVM {
-        vm: Rc<Vm>,
+        vm: Vm,
         fn_name: Symbol,
         args: Vec<Val>,
         instance: ScContractInstance,
@@ -125,7 +126,7 @@ pub(crate) enum Frame {
 impl Frame {
     fn contract_id(&self) -> Option<&Hash> {
         match self {
-            Frame::ContractVM { vm, .. } => Some(&vm.contract_id),
+            Frame::ContractVM { vm, .. } => Some(&vm.get_contract_id()),
             Frame::HostFunction(_) => None,
             Frame::StellarAssetContract(id, ..) => Some(id),
             #[cfg(any(test, feature = "testutils"))]
@@ -678,7 +679,7 @@ impl Host {
                     None
                 };
                 let vm = if let Some(module) = parsed_module {
-                    Vm::from_parsed_module(self, contract_id, module)?
+                    Vm::from_parsed_module(self, contract_id, &module)?
                 } else {
                     // We can get here a few ways:
                     //
@@ -748,7 +749,7 @@ impl Host {
                 let relative_objects = Vec::new();
                 self.with_frame(
                     Frame::ContractVM {
-                        vm: Rc::clone(&vm),
+                        vm: vm.clone(),
                         fn_name: *func,
                         args: args_vec,
                         instance,
@@ -899,7 +900,7 @@ impl Host {
                             // because we're not actually running a VM, but we
                             // prioritize emulation fidelity over honesty here.
                             let mut error: Error =
-                                Error::from(wasmi::core::TrapCode::UnreachableCodeReached);
+                                Error::from(wasmi_031::core::TrapCode::UnreachableCodeReached);
 
                             let mut recovered_error_from_panic_refcell = false;
                             if let Ok(panic) = panic.try_borrow() {

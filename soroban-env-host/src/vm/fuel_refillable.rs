@@ -4,8 +4,6 @@ use crate::{
     Host, HostError,
 };
 
-use wasmi::{errors::FuelError, Caller, Store};
-
 pub(crate) trait FuelRefillable {
     fn fuel_consumed(&self) -> Result<u64, HostError>;
 
@@ -40,32 +38,67 @@ pub(crate) trait FuelRefillable {
     }
 }
 
-macro_rules! impl_refillable_for_store {
+macro_rules! impl_refillable_for_store_wasmi_031 {
     ($store: ty) => {
         impl<'a> FuelRefillable for $store {
             fn fuel_consumed(&self) -> Result<u64, HostError> {
                 self.fuel_consumed().ok_or_else(|| {
-                    HostError::from(wasmi::Error::Store(FuelError::FuelMeteringDisabled))
+                    HostError::from(wasmi_031::Error::Store(
+                        wasmi_031::errors::FuelError::FuelMeteringDisabled,
+                    ))
                 })
             }
 
             fn fuel_total(&self) -> Result<u64, HostError> {
                 self.fuel_total().ok_or_else(|| {
-                    HostError::from(wasmi::Error::Store(FuelError::FuelMeteringDisabled))
+                    HostError::from(wasmi_031::Error::Store(
+                        wasmi_031::errors::FuelError::FuelMeteringDisabled,
+                    ))
                 })
             }
 
             fn add_fuel(&mut self, fuel: u64) -> Result<(), HostError> {
                 self.add_fuel(fuel)
-                    .map_err(|fe| HostError::from(wasmi::Error::Store(fe)))
+                    .map_err(|fe| HostError::from(wasmi_031::Error::Store(fe)))
             }
 
             fn reset_fuel(&mut self) -> Result<(), HostError> {
                 self.reset_fuel()
-                    .map_err(|fe| HostError::from(wasmi::Error::Store(fe)))
+                    .map_err(|fe| HostError::from(wasmi_031::Error::Store(fe)))
             }
         }
     };
 }
-impl_refillable_for_store!(Store<Host>);
-impl_refillable_for_store!(Caller<'a, Host>);
+impl_refillable_for_store_wasmi_031!(wasmi_031::Store<Host>);
+impl_refillable_for_store_wasmi_031!(wasmi_031::Caller<'a, Host>);
+
+macro_rules! impl_refillable_for_store_wasmi_036 {
+    ($store: ty) => {
+        impl<'a> FuelRefillable for $store {
+            fn fuel_consumed(&self) -> Result<u64, HostError> {
+                self.fuel_consumed().ok_or_else(|| {
+                    HostError::from(wasmi_036::Error::from(
+                        wasmi_036::errors::FuelError::FuelMeteringDisabled,
+                    ))
+                })
+            }
+
+            fn fuel_total(&self) -> Result<u64, HostError> {
+                self.get_fuel()
+                    .map_err(|fe| HostError::from(wasmi_036::Error::from(fe)))
+            }
+
+            fn add_fuel(&mut self, fuel: u64) -> Result<(), HostError> {
+                self.set_fuel(fuel)
+                    .map_err(|fe| HostError::from(wasmi_036::Error::from(fe)))
+            }
+
+            fn reset_fuel(&mut self) -> Result<(), HostError> {
+                self.set_fuel(0)
+                    .map_err(|fe| HostError::from(wasmi_036::Error::from(fe)))
+            }
+        }
+    };
+}
+impl_refillable_for_store_wasmi_036!(wasmi_036::Store<Host>);
+impl_refillable_for_store_wasmi_036!(wasmi_036::Caller<'a, Host>);

@@ -1,0 +1,22 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call deserialize_from_bytes(Bytes(obj#1))": "cpu:440, mem:64, objs:-/1@5b7170d7",
+  "   2 ret deserialize_from_bytes -> Err(Error(Context, ExceededLimit))": "cpu:59614",
+  "   3 call deserialize_from_bytes(Bytes(obj#3))": "cpu:60054, mem:128, objs:-/2@28780288",
+  "   4 ret deserialize_from_bytes -> Err(Error(Value, InvalidInput))": "cpu:119384, mem:143",
+  "   5 call deserialize_from_bytes(Bytes(obj#5))": "cpu:119824, mem:207, objs:-/3@8231ae8e",
+  "   6 ret deserialize_from_bytes -> Err(Error(Value, InvalidInput))": "cpu:179123, mem:219",
+  "   7 call deserialize_from_bytes(Bytes(obj#7))": "cpu:179563, mem:283, objs:-/4@52334796",
+  "   8 ret deserialize_from_bytes -> Err(Error(Value, InvalidInput))": "cpu:239612, mem:367",
+  "   9 call deserialize_from_bytes(Bytes(obj#9))": "cpu:240052, mem:431, objs:-/5@ba7f16d3",
+  "  10 ret deserialize_from_bytes -> Err(Error(Context, ExceededLimit))": "cpu:300101, mem:515",
+  "  11 call deserialize_from_bytes(Bytes(obj#11))": "cpu:300541, mem:579, objs:-/6@794857",
+  "  12 ret deserialize_from_bytes -> Err(Error(Context, ExceededLimit))": "cpu:360590, mem:663",
+  "  13 call deserialize_from_bytes(Bytes(obj#13))": "cpu:361030, mem:727, objs:-/7@ba81a178",
+  "  14 ret deserialize_from_bytes -> Err(Error(Value, InvalidInput))": "cpu:421610, mem:862",
+  "  15 call deserialize_from_bytes(Bytes(obj#15))": "cpu:422050, mem:926, objs:-/8@fd87c609",
+  "  16 ret deserialize_from_bytes -> Err(Error(Context, ExceededLimit))": "cpu:482568, mem:1055",
+  "  17 call deserialize_from_bytes(Bytes(obj#17))": "cpu:483008, mem:1119, objs:-/9@adc3a178",
+  "  18 ret deserialize_from_bytes -> Err(Error(Value, InvalidInput))": "cpu:543557, mem:1251",
+  "  19 end": "cpu:543557, mem:1251, prngs:-/-, objs:-/9@adc3a178, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

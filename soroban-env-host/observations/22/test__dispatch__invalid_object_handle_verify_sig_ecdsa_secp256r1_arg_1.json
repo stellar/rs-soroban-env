@@ -1,0 +1,21 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(125)": "cpu:47",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1038, mem:205, objs:-/1@78b6868a",
+  "   3 call upload_wasm(Bytes(obj#1))": "",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:218892, mem:306864, objs:-/2@4f3a92f3, store:-/1@54a3d0bc, foot:1@85133706",
+  "   5 call bytes_new_from_slice(32)": "cpu:219332, mem:306928, objs:-/3@493a0ec2",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:220301, mem:307040, objs:-/4@c2c7db4b",
+  "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:221944, mem:307218, objs:-/5@2024b5e0, auth:1@2be0dbef/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:222236",
+  "  10 call get_ledger_network_id()": "cpu:222286, auth:1@2be0dbef/1@3231bd63",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:223316, mem:307330, objs:-/6@ede96792",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:241449, mem:310404, objs:-/7@2e55d9c9, store:-/2@b2c3e742, foot:2@73eaf74f, auth:-/1@4f76165f",
+  "  13 call call(Address(obj#13), Symbol(test), Vec(obj#19))": "cpu:242769, mem:310596, objs:-/10@17d1fc82, auth:-/-",
+  "  14 push VM:65dd696:test(Bytes(obj#15), Bytes(obj#123), Bytes(obj#17))": "cpu:413866, mem:472982, objs:-/11@c3bd3ea, vm:65536@b1cd98b9/2@2f94d90d, stk:1@172a4f66, auth:1@b1b428e/-",
+  "  15 call verify_sig_ecdsa_secp256r1(Bytes(obj#15), Bytes(obj#123), Bytes(obj#17))": "cpu:417652, mem:473172, objs:3@ac6ec193/11@c3bd3ea, vm:-/-, stk:1@3aa984f6",
+  "  16 pop VM:65dd696:test -> Err(Error(Value, InvalidInput))": "cpu:418096, vm:65536@b1cd98b9/2@2f94d90d",
+  "  17 ret call -> Err(Error(Value, InvalidInput))": "cpu:418718, mem:473188, objs:-/11@c3bd3ea, vm:-/-, stk:-, auth:-/-",
+  "  18 end": "cpu:418718, mem:473188, prngs:-/9b4a753, objs:-/11@c3bd3ea, vm:-/-, evt:-, store:-/2@b2c3e742, foot:2@73eaf74f, stk:-, auth:-/-"
+}

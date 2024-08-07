@@ -2,7 +2,7 @@ use crate::{
     meta::{get_ledger_protocol_version, INTERFACE_VERSION},
     testutils::{generate_account_id, generate_bytes_array, wasm as wasm_util},
     xdr::{ScErrorCode, ScErrorType},
-    AddressObject, Env, Host, HostError, LedgerInfo, Symbol, Val, WasmiMarshal,
+    AddressObject, Env, Host, HostError, LedgerInfo, Symbol, Val, WasmiMarshal031,
 };
 
 #[test]
@@ -211,7 +211,7 @@ fn test_native_mode_calling_protocol_gated_host_fn() -> Result<(), HostError> {
 fn configure_protocol_test_for_runtime_guardrail(
     host: &Host,
     ledger_proto: u32,
-) -> Result<wasmi::Value, wasmi::Error> {
+) -> Result<wasmi_031::Value, wasmi_031::Error> {
     host.enable_debug().unwrap();
     let mut li = LedgerInfo::default();
     li.protocol_version = ledger_proto;
@@ -223,10 +223,10 @@ fn configure_protocol_test_for_runtime_guardrail(
 fn register_and_invoke_custom_vm_no_linker_check(
     host: &Host,
     wasm_code: &[u8],
-) -> Result<wasmi::Value, wasmi::Error> {
+) -> Result<wasmi_031::Value, wasmi_031::Error> {
     use crate::vm::protocol_gated_dummy;
-    use wasmi::{Engine, Func, Linker, Module, Store, Value};
-    let mut config = wasmi::Config::default();
+    use wasmi_031::{Engine, Func, Linker, Module, Store, Value};
+    let mut config = wasmi_031::Config::default();
     config.consume_fuel(true);
     let engine = Engine::new(&config);
     let module = Module::new(&engine, wasm_code).unwrap();
@@ -252,14 +252,14 @@ fn register_and_invoke_custom_vm_no_linker_check(
 
 fn fish_host_error_from_wasm_trap(
     host: &Host,
-    res: Result<wasmi::Value, wasmi::Error>,
+    res: Result<wasmi_031::Value, wasmi_031::Error>,
 ) -> Result<Val, HostError> {
     res.map(|r| {
         host.relative_to_absolute(Val::try_marshal_from_value(r).unwrap())
             .unwrap()
     })
     .map_err(|e| match e {
-        wasmi::Error::Trap(t) => t.downcast().unwrap(),
+        wasmi_031::Error::Trap(t) => t.downcast().unwrap(),
         _ => panic!(),
     })
 }

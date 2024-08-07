@@ -7,7 +7,8 @@ mod wasmi_helper;
 pub(crate) use limits::DepthLimiter;
 pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use model::{MeteredCostComponent, ScaledU64};
-pub(crate) use wasmi_helper::{get_wasmi_config, load_calibrated_fuel_costs};
+use wasmi_helper::load_calibrated_fuel_costs_036;
+pub(crate) use wasmi_helper::{get_wasmi_config, load_calibrated_fuel_costs_031, WasmiConfig};
 
 use std::{
     cell::{RefCell, RefMut},
@@ -160,7 +161,8 @@ pub(crate) struct BudgetImpl {
     /// For the purpose of calibration and reporting; not used for budget-limiting nor does it affect consensus
     tracker: BudgetTracker,
     is_in_shadow_mode: bool,
-    fuel_costs: wasmi::FuelCosts,
+    fuel_costs_031: wasmi_031::FuelCosts,
+    fuel_costs_036: wasmi_036::FuelCosts,
     depth_limit: u32,
 }
 
@@ -177,7 +179,8 @@ impl BudgetImpl {
             mem_bytes: BudgetDimension::try_from_config(mem_cost_params, mem_limit)?,
             tracker: BudgetTracker::default(),
             is_in_shadow_mode: false,
-            fuel_costs: load_calibrated_fuel_costs(),
+            fuel_costs_031: load_calibrated_fuel_costs_031(),
+            fuel_costs_036: load_calibrated_fuel_costs_036(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         })
     }
@@ -268,7 +271,8 @@ impl Default for BudgetImpl {
             mem_bytes: BudgetDimension::default(),
             tracker: Default::default(),
             is_in_shadow_mode: false,
-            fuel_costs: load_calibrated_fuel_costs(),
+            fuel_costs_031: load_calibrated_fuel_costs_031(),
+            fuel_costs_036: load_calibrated_fuel_costs_036(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
@@ -342,17 +346,26 @@ impl Default for BudgetImpl {
                     cpu.const_term = 377524;
                     cpu.lin_term = ScaledU64(4068);
                 }
+
                 ContractCostType::VmInstantiation => {
-                    cpu.const_term = 451626;
-                    cpu.lin_term = ScaledU64(45405);
-                }
-                ContractCostType::VmCachedInstantiation => {
-                    if proto < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
                         cpu.const_term = 451626;
                         cpu.lin_term = ScaledU64(45405);
                     } else {
+                        cpu.const_term = 63492;
+                        cpu.lin_term = ScaledU64(12309);
+                    }
+                }
+                ContractCostType::VmCachedInstantiation => {
+                    if !crate::vm::ModuleCache::should_use_for_protocol(proto) {
+                        cpu.const_term = 451626;
+                        cpu.lin_term = ScaledU64(45405);
+                    } else if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
                         cpu.const_term = 41142;
                         cpu.lin_term = ScaledU64(634);
+                    } else {
+                        cpu.const_term = 39513;
+                        cpu.lin_term = ScaledU64(621);
                     }
                 }
                 ContractCostType::InvokeVmFunction => {
@@ -397,12 +410,22 @@ impl Default for BudgetImpl {
                 }
 
                 ContractCostType::ParseWasmInstructions => {
-                    cpu.const_term = 73077;
-                    cpu.lin_term = ScaledU64(25410);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 73077;
+                        cpu.lin_term = ScaledU64(25410);
+                    } else {
+                        cpu.const_term = 42877;
+                        cpu.lin_term = ScaledU64(93);
+                    }
                 }
                 ContractCostType::ParseWasmFunctions => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(540752);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(540752);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(137393);
+                    }
                 }
                 ContractCostType::ParseWasmGlobals => {
                     cpu.const_term = 0;
@@ -425,16 +448,31 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(328476);
                 }
                 ContractCostType::ParseWasmImports => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(701845);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(701845);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(534661);
+                    }
                 }
                 ContractCostType::ParseWasmExports => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(429383);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(429383);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(400078);
+                    }
                 }
                 ContractCostType::ParseWasmDataSegmentBytes => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(28);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(28);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(14);
+                    }
                 }
                 ContractCostType::InstantiateWasmInstructions => {
                     cpu.const_term = 43030;
@@ -449,28 +487,53 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(10711);
                 }
                 ContractCostType::InstantiateWasmTableEntries => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(3300);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(3300);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(1816);
+                    }
                 }
                 ContractCostType::InstantiateWasmTypes => {
                     cpu.const_term = 0;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::InstantiateWasmDataSegments => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(23038);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(23038);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(16689);
+                    }
                 }
                 ContractCostType::InstantiateWasmElemSegments => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(42488);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(42488);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(26598);
+                    }
                 }
                 ContractCostType::InstantiateWasmImports => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(828974);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(828974);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(964492);
+                    }
                 }
                 ContractCostType::InstantiateWasmExports => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(297100);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(297100);
+                    } else {
+                        cpu.const_term = 0;
+                        cpu.lin_term = ScaledU64(141453);
+                    }
                 }
                 ContractCostType::InstantiateWasmDataSegmentBytes => {
                     cpu.const_term = 0;
@@ -540,11 +603,16 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::VmInstantiation => {
-                    mem.const_term = 130065;
-                    mem.lin_term = ScaledU64(5064);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        mem.const_term = 130065;
+                        mem.lin_term = ScaledU64(5064);
+                    } else {
+                        mem.const_term = 80980;
+                        mem.lin_term = ScaledU64(3797);
+                    }
                 }
                 ContractCostType::VmCachedInstantiation => {
-                    if proto < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
+                    if !crate::vm::ModuleCache::should_use_for_protocol(proto) {
                         mem.const_term = 130065;
                         mem.lin_term = ScaledU64(5064);
                     } else {
@@ -553,8 +621,13 @@ impl Default for BudgetImpl {
                     }
                 }
                 ContractCostType::InvokeVmFunction => {
-                    mem.const_term = 14;
-                    mem.lin_term = ScaledU64(0);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        mem.const_term = 14;
+                        mem.lin_term = ScaledU64(0);
+                    } else {
+                        mem.const_term = 54;
+                        mem.lin_term = ScaledU64(0);
+                    }
                 }
                 ContractCostType::ComputeKeccak256Hash => {
                     mem.const_term = 0;
@@ -592,14 +665,23 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-
                 ContractCostType::ParseWasmInstructions => {
-                    mem.const_term = 17564;
-                    mem.lin_term = ScaledU64(6457);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        mem.const_term = 17564;
+                        mem.lin_term = ScaledU64(6457);
+                    } else {
+                        mem.const_term = 13928;
+                        mem.lin_term = ScaledU64(215);
+                    }
                 }
                 ContractCostType::ParseWasmFunctions => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(47464);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(47464);
+                    } else {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(28468);
+                    }
                 }
                 ContractCostType::ParseWasmGlobals => {
                     mem.const_term = 0;
@@ -610,12 +692,22 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(6285);
                 }
                 ContractCostType::ParseWasmTypes => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(64670);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(64670);
+                    } else {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(49554);
+                    }
                 }
                 ContractCostType::ParseWasmDataSegments => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(29074);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(29074);
+                    } else {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(5525);
+                    }
                 }
                 ContractCostType::ParseWasmElemSegments => {
                     mem.const_term = 0;
@@ -630,8 +722,13 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(36394);
                 }
                 ContractCostType::ParseWasmDataSegmentBytes => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(257);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(257);
+                    } else {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(129);
+                    }
                 }
                 ContractCostType::InstantiateWasmInstructions => {
                     mem.const_term = 70704;
@@ -666,8 +763,13 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(97637);
                 }
                 ContractCostType::InstantiateWasmExports => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(9176);
+                    if crate::Vm::protocol_uses_legacy_stack_vm(proto) {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(9176);
+                    } else {
+                        mem.const_term = 0;
+                        mem.lin_term = ScaledU64(17181);
+                    }
                 }
                 ContractCostType::InstantiateWasmDataSegmentBytes => {
                     mem.const_term = 0;

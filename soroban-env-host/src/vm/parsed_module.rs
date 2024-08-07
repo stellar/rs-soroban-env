@@ -6,9 +6,7 @@ use crate::{
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };
 
-use wasmi::{Engine, Module};
-
-use super::{ModuleCache, MAX_VM_ARGS};
+use super::{ModuleCache, Wasmi031, Wasmi036, WasmiVersion};
 use std::{collections::BTreeSet, io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
@@ -85,7 +83,7 @@ impl VersionedContractCodeCostInputs {
                 // VmInstantiation cost type was repurposed to only cover the
                 // cost of parsing, so we have to charge the "second half" cost
                 // of instantiation separately here.
-                if _host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+                if ModuleCache::should_use_for_protocol(_host.get_ledger_protocol_version()?) {
                     _host.charge_budget(
                         ContractCostType::VmCachedInstantiation,
                         Some(*wasm_bytes as u64),
@@ -136,16 +134,38 @@ impl VersionedContractCodeCostInputs {
 /// A [ParsedModule] contains the parsed [wasmi::Module] for a given Wasm blob,
 /// as well as a protocol number and set of [ContractCodeCostInputs] extracted
 /// from the module when it was parsed.
-pub struct ParsedModule {
-    pub module: Module,
+
+#[derive(Clone)]
+pub struct ParsedModule(pub(crate) PmVer);
+
+#[derive(Clone)]
+pub(crate) enum PmVer {
+    Pm031(Rc<VersionedParsedModule<Wasmi031>>),
+    Pm036(Rc<VersionedParsedModule<Wasmi036>>),
+}
+
+impl From<Rc<VersionedParsedModule<Wasmi031>>> for ParsedModule {
+    fn from(m: Rc<VersionedParsedModule<Wasmi031>>) -> Self {
+        Self(PmVer::Pm031(m))
+    }
+}
+
+impl From<Rc<VersionedParsedModule<Wasmi036>>> for ParsedModule {
+    fn from(m: Rc<VersionedParsedModule<Wasmi036>>) -> Self {
+        Self(PmVer::Pm036(m))
+    }
+}
+
+pub(crate) struct VersionedParsedModule<V: WasmiVersion> {
+    pub module: V::Module,
     pub proto_version: u32,
     pub cost_inputs: VersionedContractCodeCostInputs,
 }
 
-impl ParsedModule {
+impl<V: WasmiVersion> VersionedParsedModule<V> {
     pub fn new(
         host: &Host,
-        engine: &Engine,
+        engine: &V::Engine,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<Self>, HostError> {
@@ -164,22 +184,17 @@ impl ParsedModule {
         callback: impl FnOnce(&BTreeSet<(&str, &str)>) -> Result<T, HostError>,
     ) -> Result<T, HostError> {
         // Cap symbols we're willing to import at 10 characters for each of
-        // module and function name. in practice they are all 1-2 chars, but
+        // module and function name. in practice they are all 1-:v chars, but
         // we'll leave some future-proofing room here. The important point
         // is to not be introducing a DoS vector.
         const SYM_LEN_LIMIT: usize = 10;
-        let symbols: BTreeSet<(&str, &str)> = self
-            .module
-            .imports()
-            .filter_map(|i| {
-                if i.ty().func().is_some() {
-                    let mod_str = i.module();
-                    let fn_str = i.name();
-                    if mod_str.len() < SYM_LEN_LIMIT && fn_str.len() < SYM_LEN_LIMIT {
-                        return Some((mod_str, fn_str));
-                    }
+        let symbols: BTreeSet<(&str, &str)> = V::module_func_imports(&self.module)
+            .filter_map(|(mod_str, fn_str)| {
+                if mod_str.len() < SYM_LEN_LIMIT && fn_str.len() < SYM_LEN_LIMIT {
+                    Some((mod_str, fn_str))
+                } else {
+                    None
                 }
-                None
             })
             .collect();
         // We approximate the cost of `BTreeSet` with the cost of initializng a
@@ -188,15 +203,15 @@ impl ParsedModule {
         // parsing phase, so there is no DOS factor. We don't charge for
         // insertion/lookups, since they should be cheap and number of
         // operations on the set is limited.
-        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
+        if ModuleCache::should_use_for_protocol(host.get_ledger_protocol_version()?) {
             Vec::<(&str, &str)>::charge_bulk_init_cpy(symbols.len() as u64, host)?;
         }
         callback(&symbols)
     }
 
-    pub fn make_linker(&self, host: &Host) -> Result<wasmi::Linker<Host>, HostError> {
+    pub fn make_linker(&self, host: &Host) -> Result<V::Linker, HostError> {
         self.with_import_symbols(host, |symbols| {
-            Host::make_linker(self.module.engine(), symbols)
+            Host::make_linker::<V>(V::get_module_engine(&self.module), symbols)
         })
     }
 
@@ -206,19 +221,24 @@ impl ParsedModule {
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<Self>, HostError> {
         use crate::budget::AsBudget;
-        let config = crate::vm::get_wasmi_config(host.as_budget())?;
-        let engine = Engine::new(&config);
+        let config =
+            crate::vm::get_wasmi_config(host.as_budget(), wasmi_036::CompilationMode::Eager)?;
+        let engine = V::new_engine(&config);
         Self::new(host, &engine, wasm, cost_inputs)
     }
 
     /// Parse the Wasm blob into a [Module] and its protocol number, checking its interface version
-    fn parse_wasm(host: &Host, engine: &Engine, wasm: &[u8]) -> Result<(Module, u32), HostError> {
+    fn parse_wasm(
+        host: &Host,
+        engine: &V::Engine,
+        wasm: &[u8],
+    ) -> Result<(V::Module, u32), HostError> {
         let module = {
             let _span0 = tracy_span!("parse module");
-            host.map_err(Module::new(&engine, wasm))?
+            host.map_err(V::new_module(engine, wasm))?
         };
 
-        Self::check_max_args(host, &module)?;
+        V::check_max_args(host, &module)?;
         let interface_version = Self::check_meta_section(host, &module)?;
         let contract_proto = get_ledger_protocol_version(interface_version);
 
@@ -306,24 +326,14 @@ impl ParsedModule {
         Ok(())
     }
 
-    fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {
-        m.custom_sections().iter().find_map(|s| {
-            if &*s.name == name.as_ref() {
-                Some(&*s.data)
-            } else {
-                None
-            }
-        })
-    }
-
     /// Returns the raw bytes content of a named custom section from the Wasm
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
-        Self::module_custom_section(&self.module, name)
+        V::module_custom_section(&self.module, name)
     }
 
-    fn check_meta_section(host: &Host, m: &Module) -> Result<u64, HostError> {
-        if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
+    fn check_meta_section(host: &Host, m: &V::Module) -> Result<u64, HostError> {
+        if let Some(env_meta) = V::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut limits = DEFAULT_XDR_RW_LIMITS;
             limits.len = env_meta.len();
             let mut cursor = Limited::new(Cursor::new(env_meta), limits);
@@ -349,50 +359,25 @@ impl ParsedModule {
             ))
         }
     }
+}
 
-    fn check_max_args(host: &Host, m: &Module) -> Result<(), HostError> {
-        for e in m.exports() {
-            match e.ty() {
-                wasmi::ExternType::Func(f) => {
-                    if f.results().len() > MAX_VM_ARGS {
-                        return Err(err!(
-                            host,
-                            (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                            "Too many return values in Wasm export",
-                            f.results().len()
-                        ));
-                    }
-                    if f.params().len() > MAX_VM_ARGS {
-                        return Err(err!(
-                            host,
-                            (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                            "Too many arguments Wasm export",
-                            f.params().len()
-                        ));
-                    }
-                }
-                _ => (),
-            }
+impl ParsedModule {
+    pub fn get_cost_inputs(&self) -> &VersionedContractCodeCostInputs {
+        match &self.0 {
+            PmVer::Pm031(m) => &m.cost_inputs,
+            PmVer::Pm036(m) => &m.cost_inputs,
         }
-        Ok(())
     }
 
-    // Do a second, manual parse of the Wasm blob to extract cost parameters we're
-    // interested in.
+    // Do a second, manual parse of the Wasm blob to extract cost parameters
+    // we're interested in. This is wasmi-version agnostic, so goes in an impl
+    // on ParsedModule itself, not VersionedParsedModule.
+
     pub fn extract_refined_contract_cost_inputs(
         host: &Host,
         wasm: &[u8],
     ) -> Result<crate::xdr::ContractCodeCostInputs, HostError> {
-        use wasmparser::{ElementItems, ElementKind, Parser, Payload::*, TableInit};
-
-        if !Parser::is_core_wasm(wasm) {
-            return Err(host.err(
-                ScErrorType::WasmVm,
-                ScErrorCode::InvalidInput,
-                "unsupported non-core wasm module",
-                &[],
-            ));
-        }
+        use wasmparser::{ElementItems, ElementKind, Parser, Payload::*};
 
         let mut costs = crate::xdr::ContractCodeCostInputs {
             ext: crate::xdr::ExtensionPoint::V0,
@@ -490,14 +475,7 @@ impl ParsedModule {
                 TableSection(s) => {
                     for table in s {
                         let table = host.map_err(table)?;
-                        costs.n_table_entries =
-                            costs.n_table_entries.saturating_add(table.ty.initial);
-                        match table.init {
-                            TableInit::RefNull => (),
-                            TableInit::Expr(ref expr) => {
-                                Self::check_const_expr_simple(&host, &expr)?;
-                            }
-                        }
+                        costs.n_table_entries = costs.n_table_entries.saturating_add(table.initial);
                     }
                 }
                 GlobalSection(s) => {
@@ -522,7 +500,7 @@ impl ParsedModule {
                             ElementItems::Functions(fs) => {
                                 elements = elements.saturating_add(fs.count());
                             }
-                            ElementItems::Expressions(_, exprs) => {
+                            ElementItems::Expressions(exprs) => {
                                 elements = elements.saturating_add(exprs.count());
                                 for expr in exprs {
                                     let expr = host.map_err(expr)?;
@@ -601,5 +579,19 @@ impl ParsedModule {
             }
         }
         Ok(())
+    }
+
+    pub fn new_with_isolated_engine(
+        host: &Host,
+        wasm: &[u8],
+        cost_inputs: VersionedContractCodeCostInputs,
+    ) -> Result<Self, HostError> {
+        if crate::Vm::protocol_uses_legacy_stack_vm(host.get_ledger_protocol_version()?) {
+            VersionedParsedModule::<Wasmi031>::new_with_isolated_engine(host, wasm, cost_inputs)
+                .map(|m| m.into())
+        } else {
+            VersionedParsedModule::<Wasmi036>::new_with_isolated_engine(host, wasm, cost_inputs)
+                .map(|m| m.into())
+        }
     }
 }
