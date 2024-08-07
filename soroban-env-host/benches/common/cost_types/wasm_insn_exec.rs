@@ -86,10 +86,20 @@ pub fn wasm_module_with_n_globals(n: usize) -> Vec<u8> {
 
 pub fn wasm_module_with_n_imports(n: usize) -> Vec<u8> {
     let mut me = ModEmitter::default().add_bench_import();
-    let names = Vm::get_all_host_functions();
-    for (module, name, arity) in names.iter().take(n) {
+    let names = Vm::get_all_host_functions_with_supported_protocol_range();
+    for (module, name, arity, min_proto, max_proto) in names.iter().take(n) {
         if *module == "t" {
             continue;
+        }
+        if let Some(proto) = min_proto {
+            if *proto > 20 {
+                continue;
+            }
+        }
+        if let Some(proto) = max_proto {
+            if *proto < 20 {
+                continue;
+            }
         }
         me.import_func(module, name, Arity(*arity));
     }
