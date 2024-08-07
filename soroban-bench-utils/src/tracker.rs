@@ -128,7 +128,7 @@ pub struct HostTracker<'a> {
     mem_tracker: MemTracker,
     start_time: Instant,
     alloc_guard: Option<AllocationGuard<'a>>,
-    #[cfg(feature = "tracy")]
+    #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
     tracy_span: Option<tracy_client::Span>,
 }
 
@@ -146,16 +146,16 @@ impl<'a> HostTracker<'a> {
             mem_tracker,
             start_time: Instant::now(),
             alloc_guard: None,
-            #[cfg(feature = "tracy")]
+            #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
             tracy_span: None,
         }
     }
 
     pub fn start(&mut self, token: Option<&'a mut AllocationGroupToken>) {
         // start the mem measurement
-        #[cfg(feature = "tracy")]
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
         {
-            self.tracy_span = Some(tracy_span!("tracker active"));
+            self.tracy_span = Some(tracy_client::span!("tracker active"));
         }
         self.mem_tracker.0.store(0, Ordering::SeqCst);
         self.alloc_guard = if let Some(t) = token {
@@ -179,7 +179,7 @@ impl<'a> HostTracker<'a> {
         let mem_bytes = self.mem_tracker.0.load(Ordering::SeqCst);
         let time_nsecs = stop_time.duration_since(self.start_time).as_nanos() as u64;
         self.alloc_guard = None;
-        #[cfg(feature = "tracy")]
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
         {
             self.tracy_span = None
         }

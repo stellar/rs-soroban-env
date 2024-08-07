@@ -1357,6 +1357,7 @@ dependencies = [
  "perf-event",
  "soroban-env-common",
  "tracking-allocator",
+ "tracy-client",
 ]
 
 [[package]]
