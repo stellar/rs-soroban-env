@@ -201,6 +201,13 @@ impl From<wasmi::core::TrapCode> for Error {
 #[cfg(feature = "wasmi")]
 impl From<wasmi::errors::FuncError> for Error {
     fn from(err: wasmi::errors::FuncError) -> Self {
+        (&err).into()
+    }
+}
+
+#[cfg(feature = "wasmi")]
+impl From<&wasmi::errors::FuncError> for Error {
+    fn from(err: &wasmi::errors::FuncError) -> Self {
         let ec = match err {
             wasmi::errors::FuncError::ExportedFuncNotFound => ScErrorCode::MissingValue,
             wasmi::errors::FuncError::MismatchingParameterType
@@ -220,20 +227,20 @@ impl From<wasmi::Error> for Error {
         const INDEX_BOUND: Error =
             Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds);
 
-        match e {
-            wasmi::Error::Memory(e) => match e {
+        match e.kind() {
+            wasmi::errors::ErrorKind::Memory(e) => match e {
                 wasmi::errors::MemoryError::OutOfBoundsAllocation
                 | wasmi::errors::MemoryError::OutOfBoundsGrowth => return EXCEEDED_LIMIT,
                 wasmi::errors::MemoryError::OutOfBoundsAccess => return INDEX_BOUND,
                 _ => (),
             },
-            wasmi::Error::Table(e) => match e {
+            wasmi::errors::ErrorKind::Table(e) => match e {
                 wasmi::errors::TableError::GrowOutOfBounds { .. } => return EXCEEDED_LIMIT,
                 wasmi::errors::TableError::AccessOutOfBounds { .. }
                 | wasmi::errors::TableError::CopyOutOfBounds => return INDEX_BOUND,
                 _ => (),
             },
-            wasmi::Error::Instantiation(e) => match e {
+            wasmi::errors::ErrorKind::Instantiation(e) => match e {
                 wasmi::errors::InstantiationError::Memory(me) => match me {
                     wasmi::errors::MemoryError::OutOfBoundsAllocation
                     | wasmi::errors::MemoryError::OutOfBoundsGrowth => return EXCEEDED_LIMIT,
@@ -248,20 +255,18 @@ impl From<wasmi::Error> for Error {
                 },
                 _ => (),
             },
-            wasmi::Error::Store(e) => {
+            wasmi::errors::ErrorKind::Fuel(e) => {
                 if let wasmi::errors::FuelError::OutOfFuel = e {
                     return EXCEEDED_LIMIT;
                 }
             }
-            wasmi::Error::Trap(trap) => {
-                if let Some(code) = trap.trap_code() {
-                    return code.into();
-                }
+            wasmi::errors::ErrorKind::TrapCode(code) => {
+                return (*code).into();
             }
-            wasmi::Error::Func(e) => {
+            wasmi::errors::ErrorKind::Func(e) => {
                 return e.into();
             }
-            wasmi::Error::Global(e) => {
+            wasmi::errors::ErrorKind::Global(e) => {
                 if matches!(e, wasmi::errors::GlobalError::TypeMismatch { .. }) {
                     return Error::from_type_and_code(
                         ScErrorType::WasmVm,
