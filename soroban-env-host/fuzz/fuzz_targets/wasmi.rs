@@ -1,7 +1,7 @@
 #![no_main]
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use wasmi::{core::ValueType, Engine, Extern, Linker, Module, Store, StoreLimitsBuilder, Value};
+use wasmi_036::{core::ValType, Engine, Extern, Linker, Module, Store, StoreLimitsBuilder, Val};
 
 #[derive(Debug, Arbitrary)]
 struct WasmiConfig;
@@ -53,12 +53,12 @@ impl wasm_smith::Config for WasmiConfig {
     }
 }
 
-fn ty_to_arg(ty: &ValueType) -> Value {
+fn ty_to_arg(ty: &ValType) -> Val {
     match ty {
-        ValueType::I32 => Value::I32(1),
-        ValueType::I64 => Value::I64(1),
-        ValueType::F32 => Value::F32(1.0.into()),
-        ValueType::F64 => Value::F64(1.0.into()),
+        ValType::I32 => Val::I32(1),
+        ValType::I64 => Val::I64(1),
+        ValType::F32 => Val::F32(1.0.into()),
+        ValType::F64 => Val::F64(1.0.into()),
         _ => panic!("reference type"),
     }
 }
@@ -89,7 +89,7 @@ fuzz_target!(|cfg_module: wasm_smith::ConfiguredModule<WasmiConfig>| {
     let exports = instance.exports(&store);
     for e in exports {
         match e.ty(&store) {
-            wasmi::ExternType::Func(fty) => {
+            wasmi_036::ExternType::Func(fty) => {
                 args = fty.params().iter().map(ty_to_arg).collect::<Vec<_>>();
                 out = fty.results().iter().map(ty_to_arg).collect::<Vec<_>>();
                 name = Some(e.name().to_string());
