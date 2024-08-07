@@ -61,7 +61,7 @@ const SUBTYPES: &[(&str, &str)] = &[
     ("TimepointVal", "TimepointObject"),
     // Unfortunately we can only test types that are convertable to `Val` due to the call interface.
     // Ideally we should be able to jam these bits directly into a `Val` (or a call interface taking
-    // `Wasmi::Value`) and provide them as call args. But this will require some work.
+    // `wasmi::Val`) and provide them as call args. But this will require some work.
     // ("Val", "StorageType"),
     // ("u64", "Val"),
     // ("i64", "Val"),
