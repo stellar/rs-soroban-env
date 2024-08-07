@@ -78,7 +78,7 @@ jobs:
         - os: ubuntu-latest
           target: wasm32-unknown-unknown
           test: false
-        - os: ubuntu-latest
+        - os: ubuntu-latest-16-cores
           target: x86_64-unknown-linux-gnu
           test: true
         # TODO: Re-enable these builds if we see value in doing so.

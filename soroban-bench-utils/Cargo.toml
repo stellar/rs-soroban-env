@@ -10,9 +10,15 @@ edition = "2021"
 rust-version.workspace = true
 publish = false
 
-[dependencies]
-soroban-env-common = { workspace = true }
-tracking-allocator = "=0.4.0"
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tracy-client = { version = "=0.16.4", features = ["enable", "timer-fallback"], default-features = false, optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 perf-event = "0.4.7"
+
+[features]
+tracy = ["soroban-env-common/tracy", "dep:tracy-client"]
+
+[dependencies]
+soroban-env-common = { workspace = true }
+tracking-allocator = "=0.4.0"
