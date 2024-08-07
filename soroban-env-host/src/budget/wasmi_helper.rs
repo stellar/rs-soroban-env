@@ -4,7 +4,7 @@ use crate::{
     xdr::ContractCostType,
     Host, HostError,
 };
-use wasmi::{errors, FuelConsumptionMode, FuelCosts, ResourceLimiter};
+use wasmi::{errors, CompilationMode, EnforcedLimits, FuelCosts, ResourceLimiter};
 
 pub(crate) struct WasmiLimits {
     pub table_elements: u32,
@@ -100,23 +100,47 @@ impl ResourceLimiter for Host {
     }
 }
 
-// These values are calibrated and set by us. Calibration is done with a given
-// wasmi version, and as long as the version is pinned, these values aren't
-// expected to change much.
 pub(crate) fn load_calibrated_fuel_costs() -> FuelCosts {
-    let mut fuel_costs = FuelCosts::default();
-    fuel_costs.base = 1;
-    fuel_costs.entity = 3;
-    fuel_costs.load = 2;
-    fuel_costs.store = 1;
-    fuel_costs.call = 67;
+    let fuel_costs = FuelCosts::default();
+    // Wasmi 0.36 has a simplified fuel-cost schedule, based on its new
+    // register-machine architecture. It is simply this: 1 fuel per wasm
+    // instruction, and each fuel represents moving 8 registers or 64 bytes.
+    //
+    // All this is hard-wired now (see FuelCosts::default) and it seems broadly
+    // _correct_ in terms of the actual runtime costs we see in wasmi: it costs
+    // _about_ 8-16 CPU instructions per fuel when we look at instructions we
+    // can even calibrate, and wasmi's own benchmarks suggest it runs about
+    // 8-16x slower than native code. So we will just leave their calibration
+    // as-is and hope it's not too wildly off in practice.
     fuel_costs
 }
 
-pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<wasmi::Config, HostError> {
+pub(crate) fn get_wasmi_config(
+    budget: &Budget,
+    mut cmode: CompilationMode,
+) -> Result<wasmi::Config, HostError> {
     let mut config = wasmi::Config::default();
     let fuel_costs = budget.0.try_borrow_or_err()?.fuel_costs;
 
+    let enforced_limits = if cfg!(feature = "bench") {
+        // Disable limits when benchmarking, to allow large inputs.
+        EnforcedLimits::default()
+    } else {
+        let mut limits = EnforcedLimits::strict();
+        // Weaken the strict limits a bit to allow existing tests to pass.
+        // TODO: decide if it'd be better to change the tests (we need to
+        // consider what actual contracts on the network need).
+        limits.min_avg_bytes_per_function = None;
+        limits.max_data_segments = Some(10000);
+        limits
+    };
+
+    if cfg!(feature = "bench") {
+        // Allow overriding compilation mode for special benchmark mode.
+        if std::env::var("CHECK_LAZY_COMPILATION_COSTS").is_ok() {
+            cmode = CompilationMode::Lazy;
+        }
+    }
     // Turn off most optional wasm features, leaving on some post-MVP features
     // commonly enabled by Rust and Clang. Make sure all unused features are
     // explicited turned off, so that we don't get "opted in" by a future wasmi
@@ -132,8 +156,9 @@ pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<wasmi::Config, HostErr
         .wasm_tail_call(false)
         .wasm_extended_const(false)
         .floats(false)
-        .fuel_consumption_mode(FuelConsumptionMode::Eager)
-        .set_fuel_costs(fuel_costs);
+        .set_fuel_costs(fuel_costs)
+        .enforced_limits(enforced_limits)
+        .compilation_mode(cmode);
 
     Ok(config)
 }

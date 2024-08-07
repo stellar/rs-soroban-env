@@ -206,7 +206,10 @@ impl ParsedModule {
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<Self>, HostError> {
         use crate::budget::AsBudget;
-        let config = crate::vm::get_wasmi_config(host.as_budget())?;
+        // We use eager mode here because this path is called when we want
+        // complete verification of a contract during upload. This requires
+        // compiling it all.
+        let config = crate::vm::get_wasmi_config(host.as_budget(), wasmi::CompilationMode::Eager)?;
         let engine = Engine::new(&config);
         Self::new(host, &engine, wasm, cost_inputs)
     }
@@ -307,9 +310,9 @@ impl ParsedModule {
     }
 
     fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {
-        m.custom_sections().iter().find_map(|s| {
-            if &*s.name == name.as_ref() {
-                Some(&*s.data)
+        m.custom_sections().find_map(|s| {
+            if s.name() == name.as_ref() {
+                Some(s.data())
             } else {
                 None
             }

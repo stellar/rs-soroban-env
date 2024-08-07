@@ -27,7 +27,7 @@ impl ModuleCache {
     pub const MIN_LEDGER_VERSION: u32 = 21;
 
     pub fn new(host: &Host) -> Result<Self, HostError> {
-        let config = get_wasmi_config(host.as_budget())?;
+        let config = get_wasmi_config(host.as_budget(), wasmi::CompilationMode::Lazy)?;
         let engine = Engine::new(&config);
         let modules = MeteredOrdMap::new();
         let mut cache = Self { engine, modules };
