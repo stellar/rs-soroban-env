@@ -7,7 +7,7 @@ use soroban_env_host::{
 };
 use soroban_synth_wasm::{Arity, ModEmitter};
 use std::rc::Rc;
-use wasmi::Value;
+use wasmi::Val as Value;
 
 const MAX_VM_ARGS: usize = 32;
 

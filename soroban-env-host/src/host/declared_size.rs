@@ -30,7 +30,7 @@ use crate::{
     VecObject, Void, I256, U256,
 };
 use std::{cell::RefCell, rc::Rc};
-use wasmi::Value;
+use wasmi::Val as Value;
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
 // and comparison. It should be the upperbound (across various compilations and platforms) of the
