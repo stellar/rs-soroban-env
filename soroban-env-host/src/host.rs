@@ -78,6 +78,13 @@ pub struct CoverageScoreboard {
     pub vm_to_vm_calls: usize,
 }
 
+// The soroban 22.x host only supports protocol 22 and later, having
+// adopted a new version of wasmi with a new fuel metering system, it
+// cannot accurately replay earlier contracts. Earlier protocols
+// must run on Soroban 21.x or earlier.
+
+pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 22;
+
 #[derive(Clone, Default)]
 struct HostImpl {
     module_cache: RefCell<Option<ModuleCache>>,
@@ -521,6 +528,28 @@ impl Host {
 
     pub fn set_ledger_info(&self, info: LedgerInfo) -> Result<(), HostError> {
         *self.try_borrow_ledger_mut()? = Some(info);
+        self.check_ledger_protocol_supported()
+    }
+
+    pub(crate) fn check_ledger_protocol_supported(&self) -> Result<(), HostError> {
+        use soroban_env_common::meta;
+        let proto = self.get_ledger_protocol_version()?;
+        if proto < MIN_LEDGER_PROTOCOL_VERSION {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "ledger protocol version too old for host",
+                &[proto.into()],
+            ));
+        }
+        if proto > meta::get_ledger_protocol_version(meta::INTERFACE_VERSION)  {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "ledger protocol version too new for host",
+                &[proto.into()],
+            ));
+        }
         Ok(())
     }
 
