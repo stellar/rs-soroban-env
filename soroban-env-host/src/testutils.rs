@@ -721,8 +721,8 @@ pub(crate) mod wasm {
         // we just make sure the total memory can fit one segments the segments
         // will just cycle through the space and possibly override earlier ones
         let max_segments = (mem_len / seg_size.max(1)).max(1);
-        for _i in 0..num_sgmts % max_segments {
-            me.define_data_segment(0, vec![0; seg_size as usize]);
+        for i in 0..num_sgmts % max_segments {
+            me.define_data_segment(i, vec![0; seg_size as usize]);
         }
         // a local wasm function
         let mut fe = me.func(Arity(0), 0);
@@ -870,7 +870,7 @@ pub(crate) mod wasm {
         let mut me = ModEmitter::new();
         me.memory(1, None, false, false);
         me.memory(1, None, false, false);
-        me.finish()
+        me.finish_no_validate()
     }
 
     pub fn wasm_module_lying_about_import_function_type() -> Vec<u8> {
@@ -892,7 +892,7 @@ pub(crate) mod wasm {
         for _ in 0..n {
             me.import_func_no_check("t", "_", Arity(0));
         }
-        me.finish()
+        me.finish_no_validate()
     }
 
     pub fn wasm_module_with_nonexistent_function_export() -> Vec<u8> {

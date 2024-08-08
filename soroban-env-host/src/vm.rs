@@ -125,7 +125,6 @@ pub(crate) enum ModuleParseCostMode {
 }
 
 impl Vm {
-
     /// The maximum number of arguments that can be passed to a VM function.
     pub const MAX_VM_ARGS: usize = 32;
 
@@ -134,6 +133,16 @@ impl Vm {
         HOST_FUNCTIONS
             .iter()
             .map(|hf| (hf.mod_str, hf.fn_str, hf.arity))
+            .collect()
+    }
+
+    #[cfg(feature = "testutils")]
+    #[allow(clippy::type_complexity)]
+    pub fn get_all_host_functions_with_supported_protocol_range(
+    ) -> Vec<(&'static str, &'static str, u32, Option<u32>, Option<u32>)> {
+        HOST_FUNCTIONS
+            .iter()
+            .map(|hf| (hf.mod_str, hf.fn_str, hf.arity, hf.min_proto, hf.max_proto))
             .collect()
     }
 
