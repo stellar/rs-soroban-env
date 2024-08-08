@@ -156,6 +156,12 @@ impl Vm {
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::instantiate");
 
+        // The host really never should have made it past construction on an old
+        // protocol version, but it doesn't hurt to double check here before we
+        // instantiate a VM, which is the place old-protocol replay will
+        // diverge.
+        host.check_ledger_protocol_supported()?;
+
         let engine = parsed_module.module.engine();
         let mut store = Store::new(engine, host.clone());
 
