@@ -44,7 +44,6 @@ use wasmi::{Caller, StoreContextMut};
 
 impl wasmi::core::HostError for HostError {}
 
-const MAX_VM_ARGS: usize = 32;
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
 
 struct VmInstantiationTimer {
@@ -126,6 +125,10 @@ pub(crate) enum ModuleParseCostMode {
 }
 
 impl Vm {
+
+    /// The maximum number of arguments that can be passed to a VM function.
+    pub const MAX_VM_ARGS: usize = 32;
+
     #[cfg(feature = "testutils")]
     pub fn get_all_host_functions() -> Vec<(&'static str, &'static str, u32)> {
         HOST_FUNCTIONS
@@ -407,7 +410,7 @@ impl Vm {
             Some(e) => e,
         };
 
-        if inputs.len() > MAX_VM_ARGS {
+        if inputs.len() > Vm::MAX_VM_ARGS {
             return Err(host.err(
                 ScErrorType::WasmVm,
                 ScErrorCode::InvalidInput,

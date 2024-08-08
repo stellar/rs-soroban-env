@@ -8,7 +8,7 @@ use crate::{
 
 use wasmi::{Engine, Module};
 
-use super::{ModuleCache, MAX_VM_ARGS};
+use super::{ModuleCache, Vm};
 use std::{collections::BTreeSet, io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
@@ -357,7 +357,7 @@ impl ParsedModule {
         for e in m.exports() {
             match e.ty() {
                 wasmi::ExternType::Func(f) => {
-                    if f.results().len() > MAX_VM_ARGS {
+                    if f.results().len() > Vm::MAX_VM_ARGS {
                         return Err(err!(
                             host,
                             (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
@@ -365,7 +365,7 @@ impl ParsedModule {
                             f.results().len()
                         ));
                     }
-                    if f.params().len() > MAX_VM_ARGS {
+                    if f.params().len() > Vm::MAX_VM_ARGS {
                         return Err(err!(
                             host,
                             (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
