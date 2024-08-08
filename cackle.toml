@@ -125,13 +125,15 @@ allow_unsafe = true
 
 [pkg.soroban-env-host]
 allow_unsafe = true
-build.allow_apis = [
-    "env",
-]
 allow_apis = [
+    "env",
     "time",
     "thread",
     "rand",
+]
+test.allow_apis = [
+    "fs",
+    "hash",
 ]
 
 [pkg.unicode-ident]
@@ -178,6 +180,9 @@ allow_unsafe = true
 
 [pkg.once_cell]
 allow_unsafe = true
+from.test.allow_apis = [
+    "thread",
+]
 
 [pkg.ppv-lite86]
 allow_unsafe = true
@@ -241,6 +246,9 @@ build.allow_apis = [
 
 [pkg.tracking-allocator]
 allow_unsafe = true
+from.test.allow_apis = [
+    "thread",
+]
 
 [pkg.serde_json]
 build.allow_apis = [
@@ -248,6 +256,9 @@ build.allow_apis = [
     "process",
 ]
 allow_unsafe = true
+from.test.allow_apis = [
+    "hash",
+]
 
 [pkg.serde]
 build.allow_apis = [
@@ -255,6 +266,9 @@ build.allow_apis = [
     "process",
 ]
 allow_unsafe = true
+from.test.allow_apis = [
+    "hash",
+]
 
 [pkg.quote]
 build.allow_apis = [
@@ -327,6 +341,9 @@ build.allow_apis = [
     "env",
 ]
 allow_unsafe = true
+from.test.allow_apis = [
+    "hash",
+]
 
 [pkg.getrandom]
 allow_unsafe = true
@@ -350,6 +367,10 @@ allow_unsafe = true
 
 [pkg.perf-event]
 allow_unsafe = true
+from.test.allow_apis = [
+    "fs",
+    "thread",
+]
 
 [pkg.rustc_version]
 from.build.allow_apis = [
@@ -385,6 +406,8 @@ allow_unsafe = true
 
 [pkg.wasmparser]
 allow_unsafe = true
+from.test.allow_apis = [
+]
 
 [pkg.crate-git-revision]
 from.build.allow_apis = [
@@ -395,9 +418,15 @@ from.build.allow_apis = [
 
 [pkg.soroban-env-common]
 allow_unsafe = true
+from.test.allow_apis = [
+    "hash",
+]
 
 [pkg.soroban-bench-utils]
 allow_unsafe = true
+from.test.allow_apis = [
+    "time",
+]
 
 [pkg.derive_arbitrary]
 allow_proc_macro = true
@@ -418,3 +447,55 @@ from.build.allow_apis = [
 
 [pkg.rustversion]
 allow_proc_macro = true
+
+[pkg.zerocopy-derive]
+allow_proc_macro = true
+
+[pkg.wasmi_collections]
+allow_unsafe = true
+
+[pkg.expect-test]
+from.test.allow_apis = [
+    "env",
+    "fs",
+    "hash",
+]
+
+[pkg.wasmprinter]
+from.test.allow_apis = [
+    "hash",
+]
+
+[pkg.wycheproof]
+from.test.allow_apis = [
+    "hash",
+]
+
+[pkg.soroban-synth-wasm]
+from.test.allow_apis = [
+    "env",
+]
+
+[pkg.stellar-xdr]
+from.test.allow_apis = [
+    "hash",
+    "thread",
+]
+
+[pkg.string-interner]
+allow_unsafe = true
+
+[pkg.zerocopy]
+allow_unsafe = true
+
+[pkg.multi-stash]
+allow_unsafe = true
+
+[pkg.ahash]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.arrayvec]
+allow_unsafe = true
