@@ -528,11 +528,9 @@ fn excessive_logging() -> Result<(), HostError> {
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
 
-    if host.get_ledger_protocol_version()? >= crate::vm::ModuleCache::MIN_LEDGER_VERSION {
-        host.switch_to_enforcing_storage()?;
-    }
+    host.switch_to_enforcing_storage()?;
 
-    let expected_budget_p21 = expect![[r#"
+    let expected_budget = expect![[r#"
         =================================================================
         Cpu limit: 2000000; used: 215305
         Mem limit: 500000; used: 166764
@@ -586,68 +584,6 @@ fn excessive_logging() -> Result<(), HostError> {
         =================================================================
 
     "#]];
-
-    let expected_budget_p20 = expect![[r#"
-        =================================================================
-        Cpu limit: 2000000; used: 522315
-        Mem limit: 500000; used: 202391
-        =================================================================
-        CostType                           cpu_insns      mem_bytes      
-        WasmInsnExec                       300            0              
-        MemAlloc                           15750          67248          
-        MemCpy                             2298           0              
-        MemCmp                             696            0              
-        DispatchHostFunction               310            0              
-        VisitObject                        244            0              
-        ValSer                             0              0              
-        ValDeser                           0              0              
-        ComputeSha256Hash                  3738           0              
-        ComputeEd25519PubKey               0              0              
-        VerifyEd25519Sig                   0              0              
-        VmInstantiation                    497031         135129         
-        VmCachedInstantiation              0              0              
-        InvokeVmFunction                   1948           14             
-        ComputeKeccak256Hash               0              0              
-        DecodeEcdsaCurve256Sig             0              0              
-        RecoverEcdsaSecp256k1Key           0              0              
-        Int256AddSub                       0              0              
-        Int256Mul                          0              0              
-        Int256Div                          0              0              
-        Int256Pow                          0              0              
-        Int256Shift                        0              0              
-        ChaCha20DrawBytes                  0              0              
-        ParseWasmInstructions              0              0              
-        ParseWasmFunctions                 0              0              
-        ParseWasmGlobals                   0              0              
-        ParseWasmTableEntries              0              0              
-        ParseWasmTypes                     0              0              
-        ParseWasmDataSegments              0              0              
-        ParseWasmElemSegments              0              0              
-        ParseWasmImports                   0              0              
-        ParseWasmExports                   0              0              
-        ParseWasmDataSegmentBytes          0              0              
-        InstantiateWasmInstructions        0              0              
-        InstantiateWasmFunctions           0              0              
-        InstantiateWasmGlobals             0              0              
-        InstantiateWasmTableEntries        0              0              
-        InstantiateWasmTypes               0              0              
-        InstantiateWasmDataSegments        0              0              
-        InstantiateWasmElemSegments        0              0              
-        InstantiateWasmImports             0              0              
-        InstantiateWasmExports             0              0              
-        InstantiateWasmDataSegmentBytes    0              0              
-        Sec1DecodePointUncompressed        0              0              
-        VerifyEcdsaSecp256r1Sig            0              0              
-        =================================================================
-
-    "#]];
-
-    let expected_budget =
-        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
-            expected_budget_p20
-        } else {
-            expected_budget_p21
-        };
 
     // moderate logging
     {

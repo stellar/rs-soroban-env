@@ -578,7 +578,6 @@ mod cap_54_55_56 {
         storage::{FootprintMap, StorageMap},
         test::observe::ObservedHost,
         testutils::wasm::wasm_module_with_a_bit_of_everything,
-        vm::ModuleCache,
         xdr::{
             ContractCostType::{self, *},
             LedgerEntry, LedgerKey,
@@ -587,8 +586,8 @@ mod cap_54_55_56 {
     };
     use std::rc::Rc;
 
-    const V_NEW: u32 = ModuleCache::MIN_LEDGER_VERSION;
-    const V_OLD: u32 = V_NEW - 1;
+    const V_NEW: u32 = 22;
+    const V_OLD: u32 = 20;
     const NEW_COST_TYPES: &'static [ContractCostType] = &[
         ParseWasmInstructions,
         ParseWasmFunctions,
@@ -819,24 +818,6 @@ mod cap_54_55_56 {
 
     // region: CAP-0054 refined cost model
 
-    // Test that running on protocol vOld only charges the VmInstantiation cost
-    // type.
-    #[test]
-    fn test_v_old_only_charges_vm_instantiation() -> Result<(), HostError> {
-        let (budget, _storage) = upload_and_call(
-            "test_v_old_only_charges_vminstantiation_upload",
-            V_OLD,
-            "test_v_old_only_charges_vm_instantiation_call",
-            V_OLD,
-        )?;
-        assert_ne!(budget.get_tracker(VmInstantiation)?.cpu, 0);
-        assert_eq!(budget.get_tracker(VmCachedInstantiation)?.cpu, 0);
-        for ct in NEW_COST_TYPES {
-            assert_eq!(budget.get_tracker(*ct)?.cpu, 0);
-        }
-        Ok(())
-    }
-
     // Test that running on protocol vNew on a ContractCode LE that does not have
     // ContractCodeCostInputs charges the VmInstantiation and VmCachedInstantiation
     // cost types.
@@ -891,37 +872,6 @@ mod cap_54_55_56 {
             }
             assert_ne!(budget.get_tracker(*ct)?.cpu, 0);
         }
-        Ok(())
-    }
-
-    // Test that running on protocol vOld does not add ContractCodeCostInputs to a
-    // newly uploaded ContractCode LE.
-    #[test]
-    fn test_v_old_no_contract_code_cost_inputs() -> Result<(), HostError> {
-        let entries = upload_and_get_contract_and_wasm_entries(
-            "test_v_old_no_contract_code_cost_inputs_upload",
-            V_OLD,
-        )?;
-        assert!(!code_entry_has_cost_inputs(&entries.wasm_entry));
-        Ok(())
-    }
-
-    // Test that running on protocol vOld does not rewrite a ContractCode LE when it
-    // already exists.
-    #[test]
-    fn test_v_old_no_rewrite() -> Result<(), HostError> {
-        let entries =
-            upload_and_get_contract_and_wasm_entries("test_v_old_no_rewrite_upload", V_OLD)?;
-        // make a new storage map for a new run
-        let budget = Budget::default();
-        let storage = entries.read_only_storage(&budget);
-        let host = observed_test_host_with_storage_and_budget(
-            "test_v_old_no_rewrite_call",
-            V_OLD,
-            storage,
-            budget,
-        )?;
-        host.upload_contract_wasm(wasm_module_with_a_bit_of_everything(V_OLD))?;
         Ok(())
     }
 
@@ -995,23 +945,6 @@ mod cap_54_55_56 {
     // endregion: CAP-0054 refined cost model
 
     // region: CAP-0056 ModuleCache related tests
-
-    // Test that running on protocol vOld does not make a ModuleCache at all.
-    #[test]
-    fn test_v_old_no_module_cache() -> Result<(), HostError> {
-        let host = upload_and_make_host_for_next_ledger(
-            "test_v_old_no_module_cache_upload",
-            V_OLD,
-            "test_v_old_no_module_cache_check",
-            V_OLD,
-        )?
-        .0;
-        // force a module-cache build (this normally happens on first VM call)
-        host.build_module_cache_if_needed()?;
-        let module_cache = host.try_borrow_module_cache()?;
-        assert!(module_cache.is_none());
-        Ok(())
-    }
 
     // Test that running on protocol vNew does add ModuleCache entries.
     #[test]

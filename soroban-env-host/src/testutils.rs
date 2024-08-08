@@ -165,11 +165,12 @@ impl Host {
     pub fn current_test_protocol() -> u32 {
         use crate::meta::{get_ledger_protocol_version, INTERFACE_VERSION};
         let max_supported_protocol = get_ledger_protocol_version(INTERFACE_VERSION);
+        let min_supported_protocol = crate::host::MIN_LEDGER_PROTOCOL_VERSION;
         if let Ok(vers) = std::env::var("TEST_PROTOCOL") {
             let test_protocol = vers.parse().expect("parsing TEST_PROTOCOL");
-            if test_protocol <= max_supported_protocol {
+            if test_protocol >= min_supported_protocol && test_protocol <= max_supported_protocol {
                 test_protocol
-            } else {
+            } else if test_protocol > max_supported_protocol {
                 let next_advice = if cfg!(feature = "next") {
                     ""
                 } else {
@@ -178,6 +179,11 @@ impl Host {
                 panic!(
                     "TEST_PROTOCOL={} is higher than the max supported protocol {}{}",
                     test_protocol, max_supported_protocol, next_advice
+                );
+            } else {
+                panic!(
+                    "TEST_PROTOCOL={} is lower than the min supported protocol {}",
+                    test_protocol, min_supported_protocol
                 );
             }
         } else {
