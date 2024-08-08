@@ -361,9 +361,7 @@ impl Vm {
         cost_inputs: VersionedContractCodeCostInputs,
         cost_mode: ModuleParseCostMode,
     ) -> Result<Rc<ParsedModule>, HostError> {
-        if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording
-            && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
-        {
+        if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording {
             if host.in_storage_recording_mode()? {
                 return host.budget_ref().with_observable_shadow_mode(|| {
                     ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)

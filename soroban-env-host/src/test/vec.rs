@@ -453,12 +453,7 @@ fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
     );
 
     // constructing a big map will cause budget limit exceeded error
-    let num_vals =
-        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
-            60_000
-        } else {
-            1_000_000
-        };
+    let num_vals = 1_000_000;
     let wasm_long =
         wasm::wasm_module_with_large_vector_from_linear_memory(num_vals, U32Val::from(7).to_val());
     host.clear_module_cache()?;

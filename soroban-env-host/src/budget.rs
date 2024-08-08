@@ -257,12 +257,6 @@ impl BudgetImpl {
 /// read on-chain from network configuration via [`from_configs`] above.
 impl Default for BudgetImpl {
     fn default() -> Self {
-        #[cfg(any(test, feature = "testutils"))]
-        let proto = Host::current_test_protocol();
-
-        #[cfg(not(any(test, feature = "testutils")))]
-        let proto = crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION);
-
         let mut b = Self {
             cpu_insns: BudgetDimension::default(),
             mem_bytes: BudgetDimension::default(),
@@ -347,13 +341,8 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(45405);
                 }
                 ContractCostType::VmCachedInstantiation => {
-                    if proto < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
-                        cpu.const_term = 451626;
-                        cpu.lin_term = ScaledU64(45405);
-                    } else {
-                        cpu.const_term = 41142;
-                        cpu.lin_term = ScaledU64(634);
-                    }
+                    cpu.const_term = 41142;
+                    cpu.lin_term = ScaledU64(634);
                 }
                 ContractCostType::InvokeVmFunction => {
                     cpu.const_term = 1948;
@@ -544,13 +533,8 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(5064);
                 }
                 ContractCostType::VmCachedInstantiation => {
-                    if proto < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
-                        mem.const_term = 130065;
-                        mem.lin_term = ScaledU64(5064);
-                    } else {
-                        mem.const_term = 69472;
-                        mem.lin_term = ScaledU64(1217);
-                    }
+                    mem.const_term = 69472;
+                    mem.lin_term = ScaledU64(1217);
                 }
                 ContractCostType::InvokeVmFunction => {
                     mem.const_term = 14;

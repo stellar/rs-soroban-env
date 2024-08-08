@@ -387,9 +387,7 @@ impl Host {
     }
 
     pub fn build_module_cache_if_needed(&self) -> Result<(), HostError> {
-        if self.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
-            && self.try_borrow_module_cache()?.is_none()
-        {
+        if self.try_borrow_module_cache()?.is_none() {
             let cache = ModuleCache::new(self)?;
             let linker = cache.make_linker(self)?;
             *self.try_borrow_module_cache_mut()? = Some(cache);
@@ -542,7 +540,7 @@ impl Host {
                 &[proto.into()],
             ));
         }
-        if proto > meta::get_ledger_protocol_version(meta::INTERFACE_VERSION)  {
+        if proto > meta::get_ledger_protocol_version(meta::INTERFACE_VERSION) {
             return Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,

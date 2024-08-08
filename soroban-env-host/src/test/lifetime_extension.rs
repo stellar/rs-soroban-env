@@ -51,8 +51,6 @@ impl InstanceCodeTest {
 mod separate_instance_code_extension {
     use super::*;
 
-    const PROTOCOL_SUPPORT_FOR_SEPARATE_EXTENSIONS: u32 = 21;
-
     #[test]
     fn extend_only_instance() {
         let InstanceCodeTest {
@@ -61,10 +59,6 @@ mod separate_instance_code_extension {
             contract,
             ..
         } = InstanceCodeTest::setup();
-
-        if host.get_ledger_protocol_version().unwrap() < PROTOCOL_SUPPORT_FOR_SEPARATE_EXTENSIONS {
-            return;
-        }
 
         assert!(host
             .extend_contract_instance_ttl(contract_id, 5.into(), 5000.into())
@@ -90,10 +84,6 @@ mod separate_instance_code_extension {
             code,
             ..
         } = InstanceCodeTest::setup();
-
-        if host.get_ledger_protocol_version().unwrap() < PROTOCOL_SUPPORT_FOR_SEPARATE_EXTENSIONS {
-            return;
-        }
 
         assert!(host
             .extend_contract_code_ttl(contract_id, 5.into(), 5000.into())
