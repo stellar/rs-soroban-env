@@ -1,12 +1,12 @@
+use super::{
+    wasm_module_with_empty_invoke, wasm_module_with_m_fns_each_with_n_insns_returning_early,
+};
 use crate::common::HostCostMeasurement;
 use rand::rngs::StdRng;
 use soroban_env_host::{
     cost_runner::{CostRunner, InvokeHostFunctionRun, InvokeVmFunctionMode, InvokeVmFunctionRun},
     xdr::Hash,
     Host, Vm,
-};
-use super::{
-    wasm_module_with_empty_invoke, wasm_module_with_m_fns_each_with_n_insns_returning_early,
 };
 
 use std::rc::Rc;
@@ -96,7 +96,11 @@ pub(crate) struct InvokeVmFunctionMeasure;
 impl HostCostMeasurement for InvokeVmFunctionMeasure {
     type Runner = InvokeVmFunctionRun;
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> (Rc<Vm>, Vec<Value>, InvokeVmFunctionMode) {
+    fn new_random_case(
+        host: &Host,
+        _rng: &mut StdRng,
+        input: u64,
+    ) -> (Rc<Vm>, Vec<Value>, InvokeVmFunctionMode) {
         let id: Hash = [0; 32].into();
         let (code, mode) = if std::env::var("CHECK_LAZY_COMPILATION_COSTS").is_ok() {
             // We're going to compile a module with a bunch of functions, each of
