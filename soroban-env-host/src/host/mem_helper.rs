@@ -17,6 +17,37 @@ pub(crate) struct MemFnArgs {
     pub(crate) len: u32,
 }
 
+// For future reference:
+//
+// (Note: there is no good place to put this but maybe someone grepping for
+// "memory map" or "stack" or "__heap_base" will find it, please don't
+// delete this comment as I have to re-derive it from primary sources every
+// time I need to remember it):
+//
+// The default rust-wasm memory map looks like:
+//
+//             0x0010_0000        __heap_base
+//             a.k.a. 1MiB        __data_end
+// +----------------+-----------------+-----------------+
+// |          stack |  static data    |  heap           |
+// | <-- grows down |   (fixed)       |  grows up -->   |
+// +----------------+-----------------+-----------------+
+//
+// This is controlled by linker args, specifically
+// -z stack-size=1048576 and --stack-first
+// both of which are passed by the LLD rust backend
+// when writing wasm, see:
+//
+// https://github.com/rust-lang/rust/blob/master/compiler/rustc_target/src/spec/base/wasm.rs
+//
+// In case it seems odd that __heap_base and __data_end are
+// the same, this is (as far as I can tell) just an artifact
+// of --stack_first. The "conventional" wasm memory map has
+// the stack _between_ the data and heap, so those two symbols
+// would normally be different. But if you move the stack to
+// the beginning of memory, then the data and heap are adjacent
+// and so the symbols are the same.
+
 impl Host {
     // Notes on metering: free
     // Helper for the first step in most functions that operate on linear
