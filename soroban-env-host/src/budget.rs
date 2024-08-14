@@ -336,16 +336,76 @@ impl Default for BudgetImpl {
                     cpu.const_term = 377524;
                     cpu.lin_term = ScaledU64(4068);
                 }
+                // VmInstantiation, VmCachedInstantiation and InvokeVmFunction
+                // should all come from _eager_ calibration (i.e. _without_
+                // CHECK_LAZY_COMPILATION_COSTS=1). The rationale here is as
+                // follows:
+                //
+                // 1) VmInstantiation: this is used for the parsing-half of
+                //    processing a Wasm we don't have a refined cost input model
+                //    for, which happens on initial upload _or_ running an old
+                //    pre-p21 contract that hasn't been reuploaded.
+                //
+                //     1.a) In the upload case, we run the parse-and-instantate
+                //          in eager mode, because we want to fully validate the
+                //          contract before accepting it. So this _has_ to be
+                //          charged the eager / expensive cost.
+                //
+                //     1.b) In the old-contract case, we run the
+                //          parse-and-instantiate in lazy mode because that's
+                //          what we always do in p22, so we'll be overcharging.
+                //          But we have no choice here: we don't have a refined
+                //          input model to base a cheaper / lazy charge on (by
+                //          definition) and we don't have calibration of the
+                //          worst-case costs of lazy compilation "by byte count"
+                //          and it would probably be about as bad as the eager
+                //          case anyways because the Wasm could be "the
+                //          pathological case" where every byte declares a new
+                //          function and the function bodies (that lazy mode
+                //          gets to elide processing) are all trivial. The only
+                //          "choice" we could make here would be to potentially
+                //          _run_ this case eagerly instead of lazily -- to have
+                //          the real costs match the model costs -- but that
+                //          would be weird: we'd be "artificially running slower
+                //          in reality in order to avoid disagreeing with the
+                //          overcharge happening in the model". Overcharging
+                //          while running lazily seems like the least-bad case,
+                //          and can be fixed by reuploading a contract.
+                //
+                // 2) VmCachedInstantiation: this is used for the
+                //    instantiation-half of both cases above, and has the same
+                //    rationale for both. The only way it differs is that we
+                //    "parse" (VmInstantiation) once and instantiate
+                //    (VmCachedInstantiation) potentially multiple times within
+                //    a tx, and also coincidentally the calibration we have for
+                //    VmCachedInstantiation produces almost identical numbers
+                //    between lazy and eager modes anyways.
+                //
+                // 3) InvokeVmFunction: this is used for the _invocation_, from
+                //    the host, of each _function_ in a single
+                //    parsed-and-instantiated VM. The calibration we have is
+                //    _wrong_ if you run it in lazy mode, as it'll artificially
+                //    charge the cost of wasmi doing lazy compilation of the
+                //    function. That's double charging (since wasmi charges this
+                //    itself inside its gas accounting), but it'd actually be
+                //    _worse_ than double charging because wasmi only charges on
+                //    first call to a given function and we'd be charging on
+                //    _every_ call. So instead we calibrate in eager mode,
+                //    manually confirm the linear term is zero (it sure should
+                //    be!) and hope that the the constant term is mostly the
+                //    same as lazy, and that any difference is small enough to
+                //    be lost in the noise of the other costs (parsing,
+                //    instantiation, lazy compilation, etc).
                 ContractCostType::VmInstantiation => {
-                    cpu.const_term = 451626;
-                    cpu.lin_term = ScaledU64(45405);
+                    cpu.const_term = 31271;
+                    cpu.lin_term = ScaledU64(57504);
                 }
                 ContractCostType::VmCachedInstantiation => {
-                    cpu.const_term = 41142;
-                    cpu.lin_term = ScaledU64(634);
+                    cpu.const_term = 40828;
+                    cpu.lin_term = ScaledU64(680);
                 }
                 ContractCostType::InvokeVmFunction => {
-                    cpu.const_term = 1948;
+                    cpu.const_term = 2149;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeKeccak256Hash => {
@@ -384,62 +444,86 @@ impl Default for BudgetImpl {
                     cpu.const_term = 1058;
                     cpu.lin_term = ScaledU64(501);
                 }
-
+                // All the other parsing and instantiation costs should come
+                // from _lazy_ calibration (i.e. _with_
+                // CHECK_LAZY_COMPILATION_COSTS=1). The rationale here is as
+                // follows:
+                //
+                //   - These cost types are only charged on paths where we're
+                //     sure we're running in lazy mode (i.e. not the eager
+                //     intial-upload case). So lazily-calibrated numbers are
+                //     _correct_ to charge. But they still might not be
+                //     _advantageous_.
+                //
+                //   - Lazily-calibrated numbers are _advantageous_ to charge
+                //     for _these_ cost types (rather than the older cost types)
+                //     because these cost types allow us to identify and
+                //     charge-less for the one (fairly common) "good case" where
+                //     lazy compilation is a big win in reality: when the module
+                //     has a smallish number of functions relative to the number
+                //     of instructions. Then the cheap cost charged for a
+                //     lazy-parse of the instructions (100x cheaper than eager)
+                //     isn't swamped by the still-relatively-high per-function
+                //     cost of a lazy-parse of the functions. This case wouldn't
+                //     be possible to identify if we only had the coarse
+                //     byte-count input model -- we'd have to pessimistically
+                //     charge as if it were "the pathological Wasm" -- but we
+                //     have the refined input model here, so we should use it.
                 ContractCostType::ParseWasmInstructions => {
-                    cpu.const_term = 73077;
-                    cpu.lin_term = ScaledU64(25410);
+                    cpu.const_term = 37421;
+                    cpu.lin_term = ScaledU64(32);
                 }
                 ContractCostType::ParseWasmFunctions => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(540752);
+                    cpu.lin_term = ScaledU64(84156);
                 }
                 ContractCostType::ParseWasmGlobals => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(176363);
+                    cpu.lin_term = ScaledU64(163415);
                 }
                 ContractCostType::ParseWasmTableEntries => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(29989);
+                    cpu.lin_term = ScaledU64(29644);
                 }
                 ContractCostType::ParseWasmTypes => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(1061449);
+                    cpu.lin_term = ScaledU64(893113);
                 }
                 ContractCostType::ParseWasmDataSegments => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(237336);
+                    cpu.lin_term = ScaledU64(184921);
                 }
                 ContractCostType::ParseWasmElemSegments => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(328476);
+                    cpu.lin_term = ScaledU64(312369);
                 }
                 ContractCostType::ParseWasmImports => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(701845);
+                    cpu.lin_term = ScaledU64(529255);
                 }
                 ContractCostType::ParseWasmExports => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(429383);
+                    cpu.lin_term = ScaledU64(361665);
                 }
                 ContractCostType::ParseWasmDataSegmentBytes => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(28);
+                    cpu.lin_term = ScaledU64(14);
                 }
                 ContractCostType::InstantiateWasmInstructions => {
-                    cpu.const_term = 43030;
+                    cpu.const_term = 43208;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::InstantiateWasmFunctions => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(7556);
+                    cpu.lin_term = ScaledU64(8050);
                 }
                 ContractCostType::InstantiateWasmGlobals => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(10711);
+                    cpu.lin_term = ScaledU64(10647);
                 }
                 ContractCostType::InstantiateWasmTableEntries => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(3300);
+                    cpu.lin_term = ScaledU64(1933);
                 }
                 ContractCostType::InstantiateWasmTypes => {
                     cpu.const_term = 0;
@@ -447,19 +531,19 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::InstantiateWasmDataSegments => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(23038);
+                    cpu.lin_term = ScaledU64(17164);
                 }
                 ContractCostType::InstantiateWasmElemSegments => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(42488);
+                    cpu.lin_term = ScaledU64(34261);
                 }
                 ContractCostType::InstantiateWasmImports => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(828974);
+                    cpu.lin_term = ScaledU64(746142);
                 }
                 ContractCostType::InstantiateWasmExports => {
                     cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(297100);
+                    cpu.lin_term = ScaledU64(296177);
                 }
                 ContractCostType::InstantiateWasmDataSegmentBytes => {
                     cpu.const_term = 0;
@@ -534,10 +618,10 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::VmCachedInstantiation => {
                     mem.const_term = 69472;
-                    mem.lin_term = ScaledU64(1217);
+                    mem.lin_term = ScaledU64(1478);
                 }
                 ContractCostType::InvokeVmFunction => {
-                    mem.const_term = 14;
+                    mem.const_term = 15;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeKeccak256Hash => {
@@ -576,54 +660,53 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-
                 ContractCostType::ParseWasmInstructions => {
-                    mem.const_term = 17564;
-                    mem.lin_term = ScaledU64(6457);
+                    mem.const_term = 13980;
+                    mem.lin_term = ScaledU64(215);
                 }
                 ContractCostType::ParseWasmFunctions => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(47464);
+                    mem.lin_term = ScaledU64(23056);
                 }
                 ContractCostType::ParseWasmGlobals => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(13420);
+                    mem.lin_term = ScaledU64(11924);
                 }
                 ContractCostType::ParseWasmTableEntries => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(6285);
+                    mem.lin_term = ScaledU64(6121);
                 }
                 ContractCostType::ParseWasmTypes => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(64670);
+                    mem.lin_term = ScaledU64(49554);
                 }
                 ContractCostType::ParseWasmDataSegments => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(29074);
+                    mem.lin_term = ScaledU64(5525);
                 }
                 ContractCostType::ParseWasmElemSegments => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(48095);
+                    mem.lin_term = ScaledU64(47034);
                 }
                 ContractCostType::ParseWasmImports => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(103229);
+                    mem.lin_term = ScaledU64(101762);
                 }
                 ContractCostType::ParseWasmExports => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(36394);
+                    mem.lin_term = ScaledU64(35491);
                 }
                 ContractCostType::ParseWasmDataSegmentBytes => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(257);
+                    mem.lin_term = ScaledU64(129);
                 }
                 ContractCostType::InstantiateWasmInstructions => {
-                    mem.const_term = 70704;
+                    mem.const_term = 70792;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::InstantiateWasmFunctions => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(14613);
+                    mem.lin_term = ScaledU64(17749);
                 }
                 ContractCostType::InstantiateWasmGlobals => {
                     mem.const_term = 0;
@@ -647,7 +730,7 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::InstantiateWasmImports => {
                     mem.const_term = 0;
-                    mem.lin_term = ScaledU64(97637);
+                    mem.lin_term = ScaledU64(98578);
                 }
                 ContractCostType::InstantiateWasmExports => {
                     mem.const_term = 0;
