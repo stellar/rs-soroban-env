@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_new_from_slice(2)": "",
+  "   2 ret vec_new_from_slice -> Ok(Vec(obj#1))": "cpu:965, mem:96, objs:-/1@8af88039",
+  "   3 call vec_unpack_to_slice(Vec(obj#1), 2)": "",
+  "   4 ret vec_unpack_to_slice -> Ok(Void)": "cpu:1070",
+  "   5 end": "cpu:1070, mem:96, prngs:-/-, objs:-/1@8af88039, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
