@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_front(Vec(obj#1))": "cpu:967, mem:104, objs:-/1@c38361c",
+  "   2 ret vec_front -> Ok(U32(1))": "cpu:1132",
+  "   3 call vec_back(Vec(obj#1))": "",
+  "   4 ret vec_back -> Ok(U32(3))": "cpu:1297",
+  "   5 end": "cpu:1297, mem:104, prngs:-/-, objs:-/1@c38361c, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

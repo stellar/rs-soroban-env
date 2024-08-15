@@ -1,0 +1,22 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_push_front(Vec(obj#1), U32(1))": "cpu:961, mem:80, objs:-/1@3e25b2a0",
+  "   2 ret vec_push_front -> Ok(Vec(obj#3))": "cpu:2107, mem:168, objs:-/2@ef8c6bf8",
+  "   3 call vec_push_front(Vec(obj#3), U32(2))": "",
+  "   4 ret vec_push_front -> Ok(Vec(obj#5))": "cpu:3255, mem:264, objs:-/3@bd2b00a8",
+  "   5 call vec_push_front(Vec(obj#5), U32(3))": "",
+  "   6 ret vec_push_front -> Ok(Vec(obj#7))": "cpu:4405, mem:368, objs:-/4@aa418203",
+  "   7 call obj_cmp(Vec(obj#7), Vec(obj#9))": "cpu:5372, mem:472, objs:-/5@f3a28d52",
+  "   8 ret obj_cmp -> Ok(0)": "cpu:5661",
+  "   9 call vec_pop_front(Vec(obj#7))": "",
+  "  10 ret vec_pop_front -> Ok(Vec(obj#11))": "cpu:6809, mem:568, objs:-/6@89ef2249",
+  "  11 call obj_cmp(Vec(obj#11), Vec(obj#13))": "cpu:7774, mem:664, objs:-/7@a27f9e09",
+  "  12 ret obj_cmp -> Ok(0)": "cpu:8062",
+  "  13 call vec_pop_front(Vec(obj#11))": "",
+  "  14 ret vec_pop_front -> Ok(Vec(obj#15))": "cpu:9208, mem:752, objs:-/8@e0ba652a",
+  "  15 call vec_pop_front(Vec(obj#15))": "",
+  "  16 ret vec_pop_front -> Ok(Vec(obj#17))": "cpu:10352, mem:832, objs:-/9@42bb0132",
+  "  17 call vec_pop_front(Vec(obj#17))": "",
+  "  18 ret vec_pop_front -> Err(Error(Object, IndexBounds))": "cpu:10474",
+  "  19 end": "cpu:10474, mem:832, prngs:-/-, objs:-/9@42bb0132, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
