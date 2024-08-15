@@ -1,0 +1,16 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_new_from_slice(2)": "",
+  "   2 ret vec_new_from_slice -> Ok(Vec(obj#1))": "cpu:965, mem:96, objs:-/1@ff6e5e1d",
+  "   3 call vec_new()": "",
+  "   4 ret vec_new -> Ok(Vec(obj#3))": "cpu:1466, mem:160, objs:-/2@ff4d5261",
+  "   5 call vec_push_back(Vec(obj#3), U32(1))": "",
+  "   6 ret vec_push_back -> Ok(Vec(obj#5))": "cpu:2612, mem:248, objs:-/3@5b4bd200",
+  "   7 call vec_push_back(Vec(obj#5), I32(1))": "",
+  "   8 ret vec_push_back -> Ok(Vec(obj#7))": "cpu:3760, mem:344, objs:-/4@7c38ec2e",
+  "   9 call obj_cmp(Vec(obj#1), Vec(obj#7))": "",
+  "  10 ret obj_cmp -> Ok(0)": "cpu:4048",
+  "  11 call vec_unpack_to_slice(Vec(obj#1), 2)": "",
+  "  12 ret vec_unpack_to_slice -> Ok(Void)": "cpu:4153",
+  "  13 end": "cpu:4153, mem:344, prngs:-/-, objs:-/4@7c38ec2e, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

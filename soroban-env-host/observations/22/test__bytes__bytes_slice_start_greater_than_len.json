@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(4)": "",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:961, mem:84, objs:-/1@5311c87f",
+  "   3 call bytes_slice(Bytes(obj#1), U32(5), U32(10))": "",
+  "   4 ret bytes_slice -> Err(Error(Object, IndexBounds))": "cpu:1083",
+  "   5 end": "cpu:1083, mem:84, prngs:-/-, objs:-/1@5311c87f, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

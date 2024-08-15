@@ -1,0 +1,20 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call call(Address(obj#1), Symbol(add), Vec(obj#3))": "cpu:30003, mem:1822, objs:-/3@3e2c291c, store:-/2@7bc024e1, foot:2@d6be0e71",
+  "   2 push TEST:   0:add(I32(1), I32(2))": "cpu:40546, mem:2982, objs:-/4@d7708f9, stk:1@415daa75, auth:1@ab264b90/-",
+  "   3 call map_new()": "",
+  "   4 ret map_new -> Ok(Map(obj#9))": "cpu:41047, mem:3046, objs:-/5@8517b74b",
+  "   5 call map_put(Map(obj#9), U32(1), U32(2))": "",
+  "   6 ret map_put -> Ok(Map(obj#11))": "cpu:42332, mem:3150, objs:-/6@90b102c",
+  "   7 call vec_new()": "",
+  "   8 ret vec_new -> Ok(Vec(obj#13))": "cpu:42833, mem:3214, objs:-/7@edf14fbd",
+  "   9 call vec_push_back(Vec(obj#13), U32(0))": "",
+  "  10 ret vec_push_back -> Ok(Vec(obj#15))": "cpu:43979, mem:3302, objs:-/8@7f61d806",
+  "  11 call vec_push_back(Vec(obj#15), U32(1))": "",
+  "  12 ret vec_push_back -> Ok(Vec(obj#17))": "cpu:45127, mem:3398, objs:-/9@6abec47e",
+  "  13 call contract_event(Vec(obj#17), Map(obj#11))": "",
+  "  14 ret contract_event -> Ok(Void)": "cpu:46797, mem:3575, objs:-/10@14da6192, evt:1@5435ad6c",
+  "  15 pop TEST:   0:add -> Ok(Void)": "",
+  "  16 ret call -> Ok(Void)": " stk:-, auth:-/-",
+  "  17 end": "cpu:48742, mem:4047, prngs:-/9b4a753, objs:-/10@14da6192, vm:-/-, evt:1@5435ad6c, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+}

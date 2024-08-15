@@ -22,6 +22,6 @@ impl WriteBytesContract {
 
         env.storage().instance().extend_ttl(BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
 
-        hash
+        hash.into()
     }
 }
