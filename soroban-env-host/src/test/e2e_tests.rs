@@ -648,7 +648,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    let (expected_insns, expected_write_bytes) = (1767136, 684);
+    let (expected_insns, expected_write_bytes) = (1036726, 684);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -686,7 +686,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    let expected_instructions = 1093647;
+    let expected_instructions = 767816;
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1511,7 +1511,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    let (expected_insns, expected_read_bytes) = (1431216, 3132);
+    let (expected_insns, expected_read_bytes) = (1131993, 3132);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1574,7 +1574,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    let (expected_insns, expected_read_bytes) = (1543254, 3212);
+    let (expected_insns, expected_read_bytes) = (1245383, 3212);
     assert_eq!(
         extend_res.resources,
         SorobanResources {

@@ -3,14 +3,14 @@
   "   1 call bytes_new_from_slice(100116)": "cpu:47",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:26036, mem:100196, objs:-/1@b09015af",
   "   3 call upload_wasm(Bytes(obj#1))": "",
-  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:78031438, mem:9535430, objs:-/2@e4d21c06, store:-/1@f1070a20, foot:1@70f549b0",
-  "   5 call bytes_new_from_slice(32)": "cpu:78031878, mem:9535494, objs:-/3@67a0e74a",
-  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:78032847, mem:9535606, objs:-/4@30945282",
+  "   4 ret upload_wasm -> Ok(Bytes(obj#3))": "cpu:96153011, mem:9739572, objs:-/2@e4d21c06, store:-/1@f1070a20, foot:1@70f549b0",
+  "   5 call bytes_new_from_slice(32)": "cpu:96153451, mem:9739636, objs:-/3@67a0e74a",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:96154420, mem:9739748, objs:-/4@30945282",
   "   7 call create_contract(Address(obj#5), Bytes(obj#3), Bytes(obj#7))": "",
-  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:78034490, mem:9535784, objs:-/5@d6b7c51d, auth:1@1d760e48/-",
-  "   9 ret obj_cmp -> Ok(0)": "cpu:78034782",
-  "  10 call get_ledger_network_id()": "cpu:78034832, auth:1@1d760e48/1@4b4fdee9",
-  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:78035862, mem:9535896, objs:-/6@8c5f9aea",
-  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:78053995, mem:9538970, objs:-/7@9e7d14a7, store:-/2@801d2d4d, foot:2@446b5499, auth:-/1@8ceb144b",
-  "  13 end": "cpu:78053995, mem:9538970, prngs:-/9b4a753, objs:-/7@9e7d14a7, vm:-/-, evt:-, store:-/2@801d2d4d, foot:2@446b5499, stk:-, auth:-/-"
+  "   8 call obj_cmp(Address(obj#9), Address(obj#5))": "cpu:96156063, mem:9739926, objs:-/5@d6b7c51d, auth:1@1d760e48/-",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:96156355",
+  "  10 call get_ledger_network_id()": "cpu:96156405, auth:1@1d760e48/1@4b4fdee9",
+  "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:96157435, mem:9740038, objs:-/6@8c5f9aea",
+  "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:96175568, mem:9743112, objs:-/7@9e7d14a7, store:-/2@801d2d4d, foot:2@446b5499, auth:-/1@8ceb144b",
+  "  13 end": "cpu:96175568, mem:9743112, prngs:-/9b4a753, objs:-/7@9e7d14a7, vm:-/-, evt:-, store:-/2@801d2d4d, foot:2@446b5499, stk:-, auth:-/-"
 }

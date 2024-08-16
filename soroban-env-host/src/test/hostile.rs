@@ -531,57 +531,57 @@ fn excessive_logging() -> Result<(), HostError> {
     host.switch_to_enforcing_storage()?;
 
     let expected_budget = expect![[r#"
-        =================================================================
-        Cpu limit: 2000000; used: 215305
-        Mem limit: 500000; used: 166764
-        =================================================================
-        CostType                           cpu_insns      mem_bytes      
-        WasmInsnExec                       300            0              
-        MemAlloc                           17058          67344          
-        MemCpy                             2866           0              
-        MemCmp                             512            0              
-        DispatchHostFunction               310            0              
-        VisitObject                        244            0              
-        ValSer                             0              0              
-        ValDeser                           0              0              
-        ComputeSha256Hash                  3738           0              
-        ComputeEd25519PubKey               0              0              
-        VerifyEd25519Sig                   0              0              
-        VmInstantiation                    0              0              
-        VmCachedInstantiation              0              0              
-        InvokeVmFunction                   1948           14             
-        ComputeKeccak256Hash               0              0              
-        DecodeEcdsaCurve256Sig             0              0              
-        RecoverEcdsaSecp256k1Key           0              0              
-        Int256AddSub                       0              0              
-        Int256Mul                          0              0              
-        Int256Div                          0              0              
-        Int256Pow                          0              0              
-        Int256Shift                        0              0              
-        ChaCha20DrawBytes                  0              0              
-        ParseWasmInstructions              74665          17967          
-        ParseWasmFunctions                 4224           370            
-        ParseWasmGlobals                   1377           104            
-        ParseWasmTableEntries              29989          6285           
-        ParseWasmTypes                     8292           505            
-        ParseWasmDataSegments              0              0              
-        ParseWasmElemSegments              0              0              
-        ParseWasmImports                   5483           806            
-        ParseWasmExports                   6709           568            
-        ParseWasmDataSegmentBytes          0              0              
-        InstantiateWasmInstructions        43030          70704          
-        InstantiateWasmFunctions           59             114            
-        InstantiateWasmGlobals             83             53             
-        InstantiateWasmTableEntries        3300           1025           
-        InstantiateWasmTypes               0              0              
-        InstantiateWasmDataSegments        0              0              
-        InstantiateWasmElemSegments        0              0              
-        InstantiateWasmImports             6476           762            
-        InstantiateWasmExports             4642           143            
-        InstantiateWasmDataSegmentBytes    0              0              
-        Sec1DecodePointUncompressed        0              0              
-        VerifyEcdsaSecp256r1Sig            0              0              
-        =================================================================
+    =================================================================
+    Cpu limit: 2000000; used: 169149
+    Mem limit: 500000; used: 162403
+    =================================================================
+    CostType                           cpu_insns      mem_bytes      
+    WasmInsnExec                       768            0              
+    MemAlloc                           17058          67344          
+    MemCpy                             2866           0              
+    MemCmp                             512            0              
+    DispatchHostFunction               310            0              
+    VisitObject                        244            0              
+    ValSer                             0              0              
+    ValDeser                           0              0              
+    ComputeSha256Hash                  3738           0              
+    ComputeEd25519PubKey               0              0              
+    VerifyEd25519Sig                   0              0              
+    VmInstantiation                    0              0              
+    VmCachedInstantiation              0              0              
+    InvokeVmFunction                   2149           15             
+    ComputeKeccak256Hash               0              0              
+    DecodeEcdsaCurve256Sig             0              0              
+    RecoverEcdsaSecp256k1Key           0              0              
+    Int256AddSub                       0              0              
+    Int256Mul                          0              0              
+    Int256Div                          0              0              
+    Int256Pow                          0              0              
+    Int256Shift                        0              0              
+    ChaCha20DrawBytes                  0              0              
+    ParseWasmInstructions              37423          13993          
+    ParseWasmFunctions                 657            180            
+    ParseWasmGlobals                   1276           93             
+    ParseWasmTableEntries              29644          6121           
+    ParseWasmTypes                     6977           387            
+    ParseWasmDataSegments              0              0              
+    ParseWasmElemSegments              0              0              
+    ParseWasmImports                   4134           795            
+    ParseWasmExports                   5651           554            
+    ParseWasmDataSegmentBytes          0              0              
+    InstantiateWasmInstructions        43208          70792          
+    InstantiateWasmFunctions           62             138            
+    InstantiateWasmGlobals             83             53             
+    InstantiateWasmTableEntries        1933           1025           
+    InstantiateWasmTypes               0              0              
+    InstantiateWasmDataSegments        0              0              
+    InstantiateWasmElemSegments        0              0              
+    InstantiateWasmImports             5829           770            
+    InstantiateWasmExports             4627           143            
+    InstantiateWasmDataSegmentBytes    0              0              
+    Sec1DecodePointUncompressed        0              0              
+    VerifyEcdsaSecp256r1Sig            0              0              
+    =================================================================
 
     "#]];
 
@@ -1297,7 +1297,7 @@ fn test_invalid_expr_in_segments() -> Result<(), HostError> {
 
 #[test]
 fn test_stack_depth_stability() {
-    const MAX_WASM_STACK_DEPTH: u32 = 1024;
+    const MAX_WASM_STACK_DEPTH: u32 = 1023;
 
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.as_budget().reset_unlimited().unwrap();

@@ -532,6 +532,13 @@ impl Host {
     pub(crate) fn check_ledger_protocol_supported(&self) -> Result<(), HostError> {
         use soroban_env_common::meta;
         let proto = self.get_ledger_protocol_version()?;
+        // There are some protocol-gating tests that want to register
+        // old-protocol contracts and run them in the new host. We allow this in
+        // test mode -- technically old contracts should _run_ -- but we don't
+        // allow it in production because it risks replaying an old contract
+        // with the new VM and thereby (subtly!) replaying its execution costs
+        // wrong.
+        #[cfg(not(test))]
         if proto < MIN_LEDGER_PROTOCOL_VERSION {
             return Err(self.err(
                 ScErrorType::Context,
