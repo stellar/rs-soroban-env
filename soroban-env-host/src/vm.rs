@@ -134,6 +134,15 @@ impl Vm {
             .collect()
     }
 
+    #[cfg(feature = "testutils")]
+    pub fn get_all_host_functions_with_supported_protocol_range(
+    ) -> Vec<(&'static str, &'static str, u32, Option<u32>, Option<u32>)> {
+        HOST_FUNCTIONS
+            .iter()
+            .map(|hf| (hf.mod_str, hf.fn_str, hf.arity, hf.min_proto, hf.max_proto))
+            .collect()
+    }
+
     /// Instantiates a VM given the arguments provided in [`Self::new`],
     /// or [`Self::new_from_module_cache`]
     fn instantiate(
