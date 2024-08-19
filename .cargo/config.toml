@@ -20,6 +20,7 @@
 rustflags = [
      "-Dwarnings",
      "-Aclippy::style",
+     "-Aunexpected_cfgs",
 #    "-Dclippy::pedantic",
 #    "-Aclippy::module_name_repetitions",
 #    "-Aclippy::needless_pass_by_value",
