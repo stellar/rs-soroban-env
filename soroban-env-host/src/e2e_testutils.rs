@@ -1,4 +1,3 @@
-use crate::vm::ModuleCache;
 use crate::vm::ParsedModule;
 use crate::xdr::{
     AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractDataDurability,
@@ -65,10 +64,7 @@ pub fn wasm_entry_non_validated(wasm: &[u8]) -> LedgerEntry {
 /// The entry has the most 'up-to-date' contents possible (such as refined costs
 /// in protocol 21).
 pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
-    wasm_entry_with_refined_contract_cost_inputs(
-        wasm,
-        e2e_test_protocol_version() >= ModuleCache::MIN_LEDGER_VERSION,
-    )
+    wasm_entry_with_refined_contract_cost_inputs(wasm, true)
 }
 
 pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
@@ -123,11 +119,7 @@ pub struct CreateContractData {
 
 impl CreateContractData {
     pub fn new(salt: [u8; 32], wasm: &[u8]) -> Self {
-        Self::new_with_refined_contract_cost_inputs(
-            salt,
-            wasm,
-            e2e_test_protocol_version() >= ModuleCache::MIN_LEDGER_VERSION,
-        )
+        Self::new_with_refined_contract_cost_inputs(salt, wasm, true)
     }
     pub fn new_with_refined_contract_cost_inputs(
         salt: [u8; 32],

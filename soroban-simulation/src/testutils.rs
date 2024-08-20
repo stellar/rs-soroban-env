@@ -20,7 +20,7 @@ use std::rc::Rc;
 /// the current ledger protocol and the next one. Thus, the code that
 /// depends on the certain behavior of the current version can be
 /// safely removed as soon as the current protocol has been bumped.
-pub const CURRENT_PROTOCOL_VERSION: u32 = 20;
+pub const CURRENT_PROTOCOL_VERSION: u32 = 22;
 
 pub struct MockSnapshotSource {
     map: BTreeMap<Rc<LedgerKey>, EntryWithLiveUntil>,

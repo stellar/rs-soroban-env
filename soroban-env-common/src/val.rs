@@ -404,14 +404,14 @@ impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(Error);
 
 #[cfg(feature = "wasmi")]
 pub trait WasmiMarshal: Sized {
-    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self>;
-    fn marshal_from_self(self) -> wasmi::Value;
+    fn try_marshal_from_value(v: wasmi::Val) -> Option<Self>;
+    fn marshal_from_self(self) -> wasmi::Val;
 }
 
 #[cfg(feature = "wasmi")]
 impl WasmiMarshal for Val {
-    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-        if let wasmi::Value::I64(i) = v {
+    fn try_marshal_from_value(v: wasmi::Val) -> Option<Self> {
+        if let wasmi::Val::I64(i) = v {
             let v = Val::from_payload(i as u64);
             if v.is_good() {
                 Some(v)
@@ -423,38 +423,38 @@ impl WasmiMarshal for Val {
         }
     }
 
-    fn marshal_from_self(self) -> wasmi::Value {
-        wasmi::Value::I64(self.get_payload() as i64)
+    fn marshal_from_self(self) -> wasmi::Val {
+        wasmi::Val::I64(self.get_payload() as i64)
     }
 }
 
 #[cfg(feature = "wasmi")]
 impl WasmiMarshal for u64 {
-    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-        if let wasmi::Value::I64(i) = v {
+    fn try_marshal_from_value(v: wasmi::Val) -> Option<Self> {
+        if let wasmi::Val::I64(i) = v {
             Some(i as u64)
         } else {
             None
         }
     }
 
-    fn marshal_from_self(self) -> wasmi::Value {
-        wasmi::Value::I64(self as i64)
+    fn marshal_from_self(self) -> wasmi::Val {
+        wasmi::Val::I64(self as i64)
     }
 }
 
 #[cfg(feature = "wasmi")]
 impl WasmiMarshal for i64 {
-    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
-        if let wasmi::Value::I64(i) = v {
+    fn try_marshal_from_value(v: wasmi::Val) -> Option<Self> {
+        if let wasmi::Val::I64(i) = v {
             Some(i)
         } else {
             None
         }
     }
 
-    fn marshal_from_self(self) -> wasmi::Value {
-        wasmi::Value::I64(self)
+    fn marshal_from_self(self) -> wasmi::Val {
+        wasmi::Val::I64(self)
     }
 }
 

@@ -164,10 +164,30 @@ impl Host {
 
     pub fn current_test_protocol() -> u32 {
         use crate::meta::{get_ledger_protocol_version, INTERFACE_VERSION};
+        let max_supported_protocol = get_ledger_protocol_version(INTERFACE_VERSION);
+        let min_supported_protocol = crate::host::MIN_LEDGER_PROTOCOL_VERSION;
         if let Ok(vers) = std::env::var("TEST_PROTOCOL") {
-            vers.parse().unwrap()
+            let test_protocol = vers.parse().expect("parsing TEST_PROTOCOL");
+            if test_protocol >= min_supported_protocol && test_protocol <= max_supported_protocol {
+                test_protocol
+            } else if test_protocol > max_supported_protocol {
+                let next_advice = if cfg!(feature = "next") {
+                    ""
+                } else {
+                    " (consider building with --feature=next)"
+                };
+                panic!(
+                    "TEST_PROTOCOL={} is higher than the max supported protocol {}{}",
+                    test_protocol, max_supported_protocol, next_advice
+                );
+            } else {
+                panic!(
+                    "TEST_PROTOCOL={} is lower than the min supported protocol {}",
+                    test_protocol, min_supported_protocol
+                );
+            }
         } else {
-            get_ledger_protocol_version(INTERFACE_VERSION)
+            max_supported_protocol
         }
     }
 
@@ -707,8 +727,8 @@ pub(crate) mod wasm {
         // we just make sure the total memory can fit one segments the segments
         // will just cycle through the space and possibly override earlier ones
         let max_segments = (mem_len / seg_size.max(1)).max(1);
-        for _i in 0..num_sgmts % max_segments {
-            me.define_data_segment(0, vec![0; seg_size as usize]);
+        for i in 0..num_sgmts % max_segments {
+            me.define_data_segment(i, vec![0; seg_size as usize]);
         }
         // a local wasm function
         let mut fe = me.func(Arity(0), 0);
@@ -856,7 +876,7 @@ pub(crate) mod wasm {
         let mut me = ModEmitter::new();
         me.memory(1, None, false, false);
         me.memory(1, None, false, false);
-        me.finish()
+        me.finish_no_validate()
     }
 
     pub fn wasm_module_lying_about_import_function_type() -> Vec<u8> {
@@ -878,7 +898,7 @@ pub(crate) mod wasm {
         for _ in 0..n {
             me.import_func_no_check("t", "_", Arity(0));
         }
-        me.finish()
+        me.finish_no_validate()
     }
 
     pub fn wasm_module_with_nonexistent_function_export() -> Vec<u8> {

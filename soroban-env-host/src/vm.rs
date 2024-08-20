@@ -31,20 +31,19 @@ use crate::{
 };
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
-use fuel_refillable::FuelRefillable;
+pub(crate) use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 
 pub use module_cache::ModuleCache;
 pub use parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
 
-use wasmi::{Instance, Linker, Memory, Store, Value};
+use wasmi::{Instance, Linker, Memory, Store, Val as Value};
 
 use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
 
 impl wasmi::core::HostError for HostError {}
 
-const MAX_VM_ARGS: usize = 32;
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
 
 struct VmInstantiationTimer {
@@ -107,7 +106,7 @@ impl Host {
         let mut linker = Linker::new(&engine);
         for hf in HOST_FUNCTIONS {
             if symbols.contains(&(hf.mod_str, hf.fn_str)) {
-                (hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le))?;
+                (hf.wrap)(&mut linker).map_err(|le| wasmi::Error::from(le))?;
             }
         }
         Ok(linker)
@@ -126,11 +125,24 @@ pub(crate) enum ModuleParseCostMode {
 }
 
 impl Vm {
+    /// The maximum number of arguments that can be passed to a VM function.
+    pub const MAX_VM_ARGS: usize = 32;
+
     #[cfg(feature = "testutils")]
     pub fn get_all_host_functions() -> Vec<(&'static str, &'static str, u32)> {
         HOST_FUNCTIONS
             .iter()
             .map(|hf| (hf.mod_str, hf.fn_str, hf.arity))
+            .collect()
+    }
+
+    #[cfg(feature = "testutils")]
+    #[allow(clippy::type_complexity)]
+    pub fn get_all_host_functions_with_supported_protocol_range(
+    ) -> Vec<(&'static str, &'static str, u32, Option<u32>, Option<u32>)> {
+        HOST_FUNCTIONS
+            .iter()
+            .map(|hf| (hf.mod_str, hf.fn_str, hf.arity, hf.min_proto, hf.max_proto))
             .collect()
     }
 
@@ -143,6 +155,12 @@ impl Vm {
         linker: &Linker<Host>,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::instantiate");
+
+        // The host really never should have made it past construction on an old
+        // protocol version, but it doesn't hurt to double check here before we
+        // instantiate a VM, which is the place old-protocol replay will
+        // diverge.
+        host.check_ledger_protocol_supported()?;
 
         let engine = parsed_module.module.engine();
         let mut store = Store::new(engine, host.clone());
@@ -208,7 +226,7 @@ impl Vm {
         let instance = host.map_err(
             not_started_instance
                 .ensure_no_start(&mut store)
-                .map_err(|ie| wasmi::Error::Instantiation(ie)),
+                .map_err(|ie| wasmi::Error::from(ie)),
         )?;
 
         let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
@@ -343,9 +361,7 @@ impl Vm {
         cost_inputs: VersionedContractCodeCostInputs,
         cost_mode: ModuleParseCostMode,
     ) -> Result<Rc<ParsedModule>, HostError> {
-        if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording
-            && host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION
-        {
+        if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording {
             if host.in_storage_recording_mode()? {
                 return host.budget_ref().with_observable_shadow_mode(|| {
                     ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
@@ -407,7 +423,7 @@ impl Vm {
             Some(e) => e,
         };
 
-        if inputs.len() > MAX_VM_ARGS {
+        if inputs.len() > Vm::MAX_VM_ARGS {
             return Err(host.err(
                 ScErrorType::WasmVm,
                 ScErrorCode::InvalidInput,
@@ -441,41 +457,36 @@ impl Vm {
 
             // When a call fails with a wasmi::Error::Trap that carries a HostError
             // we propagate that HostError as is, rather than producing something new.
-
-            match e {
-                wasmi::Error::Trap(trap) => {
-                    if let Some(code) = trap.trap_code() {
-                        let err = code.into();
-                        let mut msg = Cow::Borrowed("VM call trapped");
-                        host.with_debug_mode(|| {
-                            msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
-                            Ok(())
-                        });
-                        return Err(host.error(err, &msg, &[func_sym.to_val()]));
-                    }
-                    if let Some(he) = trap.downcast::<HostError>() {
-                        host.log_diagnostics(
-                            "VM call trapped with HostError",
-                            &[func_sym.to_val(), he.error.to_val()],
-                        );
-                        return Err(he);
-                    }
+            if let Some(code) = e.as_trap_code() {
+                let err = code.into();
+                let mut msg = Cow::Borrowed("VM call trapped");
+                host.with_debug_mode(|| {
+                    msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
+                    Ok(())
+                });
+                return Err(host.error(err, &msg, &[func_sym.to_val()]));
+            } else if let Some(_) = e.downcast_ref::<HostError>() {
+                let Some(he) = e.downcast::<HostError>() else {
                     return Err(host.err(
                         ScErrorType::WasmVm,
                         ScErrorCode::InternalError,
-                        "VM trapped but propagation failed",
+                        "downcast failed during VM failure handling",
                         &[],
                     ));
-                }
-                e => {
-                    let mut msg = Cow::Borrowed("VM call failed");
-                    host.with_debug_mode(|| {
-                        msg = Cow::Owned(format!("VM call failed: {:?}", &e));
-                        Ok(())
-                    });
-                    return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
-                }
-            }
+                };
+                host.log_diagnostics(
+                    "VM call trapped with HostError",
+                    &[func_sym.to_val(), he.error.to_val()],
+                );
+                return Err(he);
+            } else {
+                let mut msg = Cow::Borrowed("VM call failed");
+                host.with_debug_mode(|| {
+                    msg = Cow::Owned(format!("VM call failed: {:?}", &e));
+                    Ok(())
+                });
+                return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
+            };
         }
         host.relative_to_absolute(
             Val::try_marshal_from_value(wasm_ret[0].clone()).ok_or(ConversionError)?,

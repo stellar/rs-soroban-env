@@ -217,23 +217,6 @@ fn write_budget_params_code(
                     ty,
                 );
             }
-            ContractCostType::VmCachedInstantiation => {
-                println!(
-                    " 
-                    // `VmCachedInstantiation` has not been calibrated, it is copied
-                    // from `VmInstantiation`.\n
-                    "
-                );
-                match params.get(&CostType::Contract(ContractCostType::VmInstantiation)) {
-                    Some((cpu, _)) => println!(
-                        "ContractCostType::VmCachedInstantiation => {{ cpu.const_term = {}; cpu.lin_term = {:?}; }}",
-                        cpu.const_term, cpu.lin_term
-                    ),
-                    None => println!(
-                        "ContractCostType::VmCachedInstantiation => todo!()"
-                    ),
-                }
-            }
             _ => match params.get(&CostType::Contract(*ty)) {
                 Some((cpu, _)) => println!(
                     "ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = {:?}; }}",
@@ -291,23 +274,6 @@ fn write_budget_params_code(
                     ContractCostType::{:?} => {{ mem.const_term = 0; mem.lin_term = ScaledU64::from_unscaled_u64(3); }}",
                     ty
                 )
-            }
-            ContractCostType::VmCachedInstantiation => {
-                println!(
-                    " 
-                    // `VmCachedInstantiation` has not been calibrated, it is copied
-                    // from `VmInstantiation`.\n
-                    "
-                );
-                match params.get(&CostType::Contract(ContractCostType::VmInstantiation)) {
-                    Some((_, mem)) => println!(
-                        "ContractCostType::VmCachedInstantiation => {{ mem.const_term = {}; mem.lin_term = {:?}; }}",
-                        mem.const_term, mem.lin_term
-                    ),
-                    None => println!(
-                        "ContractCostType::VmCachedInstantiation => todo!()"
-                    ),
-                }
             }
             _ => match params.get(&CostType::Contract(*ty)) {
                 Some((_, mem)) => println!(

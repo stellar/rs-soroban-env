@@ -117,8 +117,18 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     let mut all_subty_fns: BTreeSet<String> = BTreeSet::new();
     let mut fns_by_type = BTreeMap::<String, Vec<crate::Function>>::new();
 
+    let mut allowed_fns: BTreeSet<String> = BTreeSet::new();
+
     for m in root.modules.iter() {
+        if m.name == "t" {
+            continue;
+        }
         for f in m.functions.iter() {
+            // Skip any functions that don't work on all protocols.
+            if f.min_supported_protocol.is_some() || f.max_supported_protocol.is_some() {
+                continue;
+            }
+            allowed_fns.insert(f.name.clone());
             all_tys.insert(f.r#return.clone());
             for arg in f.args.iter() {
                 all_tys.insert(arg.r#type.clone());
@@ -129,6 +139,10 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
                 .push(f.clone())
         }
     }
+
+    // We skipped a bunch of protocol-gated functions here but
+    // we _should_ still have quite a lot available.
+    assert!(allowed_fns.len() > 100);
 
     // Several types have expression-subtype relationships, for example
     // ExprSymbolObject is a subtype of ExprSymbol or ExprMapObject is a subtype

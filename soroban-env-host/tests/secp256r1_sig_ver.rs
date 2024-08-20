@@ -8,17 +8,12 @@ mod v21 {
     use soroban_env_common::EnvBase;
     use soroban_env_host::{budget::AsBudget, Env, Host, HostError};
 
-    const PROTOCOL_SUPPORT_FOR_SECP256R1: u32 = 21;
-
     // Test vectors copied from
     // https://csrc.nist.gov/groups/STM/cavp/documents/dss/186-3ecdsatestvectors.zip
     // `SigVer.rsp` section [P-256,SHA-256]
     #[test]
     fn test_secp256r1_sig_ver_with_sha256_on_msg() -> Result<(), HostError> {
         let host = Host::test_host();
-        if host.get_ledger_protocol_version()? < PROTOCOL_SUPPORT_FOR_SECP256R1 {
-            return Ok(());
-        }
         for test_vector in FIPS186_ECDSA_TEST_VECTORS {
             // reset the budget for each test case so they don't interfere
             host.as_budget().reset_default()?;
@@ -202,9 +197,6 @@ mod v21 {
 
         let test_set = TestSet::load(EcdsaSecp256r1Sha256).unwrap();
         let host = Host::test_host();
-        if host.get_ledger_protocol_version()? < PROTOCOL_SUPPORT_FOR_SECP256R1 {
-            return Ok(());
-        }
         for test_group in test_set.test_groups {
             let public_key = host.bytes_new_from_slice(&test_group.key.key).unwrap();
             for test in test_group.tests {

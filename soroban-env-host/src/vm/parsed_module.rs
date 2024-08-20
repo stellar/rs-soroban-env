@@ -8,7 +8,7 @@ use crate::{
 
 use wasmi::{Engine, Module};
 
-use super::{ModuleCache, MAX_VM_ARGS};
+use super::Vm;
 use std::{collections::BTreeSet, io::Cursor, rc::Rc};
 
 #[derive(Debug, Clone)]
@@ -85,12 +85,10 @@ impl VersionedContractCodeCostInputs {
                 // VmInstantiation cost type was repurposed to only cover the
                 // cost of parsing, so we have to charge the "second half" cost
                 // of instantiation separately here.
-                if _host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
-                    _host.charge_budget(
-                        ContractCostType::VmCachedInstantiation,
-                        Some(*wasm_bytes as u64),
-                    )?;
-                }
+                _host.charge_budget(
+                    ContractCostType::VmCachedInstantiation,
+                    Some(*wasm_bytes as u64),
+                )?;
             }
             Self::V1(inputs) => {
                 _host.charge_budget(ContractCostType::InstantiateWasmInstructions, None)?;
@@ -188,9 +186,7 @@ impl ParsedModule {
         // parsing phase, so there is no DOS factor. We don't charge for
         // insertion/lookups, since they should be cheap and number of
         // operations on the set is limited.
-        if host.get_ledger_protocol_version()? >= ModuleCache::MIN_LEDGER_VERSION {
-            Vec::<(&str, &str)>::charge_bulk_init_cpy(symbols.len() as u64, host)?;
-        }
+        Vec::<(&str, &str)>::charge_bulk_init_cpy(symbols.len() as u64, host)?;
         callback(&symbols)
     }
 
@@ -206,7 +202,10 @@ impl ParsedModule {
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<Self>, HostError> {
         use crate::budget::AsBudget;
-        let config = crate::vm::get_wasmi_config(host.as_budget())?;
+        // We use eager mode here because this path is called when we want
+        // complete verification of a contract during upload. This requires
+        // compiling it all.
+        let config = crate::vm::get_wasmi_config(host.as_budget(), wasmi::CompilationMode::Eager)?;
         let engine = Engine::new(&config);
         Self::new(host, &engine, wasm, cost_inputs)
     }
@@ -307,9 +306,9 @@ impl ParsedModule {
     }
 
     fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {
-        m.custom_sections().iter().find_map(|s| {
-            if &*s.name == name.as_ref() {
-                Some(&*s.data)
+        m.custom_sections().find_map(|s| {
+            if s.name() == name.as_ref() {
+                Some(s.data())
             } else {
                 None
             }
@@ -354,7 +353,7 @@ impl ParsedModule {
         for e in m.exports() {
             match e.ty() {
                 wasmi::ExternType::Func(f) => {
-                    if f.results().len() > MAX_VM_ARGS {
+                    if f.results().len() > Vm::MAX_VM_ARGS {
                         return Err(err!(
                             host,
                             (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
@@ -362,7 +361,7 @@ impl ParsedModule {
                             f.results().len()
                         ));
                     }
-                    if f.params().len() > MAX_VM_ARGS {
+                    if f.params().len() > Vm::MAX_VM_ARGS {
                         return Err(err!(
                             host,
                             (ScErrorType::WasmVm, ScErrorCode::InvalidInput),

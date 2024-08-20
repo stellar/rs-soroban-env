@@ -452,13 +452,8 @@ fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
         U32Val::from(100).to_val().get_payload()
     );
 
-    // constructing a big map will cause budget limit exceeded error
-    let num_vals =
-        if host.get_ledger_protocol_version()? < crate::vm::ModuleCache::MIN_LEDGER_VERSION {
-            60_000
-        } else {
-            1_000_000
-        };
+    // constructing a big vec will cause budget limit exceeded error
+    let num_vals = 1_100_000;
     let wasm_long =
         wasm::wasm_module_with_large_vector_from_linear_memory(num_vals, U32Val::from(7).to_val());
     host.clear_module_cache()?;
@@ -470,9 +465,10 @@ fn instantiate_oversized_vec_from_linear_memory() -> Result<(), HostError> {
         Symbol::try_from_small_str("test")?,
         host.test_vec_obj::<u32>(&[])?,
     );
-    // This currently won't pass VmInstantiation, in the future if VmInstantiation cost goes down, we need
-    // to adjust the maximum length.
-    // Here we check the mem inputs match expectation.
+    // This currently makes it past VmInstantiation but fails during the
+    // vec_new_from_linear_memory call; in the future if either cost goes down,
+    // we need to adjust the maximum length. Here we check the mem inputs match
+    // expectation.
     assert_ge!(
         host.budget_ref()
             .get_tracker(ContractCostType::MemAlloc)?

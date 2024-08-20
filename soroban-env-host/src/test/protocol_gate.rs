@@ -211,7 +211,7 @@ fn test_native_mode_calling_protocol_gated_host_fn() -> Result<(), HostError> {
 fn configure_protocol_test_for_runtime_guardrail(
     host: &Host,
     ledger_proto: u32,
-) -> Result<wasmi::Value, wasmi::Error> {
+) -> Result<wasmi::Val, wasmi::Error> {
     host.enable_debug().unwrap();
     let mut li = LedgerInfo::default();
     li.protocol_version = ledger_proto;
@@ -223,9 +223,9 @@ fn configure_protocol_test_for_runtime_guardrail(
 fn register_and_invoke_custom_vm_no_linker_check(
     host: &Host,
     wasm_code: &[u8],
-) -> Result<wasmi::Value, wasmi::Error> {
-    use crate::vm::protocol_gated_dummy;
-    use wasmi::{Engine, Func, Linker, Module, Store, Value};
+) -> Result<wasmi::Val, wasmi::Error> {
+    use crate::vm::{protocol_gated_dummy, FuelRefillable};
+    use wasmi::{Engine, Func, Linker, Module, Store, Val as Value};
     let mut config = wasmi::Config::default();
     config.consume_fuel(true);
     let engine = Engine::new(&config);
@@ -252,16 +252,13 @@ fn register_and_invoke_custom_vm_no_linker_check(
 
 fn fish_host_error_from_wasm_trap(
     host: &Host,
-    res: Result<wasmi::Value, wasmi::Error>,
+    res: Result<wasmi::Val, wasmi::Error>,
 ) -> Result<Val, HostError> {
     res.map(|r| {
         host.relative_to_absolute(Val::try_marshal_from_value(r).unwrap())
             .unwrap()
     })
-    .map_err(|e| match e {
-        wasmi::Error::Trap(t) => t.downcast().unwrap(),
-        _ => panic!(),
-    })
+    .map_err(|e| e.downcast().unwrap())
 }
 
 // Tests the additional runtime protocol guardrail during host function

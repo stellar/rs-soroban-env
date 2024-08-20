@@ -1,5 +1,5 @@
 use soroban_env_common::ConversionError;
-use wasmi::Value;
+use wasmi::Val as Value;
 
 use crate::{
     cost_runner::{CostRunner, CostType},
@@ -16,20 +16,31 @@ const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
     _ => panic!(),
 };
 
+#[derive(Clone)]
+pub enum InvokeVmFunctionMode {
+    Normal,
+    CheckLazyCompilationCosts,
+}
+
 impl CostRunner for InvokeVmFunctionRun {
     const COST_TYPE: CostType = CostType::Contract(InvokeVmFunction);
 
-    type SampleType = (Rc<Vm>, Vec<Value>);
+    type SampleType = (Rc<Vm>, Vec<Value>, InvokeVmFunctionMode);
 
     type RecycledType = (Option<Val>, Self::SampleType);
 
     const RUN_ITERATIONS: u64 = 100;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+    fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let sym = if let InvokeVmFunctionMode::Normal = sample.2 {
+            TEST_SYM
+        } else {
+            Symbol::try_from_small_str(format!("test{}", iter).as_str()).unwrap()
+        };
         let rv = black_box(
             sample
                 .0
-                .metered_func_call(host, &TEST_SYM, sample.1.as_slice())
+                .metered_func_call(host, &sym, sample.1.as_slice())
                 .unwrap(),
         );
         (Some(rv), sample)
@@ -40,6 +51,9 @@ impl CostRunner for InvokeVmFunctionRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
+        if let InvokeVmFunctionMode::CheckLazyCompilationCosts = sample.2 {
+            black_box(Symbol::try_from_small_str(format!("test{}", 99).as_str()).unwrap());
+        }
         black_box(host.charge_budget(InvokeVmFunction, None).unwrap());
         black_box((None, sample))
     }
