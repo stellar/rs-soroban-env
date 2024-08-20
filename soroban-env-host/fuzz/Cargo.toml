@@ -12,8 +12,14 @@ libfuzzer-sys = "=0.4.7"
 arbitrary = { version = "=1.3.2", features = ["derive"] }
 soroban-env-host = { path = "..", features = ["testutils"]}
 soroban-synth-wasm = { path = "../../soroban-synth-wasm", features = ["testutils"]}
-wasmi = { package = "soroban-wasmi", version = "=0.31.1-soroban.20.0.0" }
 wasm-smith = "=0.13.1"
+
+[dependencies.wasmi]
+package = "soroban-wasmi"
+version = "=0.36.0-soroban.22.0.0"
+git = "https://github.com/stellar/wasmi"
+rev = "122a74a7c491929e5ac9de876099154ef7c06d06"
+features = ["no-hash-maps"]
 
 # Prevent this from interfering with workspaces
 [workspace]
