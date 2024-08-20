@@ -126,7 +126,7 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
         for f in m.functions.iter() {
             // Skip any functions that don't work on all protocols.
             if f.min_supported_protocol.is_some() || f.max_supported_protocol.is_some() {
-                    continue;
+                continue;
             }
             allowed_fns.insert(f.name.clone());
             all_tys.insert(f.r#return.clone());

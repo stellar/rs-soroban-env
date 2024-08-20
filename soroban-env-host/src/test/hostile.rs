@@ -457,7 +457,7 @@ fn instantiate_with_page_and_segment_count(
 #[test]
 fn many_small_segments_ok() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let res = instantiate_with_page_and_segment_count(&host, 1, 10000, 1);
+    let res = instantiate_with_page_and_segment_count(&host, 1, 1000, 1);
     assert!(res.is_ok());
     Ok(())
 }

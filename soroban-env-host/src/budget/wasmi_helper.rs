@@ -127,11 +127,14 @@ pub(crate) fn get_wasmi_config(
         EnforcedLimits::default()
     } else {
         let mut limits = EnforcedLimits::strict();
-        // Weaken the strict limits a bit to allow existing tests to pass.
-        // TODO: decide if it'd be better to change the tests (we need to
-        // consider what actual contracts on the network need).
+        // We mostly use the new "strict" limits, which are designed to minimize
+        // the possibility of DoS Wasms, but we turn off one: the one that
+        // rejects Wasms when the average size of functions is too small. This
+        // is a potential DoS, but only when there are in fact lots of
+        // functions; we expect that given the total size limit of the Wasms in
+        // the network it's not going to be a real DoS for us, and it's fairly
+        // easy to trigger in practice with benign inputs like test wasms.
         limits.min_avg_bytes_per_function = None;
-        limits.max_data_segments = Some(10000);
         limits
     };
 
