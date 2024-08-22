@@ -603,7 +603,8 @@ impl AuthorizedFunction {
                 })
             }
             SorobanAuthorizedFunction::CreateContractHostFn(_) => {
-                return Err(host.err(ScErrorType::Auth, ScErrorCode::InvalidInput, "SorobanAuthorizedFunction::CreateContractHostFn is deprecated in authorization payloads. Please use SorobanAuthorizedFunction::CreateContractHostFnV2 instead.", &[]));
+                return Err(host.err(ScErrorType::Auth, ScErrorCode::InvalidInput,
+                     "SorobanAuthorizedFunction::CreateContractHostFn is no longer supported in authorization payloads. Please use SorobanAuthorizedFunction::CreateContractHostFnV2 instead.", &[]));
             }
             SorobanAuthorizedFunction::CreateContractV2HostFn(xdr_args) => {
                 AuthorizedFunction::CreateContractHostFn(xdr_args)
