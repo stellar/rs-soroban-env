@@ -152,7 +152,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         true
     );
 
-    let max_live_until_ledger: u32 = host.max_live_until_ledger().unwrap().into();
+    let max_live_until_ledger: u32 = host.max_live_until_ledger().unwrap();
     let ledger_seq: u32 = host.get_ledger_sequence().unwrap().into();
     let max_extend = max_live_until_ledger - ledger_seq;
     let threshold: u32 = 1;

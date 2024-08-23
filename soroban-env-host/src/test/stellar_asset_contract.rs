@@ -2297,7 +2297,7 @@ fn test_classic_account_multisig_auth() {
         &test.user_key_3,
         &test.user_key_4,
     ];
-    out_of_order_signers.sort_by_key(|k| k.verifying_key().as_bytes().clone());
+    out_of_order_signers.sort_by_key(|k| *k.verifying_key().as_bytes());
     out_of_order_signers.swap(1, 2);
     assert!(contract
         .transfer(

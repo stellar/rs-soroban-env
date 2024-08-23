@@ -346,7 +346,7 @@ fn chacha_test_vectors() {
     // This just checks that the ChaCha library we're using conforms to
     // test vectors found in RFC 7539.
     let mut seed = [0; 32];
-    let mut chacha_0 = ChaCha20Rng::from_seed(seed.into());
+    let mut chacha_0 = ChaCha20Rng::from_seed(seed);
     // Test vectors 1 and 2 use a 0-seeded ChaCha
     let ref_out1 = hex!("76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc7da41597c5157488d7724e03fb8d84a376a43b8f41518a11cc387b669b2ee6586");
     let ref_out2 = hex!("9f07e7be5551387a98ba977c732d080dcb0f29a048e3656912c6533e32ee7aed29b721769ce64e43d57133b074d839d531ed1f28510afb45ace10a1f4b794d6f");
@@ -358,7 +358,7 @@ fn chacha_test_vectors() {
 
     // Test vector 3 uses a 1-seeded ChaCha
     seed[31] = 1;
-    let mut chacha_1 = ChaCha20Rng::from_seed(seed.into());
+    let mut chacha_1 = ChaCha20Rng::from_seed(seed);
     let ref_out3 = hex!("3aeb5224ecf849929b9d828db1ced4dd832025e8018b8160b82284f3c949aa5a8eca00bbb4a73bdad192b5c42f73f2fd4e273644c8b36125a64addeb006c13a0");
     chacha_1.fill_bytes(&mut out); // advance from block 0 to block 1
     chacha_1.fill_bytes(&mut out);
@@ -367,7 +367,7 @@ fn chacha_test_vectors() {
     // Test vector 4 uses a high-ff-seeded ChaCha
     seed[31] = 0;
     seed[1] = 0xff;
-    let mut chacha_ff = ChaCha20Rng::from_seed(seed.into());
+    let mut chacha_ff = ChaCha20Rng::from_seed(seed);
     let ref_out4 = hex!("72d54dfbf12ec44b362692df94137f328fea8da73990265ec1bbbea1ae9af0ca13b25aa26cb4a648cb9b9d1be65b2c0924a66c54d545ec1b7374f4872e99f096");
     chacha_ff.fill_bytes(&mut out); // advance from block 0 to block 2
     chacha_ff.fill_bytes(&mut out);
@@ -376,7 +376,7 @@ fn chacha_test_vectors() {
 
     // Test vector 5 uses a different "nonce" (a.k.a. "stream number")
     seed[1] = 0;
-    let mut chacha_stream_2 = ChaCha20Rng::from_seed(seed.into());
+    let mut chacha_stream_2 = ChaCha20Rng::from_seed(seed);
     chacha_stream_2.set_stream(0x0200_0000_0000_0000u64);
     let ref_out5 = hex!("c2c64d378cd536374ae204b9ef933fcd1a8b2288b3dfa49672ab765b54ee27c78a970e0e955c14f3a88e741b97c286f75f8fc299e8148362fa198a39531bed6d");
     chacha_stream_2.fill_bytes(&mut out);

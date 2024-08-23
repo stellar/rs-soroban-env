@@ -416,7 +416,7 @@ fn test_bytes_out_of_cpu_budget() -> Result<(), HostError> {
     host.as_budget().reset_unlimited_cpu()?;
     let mut b1 = host.bytes_new_from_slice(&[2; 1])?;
     loop {
-        let res = host.bytes_append(b1, b1.clone());
+        let res = host.bytes_append(b1, b1);
         if res.is_err() {
             assert!(HostError::result_matches_err(
                 res,
@@ -436,7 +436,7 @@ fn test_bytes_out_of_mem_budget() -> Result<(), HostError> {
     host.as_budget().reset_unlimited_mem()?;
     let mut b1 = host.bytes_new_from_slice(&[2; 1])?;
     loop {
-        let res = host.bytes_append(b1, b1.clone());
+        let res = host.bytes_append(b1, b1);
         if res.is_err() {
             assert!(HostError::result_matches_err(
                 res,

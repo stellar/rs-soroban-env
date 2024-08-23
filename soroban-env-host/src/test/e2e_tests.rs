@@ -238,7 +238,7 @@ fn invoke_host_function_helper(
                     LedgerKey::ContractData(LedgerKeyContractData {
                         contract: cd.contract.clone(),
                         key: cd.key.clone(),
-                        durability: cd.durability.clone(),
+                        durability: cd.durability,
                     })
                 }
                 LedgerEntryData::ContractCode(code) => {
@@ -312,7 +312,7 @@ fn invoke_host_function_recording_helper(
         auth_entries,
         ledger_info.clone(),
         snapshot,
-        prng_seed.clone(),
+        *prng_seed,
         &mut diagnostic_events,
     )?;
     Ok(InvokeHostFunctionRecordingHelperResult {

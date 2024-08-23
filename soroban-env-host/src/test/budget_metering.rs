@@ -330,7 +330,7 @@ fn test_metered_collection() -> Result<(), HostError> {
     let res = v
         .iter()
         .filter(|i| i.abs() > 3)
-        .map(|i| Ok(i.abs() as u64))
+        .map(|i| Ok(i.unsigned_abs() as u64))
         .metered_collect::<Result<Vec<u64>, HostError>>(&budget)??;
     assert_eq!(res, vec![4, 6, 11]);
     Ok(())
