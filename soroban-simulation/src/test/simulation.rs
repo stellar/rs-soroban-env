@@ -313,7 +313,7 @@ fn test_simulate_create_contract() {
         )]
     );
     assert!(res.contract_events.is_empty());
-    assert!(res.diagnostic_events.is_empty());
+    assert!(res.diagnostic_events.is_empty());    
     let expected_instructions = 2979643;
     assert_eq!(
         res.transaction_data,

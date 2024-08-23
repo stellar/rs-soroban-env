@@ -602,9 +602,12 @@ impl AuthorizedFunction {
                     args: host.scvals_to_val_vec(xdr_contract_fn.args.as_slice())?,
                 })
             }
-            SorobanAuthorizedFunction::CreateContractHostFn(_) => {
-                return Err(host.err(ScErrorType::Auth, ScErrorCode::InvalidInput,
-                     "SorobanAuthorizedFunction::CreateContractHostFn is no longer supported in authorization payloads. Please use SorobanAuthorizedFunction::CreateContractHostFnV2 instead.", &[]));
+            SorobanAuthorizedFunction::CreateContractHostFn(xdr_args) => {
+                AuthorizedFunction::CreateContractHostFn(CreateContractArgsV2 {
+                    contract_id_preimage: xdr_args.contract_id_preimage,
+                    executable: xdr_args.executable,
+                    constructor_args: Default::default(),
+                })
             }
             SorobanAuthorizedFunction::CreateContractV2HostFn(xdr_args) => {
                 AuthorizedFunction::CreateContractHostFn(xdr_args)

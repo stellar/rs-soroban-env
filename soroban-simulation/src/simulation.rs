@@ -141,6 +141,7 @@ pub fn simulate_invoke_host_function_op(
         base_prng_seed,
         &mut diagnostic_events,
     );
+    dbg!(&budget);
     let invoke_result = match &recording_result {
         Ok(r) => r.invoke_result.clone(),
         Err(e) => Err(e.clone()),

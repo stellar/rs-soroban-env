@@ -207,7 +207,10 @@ fn create_contract_with_constructor(
     // Create contract
     // Check that the test is not misconfigured - we can't pass constructor args
     // into V1 XDR.
-    assert!(constructor_args.is_empty() || !params.use_create_contract_args_v1);
+    assert!(
+        constructor_args.is_empty()
+            || (!params.use_create_contract_args_v1 && !params.use_create_contract_args_v1)
+    );
     let host_fn =
         params.create_host_fn(&contract_id_preimage, &uploaded_wasm_hash, constructor_args);
     let auth_invocation =
@@ -1538,32 +1541,35 @@ mod cap_58_constructor {
                 CONSTRUCTOR_TEST_CONTRACT_P21,
             ] {
                 for use_create_contract_args_v1 in [false, true] {
-                    let host = test_host();
-                    let contract_id = create_contract_with_constructor(
-                        &host,
-                        generate_account_id(&host),
-                        generate_bytes_array(&host),
-                        wasm,
-                        &vec![],
-                        CreateContractTestParams {
-                            use_create_contract_args_v1,
-                            ..Default::default()
-                        },
-                    )
-                    .unwrap();
-                    let err = host
-                        .call(
-                            host.add_host_object(ScAddress::Contract(contract_id))
-                                .unwrap(),
-                            Symbol::try_from_small_str("get_data").unwrap(),
-                            test_vec![&host, Symbol::try_from_small_str("key").unwrap()]
-                                .as_object(),
+                    for use_auth_invocation_v1 in [false, true] {
+                        let host = test_host();
+                        let contract_id = create_contract_with_constructor(
+                            &host,
+                            generate_account_id(&host),
+                            generate_bytes_array(&host),
+                            wasm,
+                            &vec![],
+                            CreateContractTestParams {
+                                use_create_contract_args_v1,
+                                use_auth_invocation_v1,
+                                ..Default::default()
+                            },
                         )
-                        .err()
                         .unwrap();
-                    // SDK produces panic when non-existent value is accessed.
-                    assert!(err.error.is_type(ScErrorType::WasmVm));
-                    assert!(err.error.is_code(ScErrorCode::InvalidAction));
+                        let err = host
+                            .call(
+                                host.add_host_object(ScAddress::Contract(contract_id))
+                                    .unwrap(),
+                                Symbol::try_from_small_str("get_data").unwrap(),
+                                test_vec![&host, Symbol::try_from_small_str("key").unwrap()]
+                                    .as_object(),
+                            )
+                            .err()
+                            .unwrap();
+                        // SDK produces panic when non-existent value is accessed.
+                        assert!(err.error.is_type(ScErrorType::WasmVm));
+                        assert!(err.error.is_code(ScErrorCode::InvalidAction));
+                    }
                 }
             }
         }
@@ -1571,19 +1577,22 @@ mod cap_58_constructor {
         #[test]
         fn test_constructor_with_return_value_is_ignored() {
             for use_create_contract_args_v1 in [false, true] {
-                let host = test_host();
-                let res = create_contract_with_constructor(
-                    &host,
-                    generate_account_id(&host),
-                    generate_bytes_array(&host),
-                    CONSTRUCTOR_WITH_RETURN_VALUE_P21,
-                    &vec![],
-                    CreateContractTestParams {
-                        use_create_contract_args_v1,
-                        ..Default::default()
-                    },
-                );
-                assert!(res.is_ok());
+                for use_auth_invocation_v1 in [false, true] {
+                    let host = test_host();
+                    let res = create_contract_with_constructor(
+                        &host,
+                        generate_account_id(&host),
+                        generate_bytes_array(&host),
+                        CONSTRUCTOR_WITH_RETURN_VALUE_P21,
+                        &vec![],
+                        CreateContractTestParams {
+                            use_create_contract_args_v1,
+                            use_auth_invocation_v1,
+                            ..Default::default()
+                        },
+                    );
+                    assert!(res.is_ok());
+                }
             }
         }
 
@@ -1670,19 +1679,22 @@ mod cap_58_constructor {
             #[test]
             fn test_default_constructor() {
                 for use_create_contract_args_v1 in [false, true] {
-                    let host = test_host();
-                    let res = create_contract_with_constructor(
-                        &host,
-                        generate_account_id(&host),
-                        generate_bytes_array(&host),
-                        ADD_I32_P22,
-                        &vec![],
-                        CreateContractTestParams {
-                            use_create_contract_args_v1,
-                            ..Default::default()
-                        },
-                    );
-                    assert!(res.is_ok());
+                    for use_auth_invocation_v1 in [false, true] {
+                        let host = test_host();
+                        let res = create_contract_with_constructor(
+                            &host,
+                            generate_account_id(&host),
+                            generate_bytes_array(&host),
+                            ADD_I32_P22,
+                            &vec![],
+                            CreateContractTestParams {
+                                use_create_contract_args_v1,
+                                use_auth_invocation_v1,
+                                ..Default::default()
+                            },
+                        );
+                        assert!(res.is_ok());
+                    }
                 }
             }
 
@@ -1698,31 +1710,34 @@ mod cap_58_constructor {
             #[test]
             fn test_constructor_without_arguments() {
                 for use_create_contract_args_v1 in [false, true] {
-                    let host = test_host();
-                    let contract_id = create_contract_with_constructor(
-                        &host,
-                        generate_account_id(&host),
-                        generate_bytes_array(&host),
-                        NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22,
-                        &vec![],
-                        CreateContractTestParams {
-                            use_create_contract_args_v1,
-                            ..Default::default()
-                        },
-                    )
-                    .unwrap();
-                    let res: u32 = host
-                        .call(
-                            host.add_host_object(ScAddress::Contract(contract_id))
-                                .unwrap(),
-                            Symbol::try_from_small_str("get_data").unwrap(),
-                            test_vec![&host, Symbol::try_from_small_str("key").unwrap()]
-                                .as_object(),
+                    for use_auth_invocation_v1 in [false, true] {
+                        let host = test_host();
+                        let contract_id = create_contract_with_constructor(
+                            &host,
+                            generate_account_id(&host),
+                            generate_bytes_array(&host),
+                            NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22,
+                            &vec![],
+                            CreateContractTestParams {
+                                use_create_contract_args_v1,
+                                use_auth_invocation_v1,
+                                ..Default::default()
+                            },
                         )
-                        .unwrap()
-                        .try_into_val(&host)
                         .unwrap();
-                    assert_eq!(res, 6);
+                        let res: u32 = host
+                            .call(
+                                host.add_host_object(ScAddress::Contract(contract_id))
+                                    .unwrap(),
+                                Symbol::try_from_small_str("get_data").unwrap(),
+                                test_vec![&host, Symbol::try_from_small_str("key").unwrap()]
+                                    .as_object(),
+                            )
+                            .unwrap()
+                            .try_into_val(&host)
+                            .unwrap();
+                        assert_eq!(res, 6);
+                    }
                 }
             }
 
@@ -2099,18 +2114,21 @@ mod cap_58_constructor {
         #[test]
         fn test_constructor_with_return_value_is_not_supported() {
             for use_create_contract_args_v1 in [false, true] {
-                let host = test_host();
-                create_contract_error_test(
-                    &host,
-                    CONSTRUCTOR_WITH_RETURN_VALUE_P22,
-                    vec![],
-                    CreateContractTestParams {
-                        use_create_contract_args_v1,
-                        ..Default::default()
-                    },
-                    ScErrorType::Value,
-                    ScErrorCode::UnexpectedType,
-                );
+                for use_auth_invocation_v1 in [false, true] {
+                    let host = test_host();
+                    create_contract_error_test(
+                        &host,
+                        CONSTRUCTOR_WITH_RETURN_VALUE_P22,
+                        vec![],
+                        CreateContractTestParams {
+                            use_create_contract_args_v1,
+                            use_auth_invocation_v1,
+                            ..Default::default()
+                        },
+                        ScErrorType::Value,
+                        ScErrorCode::UnexpectedType,
+                    );
+                }
             }
         }
     }
@@ -2197,35 +2215,39 @@ mod cap_58_constructor {
                 NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P21,
             ] {
                 for use_create_contract_args_v1 in [false, true] {
-                    let host = test_host();
-                    let account_contract =
-                        host.register_test_contract_wasm(CUSTOM_ACCOUNT_CONTEXT_TEST_CONTRACT);
-                    let account_address = host.scaddress_from_address(account_contract).unwrap();
+                    for use_auth_invocation_v1 in [false, true] {
+                        let host = test_host();
+                        let account_contract =
+                            host.register_test_contract_wasm(CUSTOM_ACCOUNT_CONTEXT_TEST_CONTRACT);
+                        let account_address =
+                            host.scaddress_from_address(account_contract).unwrap();
 
-                    let (wasm_hash, wasm_exec) = upload_wasm(&host, wasm);
-                    let salt = generate_bytes_array(&host);
+                        let (wasm_hash, wasm_exec) = upload_wasm(&host, wasm);
+                        let salt = generate_bytes_array(&host);
 
-                    let res = create_contract_with_custom_account_auth_context(
-                        &host,
-                        &account_address,
-                        wasm_hash,
-                        salt.clone(),
-                        &vec![],
-                        CreateContractTestParams {
-                            use_create_contract_args_v1,
-                            ..Default::default()
-                        },
-                        test_vec![
+                        let res = create_contract_with_custom_account_auth_context(
                             &host,
-                            AuthorizationContext::CreateContractHostFn(
-                                CreateContractHostFnContext {
-                                    executable: wasm_exec,
-                                    salt: BytesN::from_slice(&host, salt.as_slice()).unwrap()
-                                }
-                            )
-                        ],
-                    );
-                    assert!(res.is_ok());
+                            &account_address,
+                            wasm_hash,
+                            salt.clone(),
+                            &vec![],
+                            CreateContractTestParams {
+                                use_create_contract_args_v1,
+                                use_auth_invocation_v1,
+                                ..Default::default()
+                            },
+                            test_vec![
+                                &host,
+                                AuthorizationContext::CreateContractHostFn(
+                                    CreateContractHostFnContext {
+                                        executable: wasm_exec,
+                                        salt: BytesN::from_slice(&host, salt.as_slice()).unwrap()
+                                    }
+                                )
+                            ],
+                        );
+                        assert!(res.is_ok());
+                    }
                 }
             }
         }
@@ -2243,41 +2265,46 @@ mod cap_58_constructor {
                 NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P21,
             ] {
                 for use_create_contract_args_v1 in [false, true] {
-                    let host = test_host();
-                    let account_contract =
-                        host.register_test_contract_wasm(CUSTOM_ACCOUNT_CONTEXT_TEST_CONTRACT);
-                    let account_address = host.scaddress_from_address(account_contract).unwrap();
-                    let (wasm_hash, wasm_exec) = upload_wasm(&host, wasm);
-                    let salt = generate_bytes_array(&host);
+                    for use_auth_invocation_v1 in [false, true] {
+                        let host = test_host();
+                        let account_contract =
+                            host.register_test_contract_wasm(CUSTOM_ACCOUNT_CONTEXT_TEST_CONTRACT);
+                        let account_address =
+                            host.scaddress_from_address(account_contract).unwrap();
+                        let (wasm_hash, wasm_exec) = upload_wasm(&host, wasm);
+                        let salt = generate_bytes_array(&host);
 
-                    let err = create_contract_with_custom_account_auth_context(
-                        &host,
-                        &account_address,
-                        wasm_hash,
-                        salt.clone(),
-                        &vec![],
-                        CreateContractTestParams {
-                            use_create_contract_args_v1,
-                            ..Default::default()
-                        },
-                        test_vec![
+                        let err = create_contract_with_custom_account_auth_context(
                             &host,
+                            &account_address,
+                            wasm_hash,
+                            salt.clone(),
+                            &vec![],
+                            CreateContractTestParams {
+                                use_create_contract_args_v1,
+                                use_auth_invocation_v1,
+                                ..Default::default()
+                            },
                             test_vec![
                                 &host,
-                                AuthorizationContext::CreateContractWithCtorHostFn(
-                                    CreateContractWithConstructorHostFnContext {
-                                        executable: wasm_exec,
-                                        salt: BytesN::from_slice(&host, salt.as_slice()).unwrap(),
-                                        constructor_args: test_vec![&host],
-                                    }
-                                )
+                                test_vec![
+                                    &host,
+                                    AuthorizationContext::CreateContractWithCtorHostFn(
+                                        CreateContractWithConstructorHostFnContext {
+                                            executable: wasm_exec,
+                                            salt: BytesN::from_slice(&host, salt.as_slice())
+                                                .unwrap(),
+                                            constructor_args: test_vec![&host],
+                                        }
+                                    )
+                                ],
                             ],
-                        ],
-                    )
-                    .err()
-                    .unwrap();
-                    assert!(err.error.is_type(ScErrorType::Auth));
-                    assert!(err.error.is_code(ScErrorCode::InvalidAction));
+                        )
+                        .err()
+                        .unwrap();
+                        assert!(err.error.is_type(ScErrorType::Auth));
+                        assert!(err.error.is_code(ScErrorCode::InvalidAction));
+                    }
                 }
             }
         }
@@ -2367,34 +2394,5 @@ mod cap_58_constructor {
             );
             assert!(res.is_ok());
         }
-    }
-
-    #[test]
-    fn test_legacy_create_contract_auth_payload_is_not_supported() {
-        let host = test_host();
-        let account_id = generate_account_id(&host);
-        host.set_source_account(account_id.clone()).unwrap();
-        let err = host
-            .set_authorization_entries(vec![SorobanAuthorizationEntry {
-                credentials: SorobanCredentials::SourceAccount,
-                root_invocation: SorobanAuthorizedInvocation {
-                    function: SorobanAuthorizedFunction::CreateContractHostFn(CreateContractArgs {
-                        contract_id_preimage: ContractIdPreimage::Address(
-                            ContractIdPreimageFromAddress {
-                                address: ScAddress::Account(account_id),
-                                salt: generate_bytes_array(&host).try_into().unwrap(),
-                            },
-                        ),
-                        executable: ContractExecutable::Wasm(
-                            generate_bytes_array(&host).try_into().unwrap(),
-                        ),
-                    }),
-                    sub_invocations: Default::default(),
-                },
-            }])
-            .err()
-            .unwrap();
-        assert!(err.error.is_type(ScErrorType::Auth));
-        assert!(err.error.is_code(ScErrorCode::InvalidInput));
     }
 }
