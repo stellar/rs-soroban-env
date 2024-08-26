@@ -14,9 +14,9 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
         ContractCodeEntryV1, ContractDataDurability, ContractEvent, ContractExecutable,
-        ContractIdPreimage, CreateContractArgs, Duration, ExtensionPoint, Hash, Int128Parts,
-        Int256Parts, InvokeContractArgs, LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
+        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, ExtensionPoint,
+        Hash, Int128Parts, Int256Parts, InvokeContractArgs, LedgerEntry, LedgerEntryExt, LedgerKey,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
         ScContractInstance, ScError, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
         ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
         SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, TtlEntry,
@@ -123,11 +123,11 @@ impl_declared_size_type!(InternalEvent, 40);
 impl_declared_size_type!(EventError, 1);
 
 impl_declared_size_type!(ContractInvocation, 16);
-impl_declared_size_type!(AuthorizedInvocation, 136);
+impl_declared_size_type!(AuthorizedInvocation, 160);
 impl_declared_size_type!(AuthorizedInvocationSnapshot, 32);
-impl_declared_size_type!(AccountAuthorizationTracker, 232);
+impl_declared_size_type!(AccountAuthorizationTracker, 256);
 impl_declared_size_type!(AccountAuthorizationTrackerSnapshot, 40);
-impl_declared_size_type!(InvokerContractAuthorizationTracker, 192);
+impl_declared_size_type!(InvokerContractAuthorizationTracker, 216);
 impl_declared_size_type!(InternalDiagnosticArg, 64);
 impl_declared_size_type!(InternalDiagnosticEvent, 88);
 
@@ -173,12 +173,13 @@ impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
 impl_declared_size_type!(ScError, 8);
 impl_declared_size_type!(CreateContractArgs, 98);
+impl_declared_size_type!(CreateContractArgsV2, 128);
 impl_declared_size_type!(InvokeContractArgs, 88);
 impl_declared_size_type!(ContractIdPreimage, 65);
 impl_declared_size_type!(ContractDataDurability, 4);
 
 // NB: ExtensionPoint is a 1-variant enum with no payload, which Rust optimizes
-// to take zero bytes of memroy -- but in XDR it's a 4-byte type like any other
+// to take zero bytes of memory -- but in XDR it's a 4-byte type like any other
 // union.
 //
 // It exists to help allow the protocol to evolve, as a placeholder type in XDR.
@@ -251,9 +252,9 @@ impl_declared_size_type!(ContractDataDurability, 4);
 impl_declared_size_type!(ExtensionPoint, 0);
 
 impl_declared_size_type!(ScContractInstance, 64);
-impl_declared_size_type!(SorobanAuthorizationEntry, 240);
-impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
-impl_declared_size_type!(SorobanAuthorizedFunction, 104);
+impl_declared_size_type!(SorobanAuthorizationEntry, 264);
+impl_declared_size_type!(SorobanAuthorizedInvocation, 152);
+impl_declared_size_type!(SorobanAuthorizedFunction, 128);
 
 // composite types
 
@@ -422,13 +423,13 @@ mod test {
         expect!["1"].assert_eq(size_of::<EventError>().to_string().as_str());
 
         expect!["16"].assert_eq(size_of::<ContractInvocation>().to_string().as_str());
-        expect!["136"].assert_eq(size_of::<AuthorizedInvocation>().to_string().as_str());
+        expect!["160"].assert_eq(size_of::<AuthorizedInvocation>().to_string().as_str());
         expect!["32"].assert_eq(
             size_of::<AuthorizedInvocationSnapshot>()
                 .to_string()
                 .as_str(),
         );
-        expect!["232"].assert_eq(
+        expect!["256"].assert_eq(
             size_of::<AccountAuthorizationTracker>()
                 .to_string()
                 .as_str(),
@@ -438,7 +439,7 @@ mod test {
                 .to_string()
                 .as_str(),
         );
-        expect!["192"].assert_eq(
+        expect!["216"].assert_eq(
             size_of::<InvokerContractAuthorizationTracker>()
                 .to_string()
                 .as_str(),
@@ -503,18 +504,19 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<ScError>().to_string().as_str());
         expect!["98"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
+        expect!["128"].assert_eq(size_of::<CreateContractArgsV2>().to_string().as_str());
         expect!["88"].assert_eq(size_of::<InvokeContractArgs>().to_string().as_str());
         expect!["65"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<ContractDataDurability>().to_string().as_str());
         expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ScContractInstance>().to_string().as_str());
-        expect!["240"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
-        expect!["128"].assert_eq(
+        expect!["264"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
+        expect!["152"].assert_eq(
             size_of::<SorobanAuthorizedInvocation>()
                 .to_string()
                 .as_str(),
         );
-        expect!["104"].assert_eq(size_of::<SorobanAuthorizedFunction>().to_string().as_str());
+        expect!["128"].assert_eq(size_of::<SorobanAuthorizedFunction>().to_string().as_str());
 
         // composite types
         expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());
@@ -678,6 +680,7 @@ mod test {
         assert_mem_size_le_declared_size!(ScSymbol);
         assert_mem_size_le_declared_size!(ScError);
         assert_mem_size_le_declared_size!(CreateContractArgs);
+        assert_mem_size_le_declared_size!(CreateContractArgsV2);
         assert_mem_size_le_declared_size!(InvokeContractArgs);
         assert_mem_size_le_declared_size!(ContractIdPreimage);
         assert_mem_size_le_declared_size!(ContractDataDurability);

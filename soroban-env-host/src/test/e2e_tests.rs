@@ -20,8 +20,8 @@ use crate::{
         ExtensionPoint, HashIdPreimage, HashIdPreimageSorobanAuthorization, HostFunction,
         InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
         LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScErrorCode,
-        ScErrorType, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
-        TtlEntry, Uint256, WriteXdr,
+        ScErrorType, ScMap, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials,
+        SorobanResources, TtlEntry, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -33,7 +33,8 @@ use sha2::{Digest, Sha256};
 use soroban_env_common::TryIntoVal;
 use soroban_test_wasms::{
     ADD_F32, ADD_I32, AUTH_TEST_CONTRACT, CONTRACT_STORAGE, DEPLOYER_TEST_CONTRACT, LINEAR_MEMORY,
-    SIMPLE_ACCOUNT_CONTRACT, SUM_I32, UPDATEABLE_CONTRACT,
+    NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22, SIMPLE_ACCOUNT_CONTRACT, SUM_I32,
+    UPDATEABLE_CONTRACT,
 };
 use std::rc::Rc;
 
@@ -974,6 +975,123 @@ fn test_create_contract_success() {
 }
 
 #[test]
+fn test_create_contract_with_no_argument_constructor_success() {
+    let cd = CreateContractData::new([111; 32], NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22);
+    let ledger_info = default_ledger_info();
+    let persistent_entry_key = contract_data_key(
+        &cd.contract_address,
+        &symbol_sc_val("key"),
+        ContractDataDurability::Persistent,
+    );
+    let temp_entry_key = contract_data_key(
+        &cd.contract_address,
+        &symbol_sc_val("key"),
+        ContractDataDurability::Temporary,
+    );
+    let res = invoke_host_function_helper(
+        true,
+        &cd.host_fn,
+        &resources(
+            10_000_000,
+            vec![cd.wasm_key.clone()],
+            vec![
+                cd.contract_key.clone(),
+                persistent_entry_key.clone(),
+                temp_entry_key.clone(),
+            ],
+        ),
+        &cd.deployer,
+        vec![cd.auth_entry],
+        &ledger_info,
+        vec![(
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100),
+        )],
+        &prng_seed(),
+    )
+    .unwrap();
+    assert_eq!(
+        res.invoke_result.unwrap(),
+        ScVal::Address(cd.contract_address.clone())
+    );
+    assert!(res.contract_events.is_empty());
+    let mut expected_contract_entry = cd.contract_entry.clone();
+    if let LedgerEntryData::ContractData(cd) = &mut expected_contract_entry.data {
+        if let ScVal::ContractInstance(instance) = &mut cd.val {
+            instance.storage =
+                Some(ScMap::sorted_from(vec![(symbol_sc_val("key"), u32_sc_val(2))]).unwrap());
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    };
+    assert_eq!(
+        res.ledger_changes,
+        vec![
+            LedgerEntryChangeHelper {
+                read_only: false,
+                key: temp_entry_key.clone(),
+                old_entry_size_bytes: 0,
+                new_value: Some(contract_data_entry(
+                    &cd.contract_address,
+                    &symbol_sc_val("key"),
+                    &u32_sc_val(3),
+                    ContractDataDurability::Temporary
+                )),
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&temp_entry_key),
+                    durability: ContractDataDurability::Temporary,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: ledger_info.sequence_number
+                        + ledger_info.min_temp_entry_ttl
+                        - 1,
+                }),
+            },
+            LedgerEntryChangeHelper {
+                read_only: false,
+                key: persistent_entry_key.clone(),
+                old_entry_size_bytes: 0,
+                new_value: Some(contract_data_entry(
+                    &cd.contract_address,
+                    &symbol_sc_val("key"),
+                    &u32_sc_val(1),
+                    ContractDataDurability::Persistent
+                )),
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&persistent_entry_key),
+                    durability: ContractDataDurability::Persistent,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: ledger_info.sequence_number
+                        + ledger_info.min_persistent_entry_ttl
+                        - 1,
+                }),
+            },
+            LedgerEntryChangeHelper {
+                read_only: false,
+                key: cd.contract_key.clone(),
+                old_entry_size_bytes: 0,
+                new_value: Some(expected_contract_entry),
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&cd.contract_key),
+                    durability: ContractDataDurability::Persistent,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: ledger_info.sequence_number
+                        + ledger_info.min_persistent_entry_ttl
+                        - 1,
+                }),
+            },
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100
+            ),
+        ]
+    );
+    assert!(res.budget.get_cpu_insns_consumed().unwrap() > 0);
+    assert!(res.budget.get_mem_bytes_consumed().unwrap() > 0);
+}
+
+#[test]
 fn test_create_contract_success_in_recording_mode() {
     let cd = CreateContractData::new([111; 32], ADD_I32);
     let ledger_info = default_ledger_info();
@@ -1020,7 +1138,6 @@ fn test_create_contract_success_in_recording_mode() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    let (expected_insns, expected_read_bytes) = (453719, 684);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1028,8 +1145,8 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: expected_insns,
-            read_bytes: expected_read_bytes,
+            instructions: 751027,
+            read_bytes: 684,
             write_bytes: 104,
         }
     );
@@ -1082,7 +1199,6 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    let (expected_insns, expected_read_bytes) = (455160, 684);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1090,8 +1206,8 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: expected_insns,
-            read_bytes: expected_read_bytes,
+            instructions: 752472,
+            read_bytes: 684,
             write_bytes: 104,
         }
     );
@@ -1511,7 +1627,6 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    let (expected_insns, expected_read_bytes) = (1131993, 3132);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1521,8 +1636,8 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: expected_insns,
-            read_bytes: expected_read_bytes,
+            instructions: 1131993,
+            read_bytes: 3132,
             write_bytes: 80,
         }
     );
@@ -1574,7 +1689,6 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    let (expected_insns, expected_read_bytes) = (1245383, 3212);
     assert_eq!(
         extend_res.resources,
         SorobanResources {
@@ -1588,8 +1702,8 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: expected_insns,
-            read_bytes: expected_read_bytes,
+            instructions: 1245383,
+            read_bytes: 3212,
             write_bytes: 0,
         }
     );

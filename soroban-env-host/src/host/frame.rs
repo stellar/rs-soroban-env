@@ -8,8 +8,8 @@ use crate::{
     },
     storage::{InstanceStorageMap, StorageMap},
     xdr::{
-        ContractExecutable, ContractIdPreimage, Hash, HostFunction, HostFunctionType, ScAddress,
-        ScContractInstance, ScErrorCode, ScErrorType, ScVal,
+        ContractExecutable, ContractIdPreimage, CreateContractArgsV2, Hash, HostFunction,
+        HostFunctionType, ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScVal,
     },
     AddressObject, Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
     Vm, DEFAULT_HOST_DEPTH_LIMIT,
@@ -94,6 +94,31 @@ pub(crate) struct Context {
     pub(crate) frame: Frame,
     pub(crate) prng: Option<Prng>,
     pub(crate) storage: Option<InstanceStorageMap>,
+}
+
+pub(crate) struct CallParams {
+    pub(crate) reentry_mode: ContractReentryMode,
+    pub(crate) internal_host_call: bool,
+    pub(crate) treat_missing_function_as_noop: bool,
+}
+
+impl CallParams {
+    pub(crate) fn default_external_call() -> Self {
+        Self {
+            reentry_mode: ContractReentryMode::Prohibited,
+            internal_host_call: false,
+            treat_missing_function_as_noop: false,
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn default_internal_call() -> Self {
+        Self {
+            reentry_mode: ContractReentryMode::Prohibited,
+            internal_host_call: true,
+            treat_missing_function_as_noop: false,
+        }
+    }
 }
 
 /// Holds contextual information about a single invocation, either
@@ -637,7 +662,13 @@ impl Host {
     }
 
     // Notes on metering: this is covered by the called components.
-    fn call_contract_fn(&self, id: &Hash, func: &Symbol, args: &[Val]) -> Result<Val, HostError> {
+    fn call_contract_fn(
+        &self,
+        id: &Hash,
+        func: &Symbol,
+        args: &[Val],
+        treat_missing_function_as_noop: bool,
+    ) -> Result<Val, HostError> {
         // Create key for storage
         let storage_key = self.contract_instance_ledger_key(id)?;
         let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
@@ -645,106 +676,7 @@ impl Host {
         let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
-                // If the module cache is not yet built, build it now, before first access.
-                // Unless we're in recording mode, because in that case the cache is built
-                // late in [pop_context] after we've determined the transaction footprint.
-                // In the latter case we just mark that the module cache needs to be built.
-                #[cfg(any(test, feature = "recording_mode"))]
-                {
-                    if !self.in_storage_recording_mode()? {
-                        self.build_module_cache_if_needed()?;
-                    } else {
-                        *(self.try_borrow_need_to_build_module_cache_mut()?) = true;
-                    }
-                }
-                #[cfg(not(any(test, feature = "recording_mode")))]
-                self.build_module_cache_if_needed()?;
-
-                let contract_id = id.metered_clone(self)?;
-                let parsed_module = if let Some(cache) = &*self.try_borrow_module_cache()? {
-                    // Check that storage thinks the entry exists before
-                    // checking the cache: this seems like overkill but it
-                    // provides some future-proofing, see below.
-                    let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
-                    if self
-                        .try_borrow_storage_mut()?
-                        .has_with_host(&wasm_key, self, None)?
-                    {
-                        cache.get_module(self, wasm_hash)?
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-                let vm = if let Some(module) = parsed_module {
-                    Vm::from_parsed_module(self, contract_id, module)?
-                } else {
-                    // We can get here a few ways:
-                    //
-                    //   1. We are running/replaying a protocol that has no
-                    //      module cache.
-                    //
-                    //   2. We have a module cache, but it somehow doesn't have
-                    //      the module requested. This in turn has two
-                    //      sub-cases:
-                    //
-                    //     - User invoked us with bad input, eg. calling a
-                    //       contract that wasn't provided in footprint/storage.
-                    //
-                    //     - User uploaded the wasm _in this transaction_ so we
-                    //       didn't cache it when starting the transaction (and
-                    //       couldn't due to wasmi locking its engine while
-                    //       running).
-                    //
-                    //   3. Even more pathological: the module cache was built,
-                    //      and contained the module, but someone _removed_ the
-                    //      wasm from storage after the the cache was built
-                    //      (this is not currently possible from guest code, but
-                    //      we do some future-proofing here in case it becomes
-                    //      possible). This is the case we handle above with the
-                    //      early check for storage.has(wasm_key) before
-                    //      checking the cache as well.
-                    //
-                    // In all these cases, we want to try accessing storage, and
-                    // if it has the wasm, make a _throwaway_ module with its
-                    // own engine. If it doesn't have the wasm, we want to fail
-                    // with a storage error.
-
-                    let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
-
-                    #[cfg(any(test, feature = "recording_mode"))]
-                    // In recording mode: if a contract was present in the initial snapshot image, it is part of
-                    // the set of contracts that would have been built into a module cache in enforcing mode;
-                    // we want to defer the cost of parsing those (simulating them as cache hits) and then charge
-                    // once for each such contract the simulated-module-cache-build that happens at the end of
-                    // the frame in [`Self::pop_context`].
-                    //
-                    // If a contract is _not_ in the initial snapshot image, it's because someone just uploaded
-                    // it during execution. Those would be cache misses in enforcing mode, and so it is right to
-                    // continue to charge for them as such (charging the parse cost on each call) in recording.
-                    let cost_mode = if self.in_storage_recording_mode()? {
-                        let contact_code_key =
-                            self.budget_ref().with_observable_shadow_mode(|| {
-                                self.contract_code_ledger_key(wasm_hash)
-                            })?;
-                        if self
-                            .try_borrow_storage()?
-                            .get_snapshot_value(self, &contact_code_key)?
-                            .is_some()
-                        {
-                            crate::vm::ModuleParseCostMode::PossiblyDeferredIfRecording
-                        } else {
-                            crate::vm::ModuleParseCostMode::Normal
-                        }
-                    } else {
-                        crate::vm::ModuleParseCostMode::Normal
-                    };
-                    #[cfg(not(any(test, feature = "recording_mode")))]
-                    let cost_mode = crate::vm::ModuleParseCostMode::Normal;
-
-                    Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs, cost_mode)?
-                };
+                let vm = self.instantiate_vm(id, wasm_hash)?;
                 let relative_objects = Vec::new();
                 self.with_frame(
                     Frame::ContractVM {
@@ -754,7 +686,7 @@ impl Host {
                         instance,
                         relative_objects,
                     },
-                    || vm.invoke_function_raw(self, func, args),
+                    || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
                 )
             }
             ContractExecutable::StellarAsset => self.with_frame(
@@ -767,18 +699,132 @@ impl Host {
         }
     }
 
+    fn instantiate_vm(&self, id: &Hash, wasm_hash: &Hash) -> Result<Rc<Vm>, HostError> {
+        #[cfg(any(test, feature = "recording_mode"))]
+        {
+            if !self.in_storage_recording_mode()? {
+                self.build_module_cache_if_needed()?;
+            } else {
+                *(self.try_borrow_need_to_build_module_cache_mut()?) = true;
+            }
+        }
+        #[cfg(not(any(test, feature = "recording_mode")))]
+        self.build_module_cache_if_needed()?;
+        let contract_id = id.metered_clone(self)?;
+        let parsed_module = if let Some(cache) = &*self.try_borrow_module_cache()? {
+            // Check that storage thinks the entry exists before
+            // checking the cache: this seems like overkill but it
+            // provides some future-proofing, see below.
+            let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
+            if self
+                .try_borrow_storage_mut()?
+                .has_with_host(&wasm_key, self, None)?
+            {
+                cache.get_module(self, wasm_hash)?
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some(module) = parsed_module {
+            return Vm::from_parsed_module(self, contract_id, module);
+        };
+        // We can get here a few ways:
+        //
+        //   1. We are running/replaying a protocol that has no
+        //      module cache.
+        //
+        //   2. We have a module cache, but it somehow doesn't have
+        //      the module requested. This in turn has two
+        //      sub-cases:
+        //
+        //     - User invoked us with bad input, eg. calling a
+        //       contract that wasn't provided in footprint/storage.
+        //
+        //     - User uploaded the wasm _in this transaction_ so we
+        //       didn't cache it when starting the transaction (and
+        //       couldn't due to wasmi locking its engine while
+        //       running).
+        //
+        //   3. Even more pathological: the module cache was built,
+        //      and contained the module, but someone _removed_ the
+        //      wasm from storage after the the cache was built
+        //      (this is not currently possible from guest code, but
+        //      we do some future-proofing here in case it becomes
+        //      possible). This is the case we handle above with the
+        //      early check for storage.has(wasm_key) before
+        //      checking the cache as well.
+        //
+        // In all these cases, we want to try accessing storage, and
+        // if it has the wasm, make a _throwaway_ module with its
+        // own engine. If it doesn't have the wasm, we want to fail
+        // with a storage error.
+
+        let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
+
+        #[cfg(any(test, feature = "recording_mode"))]
+        // In recording mode: if a contract was present in the initial snapshot image, it is part of
+        // the set of contracts that would have been built into a module cache in enforcing mode;
+        // we want to defer the cost of parsing those (simulating them as cache hits) and then charge
+        // once for each such contract the simulated-module-cache-build that happens at the end of
+        // the frame in [`Self::pop_context`].
+        //
+        // If a contract is _not_ in the initial snapshot image, it's because someone just uploaded
+        // it during execution. Those would be cache misses in enforcing mode, and so it is right to
+        // continue to charge for them as such (charging the parse cost on each call) in recording.
+        let cost_mode = if self.in_storage_recording_mode()? {
+            let contact_code_key = self
+                .budget_ref()
+                .with_observable_shadow_mode(|| self.contract_code_ledger_key(wasm_hash))?;
+            if self
+                .try_borrow_storage()?
+                .get_snapshot_value(self, &contact_code_key)?
+                .is_some()
+            {
+                crate::vm::ModuleParseCostMode::PossiblyDeferredIfRecording
+            } else {
+                crate::vm::ModuleParseCostMode::Normal
+            }
+        } else {
+            crate::vm::ModuleParseCostMode::Normal
+        };
+        #[cfg(not(any(test, feature = "recording_mode")))]
+        let cost_mode = crate::vm::ModuleParseCostMode::Normal;
+
+        Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs, cost_mode)
+    }
+
+    pub(crate) fn get_contract_protocol_version(
+        &self,
+        contract_id: &Hash,
+    ) -> Result<u32, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        if self.is_test_contract_executable(contract_id)? {
+            return self.get_ledger_protocol_version();
+        }
+        let storage_key = self.contract_instance_ledger_key(contract_id)?;
+        let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
+        match &instance.executable {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let vm = self.instantiate_vm(contract_id, wasm_hash)?;
+                Ok(vm.module.proto_version)
+            }
+            ContractExecutable::StellarAsset => self.get_ledger_protocol_version(),
+        }
+    }
+
     // Notes on metering: this is covered by the called components.
     pub(crate) fn call_n_internal(
         &self,
         id: &Hash,
         func: Symbol,
         args: &[Val],
-        reentry_mode: ContractReentryMode,
-        internal_host_call: bool,
+        call_params: CallParams,
     ) -> Result<Val, HostError> {
         // Internal host calls may call some special functions that otherwise
         // aren't allowed to be called.
-        if !internal_host_call
+        if !call_params.internal_host_call
             && SymbolStr::try_from_val(self, &func)?
                 .to_string()
                 .as_str()
@@ -792,7 +838,7 @@ impl Host {
             ));
         }
 
-        if !matches!(reentry_mode, ContractReentryMode::Allowed) {
+        if !matches!(call_params.reentry_mode, ContractReentryMode::Allowed) {
             let reentry_distance = self
                 .try_borrow_context_stack()?
                 .iter()
@@ -800,7 +846,7 @@ impl Host {
                 .filter_map(|c| c.frame.contract_id())
                 .position(|caller| caller == id);
 
-            match (reentry_mode, reentry_distance) {
+            match (call_params.reentry_mode, reentry_distance) {
                 // Non-reentrant calls, or calls in Allowed mode,
                 // or immediate-reentry calls in SelfAllowed mode
                 // are all acceptable.
@@ -873,12 +919,18 @@ impl Host {
                             self.fn_return_diagnostics(id, &func, &val);
                             Ok(val)
                         }
-                        Ok(None) => Err(self.err(
-                            ScErrorType::Context,
-                            ScErrorCode::MissingValue,
-                            "calling unknown contract function",
-                            &[func.to_val()],
-                        )),
+                        Ok(None) => {
+                            if call_params.treat_missing_function_as_noop {
+                                Ok(Val::VOID.into())
+                            } else {
+                                Err(self.err(
+                                    ScErrorType::Context,
+                                    ScErrorCode::MissingValue,
+                                    "calling unknown contract function",
+                                    &[func.to_val()],
+                                ))
+                            }
+                        }
                         Err(panic_payload) => {
                             // Return an error indicating the contract function
                             // panicked.
@@ -943,7 +995,8 @@ impl Host {
             }
         }
 
-        let res = self.call_contract_fn(id, &func, args);
+        let res =
+            self.call_contract_fn(id, &func, args, call_params.treat_missing_function_as_noop);
 
         match &res {
             Ok(res) => self.fn_return_diagnostics(id, &func, res),
@@ -971,14 +1024,11 @@ impl Host {
                     };
                     let function_name: Symbol = invoke_args.function_name.try_into_val(self)?;
                     let args = self.scvals_to_val_vec(invoke_args.args.as_slice())?;
-                    // since the `HostFunction` frame must be the bottom of the call stack,
-                    // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
                     self.call_n_internal(
                         contract_id,
                         function_name,
                         args.as_slice(),
-                        ContractReentryMode::Prohibited,
-                        false,
+                        CallParams::default_external_call(),
                     )
                 })
             }
@@ -989,7 +1039,26 @@ impl Host {
                     }
                     ContractIdPreimage::Asset(_) => None,
                 };
-                self.create_contract_internal(deployer, args)
+                self.create_contract_internal(
+                    deployer,
+                    CreateContractArgsV2 {
+                        contract_id_preimage: args.contract_id_preimage,
+                        executable: args.executable,
+                        constructor_args: Default::default(),
+                    },
+                    vec![],
+                )
+                .map(<Val>::from)
+            }),
+            HostFunction::CreateContractV2(args) => self.with_frame(frame, || {
+                let deployer: Option<AddressObject> = match &args.contract_id_preimage {
+                    ContractIdPreimage::Address(preimage_from_addr) => {
+                        Some(self.add_host_object(preimage_from_addr.address.metered_clone(self)?)?)
+                    }
+                    ContractIdPreimage::Asset(_) => None,
+                };
+                let arg_vals = self.scvals_to_val_vec(args.constructor_args.as_slice())?;
+                self.create_contract_internal(deployer, args, arg_vals)
                     .map(<Val>::from)
             }),
             HostFunction::UploadContractWasm(wasm) => self.with_frame(frame, || {

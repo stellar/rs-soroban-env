@@ -6,10 +6,11 @@ use crate::{
     storage::Storage,
     xdr::{
         AccountId, ContractCostType, ContractDataDurability, ContractExecutable,
-        CreateContractArgs, Duration, Hash, Int128Parts, Int256Parts, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress,
-        ScContractInstance, ScError, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey,
-        ScVal, ScVec, TimePoint, TrustLineAsset, UInt128Parts, UInt256Parts, Uint256,
+        CreateContractArgs, CreateContractArgsV2, Duration, Hash, Int128Parts, Int256Parts,
+        LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+        LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScError, ScErrorCode,
+        ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset,
+        UInt128Parts, UInt256Parts, Uint256,
     },
     Compare, Host, HostError, SymbolStr, I256, U256,
 };
@@ -186,6 +187,7 @@ impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
 impl_compare_fixed_size_ord_type!(ContractDataDurability);
 impl_compare_fixed_size_ord_type!(CreateContractArgs);
+impl_compare_fixed_size_ord_type!(CreateContractArgsV2);
 
 impl_compare_fixed_size_ord_type!(LedgerKeyAccount);
 impl_compare_fixed_size_ord_type!(LedgerKeyTrustLine);

@@ -161,10 +161,10 @@ use crate::{
     },
     host_object::HostVec,
     xdr::{
-        ContractDataEntry, CreateContractArgs, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode,
-        ScErrorType, ScNonceKey, ScVal, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanCredentials,
+        ContractDataEntry, CreateContractArgsV2, HashIdPreimage,
+        HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry, LedgerEntryData,
+        LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
+        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanCredentials,
     },
     AddressObject, Compare, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val, VecObject,
 };
@@ -480,7 +480,7 @@ pub(crate) struct InvokerContractAuthorizationTracker {
 #[derive(Clone, Hash)]
 pub(crate) enum AuthStackFrame {
     Contract(ContractInvocation),
-    CreateContractHostFn(CreateContractArgs),
+    CreateContractHostFn(CreateContractArgsV2),
 }
 
 #[derive(Clone, Hash)]
@@ -499,7 +499,7 @@ pub(crate) struct ContractFunction {
 #[derive(Clone, Hash)]
 pub(crate) enum AuthorizedFunction {
     ContractFn(ContractFunction),
-    CreateContractHostFn(CreateContractArgs),
+    CreateContractHostFn(CreateContractArgsV2),
 }
 
 // A single node in the authorized invocation tree.
@@ -603,6 +603,13 @@ impl AuthorizedFunction {
                 })
             }
             SorobanAuthorizedFunction::CreateContractHostFn(xdr_args) => {
+                AuthorizedFunction::CreateContractHostFn(CreateContractArgsV2 {
+                    contract_id_preimage: xdr_args.contract_id_preimage,
+                    executable: xdr_args.executable,
+                    constructor_args: Default::default(),
+                })
+            }
+            SorobanAuthorizedFunction::CreateContractV2HostFn(xdr_args) => {
                 AuthorizedFunction::CreateContractHostFn(xdr_args)
             }
         })
@@ -620,7 +627,7 @@ impl AuthorizedFunction {
                 }))
             }
             AuthorizedFunction::CreateContractHostFn(create_contract_args) => {
-                Ok(SorobanAuthorizedFunction::CreateContractHostFn(
+                Ok(SorobanAuthorizedFunction::CreateContractV2HostFn(
                     create_contract_args.metered_clone(host)?,
                 ))
             }
@@ -1265,9 +1272,9 @@ impl AuthorizationManager {
     pub(crate) fn push_create_contract_host_fn_frame(
         &self,
         host: &Host,
-        args: CreateContractArgs,
+        args: CreateContractArgsV2,
     ) -> Result<(), HostError> {
-        Vec::<CreateContractArgs>::charge_bulk_init_cpy(1, host)?;
+        Vec::<CreateContractArgsV2>::charge_bulk_init_cpy(1, host)?;
         self.try_borrow_call_stack_mut(host)?
             .push(AuthStackFrame::CreateContractHostFn(args));
         self.push_tracker_frame(host)
@@ -2251,7 +2258,7 @@ impl Host {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-use crate::{host::frame::ContractReentryMode, xdr::SorobanAuthorizedInvocation};
+use crate::{host::frame::CallParams, xdr::SorobanAuthorizedInvocation};
 
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
@@ -2272,8 +2279,7 @@ impl Host {
             &contract_id,
             ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(self)?,
             args_vec.as_slice(),
-            ContractReentryMode::Prohibited,
-            true,
+            CallParams::default_internal_call(),
         );
         if let Err(e) = &res {
             self.error(

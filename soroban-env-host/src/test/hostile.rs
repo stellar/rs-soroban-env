@@ -339,23 +339,19 @@ fn excessive_memory_growth() -> Result<(), HostError> {
     Ok(())
 }
 
-fn instantiate_with_mem_and_table_sizes(
+fn upload_wasm_with_mem_and_table_sizes(
     host: &Host,
     mem_pages: u32,
     elem_count: u32,
-) -> Result<crate::AddressObject, HostError> {
+) -> Result<crate::BytesObject, HostError> {
     let wasm = wasm_util::wasm_module_with_user_specified_initial_size(mem_pages, elem_count);
-    host.register_test_contract_wasm_from_source_account(
-        wasm.as_slice(),
-        AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
-        [0; 32],
-    )
+    host.upload_contract_wasm(wasm)
 }
 
 #[test]
 fn moderate_sized_initial_memory_request_ok() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let res = instantiate_with_mem_and_table_sizes(&host, 10, 0);
+    let res = upload_wasm_with_mem_and_table_sizes(&host, 10, 0);
     assert!(res.is_ok());
     assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000 * 10);
     Ok(())
@@ -364,7 +360,7 @@ fn moderate_sized_initial_memory_request_ok() -> Result<(), HostError> {
 #[test]
 fn initial_memory_request_over_limit_fails() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let res = instantiate_with_mem_and_table_sizes(&host, 1000, 0);
+    let res = upload_wasm_with_mem_and_table_sizes(&host, 1000, 0);
     assert!(HostError::result_matches_err(
         res,
         Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
@@ -377,7 +373,7 @@ fn initial_memory_request_over_limit_fails() -> Result<(), HostError> {
 #[test]
 fn moderate_sized_initial_table_request_ok() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let res = instantiate_with_mem_and_table_sizes(&host, 0, 500);
+    let res = upload_wasm_with_mem_and_table_sizes(&host, 0, 500);
     assert!(res.is_ok());
     Ok(())
 }
@@ -385,7 +381,7 @@ fn moderate_sized_initial_table_request_ok() -> Result<(), HostError> {
 #[test]
 fn initial_table_request_over_limit_fails() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let res = instantiate_with_mem_and_table_sizes(&host, 0, 2000);
+    let res = upload_wasm_with_mem_and_table_sizes(&host, 0, 2000);
     assert!(HostError::result_matches_err(
         res,
         Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit),
@@ -393,25 +389,21 @@ fn initial_table_request_over_limit_fails() -> Result<(), HostError> {
     Ok(())
 }
 
-fn instantiate_with_data_segment(
+fn upload_wasm_with_data_segment(
     host: &Host,
     mem_pages: u32,
     mem_offset: u32,
     len: u32,
-) -> Result<crate::AddressObject, HostError> {
+) -> Result<crate::BytesObject, HostError> {
     let wasm = wasm_util::wasm_module_with_large_data_segment(mem_pages, mem_offset, len);
-    host.register_test_contract_wasm_from_source_account(
-        wasm.as_slice(),
-        AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
-        [0; 32],
-    )
+    host.upload_contract_wasm(wasm)
 }
 
 #[test]
 fn data_segment_smaller_than_a_page_fits_in_one_page_memory() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.as_budget().reset_unlimited_cpu()?;
-    let res = instantiate_with_data_segment(&host, 1, 0, 5000);
+    let res = upload_wasm_with_data_segment(&host, 1, 0, 5000);
     assert!(res.is_ok());
     assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
     Ok(())
@@ -421,7 +413,7 @@ fn data_segment_smaller_than_a_page_fits_in_one_page_memory() -> Result<(), Host
 fn data_segment_larger_than_a_page_does_not_fit_in_one_page_memory() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.as_budget().reset_unlimited_cpu()?;
-    let res = instantiate_with_data_segment(&host, 1, 0, 100_000);
+    let res = upload_wasm_with_data_segment(&host, 1, 0, 100_000);
     assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
     assert!(HostError::result_matches_err(
         res,
@@ -434,7 +426,7 @@ fn data_segment_larger_than_a_page_does_not_fit_in_one_page_memory() -> Result<(
 fn data_segment_larger_than_a_page_fits_in_two_page_memory() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.as_budget().reset_unlimited_cpu()?;
-    let res = instantiate_with_data_segment(&host, 2, 0, 100_000);
+    let res = upload_wasm_with_data_segment(&host, 2, 0, 100_000);
     assert!(res.is_ok());
     assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 2 * 0x10_000);
     Ok(())
@@ -527,7 +519,9 @@ fn excessive_logging() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
-
+    let constructor_events_len = host.get_events()?.0.len();
+    // 2 diagnostic events are emitted for 'calling' the default constructor.
+    assert_eq!(constructor_events_len, 2);
     host.switch_to_enforcing_storage()?;
 
     let expected_budget = expect![[r#"
@@ -596,7 +590,7 @@ fn excessive_logging() -> Result<(), HostError> {
         )?;
         assert_eq!(SymbolSmall::try_from(res)?.to_string(), "pass");
         // three debug events: fn_call, log, fn_return
-        assert_eq!(host.get_events()?.0.len(), 3);
+        assert_eq!(host.get_events()?.0.len() - constructor_events_len, 3);
         assert!(
             !host.as_budget().shadow_mem_limit_exceeded()?
                 && !host.as_budget().shadow_cpu_limit_exceeded()?

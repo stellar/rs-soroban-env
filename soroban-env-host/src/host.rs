@@ -13,7 +13,7 @@ use crate::{
     vm::ModuleCache,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
-        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, Duration, Hash,
+        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration, Hash,
         LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
         ScSymbol, ScVal, TimePoint, Uint256,
     },
@@ -30,7 +30,7 @@ mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 pub(crate) mod ledger_info_helper;
-mod lifecycle;
+pub(crate) mod lifecycle;
 mod mem_helper;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_hash;
@@ -43,6 +43,7 @@ pub(crate) mod trace;
 mod validity;
 
 pub use error::HostError;
+use frame::CallParams;
 pub use prng::{Seed, SEED_BYTES};
 pub use trace::{TraceEvent, TraceHook, TraceRecord, TraceState};
 
@@ -690,6 +691,42 @@ impl Host {
             .map_err(|_| {
                 Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError).into()
             })
+    }
+
+    fn create_contract_impl(
+        &self,
+        deployer: AddressObject,
+        wasm_hash: BytesObject,
+        salt: BytesObject,
+        constructor_args: Option<VecObject>,
+    ) -> Result<AddressObject, HostError> {
+        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+            address: self.visit_obj(deployer, |addr: &ScAddress| addr.metered_clone(self))?,
+            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
+        });
+        let executable =
+            ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
+        let (constructor_args, constructor_args_vec) = if let Some(v) = constructor_args {
+            (
+                self.vecobject_to_scval_vec(v)?.to_vec(),
+                self.call_args_from_obj(v)?,
+            )
+        } else {
+            (vec![], vec![])
+        };
+        let args = CreateContractArgsV2 {
+            contract_id_preimage,
+            executable,
+            constructor_args: constructor_args.try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InternalError,
+                    "couldn't convert constructor args vector to XDR",
+                    &[],
+                )
+            })?,
+        };
+        self.create_contract_internal(Some(deployer), args, constructor_args_vec)
     }
 }
 
@@ -2235,17 +2272,18 @@ impl VmCallerEnv for Host {
         wasm_hash: BytesObject,
         salt: BytesObject,
     ) -> Result<AddressObject, HostError> {
-        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
-            address: self.visit_obj(deployer, |addr: &ScAddress| addr.metered_clone(self))?,
-            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
-        });
-        let executable =
-            ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
-        let args = CreateContractArgs {
-            contract_id_preimage,
-            executable,
-        };
-        self.create_contract_internal(Some(deployer), args)
+        self.create_contract_impl(deployer, wasm_hash, salt, None)
+    }
+
+    fn create_contract_with_constructor(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        deployer: AddressObject,
+        wasm_hash: BytesObject,
+        salt: BytesObject,
+        constructor_args: VecObject,
+    ) -> Result<AddressObject, HostError> {
+        self.create_contract_impl(deployer, wasm_hash, salt, Some(constructor_args))
     }
 
     // Notes on metering: covered by the components.
@@ -2257,13 +2295,14 @@ impl VmCallerEnv for Host {
         let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
         let contract_id_preimage = ContractIdPreimage::Asset(asset);
         let executable = ContractExecutable::StellarAsset;
-        let args = CreateContractArgs {
+        let args = CreateContractArgsV2 {
             contract_id_preimage,
             executable,
+            constructor_args: Default::default(),
         };
         // Asset contracts don't need any deployer authorization (they're tied
         // to the asset issuers instead).
-        self.create_contract_internal(None, args)
+        self.create_contract_internal(None, args, vec![])
     }
 
     // Notes on metering: covered by the components.
@@ -2339,8 +2378,7 @@ impl VmCallerEnv for Host {
             &self.contract_id_from_address(contract_address)?,
             func,
             argvec.as_slice(),
-            ContractReentryMode::Prohibited,
-            false,
+            CallParams::default_external_call(),
         );
         if let Err(e) = &res {
             self.error(
@@ -2369,8 +2407,7 @@ impl VmCallerEnv for Host {
             &self.contract_id_from_address(contract_address)?,
             func,
             argvec.as_slice(),
-            ContractReentryMode::Prohibited,
-            false,
+            CallParams::default_external_call(),
         );
         match res {
             Ok(rv) => Ok(rv),

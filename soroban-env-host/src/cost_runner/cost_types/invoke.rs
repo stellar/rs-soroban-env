@@ -40,7 +40,12 @@ impl CostRunner for InvokeVmFunctionRun {
         let rv = black_box(
             sample
                 .0
-                .metered_func_call(host, &sym, sample.1.as_slice())
+                .metered_func_call(
+                    host,
+                    &sym,
+                    sample.1.as_slice(),
+                    /* treat_missing_function_as_noop */ false,
+                )
                 .unwrap(),
         );
         (Some(rv), sample)

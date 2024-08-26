@@ -49,6 +49,7 @@ fn invoke_alloc() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
     let contract_id_obj = host.register_test_contract_wasm(ALLOC);
+    host.budget_ref().reset_default()?;
     let res = host.call(
         contract_id_obj,
         Symbol::try_from_small_str("sum")?,

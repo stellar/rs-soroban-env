@@ -94,3 +94,27 @@ pub const HOSTILE_LARGE_VALUE: &[u8] =
 
 pub const DEPLOYER_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/20/test_deployer.wasm").as_slice();
+
+// Protocol 21 Wasms.
+pub const CONSTRUCTOR_TEST_CONTRACT_P21: &[u8] =
+    include_bytes!("../wasm-workspace/opt/21/test_constructor.wasm").as_slice();
+pub const NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P21: &[u8] =
+    include_bytes!("../wasm-workspace/opt/21/test_no_arg_constructor.wasm").as_slice();
+pub const CONSTRUCTOR_WITH_RETURN_VALUE_P21: &[u8] =
+    include_bytes!("../wasm-workspace/opt/21/test_constructor_with_return_value.wasm").as_slice();
+
+// Protocol 22 Wasms.
+pub const CONSTRUCTOR_TEST_CONTRACT_P22: &[u8] =
+    include_bytes!("../wasm-workspace/opt/22/test_constructor.wasm").as_slice();
+pub const NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22: &[u8] =
+    include_bytes!("../wasm-workspace/opt/22/test_no_arg_constructor.wasm").as_slice();
+pub const ADD_I32_P22: &[u8] =
+    include_bytes!("../wasm-workspace/opt/22/example_add_i32.wasm").as_slice();
+pub const DEPLOYER_WITH_CONSTRUCTOR: &[u8] =
+    include_bytes!("../wasm-workspace/opt/22/test_deployer_with_constructor.wasm").as_slice();
+pub const CONSTRUCTOR_WITH_RETURN_VALUE_P22: &[u8] =
+    include_bytes!("../wasm-workspace/opt/22/test_constructor_with_return_value.wasm").as_slice();
+pub const CONSTRUCTOR_WITH_RESULT: &[u8] =
+    include_bytes!("../wasm-workspace/opt/22/test_constructor_with_result.wasm").as_slice();
+pub const CUSTOM_ACCOUNT_CONTEXT_TEST_CONTRACT: &[u8] =
+    include_bytes!("../wasm-workspace/opt/22/test_custom_account_context.wasm").as_slice();

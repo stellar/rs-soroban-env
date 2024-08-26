@@ -25,12 +25,12 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
         ContractCodeEntryExt, ContractCodeEntryV1, ContractCostType, ContractExecutable,
-        ContractIdPreimage, CreateContractArgs, Duration, Hash, InvokeContractArgs, LedgerEntry,
-        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
-        LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode,
-        ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
-        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation, StringM,
-        TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
+        ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+        SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -636,6 +636,9 @@ impl MeteredClone for SorobanAuthorizedFunction {
             SorobanAuthorizedFunction::ContractFn(c) => c.charge_for_substructure(budget),
             // CreateContractArgs has no substructure.
             SorobanAuthorizedFunction::CreateContractHostFn(_) => Ok(()),
+            SorobanAuthorizedFunction::CreateContractV2HostFn(c) => {
+                c.charge_for_substructure(budget)
+            }
         }
     }
 }
@@ -649,4 +652,14 @@ impl MeteredClone for InvokeContractArgs {
     }
 }
 
+impl MeteredClone for CreateContractArgsV2 {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.contract_id_preimage
+            .charge_for_substructure(budget.clone())?;
+        self.executable.charge_for_substructure(budget.clone())?;
+        self.constructor_args.charge_for_substructure(budget)
+    }
+}
 // endregion: xdr types with substructure

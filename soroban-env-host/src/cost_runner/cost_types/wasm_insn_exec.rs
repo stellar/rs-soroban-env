@@ -220,7 +220,12 @@ macro_rules! impl_wasm_insn_runner {
                 let rv = black_box(
                     sample
                         .vm
-                        .invoke_function_raw(host, &TEST_SYM, &[])
+                        .invoke_function_raw(
+                            host,
+                            &TEST_SYM,
+                            &[],
+                            /* treat_missing_function_as_noop */ false,
+                        )
                         .unwrap_or_default(),
                 );
                 (Some(rv), sample)
@@ -234,7 +239,12 @@ macro_rules! impl_wasm_insn_runner {
                 let rv = black_box(
                     base_sample
                         .vm
-                        .invoke_function_raw(host, &TEST_SYM, &[])
+                        .invoke_function_raw(
+                            host,
+                            &TEST_SYM,
+                            &[],
+                            /* treat_missing_function_as_noop */ false,
+                        )
                         .unwrap_or_default(),
                 );
                 (Some(rv), base_sample)
