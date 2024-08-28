@@ -412,7 +412,7 @@ mod test {
         #[cfg(target_arch = "x86_64")]
         expect!["512"].assert_eq(size_of::<Context>().to_string().as_str());
         #[cfg(target_arch = "aarch64")]
-        expect!["496"].assert_eq(size_of::<Context>().to_string().as_str());
+        expect!["488"].assert_eq(size_of::<Context>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<Address>().to_string().as_str());
 
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());

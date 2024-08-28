@@ -6,13 +6,16 @@ use core::fmt::{Debug, Display};
 
 /// We provide a "cost model" object that evaluates a linear expression:
 ///
-///    f(x) = a + b * Option<x>
+///    f(x) = I * (a + b * Option<x>)
 ///
-/// Where a, b are "fixed" parameters at construction time (extracted from an
-/// on-chain cost schedule, so technically not _totally_ fixed) and Option<x>
-/// is some abstract input variable -- say, event counts or object sizes --
-/// provided at runtime. If the input cannot be defined, i.e., the cost is
-/// constant, input-independent, then pass in `None` as the input.
+/// I is a simple scale factor that represents number of iterations the linear
+/// model inside the parantesis is repeated.
+///
+/// a, b are "fixed" parameters at construction time (extracted from an on-chain
+/// cost schedule, so technically not _totally_ fixed) and Option<x> is some
+/// abstract input variable -- say, event counts or object sizes -- provided at
+/// runtime. If the input cannot be defined, i.e., the cost is constant,
+/// input-independent, then pass in `None` as the input.
 ///
 /// The same `CostModel` type, i.e. `CostType` (applied to different parameters
 /// and variables) is used for calculating memory as well as CPU time.
@@ -22,10 +25,10 @@ use core::fmt::{Debug, Display};
 /// sufficiently by a linear model and 2. they together encompass the vast
 /// majority of available operations done by the `env` -- the host and the VM.
 ///
-/// The parameters for a `CostModel` are calibrated empirically. See this crate's
-/// benchmarks for more details.
+/// The parameters for a `CostModel` are calibrated empirically. See this
+/// crate's benchmarks for more details.
 pub trait HostCostModel {
-    fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError>;
+    fn evaluate(&self, iterations: u64, input: Option<u64>) -> Result<u64, HostError>;
 
     #[cfg(any(test, feature = "testutils", feature = "bench"))]
     fn reset(&mut self);
@@ -110,14 +113,17 @@ impl TryFrom<ContractCostParamEntry> for MeteredCostComponent {
 }
 
 impl HostCostModel for MeteredCostComponent {
-    fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError> {
-        let const_term = self.const_term;
+    fn evaluate(&self, iterations: u64, input: Option<u64>) -> Result<u64, HostError> {
+        let const_term = self.const_term.saturating_mul(iterations);
         match input {
             Some(input) => {
                 let mut res = const_term;
                 if !self.lin_term.is_zero() {
-                    let lin_cost = self.lin_term.saturating_mul(input).unscale();
-                    res = res.saturating_add(lin_cost)
+                    let lin_cost = self
+                        .lin_term
+                        .saturating_mul(input)
+                        .saturating_mul(iterations);
+                    res = res.saturating_add(lin_cost.unscale())
                 }
                 Ok(res)
             }
@@ -129,5 +135,27 @@ impl HostCostModel for MeteredCostComponent {
     fn reset(&mut self) {
         self.const_term = 0;
         self.lin_term = ScaledU64(0);
+    }
+}
+
+mod test {
+    #[allow(unused)]
+    use super::{HostCostModel, MeteredCostComponent, ScaledU64};
+
+    #[test]
+    fn test_model_evaluation_with_rounding() {
+        let test_model = MeteredCostComponent {
+            const_term: 3,
+            lin_term: ScaledU64(5),
+        };
+        // low iteration + low input
+        // the constant part is 3, the linear part is 5 >> 7 == 0, total is 3
+        assert_eq!(3, test_model.evaluate(1, Some(1)).unwrap());
+        // low iteration + high input
+        // the contant part is 3, the linear part is (26 * 5) >> 7 == 1, total is 4
+        assert_eq!(4, test_model.evaluate(1, Some(26)).unwrap());
+        // high iteration + low input
+        // the constant part is 26 * 3 == 78, the linear part is (26 * 5) >> 7 == 1, total is 79
+        assert_eq!(79, test_model.evaluate(26, Some(1)).unwrap());
     }
 }
