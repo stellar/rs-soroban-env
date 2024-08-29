@@ -77,7 +77,7 @@ impl core::fmt::Display for SymbolError {
                 "symbol too long: length {len}, max {MAX_SMALL_CHARS}"
             )),
             SymbolError::BadChar(char) => f.write_fmt(format_args!(
-                "symbol bad char: encountered {char}, supported range [a-zA-Z0-9_]"
+                "symbol bad char: encountered `{char}`, supported range [a-zA-Z0-9_]"
             )),
             SymbolError::MalformedSmall => f.write_str("malformed small symbol"),
         }
