@@ -23,7 +23,7 @@ static_assertions = "1.1.0"
 sha2 = "0.10.8"
 hex-literal = "0.4.1"
 hmac = "0.12.1"
-ed25519-dalek = {version = "2.0.0", features = ["rand_core"] }
+ed25519-dalek = {version = "2.1.1", git="https://github.com/dalek-cryptography/curve25519-dalek", rev="4ac84dd0668b1d2e51654fcdffe4ae6a687bef00", features = ["rand_core"] }
 # NB: this must match the same rand version used by ed25519-dalek above
 rand = "0.8.5"
 # NB: this must match the same rand_chacha version used by ed25519-dalek above
