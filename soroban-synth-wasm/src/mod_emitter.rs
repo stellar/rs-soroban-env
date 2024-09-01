@@ -1,5 +1,5 @@
 use crate::FuncEmitter;
-use soroban_env_common::xdr::{Limits, ScEnvMetaEntry, WriteXdr};
+use soroban_env_common::xdr::{Limits, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion, WriteXdr};
 use std::str::FromStr;
 use std::{borrow::Cow, collections::BTreeMap, env};
 #[cfg(feature = "adversarial")]
@@ -117,9 +117,10 @@ impl ModEmitter {
     /// Add a metadata section marking the module as belonging to the specified
     /// protocol version.
     pub fn add_protocol_version_meta(&mut self, protocol_version: u32) -> &mut Self {
-        let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(
-            soroban_env_common::meta::make_interface_version(protocol_version, 0),
-        );
+        let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(ScEnvMetaEntryInterfaceVersion {
+            protocol: protocol_version,
+            pre_release: 0,
+        });
         self.custom_section(
             soroban_env_common::meta::ENV_META_V0_SECTION_NAME,
             &meta.to_xdr(Limits::none()).unwrap(),
@@ -133,9 +134,7 @@ impl ModEmitter {
     pub fn add_test_protocol_version_meta(&mut self) -> &mut Self {
         let protocol_version = env::var("TEST_PROTOCOL")
             .map(|v| u32::from_str(&v).unwrap())
-            .unwrap_or(soroban_env_common::meta::get_ledger_protocol_version(
-                soroban_env_common::meta::INTERFACE_VERSION,
-            ));
+            .unwrap_or(soroban_env_common::meta::INTERFACE_VERSION.protocol);
         self.add_protocol_version_meta(protocol_version)
     }
 

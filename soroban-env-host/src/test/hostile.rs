@@ -751,8 +751,7 @@ fn test_integer_overflow() -> Result<(), HostError> {
 
 #[test]
 fn test_corrupt_custom_section() -> Result<(), HostError> {
-    use crate::meta::make_interface_version;
-    use crate::xdr::{Limits, ScEnvMetaEntry, WriteXdr};
+    use crate::xdr::{Limits, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion, WriteXdr};
 
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
@@ -781,9 +780,12 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
     ));
 
     // invalid section name
-    let xdr = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(make_interface_version(20, 0))
-        .to_xdr(Limits::none())
-        .unwrap();
+    let xdr = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(ScEnvMetaEntryInterfaceVersion {
+        protocol: 20,
+        pre_release: 0,
+    })
+    .to_xdr(Limits::none())
+    .unwrap();
     let res = host.register_test_contract_wasm_from_source_account(
         wasm_util::wasm_module_with_custom_section("contractenvmetav1", &xdr).as_slice(),
         generate_account_id(&host),
@@ -828,7 +830,7 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
         ));
 
         // invalid: protocol is current but pre-release version doesn't match env's
-        let env_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
+        let env_pre = meta::INTERFACE_VERSION.pre_release;
         let res = host.register_test_contract_wasm_from_source_account(
             wasm_util::wasm_module_with_custom_section(
                 "contractenvmetav0",
