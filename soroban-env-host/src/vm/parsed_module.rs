@@ -1,8 +1,11 @@
 use crate::{
     err,
     host::metered_clone::MeteredContainer,
-    meta::{self, get_ledger_protocol_version},
-    xdr::{ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
+    meta,
+    xdr::{
+        ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion,
+        ScErrorCode, ScErrorType,
+    },
     Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };
 
@@ -219,18 +222,18 @@ impl ParsedModule {
 
         Self::check_max_args(host, &module)?;
         let interface_version = Self::check_meta_section(host, &module)?;
-        let contract_proto = get_ledger_protocol_version(interface_version);
+        let contract_proto = interface_version.protocol;
 
         Ok((module, contract_proto))
     }
 
     fn check_contract_interface_version(
         host: &Host,
-        interface_version: u64,
+        interface_version: &ScEnvMetaEntryInterfaceVersion,
     ) -> Result<(), HostError> {
         let want_proto = {
             let ledger_proto = host.get_ledger_protocol_version()?;
-            let env_proto = get_ledger_protocol_version(meta::INTERFACE_VERSION);
+            let env_proto = meta::INTERFACE_VERSION.protocol;
             if ledger_proto <= env_proto {
                 // ledger proto should be before or equal to env proto
                 ledger_proto
@@ -247,9 +250,9 @@ impl ParsedModule {
 
         // Not used when "next" is enabled
         #[cfg(not(feature = "next"))]
-        let got_pre = meta::get_pre_release_version(interface_version);
+        let got_pre = interface_version.pre_release;
 
-        let got_proto = get_ledger_protocol_version(interface_version);
+        let got_proto = interface_version.protocol;
 
         if got_proto < want_proto {
             // Old protocols are finalized, we only support contracts
@@ -277,7 +280,7 @@ impl ParsedModule {
             {
                 // Current protocol might have a nonzero prerelease number; we will
                 // allow it only if it matches the current prerelease exactly.
-                let want_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
+                let want_pre = meta::INTERFACE_VERSION.pre_release;
                 if want_pre != got_pre {
                     return Err(err!(
                         host,
@@ -321,7 +324,10 @@ impl ParsedModule {
         Self::module_custom_section(&self.module, name)
     }
 
-    fn check_meta_section(host: &Host, m: &Module) -> Result<u64, HostError> {
+    fn check_meta_section(
+        host: &Host,
+        m: &Module,
+    ) -> Result<ScEnvMetaEntryInterfaceVersion, HostError> {
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut limits = DEFAULT_XDR_RW_LIMITS;
             limits.len = env_meta.len();
@@ -329,7 +335,7 @@ impl ParsedModule {
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;
-                Self::check_contract_interface_version(host, v)?;
+                Self::check_contract_interface_version(host, &v)?;
                 Ok(v)
             } else {
                 Err(host.err(
