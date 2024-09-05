@@ -1,4 +1,4 @@
-use soroban_env_common::TryIntoVal;
+use soroban_env_common::{Env, TryIntoVal};
 
 use crate::{
     err,
@@ -322,6 +322,19 @@ impl Host {
         contract_address: AddressObject,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
+        self.register_test_contract_with_constructor(
+            contract_address,
+            contract_fns,
+            self.vec_new()?,
+        )
+    }
+
+    pub fn register_test_contract_with_constructor(
+        &self,
+        contract_address: AddressObject,
+        contract_fns: Rc<dyn ContractFunctionSet>,
+        constructor_args: crate::VecObject,
+    ) -> Result<(), HostError> {
         let contract_id = self.contract_id_from_address(contract_address)?;
         let instance_key = self.contract_instance_ledger_key(&contract_id)?;
         let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
@@ -337,8 +350,22 @@ impl Host {
             contract_id.clone(),
             &instance_key,
         )?;
-        let mut contracts = self.try_borrow_contracts_mut()?;
-        contracts.insert(contract_id, contract_fns);
-        Ok(())
+        self.try_borrow_contracts_mut()?
+            .insert(contract_id.clone(), contract_fns);
+
+        self.call_constructor(&contract_id, self.call_args_from_obj(constructor_args)?)
+    }
+
+    // This is a test utility that allows calling constructor on a contract that
+    // already exists in the storage. It is incorrect to call this
+    // on a properly instantiated contract (as it must have already had the
+    // constructor executed), but is useful to support manually instantiated
+    // contracts, i.e. those that were created by writing directly into storage.
+    pub fn call_constructor_for_stored_contract_unsafe(
+        &self,
+        contract_id: &Hash,
+        constructor_args: crate::VecObject,
+    ) -> Result<(), HostError> {
+        self.call_constructor(&contract_id, self.call_args_from_obj(constructor_args)?)
     }
 }

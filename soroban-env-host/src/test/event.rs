@@ -9,7 +9,7 @@ use crate::{
         ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
         ExtensionPoint, Hash, ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,
     },
-    ContractFunctionSet, Env, Error, Host, HostError, Symbol, SymbolSmall, Val, VecObject,
+    Compare, ContractFunctionSet, Env, Error, Host, HostError, Symbol, SymbolSmall, Val, VecObject,
 };
 use expect_test::expect;
 use more_asserts::assert_le;
@@ -19,14 +19,25 @@ use std::rc::Rc;
 pub struct ContractWithSingleEvent;
 
 impl ContractFunctionSet for ContractWithSingleEvent {
-    fn call(&self, _func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
-        // Add a contract event
-        let mut data = host.map_new().unwrap();
-        data = host.map_put(data, 1_u32.into(), 2_u32.into()).unwrap();
-        let mut topics = host.vec_new().unwrap();
-        topics = host.vec_push_back(topics, 0u32.into()).unwrap();
-        topics = host.vec_push_back(topics, 1u32.into()).unwrap();
-        Some(host.contract_event(topics, data.to_val()).unwrap().into())
+    fn call(&self, func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
+        if host
+            .compare(
+                &host.symbol_new_from_slice(b"__constructor").unwrap().into(),
+                func,
+            )
+            .unwrap()
+            .is_ne()
+        {
+            // Add a contract event
+            let mut data = host.map_new().unwrap();
+            data = host.map_put(data, 1_u32.into(), 2_u32.into()).unwrap();
+            let mut topics = host.vec_new().unwrap();
+            topics = host.vec_push_back(topics, 0u32.into()).unwrap();
+            topics = host.vec_push_back(topics, 1u32.into()).unwrap();
+            Some(host.contract_event(topics, data.to_val()).unwrap().into())
+        } else {
+            Some(().into())
+        }
     }
 }
 
@@ -73,14 +84,23 @@ fn contract_event() -> Result<(), HostError> {
 pub struct ContractWithMultipleEvents;
 
 impl ContractFunctionSet for ContractWithMultipleEvents {
-    fn call(&self, _func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
-        let topics = host.test_vec_obj(&[0, 1]).unwrap();
-        let data = Val::from(0u32);
-        host.record_contract_event(ContractEventType::Contract, topics, data)
-            .unwrap();
-        host.log_diagnostics("debug event 0", &[]);
-        host.record_contract_event(ContractEventType::System, topics, data)
-            .unwrap();
+    fn call(&self, func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
+        if host
+            .compare(
+                &host.symbol_new_from_slice(b"__constructor").unwrap().into(),
+                func,
+            )
+            .unwrap()
+            .is_ne()
+        {
+            let topics = host.test_vec_obj(&[0, 1]).unwrap();
+            let data = Val::from(0u32);
+            host.record_contract_event(ContractEventType::Contract, topics, data)
+                .unwrap();
+            host.log_diagnostics("debug event 0", &[]);
+            host.record_contract_event(ContractEventType::System, topics, data)
+                .unwrap();
+        }
         Some(().into())
     }
 }

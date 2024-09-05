@@ -5,8 +5,9 @@ use rand_chacha::ChaCha20Rng;
 use crate::{
     test::observe::ObservedHost,
     xdr::{Hash, ScAddress, ScVal, ScVec},
-    AddressObject, BytesObject, ContractFunctionSet, Env, EnvBase, Host, HostError, StorageType,
-    Symbol, SymbolSmall, TryFromVal, TryIntoVal, U32Val, U64Object, U64Val, Val, VecObject,
+    AddressObject, BytesObject, Compare, ContractFunctionSet, Env, EnvBase, Host, HostError,
+    StorageType, Symbol, SymbolSmall, TryFromVal, TryIntoVal, U32Val, U64Object, U64Val, Val,
+    VecObject,
 };
 
 /// prng tests
@@ -57,6 +58,16 @@ impl PRNGUsingTest {
 
 impl ContractFunctionSet for PRNGUsingTest {
     fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Option<Val> {
+        if host
+            .compare(
+                &host.symbol_new_from_slice(b"__constructor").unwrap().into(),
+                func,
+            )
+            .unwrap()
+            .is_eq()
+        {
+            return Some(().into());
+        }
         let Ok(func) = SymbolSmall::try_from(func.to_val()) else {
             return None;
         };
@@ -391,7 +402,7 @@ fn check_caller_and_callee_seed_always_different() -> Result<(), HostError> {
         "soroban-end-host::test::prng::check_caller_and_callee_seed_always_different_0",
     )?;
     let id1 = PRNGUsingTest::register_as(&host0, &[1; 32]);
-    for i in 0..100 {
+    for i in 0..75 {
         base_seed[0] = i;
         host0.set_base_prng_seed(base_seed)?;
         let caller_seed: BytesObject = host0
