@@ -1,5 +1,3 @@
-use soroban_env_common::{Env, TryIntoVal};
-
 use crate::{
     err,
     host::{
@@ -12,7 +10,7 @@ use crate::{
         ContractIdPreimageFromAddress, CreateContractArgsV2, ExtensionPoint, Hash, LedgerKey,
         LedgerKeyContractCode, ScAddress, ScErrorCode, ScErrorType,
     },
-    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, Val,
+    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val,
 };
 use std::rc::Rc;
 

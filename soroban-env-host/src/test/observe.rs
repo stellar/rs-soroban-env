@@ -183,7 +183,7 @@ impl ObservedHost {
             protocol,
         }
     }
- 
+
     #[cfg(all(not(feature = "next"), feature = "testutils"))]
     pub(crate) fn new(testname: &'static str, host: Host) -> Self {
         let protocol = Host::current_test_protocol();
