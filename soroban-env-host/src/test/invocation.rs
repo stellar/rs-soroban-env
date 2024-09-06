@@ -277,8 +277,19 @@ impl ReturnContractError {
     const ERR: Error = Error::from_contract_error(12345);
 }
 impl ContractFunctionSet for ReturnContractError {
-    fn call(&self, _func: &Symbol, _host: &Host, _args: &[Val]) -> Option<Val> {
-        Some(Self::ERR.into())
+    fn call(&self, func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
+        if host
+            .compare(
+                &host.symbol_new_from_slice(b"__constructor").unwrap().into(),
+                func,
+            )
+            .unwrap()
+            .is_ne()
+        {
+            Some(Self::ERR.into())
+        } else {
+            Some(().into())
+        }
     }
 }
 

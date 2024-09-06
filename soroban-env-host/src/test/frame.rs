@@ -1,16 +1,28 @@
-use crate::{host::HostError, ContractFunctionSet, Host};
-use soroban_env_common::{
+use crate::{
+    host::HostError,
     xdr::{Hash, ScAddress},
-    Symbol, Val,
+    Compare, ContractFunctionSet, EnvBase, Host, Symbol, Val,
 };
+
 use std::rc::Rc;
 
 #[test]
 fn has_frame() -> Result<(), HostError> {
     struct NoopContractFunctionSet;
     impl ContractFunctionSet for NoopContractFunctionSet {
-        fn call(&self, _func: &Symbol, _host: &Host, _args: &[Val]) -> Option<Val> {
-            None
+        fn call(&self, func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
+            if host
+                .compare(
+                    &host.symbol_new_from_slice(b"__constructor").unwrap().into(),
+                    func,
+                )
+                .unwrap()
+                .is_ne()
+            {
+                None
+            } else {
+                Some(().into())
+            }
         }
     }
 
