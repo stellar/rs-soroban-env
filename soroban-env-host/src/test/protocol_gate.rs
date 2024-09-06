@@ -1,5 +1,5 @@
 use crate::{
-    meta::{get_ledger_protocol_version, INTERFACE_VERSION},
+    meta::INTERFACE_VERSION,
     testutils::{generate_account_id, generate_bytes_array, wasm as wasm_util},
     xdr::{ScErrorCode, ScErrorType},
     AddressObject, Env, Host, HostError, LedgerInfo, Symbol, Val, WasmiMarshal,
@@ -9,7 +9,7 @@ use crate::{
 fn ledger_protocol_greater_than_env_protocol_should_fail() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     host.enable_debug()?;
-    let env_proto = get_ledger_protocol_version(INTERFACE_VERSION);
+    let env_proto = INTERFACE_VERSION.protocol;
 
     // This test only makes sense if TEST_PROTOCOL is equal to the env version
     if env_proto != host.get_ledger_protocol_version()? {

@@ -146,9 +146,11 @@ impl SnapshotSource for MockSnapshotSource {
 
 #[cfg(test)]
 pub(crate) fn interface_meta_with_custom_versions(proto: u32, pre: u32) -> Vec<u8> {
-    use crate::xdr::{Limited, Limits, ScEnvMetaEntry, WriteXdr};
-    let iv = crate::meta::make_interface_version(proto, pre);
-    let entry = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(iv);
+    use crate::xdr::{Limited, Limits, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion, WriteXdr};
+    let entry = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(ScEnvMetaEntryInterfaceVersion {
+        protocol: proto,
+        pre_release: pre,
+    });
     let bytes = Vec::<u8>::new();
     let mut w = Limited::new(bytes, Limits::none());
     entry.write_xdr(&mut w).unwrap();
@@ -163,8 +165,7 @@ impl Host {
     }
 
     pub fn current_test_protocol() -> u32 {
-        use crate::meta::{get_ledger_protocol_version, INTERFACE_VERSION};
-        let max_supported_protocol = get_ledger_protocol_version(INTERFACE_VERSION);
+        let max_supported_protocol = crate::meta::INTERFACE_VERSION.protocol;
         let min_supported_protocol = crate::host::MIN_LEDGER_PROTOCOL_VERSION;
         if let Ok(vers) = std::env::var("TEST_PROTOCOL") {
             let test_protocol = vers.parse().expect("parsing TEST_PROTOCOL");

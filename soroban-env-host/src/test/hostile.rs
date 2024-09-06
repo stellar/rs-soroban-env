@@ -751,8 +751,7 @@ fn test_integer_overflow() -> Result<(), HostError> {
 
 #[test]
 fn test_corrupt_custom_section() -> Result<(), HostError> {
-    use crate::meta::make_interface_version;
-    use crate::xdr::{Limits, ScEnvMetaEntry, WriteXdr};
+    use crate::xdr::{Limits, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion, WriteXdr};
 
     let host = observe_host!(Host::test_host_with_recording_footprint());
     host.enable_debug()?;
@@ -781,9 +780,12 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
     ));
 
     // invalid section name
-    let xdr = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(make_interface_version(20, 0))
-        .to_xdr(Limits::none())
-        .unwrap();
+    let xdr = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(ScEnvMetaEntryInterfaceVersion {
+        protocol: 20,
+        pre_release: 0,
+    })
+    .to_xdr(Limits::none())
+    .unwrap();
     let res = host.register_test_contract_wasm_from_source_account(
         wasm_util::wasm_module_with_custom_section("contractenvmetav1", &xdr).as_slice(),
         generate_account_id(&host),
@@ -828,7 +830,7 @@ fn test_corrupt_custom_section() -> Result<(), HostError> {
         ));
 
         // invalid: protocol is current but pre-release version doesn't match env's
-        let env_pre = meta::get_pre_release_version(meta::INTERFACE_VERSION);
+        let env_pre = meta::INTERFACE_VERSION.pre_release;
         let res = host.register_test_contract_wasm_from_source_account(
             wasm_util::wasm_module_with_custom_section(
                 "contractenvmetav0",
@@ -1319,4 +1321,105 @@ fn test_stack_depth_stability() {
         ),
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
+}
+
+#[test]
+fn test_misc_hostile_wasms() {
+    // This test loads and runs a bunch of hostile WASM modules
+    // found in the hostile_inputs subdirectory. It attempts to
+    // instantiate the contract and then run a 0-ary function in
+    // the contract called "test".
+    let mut bad_inputs = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    bad_inputs.push("src/test/hostile_inputs");
+    eprintln!("loading hostile inputs from {:?}", bad_inputs);
+    let mut n_wasms = 0;
+    let mut n_instantiated_ok = 0;
+    let mut n_instantiated_external_error = 0;
+    let mut n_instantiated_internal_error = 0;
+    let mut n_executed_ok = 0;
+    let mut n_executed_external_error = 0;
+    let mut n_executed_internal_error = 0;
+
+    for entry in std::fs::read_dir(bad_inputs).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().unwrap() == "wasm" {
+            let host = Host::test_host_with_recording_footprint();
+            let filename = path.file_name().unwrap().to_str().unwrap().to_string();
+            let wasm_code = std::fs::read(path).unwrap();
+            eprintln!("loaded {}-byte wasm {}", wasm_code.len(), filename);
+            n_wasms += 1;
+            host.as_budget().reset_unlimited().unwrap();
+            let addr_res = host.register_test_contract_wasm_from_source_account(
+                &wasm_code,
+                generate_account_id(&host),
+                generate_bytes_array(&host),
+            );
+            match addr_res {
+                Err(e) => {
+                    if e.error.is_code(ScErrorCode::InternalError) {
+                        eprintln!(
+                            "instantiation failed with internal error for {}: {:?}",
+                            filename, e
+                        );
+                        n_instantiated_internal_error += 1;
+                    } else {
+                        eprintln!(
+                            "instantiation failed with external error for {}: {:?}",
+                            filename, e
+                        );
+                        n_instantiated_external_error += 1;
+                    }
+                    continue;
+                }
+                Ok(contract_id) => {
+                    n_instantiated_ok += 1;
+                    let call_res = host.call(
+                        contract_id,
+                        Symbol::try_from_small_str("test").unwrap(),
+                        test_vec![&host].into(),
+                    );
+                    if let Err(e) = call_res {
+                        if e.error.is_code(ScErrorCode::InternalError) {
+                            eprintln!(
+                                "execution failed with internal error for {}: {:?}",
+                                filename, e
+                            );
+                            n_executed_internal_error += 1;
+                        } else {
+                            eprintln!(
+                                "execution failed with external error for {}: {:?}",
+                                filename, e
+                            );
+                            n_executed_external_error += 1;
+                        }
+                    } else {
+                        n_executed_ok += 1;
+                        eprintln!("execution succeeded for {}", filename);
+                    }
+                }
+            }
+        }
+    }
+    eprintln!("loaded {} hostile Wasm modules", n_wasms);
+    eprintln!("instantiated {} contracts successfully", n_instantiated_ok);
+    eprintln!(
+        "instantiation failed with external error for {} contracts",
+        n_instantiated_external_error
+    );
+    eprintln!(
+        "instantiation failed with internal error for {} contracts",
+        n_instantiated_internal_error
+    );
+    eprintln!("executed {} contracts successfully", n_executed_ok);
+    eprintln!(
+        "execution failed with external error for {} contracts",
+        n_executed_external_error
+    );
+    eprintln!(
+        "execution failed with internal error for {} contracts",
+        n_executed_internal_error
+    );
+    assert_eq!(n_instantiated_internal_error, 0);
+    assert_eq!(n_executed_internal_error, 0);
 }

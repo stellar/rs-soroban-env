@@ -5,13 +5,13 @@
 //! [Env](crate::Env) interface provided by the host, rather than a cryptic failure
 //! due to a runtime host function signature mismatch.
 
-// Currently the only constant is `INTERFACE_VERSION` which is a u64 with a low
-// and high component. The low component is a pre-release version which should
-// be zero any time you make a real release, and the high component is the
-// ledger version / protocol version (the two terms are used interchangably in
-// the stellar codebase), which should both match the major release version of
-// soroban and the major release version of stellar-core that it's embedded
-// within.
+// Currently the only constant is `INTERFACE_VERSION` which is a struct
+// containing a 32-bit protocol version and 32-bit pre-release version. The
+// pre-release version should be zero any time you make a real release, and the
+// protocol version is the ledger version / protocol version (the two terms are
+// used interchangably in the stellar codebase), which should both match the
+// major release version of soroban and the major release version of
+// stellar-core that it's embedded within.
 //
 // Protocol numbers will be checked for ordered compatibility (a host will only
 // run contracts built for same-or-older protocol versions than its own) whereas
@@ -38,6 +38,8 @@
 // nonzero pre-release number can be used to force recompiles on interface
 // changes.
 
+use crate::xdr::ScEnvMetaEntryInterfaceVersion;
+
 pub const ENV_META_V0_SECTION_NAME: &str = "contractenvmetav0";
 
 // If the "next" feature is enabled, we're building from the "next" xdr
@@ -60,17 +62,3 @@ soroban_env_macros::generate_env_meta_consts!(
     ledger_protocol_version: 22,
     pre_release_version: 0,
 );
-
-pub const fn make_interface_version(protocol_version: u32, pre_release_version: u32) -> u64 {
-    ((protocol_version as u64) << 32) | (pre_release_version as u64)
-}
-
-pub const fn get_ledger_protocol_version(interface_version: u64) -> u32 {
-    // The ledger protocol version is the high 32 bits of INTERFACE_VERSION
-    (interface_version >> 32) as u32
-}
-
-pub const fn get_pre_release_version(interface_version: u64) -> u32 {
-    // The pre-release version is the low 32 bits of INTERFACE_VERSION
-    interface_version as u32
-}
