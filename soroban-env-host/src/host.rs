@@ -6,8 +6,8 @@ use crate::{
     budget::{AsBudget, Budget},
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     host_object::{HostMap, HostObject, HostVec},
-    impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num,
-    impl_wrapping_obj_to_num,
+    impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns,
+    impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
     storage::Storage,
     vm::ModuleCache,
@@ -18,8 +18,8 @@ use crate::{
         ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
-    MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, TryFromVal, Val, VecObject,
-    VmCaller, VmCallerEnv, Void,
+    MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal,
+    TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
 };
 
 mod comparison;
@@ -60,7 +60,6 @@ pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_mode"))]
 use rand_chacha::ChaCha20Rng;
-use soroban_env_common::SymbolSmall;
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]
@@ -2917,124 +2916,216 @@ impl VmCallerEnv for Host {
         Ok(res.into())
     }
 
-    fn bls_g1_add(
+    fn bls12_381_g1_add(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0_bytes = self.visit_obj(p0, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G1 point",
-                    &[],
-                )
-            })
-        })?;
-        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G1 point",
-                    &[],
-                )
-            })
-        })?;
-        let result = self.bls_g1_add_raw_internal(&p0_bytes, &p1_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let p0 = self.g1_affine_deserialize_from_bytesobj(p0)?;
+        let p1 = self.g1_affine_deserialize_from_bytesobj(p1)?;
+        let res = self.g1_add_internal(p0, p1)?;
+        self.g1_projective_serialize_uncompressed(res)
     }
 
-    fn bls_g1_mul(
+    fn bls12_381_g1_mul(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        scalar: BytesObject,
-        p1: BytesObject,
+        p0: BytesObject,
+        scalar: U256Val,
     ) -> Result<BytesObject, HostError> {
-        let scalar_bytes = self.visit_obj(scalar, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "scalar value out of range for G1 multiplication",
-                    &[],
-                )
-            })
-        })?;
-        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G1 point",
-                    &[],
-                )
-            })
-        })?;
-        let result = self.bls_g1_mul_raw_internal(scalar_bytes, &p1_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let p0 = self.g1_affine_deserialize_from_bytesobj(p0)?;
+        let scalar = self.fr_from_u256val(scalar)?;
+        let res = self.g1_mul_internal(p0, scalar)?;
+        self.g1_projective_serialize_uncompressed(res)
     }
 
-    fn bls_g2_add(
+    fn bls12_381_g1_msm(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        vp: VecObject,
+        vs: VecObject,
+    ) -> Result<BytesObject, HostError> {
+        let p_len = self.vec_len(vmcaller, vp)?;
+        let s_len = self.vec_len(vmcaller, vs)?;
+        if u32::from(p_len) != u32::from(s_len) || u32::from(p_len) == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "g1_msm: invalid input vector lengths",
+                &[p_len.to_val(), s_len.to_val()],
+            ));
+        }
+        let points = self.g1_vec_from_vecobj(vp)?;
+        let scalars = self.scalar_vec_from_vecobj(vs)?;
+        let res = self.g1_msm_internal(&points, &scalars)?;
+        self.g1_projective_serialize_uncompressed(res)
+    }
+
+    fn bls12_381_map_fp_to_g1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        fp: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let fp = self.fp_deserialize_from_bytesobj(fp)?;
+        let g1 = self.map_fp_to_g1_internal(fp)?;
+        self.g1_affine_serialize_uncompressed(g1)
+    }
+
+    fn bls12_381_hash_to_g1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        mo: BytesObject,
+        dst: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let g1 = self.visit_obj(mo, |msg: &ScBytes| {
+            self.visit_obj(dst, |dst: &ScBytes| {
+                let dst_len = dst.len();
+                if dst_len == 0 || dst_len > 255 {
+                    return Err(self.err(
+                        ScErrorType::Crypto,
+                        ScErrorCode::InvalidInput,
+                        format!(
+                            "hash_to_g1: invalid input dst length {dst_len}, must be > 0 and < 256"
+                        )
+                        .as_str(),
+                        &[],
+                    ));
+                }
+                self.hash_to_g1_internal(dst.as_slice(), msg.as_slice())
+            })
+        })?;
+        self.g1_affine_serialize_uncompressed(g1)
+    }
+
+    fn bls12_381_g2_add(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0_bytes = self.visit_obj(p0, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G2 point",
-                    &[],
-                )
-            })
-        })?;
-        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G2 point",
-                    &[],
-                )
-            })
-        })?;
-        let result = self.bls_g2_add_raw_internal(&p0_bytes, &p1_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        let p0 = self.g2_affine_deserialize_from_bytesobj(p0)?;
+        let p1 = self.g2_affine_deserialize_from_bytesobj(p1)?;
+        let res = self.g2_add_internal(p0, p1)?;
+        self.g2_projective_serialize_uncompressed(res)
     }
 
-    fn bls_g2_mul(
+    fn bls12_381_g2_mul(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        scalar: BytesObject,
-        p1: BytesObject,
+        p0: BytesObject,
+        scalar_le_bytes: U256Val,
     ) -> Result<BytesObject, HostError> {
-        let scalar_bytes = self.visit_obj(scalar, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "scalar value out of range for G2 multiplication",
-                    &[],
-                )
+        let p0 = self.g2_affine_deserialize_from_bytesobj(p0)?;
+        let scalar = self.fr_from_u256val(scalar_le_bytes)?;
+        let res = self.g2_mul_internal(p0, scalar)?;
+        self.g2_projective_serialize_uncompressed(res)
+    }
+
+    fn bls12_381_g2_msm(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        vp: VecObject,
+        vs: VecObject,
+    ) -> Result<BytesObject, HostError> {
+        let p_len = self.vec_len(vmcaller, vp)?;
+        let s_len = self.vec_len(vmcaller, vs)?;
+        if u32::from(p_len) != u32::from(s_len) || u32::from(p_len) == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "g2_msm: invalid input vector lengths",
+                &[p_len.to_val(), s_len.to_val()],
+            ));
+        }
+        let points = self.g2_vec_from_vecobj(vp)?;
+        let scalars = self.scalar_vec_from_vecobj(vs)?;
+        let res = self.g2_msm_internal(&points, &scalars)?;
+        self.g2_projective_serialize_uncompressed(res)
+    }
+
+    fn bls12_381_map_fp2_to_g2(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        fp2: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let fp2 = self.fp2_deserialize_from_bytesobj(fp2)?;
+        let g2 = self.map_fp2_to_g2_internal(fp2)?;
+        self.g2_affine_serialize_uncompressed(g2)
+    }
+
+    fn bls12_381_hash_to_g2(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        msg: BytesObject,
+        dst: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let g2 = self.visit_obj(msg, |msg: &ScBytes| {
+            self.visit_obj(dst, |dst: &ScBytes| {
+                let dst_len = dst.len();
+                if dst_len == 0 || dst_len > 255 {
+                    return Err(self.err(
+                        ScErrorType::Crypto,
+                        ScErrorCode::InvalidInput,
+                        format!(
+                            "hash_to_g2: invalid input dst length {dst_len}, must be > 0 and < 256"
+                        )
+                        .as_str(),
+                        &[],
+                    ));
+                }
+                self.hash_to_g2_internal(dst.as_slice(), msg.as_slice())
             })
         })?;
-        let p1_bytes = self.visit_obj(p1, |bytes: &ScBytes| {
-            bytes.as_slice().try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "invalid length for G2 point",
-                    &[],
-                )
-            })
-        })?;
-        let result = self.bls_g2_mul_raw_internal(scalar_bytes, &p1_bytes)?;
-        self.add_host_object(self.scbytes_from_vec(result.to_vec())?)
+        self.g2_affine_serialize_uncompressed(g2)
+    }
+
+    fn bls12_381_multi_pairing_check(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        vp1: VecObject,
+        vp2: VecObject,
+    ) -> Result<Bool, HostError> {
+        let l1 = self.vec_len(vmcaller, vp1)?;
+        let l2 = self.vec_len(vmcaller, vp2)?;
+        if u32::from(l1) != u32::from(l2) || u32::from(l1) == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "multi-pairing-check: invalid input vector lengths",
+                &[l1.to_val(), l2.to_val()],
+            ));
+        }
+        let vp1 = self.g1_vec_from_vecobj(vp1)?;
+        let vp2 = self.g2_vec_from_vecobj(vp2)?;
+        let output = self.pairing_internal(&vp1, &vp2)?;
+        self.check_pairing_output(&output)
+    }
+
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_add, fr_add_internal);
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_sub, fr_sub_internal);
+    impl_bls12_381_fr_arith_host_fns!(bls12_381_fr_mul, fr_mul_internal);
+
+    fn bls12_381_fr_pow(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+        rhs: U64Val,
+    ) -> Result<U256Val, Self::Error> {
+        let lhs = self.fr_from_u256val(lhs)?;
+        let rhs = rhs.try_into_val(self)?;
+        let res = self.fr_pow_internal(&lhs, &rhs)?;
+        self.fr_to_u256val(res)
+    }
+
+    fn bls12_381_fr_inv(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        lhs: U256Val,
+    ) -> Result<U256Val, Self::Error> {
+        let lhs = self.fr_from_u256val(lhs)?;
+        let res = self.fr_inv_internal(&lhs)?;
+        self.fr_to_u256val(res)
     }
 
     // endregion: "crypto" module functions

@@ -36,7 +36,7 @@ wasmparser = "=0.116.1"
 [workspace.dependencies.stellar-xdr]
 version = "=22.0.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "39d7dbb0c12bd422ee43a6e2e3277789da4eaac8"
+rev = "5315f4c583784860c0accbb8d3bd234055a19751"
 default-features = false
 
 [workspace.dependencies.wasmi]
@@ -47,7 +47,6 @@ rev = "122a74a7c491929e5ac9de876099154ef7c06d06"
 features = ["no-hash-maps"]
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
-# [patch.crates-io]
 # stellar-xdr = { path = "../rs-stellar-xdr" }
 # [patch."https://github.com/stellar/wasmi"]
 # soroban-wasmi = { path = "../wasmi/crates/wasmi/" }

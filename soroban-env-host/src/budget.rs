@@ -115,6 +115,29 @@ impl Default for BudgetTracker {
                 ContractCostType::InstantiateWasmDataSegmentBytes => init_input(),
                 ContractCostType::Sec1DecodePointUncompressed => (),
                 ContractCostType::VerifyEcdsaSecp256r1Sig => (),
+                ContractCostType::Bls12381EncodeFp => (),
+                ContractCostType::Bls12381DecodeFp => (),
+                ContractCostType::Bls12381G1Validate => (),
+                ContractCostType::Bls12381G2Validate => (),
+                ContractCostType::Bls12381G1ProjectiveToAffine => (),
+                ContractCostType::Bls12381G2ProjectiveToAffine => (),
+                ContractCostType::Bls12381G1Add => (),
+                ContractCostType::Bls12381G1Mul => (),
+                ContractCostType::Bls12381G1Msm => init_input(), // input is number of (G1,Fr) pairs
+                ContractCostType::Bls12381MapFpToG1 => (),
+                ContractCostType::Bls12381HashToG1 => init_input(),
+                ContractCostType::Bls12381G2Add => (),
+                ContractCostType::Bls12381G2Mul => (),
+                ContractCostType::Bls12381G2Msm => init_input(), // input is number of (G2,Fr) pairs
+                ContractCostType::Bls12381MapFp2ToG2 => (),
+                ContractCostType::Bls12381HashToG2 => init_input(),
+                ContractCostType::Bls12381Pairing => init_input(), // input is number of (G1,G2) pairs
+                ContractCostType::Bls12381FrFromU256 => (),
+                ContractCostType::Bls12381FrToU256 => (),
+                ContractCostType::Bls12381FrAddSub => (),
+                ContractCostType::Bls12381FrMul => (),
+                ContractCostType::Bls12381FrPow => init_input(), // input is number of bits in the u64 exponent excluding leading zeros
+                ContractCostType::Bls12381FrInv => (),
             }
         }
         mt
@@ -557,6 +580,98 @@ impl Default for BudgetImpl {
                     cpu.const_term = 3000906;
                     cpu.lin_term = ScaledU64(0);
                 }
+                ContractCostType::Bls12381EncodeFp => {
+                    cpu.const_term = 661;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381DecodeFp => {
+                    cpu.const_term = 985;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1Validate => {
+                    cpu.const_term = 732301;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2Validate => {
+                    cpu.const_term = 1063432;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1ProjectiveToAffine => {
+                    cpu.const_term = 92642;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2ProjectiveToAffine => {
+                    cpu.const_term = 100742;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1Add => {
+                    cpu.const_term = 7689;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1Mul => {
+                    cpu.const_term = 2458985;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1Msm => {
+                    cpu.const_term = 2426722;
+                    cpu.lin_term = ScaledU64(96397671);
+                }
+                ContractCostType::Bls12381MapFpToG1 => {
+                    cpu.const_term = 1541554;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381HashToG1 => {
+                    cpu.const_term = 3211191;
+                    cpu.lin_term = ScaledU64(6713);
+                }
+                ContractCostType::Bls12381G2Add => {
+                    cpu.const_term = 25207;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2Mul => {
+                    cpu.const_term = 7873219;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2Msm => {
+                    cpu.const_term = 8035968;
+                    cpu.lin_term = ScaledU64(309667335);
+                }
+                ContractCostType::Bls12381MapFp2ToG2 => {
+                    cpu.const_term = 2420202;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381HashToG2 => {
+                    cpu.const_term = 7050564;
+                    cpu.lin_term = ScaledU64(6797);
+                }
+                ContractCostType::Bls12381Pairing => {
+                    cpu.const_term = 10558948;
+                    cpu.lin_term = ScaledU64(632860943);
+                }
+                ContractCostType::Bls12381FrFromU256 => {
+                    cpu.const_term = 1994;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381FrToU256 => {
+                    cpu.const_term = 1155;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381FrAddSub => {
+                    cpu.const_term = 74;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381FrMul => {
+                    cpu.const_term = 332;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381FrPow => {
+                    cpu.const_term = 691;
+                    cpu.lin_term = ScaledU64(74558);
+                }
+                ContractCostType::Bls12381FrInv => {
+                    cpu.const_term = 35421;
+                    cpu.lin_term = ScaledU64(0);
+                }
             }
 
             // define the memory cost model parameters
@@ -745,6 +860,98 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::VerifyEcdsaSecp256r1Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381EncodeFp => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381DecodeFp => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1Validate => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2Validate => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1ProjectiveToAffine => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2ProjectiveToAffine => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1Add => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1Mul => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G1Msm => {
+                    mem.const_term = 109494;
+                    mem.lin_term = ScaledU64(354667);
+                }
+                ContractCostType::Bls12381MapFpToG1 => {
+                    mem.const_term = 5552;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381HashToG1 => {
+                    mem.const_term = 9424;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2Add => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2Mul => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2Msm => {
+                    mem.const_term = 219654;
+                    mem.lin_term = ScaledU64(354667);
+                }
+                ContractCostType::Bls12381MapFp2ToG2 => {
+                    mem.const_term = 3344;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381HashToG2 => {
+                    mem.const_term = 6816;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381Pairing => {
+                    mem.const_term = 2204;
+                    mem.lin_term = ScaledU64(9340474);
+                }
+                ContractCostType::Bls12381FrFromU256 => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381FrToU256 => {
+                    mem.const_term = 248;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381FrAddSub => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381FrMul => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381FrPow => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(128);
+                }
+                ContractCostType::Bls12381FrInv => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }

@@ -18,7 +18,7 @@ soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi", "shallow-val-hash"] }
 wasmi = { workspace = true }
 wasmparser = { workspace = true }
-stellar-strkey = "0.0.8"
+stellar-strkey = "0.0.9"
 static_assertions = "1.1.0"
 sha2 = "0.10.8"
 hex-literal = "0.4.1"
@@ -67,13 +67,17 @@ sha3 = "0.10.8"
 # which requires "4.1.3". We will need to pin to this version once Core is 
 # updated to the new env version.
 curve25519-dalek = { version = ">=4.1.1", default-features = false, features = ["digest"]}
+ark-bls12-381 = { version = "0.4.0"}
+ark-serialize = { version = "0.4.2"}
+ark-ff = { version = "0.4.2"}
+ark-ec = { version = "0.4.2"}
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "0.16.4", features = ["enable", "timer-fallback"], default-features = false, optional = true }
 
 [dev-dependencies]
 hex = "0.4.3"
-itertools = "0.11.0"
+itertools = "0.10.5"
 tabwriter = "1.3.0"
 thousands = "0.2.0"
 soroban-env-macros = { workspace = true }
@@ -88,6 +92,7 @@ more-asserts = "0.3.1"
 pretty_assertions = "1.4.0"
 backtrace = "0.3.69"
 serde_json = "1.0.108"
+serde = "1.0.192"
 arbitrary = "1.3.2"
 lstsq = "0.5.0"
 nalgebra = { version = "0.32.3", default-features = false, features = ["std"]}
@@ -100,7 +105,7 @@ p256 = {version = "0.13.2", default-features = false, features = ["alloc"]}
 [dev-dependencies.stellar-xdr]
 version = "=22.0.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "39d7dbb0c12bd422ee43a6e2e3277789da4eaac8"
+rev = "5315f4c583784860c0accbb8d3bd234055a19751"
 default-features = false
 features = ["arbitrary"]
 

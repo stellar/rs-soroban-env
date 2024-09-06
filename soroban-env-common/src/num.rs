@@ -230,6 +230,12 @@ impl TryFrom<i128> for I128Small {
     }
 }
 
+impl From<U256Small> for u64 {
+    fn from(value: U256Small) -> Self {
+        value.0.get_body()
+    }
+}
+
 impl TryFrom<U256> for U256Small {
     type Error = ConversionError;
     fn try_from(value: U256) -> Result<Self, Self::Error> {
@@ -240,6 +246,12 @@ impl TryFrom<U256> for U256Small {
         } else {
             Err(ConversionError)
         }
+    }
+}
+
+impl From<I256Small> for i64 {
+    fn from(value: I256Small) -> Self {
+        value.0.get_signed_body()
     }
 }
 

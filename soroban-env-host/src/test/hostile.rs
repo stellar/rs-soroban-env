@@ -575,6 +575,29 @@ fn excessive_logging() -> Result<(), HostError> {
     InstantiateWasmDataSegmentBytes    0              0              
     Sec1DecodePointUncompressed        0              0              
     VerifyEcdsaSecp256r1Sig            0              0              
+    Bls12381EncodeFp                   0              0              
+    Bls12381DecodeFp                   0              0              
+    Bls12381G1Validate                 0              0              
+    Bls12381G2Validate                 0              0              
+    Bls12381G1ProjectiveToAffine       0              0              
+    Bls12381G2ProjectiveToAffine       0              0              
+    Bls12381G1Add                      0              0              
+    Bls12381G1Mul                      0              0              
+    Bls12381G1Msm                      0              0              
+    Bls12381MapFpToG1                  0              0              
+    Bls12381HashToG1                   0              0              
+    Bls12381G2Add                      0              0              
+    Bls12381G2Mul                      0              0              
+    Bls12381G2Msm                      0              0              
+    Bls12381MapFp2ToG2                 0              0              
+    Bls12381HashToG2                   0              0              
+    Bls12381Pairing                    0              0              
+    Bls12381FrFromU256                 0              0              
+    Bls12381FrToU256                   0              0              
+    Bls12381FrAddSub                   0              0              
+    Bls12381FrMul                      0              0              
+    Bls12381FrPow                      0              0              
+    Bls12381FrInv                      0              0              
     =================================================================
 
     "#]];
