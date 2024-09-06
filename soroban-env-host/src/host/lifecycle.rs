@@ -310,7 +310,7 @@ impl Host {
 use super::crypto;
 use super::frame::CallParams;
 #[cfg(any(test, feature = "testutils"))]
-use super::ContractFunctionSet;
+use super::{ContractFunctionSet};
 
 // "testutils" is not covered by budget metering.
 #[cfg(any(test, feature = "testutils"))]
@@ -320,6 +320,7 @@ impl Host {
         contract_address: AddressObject,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
+        use crate::Env;
         self.register_test_contract_with_constructor(
             contract_address,
             contract_fns,
