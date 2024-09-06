@@ -32,7 +32,7 @@ impl CostRunner for ReadXdrByteArrayRun {
         black_box((None, sample))
     }
 
-    fn get_tracker(host: &crate::Host) -> CostTracker {
+    fn get_tracker(host: &crate::Host, _sample: &Self::SampleType) -> CostTracker {
         // internally this is still charged under `ValDeser`
         host.as_budget().get_tracker(ValDeser).unwrap()
     }

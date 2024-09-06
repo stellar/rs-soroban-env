@@ -60,6 +60,12 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
     call_bench::<B, EcdsaSecp256r1RecoverMeasure>(&mut params)?;
     call_bench::<B, Sec1DecodePointCompressedMeasure>(&mut params)?;
     call_bench::<B, DecodeSecp256r1SigMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1AffineSerializeUncompressedMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2AffineSerializeUncompressedMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1AffineDeserializeUncompressedMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2AffineDeserializeUncompressedMeasure>(&mut params)?;
+    call_bench::<B, Bls12381Fp2DeserializeUncompressedMeasure>(&mut params)?;
+
     Ok(params)
 }
 
@@ -114,6 +120,32 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, DecodeEcdsaCurve256SigMeasure>(&mut params)?;
     call_bench::<B, Sec1DecodePointUncompressedMeasure>(&mut params)?;
     call_bench::<B, VerifyEcdsaSecp256r1SigMeasure>(&mut params)?;
+
+    // P22 cost types
+    call_bench::<B, Bls12381EncodeFpMeasure>(&mut params)?;
+    call_bench::<B, Bls12381DecodeFpMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1ValidateMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2ValidateMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1ProjectiveToAffineMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2ProjectiveToAffineMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1AddMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1MulMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1MsmMeasure>(&mut params)?;
+    call_bench::<B, Bls12381MapFpToG1Measure>(&mut params)?;
+    call_bench::<B, Bls12381HashToG1Measure>(&mut params)?;
+    call_bench::<B, Bls12381G2AddMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2MulMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2MsmMeasure>(&mut params)?;
+    call_bench::<B, Bls12381MapFp2ToG2Measure>(&mut params)?;
+    call_bench::<B, Bls12381HashToG2Measure>(&mut params)?;
+    call_bench::<B, Bls12381PairingMeasure>(&mut params)?;
+    call_bench::<B, Bls12381FrFromU256Measure>(&mut params)?;
+    call_bench::<B, Bls12381FrToU256Measure>(&mut params)?;
+    call_bench::<B, Bls12381FrAddMeasure>(&mut params)?;
+    call_bench::<B, Bls12381FrSubMeasure>(&mut params)?;
+    call_bench::<B, Bls12381FrMulMeasure>(&mut params)?;
+    call_bench::<B, Bls12381FrPowMeasure>(&mut params)?;
+    call_bench::<B, Bls12381FrInvMeasure>(&mut params)?;
 
     // These three mem ones are derived analytically, we do not calibrate them typically
     if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {

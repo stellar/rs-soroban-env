@@ -1,3 +1,4 @@
+mod bls12_381;
 mod decode_secp256r1_sig;
 mod ecdsa_secp256k1_verify;
 mod ecdsa_secp256r1_recover;
@@ -5,6 +6,7 @@ mod ed25519_scalar_mut;
 mod read_xdr;
 mod sec1_decode_point_compressed;
 
+pub use bls12_381::*;
 pub use decode_secp256r1_sig::*;
 pub use ecdsa_secp256k1_verify::*;
 pub use ecdsa_secp256r1_recover::*;
@@ -23,6 +25,11 @@ pub enum ExperimentalCostType {
     Sec1DecodePointCompressed,
     DecodeSecp256r1Signature,
     EcdsaSecp256k1Verify,
+    Bls12381G1AffineDeserializeUncompressed,
+    Bls12381G1AffineSerializeUncompressed,
+    Bls12381G2AffineDeserializeUncompressed,
+    Bls12381G2AffineSerializeUncompressed,
+    Bls12381Fp2DeserializeUncompressed,
 }
 
 impl Name for ExperimentalCostType {
@@ -36,6 +43,21 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::Sec1DecodePointCompressed => "Sec1DecodePointCompressed",
             ExperimentalCostType::DecodeSecp256r1Signature => "DecodeSecp256r1Signature",
             ExperimentalCostType::EcdsaSecp256k1Verify => "EcdsaSecp256k1Verify",
+            ExperimentalCostType::Bls12381G1AffineDeserializeUncompressed => {
+                "Bls12381G1AffineDeserializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381G1AffineSerializeUncompressed => {
+                "Bls12381G1AffineSerializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381G2AffineDeserializeUncompressed => {
+                "Bls12381G2AffineDeserializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381G2AffineSerializeUncompressed => {
+                "Bls12381G2AffineSerializeUncompressed"
+            }
+            ExperimentalCostType::Bls12381Fp2DeserializeUncompressed => {
+                "Bls12381Fp2DeserializeUncompressed"
+            }
         }
     }
 }
