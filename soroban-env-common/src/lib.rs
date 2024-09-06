@@ -45,7 +45,7 @@ macro_rules! tracy_span {
 pub struct Version<'a> {
     pub pkg: &'a str,
     pub rev: &'a str,
-    pub interface: u64,
+    pub interface: xdr::ScEnvMetaEntryInterfaceVersion,
     pub xdr: stellar_xdr::Version<'a>,
 }
 

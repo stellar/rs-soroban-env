@@ -9,7 +9,7 @@ use core::fmt::{Debug, Display};
 ///    f(x) = I * (a + b * Option<x>)
 ///
 /// I is a simple scale factor that represents number of iterations the linear
-/// model inside the parantesis is repeated.
+/// model inside the parentheses is repeated.
 ///
 /// a, b are "fixed" parameters at construction time (extracted from an on-chain
 /// cost schedule, so technically not _totally_ fixed) and Option<x> is some

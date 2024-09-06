@@ -548,7 +548,7 @@ impl Host {
                 &[proto.into()],
             ));
         }
-        if proto > meta::get_ledger_protocol_version(meta::INTERFACE_VERSION) {
+        if proto > meta::INTERFACE_VERSION.protocol {
             return Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
