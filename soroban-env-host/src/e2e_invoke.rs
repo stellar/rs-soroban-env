@@ -14,10 +14,10 @@ use crate::{
 };
 use crate::{
     budget::{AsBudget, Budget},
+    crypto::sha256_hash_from_bytes,
     events::Events,
     fees::LedgerEntryRentChange,
     host::{
-        crypto::sha256_hash_from_bytes,
         metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
         TraceHook,

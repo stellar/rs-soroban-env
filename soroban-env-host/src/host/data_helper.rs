@@ -525,7 +525,7 @@ impl Host {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-use super::crypto;
+use crate::crypto;
 #[cfg(any(test, feature = "testutils"))]
 use crate::storage::{AccessType, Footprint};
 

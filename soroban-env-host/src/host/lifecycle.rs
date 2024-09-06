@@ -1,5 +1,5 @@
 use crate::{
-    err,
+    crypto, err,
     host::{
         metered_clone::{MeteredAlloc, MeteredClone},
         metered_write_xdr, ContractReentryMode,
@@ -307,7 +307,6 @@ impl Host {
     }
 }
 
-use super::crypto;
 use super::frame::CallParams;
 #[cfg(any(test, feature = "testutils"))]
 use super::ContractFunctionSet;

@@ -1,10 +1,7 @@
-use super::{
-    crypto::{chacha20_fill_bytes, unbias_prng_seed},
-    declared_size::DeclaredSizeForMetering,
-    metered_clone::MeteredContainer,
-};
+use super::{declared_size::DeclaredSizeForMetering, metered_clone::MeteredContainer};
 use crate::{
     budget::Budget,
+    crypto::{chacha20_fill_bytes, unbias_prng_seed},
     host::metered_clone::MeteredClone,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},

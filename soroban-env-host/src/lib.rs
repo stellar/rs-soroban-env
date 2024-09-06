@@ -26,10 +26,10 @@ mod macros;
 pub mod budget;
 pub mod events;
 pub use events::diagnostic::DiagnosticLevel;
+mod builtin_contracts;
+pub(crate) mod crypto;
 mod host;
 pub(crate) mod host_object;
-
-mod builtin_contracts;
 
 pub mod auth;
 pub mod vm;
