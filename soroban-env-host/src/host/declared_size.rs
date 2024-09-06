@@ -422,6 +422,7 @@ mod test {
         fn check_aarch64_size_that_changed_at_rust_1_79() {
             expect!["488"].assert_eq(size_of::<Context>().to_string().as_str());
         }
+        #[cfg(target_arch = "aarch64")]
         check_aarch64_size_that_changed_at_rust_1_79();
 
         expect!["16"].assert_eq(size_of::<Address>().to_string().as_str());
