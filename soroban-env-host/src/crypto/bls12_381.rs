@@ -183,7 +183,7 @@ impl Host {
         &self,
         g1: G1Affine,
     ) -> Result<BytesObject, HostError> {
-        let mut buf = vec![0; G1_SERIALIZED_SIZE];
+        let mut buf = [0; G1_SERIALIZED_SIZE];
         // `CanonicalSerialize of Affine<P>` calls into
         // `P::serialize_with_mode`, where `P` is `ark_bls12_381::g1::Config`. The
         // output bytes will be in following format: `be_bytes(X) || be_bytes(Y)`
@@ -191,10 +191,10 @@ impl Host {
         //
         // bits(X) =  [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]
         //
-        // This aligns with our standard (which is same as the ZCash standard
-        // https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization)
+        // This aligns with our chosen standard
+        // (https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization)
         self.serialize_uncompressed_into_slice(&g1, &mut buf, 2, "G1")?;
-        self.add_host_object(self.scbytes_from_vec(buf)?)
+        self.add_host_object(self.scbytes_from_slice(&buf)?)
     }
 
     pub(crate) fn g1_projective_serialize_uncompressed(
@@ -249,7 +249,7 @@ impl Host {
         &self,
         g2: G2Affine,
     ) -> Result<BytesObject, HostError> {
-        let mut buf = vec![0; G2_SERIALIZED_SIZE];
+        let mut buf = [0; G2_SERIALIZED_SIZE];
         // `CanonicalSerialization of Affine<P>` where `P` is `ark_bls12_381::curves::g2::Config`,
         // calls into `P::serialize_with_mode`.
         //
@@ -259,10 +259,9 @@ impl Host {
         // The most significant three bits of `X_c1` encodes the flags, i.e.
         // `bits(X_c1) = [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]`
         //
-        // This format conforms to the zcash standard https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization
-        // and is the one we picked.
+        // This aligns with the standard we've picked https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization
         self.serialize_uncompressed_into_slice(&g2, &mut buf, 4, "G2")?;
-        self.add_host_object(self.scbytes_from_vec(buf)?)
+        self.add_host_object(self.scbytes_from_slice(&buf)?)
     }
 
     pub(crate) fn g2_projective_serialize_uncompressed(
@@ -343,8 +342,8 @@ impl Host {
             // bytes are expected in little-endian, with the highest bits being
             // empty flags. There is no check involved.
             //
-            // This is entirely reversed from the [zcash standard](https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization)
-            // the one we have adopted. This is the input format we provide:
+            // This is entirely reversed from the [standard](https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization)
+            // we have adopted. This is the input format we provide:
             // 
             // `input = be_bytes(c1) || be_bytes(c0)`
             // 
