@@ -411,8 +411,19 @@ mod test {
         expect!["16"].assert_eq(size_of::<HostError>().to_string().as_str());
         #[cfg(target_arch = "x86_64")]
         expect!["512"].assert_eq(size_of::<Context>().to_string().as_str());
+
+        #[rustversion::before(1.79)]
         #[cfg(target_arch = "aarch64")]
-        expect!["488"].assert_eq(size_of::<Context>().to_string().as_str());
+        fn check_aarch64_size_that_changed_at_rust_1_79() {
+            expect!["496"].assert_eq(size_of::<Context>().to_string().as_str());
+        }
+        #[rustversion::since(1.79)]
+        #[cfg(target_arch = "aarch64")]
+        fn check_aarch64_size_that_changed_at_rust_1_79() {
+            expect!["488"].assert_eq(size_of::<Context>().to_string().as_str());
+        }
+        check_aarch64_size_that_changed_at_rust_1_79();
+
         expect!["16"].assert_eq(size_of::<Address>().to_string().as_str());
 
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
