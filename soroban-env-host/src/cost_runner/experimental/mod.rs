@@ -30,6 +30,12 @@ pub enum ExperimentalCostType {
     Bls12381G2AffineDeserializeUncompressed,
     Bls12381G2AffineSerializeUncompressed,
     Bls12381Fp2DeserializeUncompressed,
+    Bls12381G1CheckPointOnCurve,
+    Bls12381G1CheckPointInSubgroup,
+    Bls12381G1ComputeYFromX,
+    Bls12381G2CheckPointOnCurve,
+    Bls12381G2CheckPointInSubgroup,
+    Bls12381G2ComputeYFromX,
 }
 
 impl Name for ExperimentalCostType {
@@ -58,6 +64,16 @@ impl Name for ExperimentalCostType {
             ExperimentalCostType::Bls12381Fp2DeserializeUncompressed => {
                 "Bls12381Fp2DeserializeUncompressed"
             }
+            ExperimentalCostType::Bls12381G1CheckPointOnCurve => "Bls12381G1CheckPointOnCurve",
+            ExperimentalCostType::Bls12381G1CheckPointInSubgroup => {
+                "Bls12381G1CheckPointInSubgroup"
+            }
+            ExperimentalCostType::Bls12381G1ComputeYFromX => "Bls12381G1ComputeYFromX",
+            ExperimentalCostType::Bls12381G2CheckPointOnCurve => "Bls12381G2CheckPointOnCurve",
+            ExperimentalCostType::Bls12381G2CheckPointInSubgroup => {
+                "Bls12381G2CheckPointInSubgroup"
+            }
+            ExperimentalCostType::Bls12381G2ComputeYFromX => "Bls12381G2ComputeYFromX",
         }
     }
 }

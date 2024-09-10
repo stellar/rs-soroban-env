@@ -1,9 +1,11 @@
-use ark_bls12_381::{Fq2, G1Affine, G2Affine};
+use ark_bls12_381::{Fq, Fq2, G1Affine, G2Affine};
 
 use super::ExperimentalCostType::*;
 use crate::{
     budget::CostTracker,
     cost_runner::{CostRunner, CostType},
+    xdr::ContractCostType,
+    Host, HostError,
 };
 use std::hint::black_box;
 
@@ -16,7 +18,7 @@ pub struct Bls12381Fp2DeserializeUncompressedRun;
 // ser/deser
 
 macro_rules! impl_ser_runner_for_bls {
-    ($runner: ident, $cost: ident, $units: literal, $sample: ident) => {
+    ($runner: ident, $cost: ident, $expected_size: literal, $sample: ident) => {
         impl CostRunner for $runner {
             const COST_TYPE: CostType = CostType::Experimental($cost);
 
@@ -26,27 +28,25 @@ macro_rules! impl_ser_runner_for_bls {
 
             type RecycledType = (Option<$sample>, Option<Vec<u8>>);
 
-            fn run_iter(host: &crate::Host, _iter: u64, sample: $sample) -> Self::RecycledType {
+            fn run_iter(host: &Host, _iter: u64, sample: $sample) -> Self::RecycledType {
                 let mut buf = vec![0u8; 1000];
                 let _ = host
-                    .serialize_uncompressed_into_slice(&sample, &mut buf, $units, "test")
+                    .serialize_uncompressed_into_slice::<$expected_size, _>(
+                        &sample, &mut buf, "test",
+                    )
                     .unwrap();
                 black_box((None, Some(buf)))
             }
 
-            fn run_baseline_iter(
-                host: &crate::Host,
-                _iter: u64,
-                sample: $sample,
-            ) -> Self::RecycledType {
+            fn run_baseline_iter(host: &Host, _iter: u64, sample: $sample) -> Self::RecycledType {
                 black_box(
-                    host.charge_budget(crate::xdr::ContractCostType::Int256AddSub, None)
+                    host.charge_budget(ContractCostType::Int256AddSub, None)
                         .unwrap(),
                 );
                 black_box((Some(sample), None))
             }
 
-            fn get_tracker(_host: &crate::Host, _sample: &$sample) -> CostTracker {
+            fn get_tracker(_host: &Host, _sample: &$sample) -> CostTracker {
                 CostTracker {
                     iterations: Self::RUN_ITERATIONS,
                     inputs: None,
@@ -61,18 +61,18 @@ macro_rules! impl_ser_runner_for_bls {
 impl_ser_runner_for_bls!(
     Bls12381G1AffineSerializeUncompressedRun,
     Bls12381G1AffineSerializeUncompressed,
-    2,
+    96,
     G1Affine
 );
 impl_ser_runner_for_bls!(
     Bls12381G2AffineSerializeUncompressedRun,
     Bls12381G2AffineSerializeUncompressed,
-    4,
+    192,
     G2Affine
 );
 
 macro_rules! impl_deser_runner_for_bls {
-    ($runner: ident, $cost: ident, $units: literal, $rt: ty) => {
+    ($runner: ident, $cost: ident, $expected_size: literal, $rt: ty) => {
         impl CostRunner for $runner {
             const COST_TYPE: CostType = CostType::Experimental($cost);
 
@@ -82,30 +82,26 @@ macro_rules! impl_deser_runner_for_bls {
 
             type RecycledType = (Option<Self::SampleType>, Option<$rt>);
 
-            fn run_iter(
-                host: &crate::Host,
-                _iter: u64,
-                sample: Self::SampleType,
-            ) -> Self::RecycledType {
+            fn run_iter(host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
                 let res = host
-                    .deserialize_uncompessed_no_validate(&sample, $units, "test")
+                    .deserialize_uncompessed_no_validate::<$expected_size, _>(&sample, "test")
                     .unwrap();
                 black_box((None, Some(res)))
             }
 
             fn run_baseline_iter(
-                host: &crate::Host,
+                host: &Host,
                 _iter: u64,
                 sample: Self::SampleType,
             ) -> Self::RecycledType {
                 black_box(
-                    host.charge_budget(crate::xdr::ContractCostType::Int256AddSub, None)
+                    host.charge_budget(ContractCostType::Int256AddSub, None)
                         .unwrap(),
                 );
                 black_box((Some(sample), None))
             }
 
-            fn get_tracker(_host: &crate::Host, _sample: &Self::SampleType) -> CostTracker {
+            fn get_tracker(_host: &Host, _sample: &Self::SampleType) -> CostTracker {
                 CostTracker {
                     iterations: Self::RUN_ITERATIONS,
                     inputs: None,
@@ -134,4 +130,151 @@ impl_deser_runner_for_bls!(
     Bls12381Fp2DeserializeUncompressed,
     2,
     Fq2
+);
+
+#[macro_export]
+macro_rules! impl_experiment_const_cost_runner_for_bls_deref_sample {
+    ($runner: ident, $cost: ident, $host_fn: ident, $sample: ident, $rt: ty, $($arg: ident),*) => {
+        impl CostRunner for $runner {
+            const COST_TYPE: CostType = CostType::Experimental($cost);
+
+            const RUN_ITERATIONS: u64 = 1;
+
+            type SampleType = $sample;
+
+            type RecycledType = (Option<$sample>, Option<$rt>);
+
+            fn run_iter(host: &Host, _iter: u64, mut sample: $sample) -> Self::RecycledType {
+                let $sample($( $arg ),*) = &mut sample;
+                let res = host.$host_fn($($arg),*).unwrap();
+                black_box((Some(sample), Some(res)))
+            }
+
+            fn run_baseline_iter(
+                host: &Host,
+                _iter: u64,
+                sample: $sample,
+            ) -> Self::RecycledType {
+                black_box(
+                    host.charge_budget(ContractCostType::Int256AddSub, None)
+                        .unwrap(),
+                );
+                black_box((Some(sample), None))
+            }
+
+            fn get_tracker(_host: &Host, _sample: &$sample) -> CostTracker {
+                CostTracker {
+                    iterations: Self::RUN_ITERATIONS,
+                    inputs: None,
+                    cpu: 0,
+                    mem: 0,
+                }
+            }
+        }
+    };
+}
+
+impl Host {
+    fn check_g1_on_curve(&self, pt: &G1Affine) -> Result<bool, HostError> {
+        Ok(pt.is_on_curve())
+    }
+    fn check_g1_in_subgroup(&self, pt: &G1Affine) -> Result<bool, HostError> {
+        Ok(pt.is_in_correct_subgroup_assuming_on_curve())
+    }
+    fn check_g2_on_curve(&self, pt: &G2Affine) -> Result<bool, HostError> {
+        Ok(pt.is_on_curve())
+    }
+    fn check_g2_in_subgroup(&self, pt: &G2Affine) -> Result<bool, HostError> {
+        Ok(pt.is_in_correct_subgroup_assuming_on_curve())
+    }
+    fn g1_compute_y_from_x(&self, pt: &G1Affine) -> Result<Fq, HostError> {
+        Ok(G1Affine::get_ys_from_x_unchecked(pt.x).unwrap().0)
+    }
+    fn g2_compute_y_from_x(&self, pt: &G2Affine) -> Result<Fq2, HostError> {
+        Ok(G2Affine::get_ys_from_x_unchecked(pt.x).unwrap().0)
+    }
+}
+
+pub struct Bls12381G1CheckPointOnCurveRun;
+
+#[derive(Clone)]
+pub struct Bls12381G1CheckPointOnCurveSample(pub G1Affine);
+
+impl_experiment_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G1CheckPointOnCurveRun,
+    Bls12381G1CheckPointOnCurve,
+    check_g1_on_curve,
+    Bls12381G1CheckPointOnCurveSample,
+    bool,
+    pt
+);
+
+pub struct Bls12381G1CheckPointInSubgroupRun;
+
+#[derive(Clone)]
+pub struct Bls12381G1CheckPointInSubgroupSample(pub G1Affine);
+
+impl_experiment_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G1CheckPointInSubgroupRun,
+    Bls12381G1CheckPointInSubgroup,
+    check_g1_in_subgroup,
+    Bls12381G1CheckPointInSubgroupSample,
+    bool,
+    pt
+);
+
+pub struct Bls12381G1ComputeYFromXRun;
+
+#[derive(Clone)]
+pub struct Bls12381G1ComputeYFromXSample(pub G1Affine);
+
+impl_experiment_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G1ComputeYFromXRun,
+    Bls12381G1ComputeYFromX,
+    g1_compute_y_from_x,
+    Bls12381G1ComputeYFromXSample,
+    Fq,
+    pt
+);
+
+pub struct Bls12381G2CheckPointOnCurveRun;
+
+#[derive(Clone)]
+pub struct Bls12381G2CheckPointOnCurveSample(pub G2Affine);
+
+impl_experiment_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G2CheckPointOnCurveRun,
+    Bls12381G2CheckPointOnCurve,
+    check_g2_on_curve,
+    Bls12381G2CheckPointOnCurveSample,
+    bool,
+    pt
+);
+
+pub struct Bls12381G2CheckPointInSubgroupRun;
+
+#[derive(Clone)]
+pub struct Bls12381G2CheckPointInSubgroupSample(pub G2Affine);
+
+impl_experiment_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G2CheckPointInSubgroupRun,
+    Bls12381G2CheckPointInSubgroup,
+    check_g2_in_subgroup,
+    Bls12381G2CheckPointInSubgroupSample,
+    bool,
+    pt
+);
+
+pub struct Bls12381G2ComputeYFromXRun;
+
+#[derive(Clone)]
+pub struct Bls12381G2ComputeYFromXSample(pub G2Affine);
+
+impl_experiment_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G2ComputeYFromXRun,
+    Bls12381G2ComputeYFromX,
+    g2_compute_y_from_x,
+    Bls12381G2ComputeYFromXSample,
+    Fq2,
+    pt
 );

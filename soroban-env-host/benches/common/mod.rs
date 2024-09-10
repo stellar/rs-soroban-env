@@ -65,6 +65,12 @@ pub(crate) fn for_each_experimental_cost_measurement<B: Benchmark>(
     call_bench::<B, Bls12381G1AffineDeserializeUncompressedMeasure>(&mut params)?;
     call_bench::<B, Bls12381G2AffineDeserializeUncompressedMeasure>(&mut params)?;
     call_bench::<B, Bls12381Fp2DeserializeUncompressedMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1CheckPointOnCurveMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1CheckPointInSubgroupMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1ComputeYFromXMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2CheckPointOnCurveMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2CheckPointInSubgroupMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2ComputeYFromXMeasure>(&mut params)?;
 
     Ok(params)
 }

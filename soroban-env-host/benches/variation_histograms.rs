@@ -16,7 +16,12 @@ impl Benchmark for LinearModelTables {
     fn bench<HCM: HostCostMeasurement>(
     ) -> std::io::Result<(MeteredCostComponent, MeteredCostComponent)> {
         // the inputs will be ignored if the measurment is for a constant model
-        let mut measurements = measure_cost_variation::<HCM>(1_000, || 10, || 10, false)?;
+        let sample_count = std::env::var("SAMPLE_COUNT")
+            .ok()
+            .map(|v| v.parse::<u64>().ok())
+            .flatten()
+            .unwrap_or(1000);
+        let mut measurements = measure_cost_variation::<HCM>(sample_count, || 10, || 10, false)?;
         measurements.check_range_against_baseline(&HCM::Runner::COST_TYPE)?;
         measurements.preprocess();
         measurements.report_histogram("cpu", |m| m.cpu_insns);
