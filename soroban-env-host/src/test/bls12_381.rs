@@ -653,7 +653,7 @@ fn g1_msm() -> Result<(), HostError> {
 fn map_fp_to_g1() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
-    // invalid fp: wrongth length
+    // invalid fp: wrong length
     {
         let p1 = invalid_fp(&host, InvalidPointTypes::TooFewBytes)?;
         assert!(HostError::result_matches_err(
@@ -1067,7 +1067,7 @@ fn g2_msm() -> Result<(), HostError> {
 fn map_fp2_to_g2() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
-    // invalid fp2: wrongth length
+    // invalid fp2: wrong length
     {
         let p1 = invalid_fp2(&host, InvalidPointTypes::TooFewBytes)?;
         assert!(HostError::result_matches_err(

@@ -28,6 +28,7 @@ use std::ops::{Add, AddAssign, Mul, MulAssign, SubAssign};
 
 pub(crate) const FP_SERIALIZED_SIZE: usize = 48;
 pub(crate) const FP2_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 2;
+pub(crate) const FP12_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 12;
 pub(crate) const G1_SERIALIZED_SIZE: usize = FP_SERIALIZED_SIZE * 2;
 pub(crate) const G2_SERIALIZED_SIZE: usize = FP2_SERIALIZED_SIZE * 2;
 pub(crate) const FR_SERIALIZED_SIZE: usize = 32;
@@ -107,9 +108,8 @@ impl Host {
         match flags {
             0b0100_0000 => {
                 // infinite bit is set, check all other bits are zero
-                let mut expected_bytes = [0; EXPECTED_SIZE];
-                expected_bytes[0] = flags;
-                if bytes != expected_bytes {
+                let is_valid = bytes[0] == 0b0100_0000 && bytes[1..].iter().all(|x| x.is_zero());
+                if !is_valid {
                     Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, format!("bls12-381 {msg} deserialize: infinity flag (bit 1) is set while remaining bits are not all zero").as_str(), &[]))
                 } else {
                     Ok(())
@@ -287,6 +287,11 @@ impl Host {
 
     pub(crate) fn fr_to_u256val(&self, scalar: Fr) -> Result<U256Val, HostError> {
         self.charge_budget(ContractCostType::Bls12381FrToU256, None)?;
+        // The `into_bigint` carries the majority of the cost. It performs the
+        // Montgomery reduction on the internal representation, which is doing a
+        // number of wrapping arithmetics on each u64 word (`Fr` contains 4
+        // words). The core routine is in `ark_ff::MontConfig::into_bigint`,
+        // this cannot panic.
         let bytes: [u8; 32] = scalar
             .into_bigint()
             .to_bytes_be()
@@ -329,7 +334,7 @@ impl Host {
                 return Err(self.err(
                     ScErrorType::Crypto,
                     ScErrorCode::InvalidInput,
-                    "bls12-381 quadradic extention field element (Fp2): invalid input length to deserialize",
+                    "bls12-381 quadradic extension field element (Fp2): invalid input length to deserialize",
                     &[
                         Val::from_u32(bytes.len() as u32).into(),
                         Val::from_u32(expected_size as u32).into(),
@@ -348,6 +353,7 @@ impl Host {
             // `input = be_bytes(c1) || be_bytes(c0)`
             // 
             // So we just need to reverse our input.
+            self.charge_budget(ContractCostType::MemCpy, Some(FP2_SERIALIZED_SIZE as u64))?;
             let mut buf = [0u8; FP2_SERIALIZED_SIZE];
             buf.copy_from_slice(&bytes);
             buf.reverse();
@@ -609,7 +615,7 @@ impl Host {
         &self,
         output: &PairingOutput<Bls12_381>,
     ) -> Result<Bool, HostError> {
-        self.charge_budget(ContractCostType::MemCmp, Some(576))?;
+        self.charge_budget(ContractCostType::MemCmp, Some(FP12_SERIALIZED_SIZE as u64))?;
         match output.0.cmp(&Fq12::ONE) {
             Ordering::Equal => Ok(true.into()),
             _ => Ok(false.into()),
@@ -652,11 +658,13 @@ impl Host {
             ));
         }
         self.charge_budget(ContractCostType::Bls12381FrInv, None)?;
+        // `inverse()` returns `None` only if the rhs is zero, which we have
+        // checked upfront, so this cannot fail.
         lhs.inverse().ok_or_else(|| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InternalError,
-                format!("scalar inversion {lhs} failed").as_str(),
+                "scalar inversion failed",
                 &[],
             )
         })

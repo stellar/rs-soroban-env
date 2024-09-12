@@ -47,6 +47,7 @@ rev = "122a74a7c491929e5ac9de876099154ef7c06d06"
 features = ["no-hash-maps"]
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
+# [patch.crates-io]
 # stellar-xdr = { path = "../rs-stellar-xdr" }
 # [patch."https://github.com/stellar/wasmi"]
 # soroban-wasmi = { path = "../wasmi/crates/wasmi/" }
