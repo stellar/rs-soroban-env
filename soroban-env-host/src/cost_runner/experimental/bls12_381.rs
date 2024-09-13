@@ -175,18 +175,6 @@ macro_rules! impl_experiment_const_cost_runner_for_bls_deref_sample {
 }
 
 impl Host {
-    fn check_g1_on_curve(&self, pt: &G1Affine) -> Result<bool, HostError> {
-        Ok(pt.is_on_curve())
-    }
-    fn check_g1_in_subgroup(&self, pt: &G1Affine) -> Result<bool, HostError> {
-        Ok(pt.is_in_correct_subgroup_assuming_on_curve())
-    }
-    fn check_g2_on_curve(&self, pt: &G2Affine) -> Result<bool, HostError> {
-        Ok(pt.is_on_curve())
-    }
-    fn check_g2_in_subgroup(&self, pt: &G2Affine) -> Result<bool, HostError> {
-        Ok(pt.is_in_correct_subgroup_assuming_on_curve())
-    }
     fn g1_compute_y_from_x(&self, pt: &G1Affine) -> Result<Fq, HostError> {
         Ok(G1Affine::get_ys_from_x_unchecked(pt.x).unwrap().0)
     }
@@ -194,34 +182,6 @@ impl Host {
         Ok(G2Affine::get_ys_from_x_unchecked(pt.x).unwrap().0)
     }
 }
-
-pub struct Bls12381G1CheckPointOnCurveRun;
-
-#[derive(Clone)]
-pub struct Bls12381G1CheckPointOnCurveSample(pub G1Affine);
-
-impl_experiment_const_cost_runner_for_bls_deref_sample!(
-    Bls12381G1CheckPointOnCurveRun,
-    Bls12381G1CheckPointOnCurve,
-    check_g1_on_curve,
-    Bls12381G1CheckPointOnCurveSample,
-    bool,
-    pt
-);
-
-pub struct Bls12381G1CheckPointInSubgroupRun;
-
-#[derive(Clone)]
-pub struct Bls12381G1CheckPointInSubgroupSample(pub G1Affine);
-
-impl_experiment_const_cost_runner_for_bls_deref_sample!(
-    Bls12381G1CheckPointInSubgroupRun,
-    Bls12381G1CheckPointInSubgroup,
-    check_g1_in_subgroup,
-    Bls12381G1CheckPointInSubgroupSample,
-    bool,
-    pt
-);
 
 pub struct Bls12381G1ComputeYFromXRun;
 
@@ -234,34 +194,6 @@ impl_experiment_const_cost_runner_for_bls_deref_sample!(
     g1_compute_y_from_x,
     Bls12381G1ComputeYFromXSample,
     Fq,
-    pt
-);
-
-pub struct Bls12381G2CheckPointOnCurveRun;
-
-#[derive(Clone)]
-pub struct Bls12381G2CheckPointOnCurveSample(pub G2Affine);
-
-impl_experiment_const_cost_runner_for_bls_deref_sample!(
-    Bls12381G2CheckPointOnCurveRun,
-    Bls12381G2CheckPointOnCurve,
-    check_g2_on_curve,
-    Bls12381G2CheckPointOnCurveSample,
-    bool,
-    pt
-);
-
-pub struct Bls12381G2CheckPointInSubgroupRun;
-
-#[derive(Clone)]
-pub struct Bls12381G2CheckPointInSubgroupSample(pub G2Affine);
-
-impl_experiment_const_cost_runner_for_bls_deref_sample!(
-    Bls12381G2CheckPointInSubgroupRun,
-    Bls12381G2CheckPointInSubgroup,
-    check_g2_in_subgroup,
-    Bls12381G2CheckPointInSubgroupSample,
-    bool,
     pt
 );
 

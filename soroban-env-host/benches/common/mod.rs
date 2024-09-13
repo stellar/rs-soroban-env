@@ -130,8 +130,10 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     // P22 cost types
     call_bench::<B, Bls12381EncodeFpMeasure>(&mut params)?;
     call_bench::<B, Bls12381DecodeFpMeasure>(&mut params)?;
-    call_bench::<B, Bls12381G1ValidateMeasure>(&mut params)?;
-    call_bench::<B, Bls12381G2ValidateMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1CheckPointOnCurveMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G1CheckPointInSubgroupMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2CheckPointOnCurveMeasure>(&mut params)?;
+    call_bench::<B, Bls12381G2CheckPointInSubgroupMeasure>(&mut params)?;
     call_bench::<B, Bls12381G1ProjectiveToAffineMeasure>(&mut params)?;
     call_bench::<B, Bls12381G2ProjectiveToAffineMeasure>(&mut params)?;
     call_bench::<B, Bls12381G1AddMeasure>(&mut params)?;

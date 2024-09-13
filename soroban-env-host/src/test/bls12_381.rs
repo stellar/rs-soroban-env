@@ -74,16 +74,14 @@ fn parse_hex(s: &str) -> Vec<u8> {
     Vec::from_hex(s.trim_start_matches("0x")).unwrap()
 }
 
-fn sample_g1(host: &Host) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
-    host.g1_affine_serialize_uncompressed(G1Affine::rand(&mut rng))
+fn sample_g1(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
+    host.g1_affine_serialize_uncompressed(G1Affine::rand(rng))
 }
 
-fn sample_g1_not_on_curve(host: &Host) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
+fn sample_g1_not_on_curve(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
     loop {
-        let x = Fq::rand(&mut rng);
-        let y = Fq::rand(&mut rng);
+        let x = Fq::rand(rng);
+        let y = Fq::rand(rng);
         let p = G1Affine::new_unchecked(x, y);
         if !p.is_on_curve() {
             return host.g1_affine_serialize_uncompressed(p);
@@ -91,10 +89,9 @@ fn sample_g1_not_on_curve(host: &Host) -> Result<BytesObject, HostError> {
     }
 }
 
-fn sample_g1_not_in_subgroup(host: &Host) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
+fn sample_g1_not_in_subgroup(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
     loop {
-        let x = Fq::rand(&mut rng);
+        let x = Fq::rand(rng);
         if let Some(p) = G1Affine::get_point_from_x_unchecked(x, true) {
             assert!(p.is_on_curve());
             if !p.is_in_correct_subgroup_assuming_on_curve() {
@@ -109,13 +106,16 @@ fn g1_zero(host: &Host) -> Result<BytesObject, HostError> {
 }
 
 fn neg_g1(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g1 = host.g1_affine_deserialize_from_bytesobj(bo)?;
+    let g1 = host.g1_affine_deserialize_from_bytesobj(bo, true)?;
     host.g1_affine_serialize_uncompressed(-g1)
 }
 
-fn invalid_g1(host: &Host, ty: InvalidPointTypes) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
-    let affine = G1Affine::rand(&mut rng);
+fn invalid_g1(
+    host: &Host,
+    ty: InvalidPointTypes,
+    rng: &mut StdRng,
+) -> Result<BytesObject, HostError> {
+    let affine = G1Affine::rand(rng);
     assert!(!affine.is_zero());
     let bo = host.g1_affine_serialize_uncompressed(affine)?;
     match ty {
@@ -142,21 +142,19 @@ fn invalid_g1(host: &Host, ty: InvalidPointTypes) -> Result<BytesObject, HostErr
             first_byte = ((first_byte as u8) | (1 << 5)) as u32;
             host.bytes_put(bo, U32Val::from(0), U32Val::from(first_byte))
         }
-        InvalidPointTypes::PointNotOnCurve => sample_g1_not_on_curve(host),
-        InvalidPointTypes::PointNotInSubgroup => sample_g1_not_in_subgroup(host),
+        InvalidPointTypes::PointNotOnCurve => sample_g1_not_on_curve(host, rng),
+        InvalidPointTypes::PointNotInSubgroup => sample_g1_not_in_subgroup(host, rng),
     }
 }
 
-fn sample_g2(host: &Host) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
-    host.g2_affine_serialize_uncompressed(G2Affine::rand(&mut rng))
+fn sample_g2(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
+    host.g2_affine_serialize_uncompressed(G2Affine::rand(rng))
 }
 
-fn sample_g2_not_on_curve(host: &Host) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
+fn sample_g2_not_on_curve(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
     loop {
-        let x = Fq2::rand(&mut rng);
-        let y = Fq2::rand(&mut rng);
+        let x = Fq2::rand(rng);
+        let y = Fq2::rand(rng);
         let p = G2Affine::new_unchecked(x, y);
         if !p.is_on_curve() {
             return host.g2_affine_serialize_uncompressed(p);
@@ -164,10 +162,9 @@ fn sample_g2_not_on_curve(host: &Host) -> Result<BytesObject, HostError> {
     }
 }
 
-fn sample_g2_not_in_subgroup(host: &Host) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
+fn sample_g2_not_in_subgroup(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
     loop {
-        let x = Fq2::rand(&mut rng);
+        let x = Fq2::rand(rng);
         if let Some(p) = G2Affine::get_point_from_x_unchecked(x, true) {
             assert!(p.is_on_curve());
             if !p.is_in_correct_subgroup_assuming_on_curve() {
@@ -182,13 +179,16 @@ fn g2_zero(host: &Host) -> Result<BytesObject, HostError> {
 }
 
 fn neg_g2(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g2 = host.g2_affine_deserialize_from_bytesobj(bo)?;
+    let g2 = host.g2_affine_deserialize_from_bytesobj(bo, true)?;
     host.g2_affine_serialize_uncompressed(-g2)
 }
 
-fn invalid_g2(host: &Host, ty: InvalidPointTypes) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
-    let affine = G2Affine::rand(&mut rng);
+fn invalid_g2(
+    host: &Host,
+    ty: InvalidPointTypes,
+    rng: &mut StdRng,
+) -> Result<BytesObject, HostError> {
+    let affine = G2Affine::rand(rng);
     assert!(!affine.is_zero());
     let bo = host.g2_affine_serialize_uncompressed(affine)?;
     match ty {
@@ -215,8 +215,8 @@ fn invalid_g2(host: &Host, ty: InvalidPointTypes) -> Result<BytesObject, HostErr
             first_byte = ((first_byte as u8) | (1 << 5)) as u32;
             host.bytes_put(bo, U32Val::from(0), U32Val::from(first_byte))
         }
-        InvalidPointTypes::PointNotOnCurve => sample_g2_not_on_curve(host),
-        InvalidPointTypes::PointNotInSubgroup => sample_g2_not_in_subgroup(host),
+        InvalidPointTypes::PointNotOnCurve => sample_g2_not_on_curve(host, rng),
+        InvalidPointTypes::PointNotInSubgroup => sample_g2_not_in_subgroup(host, rng),
     }
 }
 
@@ -236,17 +236,19 @@ fn parse_g2_point_test_case(host: &Host, p: Point) -> Result<BytesObject, HostEr
 }
 
 #[allow(unused)]
-fn sample_fp(host: &Host) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
-    let fp = Fq::rand(&mut rng);
+fn sample_fp(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
+    let fp = Fq::rand(rng);
     let mut buf = [0u8; FP_SERIALIZED_SIZE];
     host.serialize_uncompressed_into_slice(&fp, &mut buf, 1, "test")?;
     host.bytes_new_from_slice(&buf)
 }
 
-fn invalid_fp(host: &Host, ty: InvalidPointTypes) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
-    let fp = Fq::rand(&mut rng);
+fn invalid_fp(
+    host: &Host,
+    ty: InvalidPointTypes,
+    rng: &mut StdRng,
+) -> Result<BytesObject, HostError> {
+    let fp = Fq::rand(rng);
     match ty {
         InvalidPointTypes::TooManyBytes => {
             let mut buf = [0u8; FP_SERIALIZED_SIZE + 1]; // one extra zero byte
@@ -263,17 +265,19 @@ fn invalid_fp(host: &Host, ty: InvalidPointTypes) -> Result<BytesObject, HostErr
 }
 
 #[allow(unused)]
-fn sample_fp2(host: &Host) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
-    let fp = Fq2::rand(&mut rng);
+fn sample_fp2(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
+    let fp = Fq2::rand(rng);
     let mut buf = [0u8; FP2_SERIALIZED_SIZE];
     host.serialize_uncompressed_into_slice(&fp, &mut buf, 1, "test")?;
     host.bytes_new_from_slice(&buf)
 }
 
-fn invalid_fp2(host: &Host, ty: InvalidPointTypes) -> Result<BytesObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
-    let fp = Fq::rand(&mut rng);
+fn invalid_fp2(
+    host: &Host,
+    ty: InvalidPointTypes,
+    rng: &mut StdRng,
+) -> Result<BytesObject, HostError> {
+    let fp = Fq::rand(rng);
     match ty {
         InvalidPointTypes::TooManyBytes => {
             let mut buf = [0u8; FP2_SERIALIZED_SIZE + 1]; // one extra zero byte
@@ -289,13 +293,12 @@ fn invalid_fp2(host: &Host, ty: InvalidPointTypes) -> Result<BytesObject, HostEr
     }
 }
 
-fn sample_fr(host: &Host) -> Result<U256Val, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
+fn sample_fr(host: &Host, rng: &mut StdRng) -> Result<U256Val, HostError> {
     let obj = host.obj_from_u256_pieces(
-        u64::rand(&mut rng),
-        u64::rand(&mut rng),
-        u64::rand(&mut rng),
-        u64::rand(&mut rng),
+        u64::rand(rng),
+        u64::rand(rng),
+        u64::rand(rng),
+        u64::rand(rng),
     )?;
     Ok(obj.into())
 }
@@ -304,12 +307,12 @@ fn sample_host_vec<T: UniformRand + CanonicalSerialize>(
     host: &Host,
     buf_size: usize,
     vec_len: usize,
+    rng: &mut StdRng,
 ) -> Result<VecObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
     let vals: Vec<Val> = (0..vec_len)
         .into_iter()
         .map(|_| {
-            let t = T::rand(&mut rng);
+            let t = T::rand(rng);
             let mut buf = vec![0; buf_size];
             host.serialize_uncompressed_into_slice(&t, &mut buf, 1, "test")
                 .unwrap();
@@ -319,16 +322,15 @@ fn sample_host_vec<T: UniformRand + CanonicalSerialize>(
     host.vec_new_from_slice(&vals)
 }
 
-fn sample_fr_vec(host: &Host, vec_len: usize) -> Result<VecObject, HostError> {
-    let mut rng = StdRng::from_seed([0xff; 32]);
+fn sample_fr_vec(host: &Host, vec_len: usize, rng: &mut StdRng) -> Result<VecObject, HostError> {
     let vals: Vec<Val> = (0..vec_len)
         .into_iter()
         .map(|_| {
             host.obj_from_u256_pieces(
-                u64::rand(&mut rng),
-                u64::rand(&mut rng),
-                u64::rand(&mut rng),
-                u64::rand(&mut rng),
+                u64::rand(rng),
+                u64::rand(rng),
+                u64::rand(rng),
+                u64::rand(rng),
             )
             .unwrap()
             .to_val()
@@ -338,107 +340,228 @@ fn sample_fr_vec(host: &Host, vec_len: usize) -> Result<VecObject, HostError> {
 }
 
 #[test]
+fn check_g1_is_in_subgroup() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+    // invalid point
+    {
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(invalid_g1(
+                &host,
+                InvalidPointTypes::TooManyBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(invalid_g1(
+                &host,
+                InvalidPointTypes::TooFewBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(invalid_g1(
+                &host,
+                InvalidPointTypes::CompressionFlagSet,
+                &mut rng
+            )?,),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(invalid_g1(
+                &host,
+                InvalidPointTypes::InfinityFlagSetBitsNotAllZero,
+                &mut rng
+            )?,),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(invalid_g1(
+                &host,
+                InvalidPointTypes::SortFlagSet,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(invalid_g1(
+                &host,
+                InvalidPointTypes::PointNotOnCurve,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // valid point in subgroup
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_check_g1_is_in_subgroup(sample_g1(&host, &mut rng)?)?
+                .to_val()
+                .is_true())
+        }
+    }
+    // infinity point is in subgroup
+    {
+        assert!(host
+            .bls12_381_check_g1_is_in_subgroup(g1_zero(&host)?)?
+            .to_val()
+            .is_true())
+    }
+    // out of subgroup
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_check_g1_is_in_subgroup(invalid_g1(
+                    &host,
+                    InvalidPointTypes::PointNotInSubgroup,
+                    &mut rng
+                )?)?
+                .to_val()
+                .is_false())
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn g1_add() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // invalid p1
     {
-        let p2 = sample_g1(&host)?;
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g1_add(invalid_g1(&host, InvalidPointTypes::TooManyBytes)?, p2),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g1_add(invalid_g1(&host, InvalidPointTypes::TooFewBytes)?, p2),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
+        let p2 = sample_g1(&host, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_add(
-                invalid_g1(&host, InvalidPointTypes::CompressionFlagSet)?,
+                invalid_g1(&host, InvalidPointTypes::TooManyBytes, &mut rng)?,
                 p2
             ),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_add(
-                invalid_g1(&host, InvalidPointTypes::InfinityFlagSetBitsNotAllZero)?,
+                invalid_g1(&host, InvalidPointTypes::TooFewBytes, &mut rng)?,
                 p2
             ),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g1_add(invalid_g1(&host, InvalidPointTypes::SortFlagSet)?, p2),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g1_add(invalid_g1(&host, InvalidPointTypes::PointNotOnCurve)?, p2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_add(
-                invalid_g1(&host, InvalidPointTypes::PointNotInSubgroup)?,
+                invalid_g1(&host, InvalidPointTypes::CompressionFlagSet, &mut rng)?,
                 p2
             ),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_add(
+                invalid_g1(
+                    &host,
+                    InvalidPointTypes::InfinityFlagSetBitsNotAllZero,
+                    &mut rng
+                )?,
+                p2
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_add(
+                invalid_g1(&host, InvalidPointTypes::SortFlagSet, &mut rng)?,
+                p2
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_add(
+                invalid_g1(&host, InvalidPointTypes::PointNotOnCurve, &mut rng)?,
+                p2
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        // addition does not require input points to be in the correcct subgroup
+        assert!(host
+            .bls12_381_g1_add(
+                invalid_g1(&host, InvalidPointTypes::PointNotInSubgroup, &mut rng)?,
+                p2
+            )
+            .is_ok())
     }
     // invalid p2
     {
-        let p1 = sample_g1(&host)?;
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g1_add(p1, invalid_g1(&host, InvalidPointTypes::TooManyBytes)?),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g1_add(p1, invalid_g1(&host, InvalidPointTypes::TooFewBytes)?),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
+        let p1 = sample_g1(&host, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_add(
                 p1,
-                invalid_g1(&host, InvalidPointTypes::CompressionFlagSet)?
+                invalid_g1(&host, InvalidPointTypes::TooManyBytes, &mut rng)?
             ),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_add(
                 p1,
-                invalid_g1(&host, InvalidPointTypes::InfinityFlagSetBitsNotAllZero)?
+                invalid_g1(&host, InvalidPointTypes::TooFewBytes, &mut rng)?
             ),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g1_add(p1, invalid_g1(&host, InvalidPointTypes::SortFlagSet)?),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g1_add(p1, invalid_g1(&host, InvalidPointTypes::PointNotOnCurve)?),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_add(
                 p1,
-                invalid_g1(&host, InvalidPointTypes::PointNotInSubgroup)?
+                invalid_g1(&host, InvalidPointTypes::CompressionFlagSet, &mut rng)?
             ),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_add(
+                p1,
+                invalid_g1(
+                    &host,
+                    InvalidPointTypes::InfinityFlagSetBitsNotAllZero,
+                    &mut rng
+                )?
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_add(
+                p1,
+                invalid_g1(&host, InvalidPointTypes::SortFlagSet, &mut rng)?
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_add(
+                p1,
+                invalid_g1(&host, InvalidPointTypes::PointNotOnCurve, &mut rng)?
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        // addition does not require input points to be in the correcct subgroup
+        assert!(host
+            .bls12_381_g1_add(
+                p1,
+                invalid_g1(&host, InvalidPointTypes::PointNotInSubgroup, &mut rng)?
+            )
+            .is_ok());
     }
     // 3. lhs.add(zero) = lhs
     {
-        let p1 = sample_g1(&host)?;
+        let p1 = sample_g1(&host, &mut rng)?;
         let res = host.bls12_381_g1_add(p1, g1_zero(&host)?)?;
         assert_eq!(host.obj_cmp(p1.into(), res.into())?, Ordering::Equal as i64);
     }
     // 4. zero.add(rhs) = rhs
     {
-        let p2 = sample_g1(&host)?;
+        let p2 = sample_g1(&host, &mut rng)?;
         let res = host.bls12_381_g1_add(g1_zero(&host)?, p2)?;
         assert_eq!(host.obj_cmp(p2.into(), res.into())?, Ordering::Equal as i64);
     }
     // 5. communitive a + b = b + a
     {
-        let a = sample_g1(&host)?;
-        let b = sample_g1(&host)?;
+        let a = sample_g1(&host, &mut rng)?;
+        let b = sample_g1(&host, &mut rng)?;
         let a_plus_b = host.bls12_381_g1_add(a, b)?;
         let b_plus_a = host.bls12_381_g1_add(b, a)?;
         assert_eq!(
@@ -448,9 +571,9 @@ fn g1_add() -> Result<(), HostError> {
     }
     // 6. associative (a + b) + c = a + (b + c)
     {
-        let a = sample_g1(&host)?;
-        let b = sample_g1(&host)?;
-        let c = sample_g1(&host)?;
+        let a = sample_g1(&host, &mut rng)?;
+        let b = sample_g1(&host, &mut rng)?;
+        let c = sample_g1(&host, &mut rng)?;
         let aplusb = host.bls12_381_g1_add(a, b)?;
         let aplusb_plus_c = host.bls12_381_g1_add(aplusb, c)?;
         let bplusc = host.bls12_381_g1_add(b, c)?;
@@ -462,7 +585,7 @@ fn g1_add() -> Result<(), HostError> {
     }
     // 7. a - a = zero
     {
-        let a = sample_g1(&host)?;
+        let a = sample_g1(&host, &mut rng)?;
         let neg_a = neg_g1(a.clone(), &host)?;
         let res = host.bls12_381_g1_add(a, neg_a)?;
         let zero = g1_zero(&host)?;
@@ -476,11 +599,12 @@ fn g1_add() -> Result<(), HostError> {
 
 #[test]
 fn g1_mul() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // 2. lhs * 0 = 0
     {
-        let lhs = sample_g1(&host)?;
+        let lhs = sample_g1(&host, &mut rng)?;
         let rhs = host.obj_from_u256_pieces(0, 0, 0, 0)?;
         let res = host.bls12_381_g1_mul(lhs, rhs.into())?;
         let zero = g1_zero(&host)?;
@@ -491,7 +615,7 @@ fn g1_mul() -> Result<(), HostError> {
     }
     // 3. lhs * 1 = lhs
     {
-        let lhs = sample_g1(&host)?;
+        let lhs = sample_g1(&host, &mut rng)?;
         let rhs = U256Val::from_u32(1);
         let res = host.bls12_381_g1_mul(lhs, rhs.into())?;
         assert_eq!(
@@ -501,9 +625,9 @@ fn g1_mul() -> Result<(), HostError> {
     }
     // 4. associative P * a * b = P * b * a
     {
-        let p = sample_g1(&host)?;
-        let a = sample_fr(&host)?;
-        let b = sample_fr(&host)?;
+        let p = sample_g1(&host, &mut rng)?;
+        let a = sample_fr(&host, &mut rng)?;
+        let b = sample_fr(&host, &mut rng)?;
         let pa = host.bls12_381_g1_mul(p, a)?;
         let pab = host.bls12_381_g1_mul(pa, b)?;
         let pb = host.bls12_381_g1_mul(p, b)?;
@@ -518,6 +642,7 @@ fn g1_mul() -> Result<(), HostError> {
 
 #[test]
 fn g1_msm() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // vector lengths are zero
@@ -531,8 +656,8 @@ fn g1_msm() -> Result<(), HostError> {
     }
     // vector lengths not equal
     {
-        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 2)?;
-        let vs = sample_fr_vec(&host, 3)?;
+        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 2, &mut rng)?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_msm(vp, vs),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -541,11 +666,11 @@ fn g1_msm() -> Result<(), HostError> {
     // vector g1 not valid
     {
         let vp = host.vec_new_from_slice(&[
-            sample_g1(&host)?.to_val(),
-            invalid_g1(&host, InvalidPointTypes::PointNotInSubgroup)?.to_val(),
-            sample_g1(&host)?.to_val(),
+            sample_g1(&host, &mut rng)?.to_val(),
+            invalid_g1(&host, InvalidPointTypes::PointNotInSubgroup, &mut rng)?.to_val(),
+            sample_g1(&host, &mut rng)?.to_val(),
         ])?;
-        let vs = sample_fr_vec(&host, 3)?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_msm(vp, vs),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -554,7 +679,7 @@ fn g1_msm() -> Result<(), HostError> {
     // vector of zero points result zero
     {
         let vp = host.vec_new_from_slice(&[g1_zero(&host)?.to_val(); 3])?;
-        let vs = sample_fr_vec(&host, 3)?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
         let res = host.bls12_381_g1_msm(vp, vs)?;
         assert_eq!(
             host.obj_cmp(res.into(), g1_zero(&host)?.into())?,
@@ -563,7 +688,7 @@ fn g1_msm() -> Result<(), HostError> {
     }
     // vector of zero scalars result in zero point
     {
-        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3)?;
+        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
         let vs = host.vec_new_from_slice(&[U256Val::from_u32(0).to_val(); 3])?;
         let res = host.bls12_381_g1_msm(vp, vs)?;
         assert_eq!(
@@ -573,7 +698,7 @@ fn g1_msm() -> Result<(), HostError> {
     }
     // 6. g1 * (1) + g1 (-1) = 0
     {
-        let pt = sample_g1(&host)?;
+        let pt = sample_g1(&host, &mut rng)?;
         let zero = g1_zero(&host)?;
         assert_ne!(
             host.obj_cmp(pt.into(), zero.into())?,
@@ -592,16 +717,16 @@ fn g1_msm() -> Result<(), HostError> {
     {
         host.budget_ref().reset_default()?;
         let mut vp = vec![
-            sample_g1(&host)?.to_val(),
-            sample_g1(&host)?.to_val(),
-            sample_g1(&host)?.to_val(),
-            sample_g1(&host)?.to_val(),
+            sample_g1(&host, &mut rng)?.to_val(),
+            sample_g1(&host, &mut rng)?.to_val(),
+            sample_g1(&host, &mut rng)?.to_val(),
+            sample_g1(&host, &mut rng)?.to_val(),
         ];
         let mut vs = vec![
-            sample_fr(&host)?.to_val(),
-            sample_fr(&host)?.to_val(),
-            sample_fr(&host)?.to_val(),
-            sample_fr(&host)?.to_val(),
+            sample_fr(&host, &mut rng)?.to_val(),
+            sample_fr(&host, &mut rng)?.to_val(),
+            sample_fr(&host, &mut rng)?.to_val(),
+            sample_fr(&host, &mut rng)?.to_val(),
         ];
         let ref_res =
             host.bls12_381_g1_msm(host.vec_new_from_slice(&vp)?, host.vec_new_from_slice(&vs)?)?;
@@ -631,8 +756,8 @@ fn g1_msm() -> Result<(), HostError> {
     // 8. msm result is same as invidial mul and add
     {
         host.budget_ref().reset_default()?;
-        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 10)?;
-        let vs = sample_fr_vec(&host, 10)?;
+        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 10, &mut rng)?;
+        let vs = sample_fr_vec(&host, 10, &mut rng)?;
         let ref_res = host.bls12_381_g1_msm(vp, vs)?;
         let mut res = g1_zero(&host)?;
         for i in 0..10 {
@@ -651,16 +776,17 @@ fn g1_msm() -> Result<(), HostError> {
 
 #[test]
 fn map_fp_to_g1() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // invalid fp: wrong length
     {
-        let p1 = invalid_fp(&host, InvalidPointTypes::TooFewBytes)?;
+        let p1 = invalid_fp(&host, InvalidPointTypes::TooFewBytes, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_map_fp_to_g1(p1),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
-        let p2 = invalid_fp(&host, InvalidPointTypes::TooManyBytes)?;
+        let p2 = invalid_fp(&host, InvalidPointTypes::TooManyBytes, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_map_fp_to_g1(p2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -751,108 +877,230 @@ fn hash_to_g1() -> Result<(), HostError> {
 }
 
 // g2 tests
+
+#[test]
+fn check_g2_is_in_subgroup() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+    // invalid point
+    {
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(invalid_g2(
+                &host,
+                InvalidPointTypes::TooManyBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(invalid_g2(
+                &host,
+                InvalidPointTypes::TooFewBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(invalid_g2(
+                &host,
+                InvalidPointTypes::CompressionFlagSet,
+                &mut rng
+            )?,),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(invalid_g2(
+                &host,
+                InvalidPointTypes::InfinityFlagSetBitsNotAllZero,
+                &mut rng
+            )?,),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(invalid_g2(
+                &host,
+                InvalidPointTypes::SortFlagSet,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(invalid_g2(
+                &host,
+                InvalidPointTypes::PointNotOnCurve,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+    // valid point in subgroup
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_check_g2_is_in_subgroup(sample_g2(&host, &mut rng)?)?
+                .to_val()
+                .is_true())
+        }
+    }
+    // infinity point is in subgroup
+    {
+        assert!(host
+            .bls12_381_check_g2_is_in_subgroup(g2_zero(&host)?)?
+            .to_val()
+            .is_true())
+    }
+    // out of subgroup
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_check_g2_is_in_subgroup(invalid_g2(
+                    &host,
+                    InvalidPointTypes::PointNotInSubgroup,
+                    &mut rng
+                )?)?
+                .to_val()
+                .is_false())
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn g2_add() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // invalid p1
     {
-        let p2 = sample_g2(&host)?;
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g2_add(invalid_g2(&host, InvalidPointTypes::TooManyBytes)?, p2),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g2_add(invalid_g2(&host, InvalidPointTypes::TooFewBytes)?, p2),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
+        let p2 = sample_g2(&host, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_add(
-                invalid_g2(&host, InvalidPointTypes::CompressionFlagSet)?,
+                invalid_g2(&host, InvalidPointTypes::TooManyBytes, &mut rng)?,
                 p2
             ),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_add(
-                invalid_g2(&host, InvalidPointTypes::InfinityFlagSetBitsNotAllZero)?,
+                invalid_g2(&host, InvalidPointTypes::TooFewBytes, &mut rng)?,
                 p2
             ),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g2_add(invalid_g2(&host, InvalidPointTypes::SortFlagSet)?, p2),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g2_add(invalid_g2(&host, InvalidPointTypes::PointNotOnCurve)?, p2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_add(
-                invalid_g2(&host, InvalidPointTypes::PointNotInSubgroup)?,
+                invalid_g2(&host, InvalidPointTypes::CompressionFlagSet, &mut rng)?,
                 p2
             ),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_add(
+                invalid_g2(
+                    &host,
+                    InvalidPointTypes::InfinityFlagSetBitsNotAllZero,
+                    &mut rng
+                )?,
+                p2
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_add(
+                invalid_g2(&host, InvalidPointTypes::SortFlagSet, &mut rng)?,
+                p2
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_add(
+                invalid_g2(&host, InvalidPointTypes::PointNotOnCurve, &mut rng)?,
+                p2
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        // addition does not require input points to be in the correcct subgroup
+        assert!(host
+            .bls12_381_g2_add(
+                invalid_g2(&host, InvalidPointTypes::PointNotInSubgroup, &mut rng)?,
+                p2
+            )
+            .is_ok());
     }
     // invalid p2
     {
-        let p1 = sample_g2(&host)?;
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g2_add(p1, invalid_g2(&host, InvalidPointTypes::TooManyBytes)?),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g2_add(p1, invalid_g2(&host, InvalidPointTypes::TooFewBytes)?),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
+        let p1 = sample_g2(&host, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_add(
                 p1,
-                invalid_g2(&host, InvalidPointTypes::CompressionFlagSet)?
+                invalid_g2(&host, InvalidPointTypes::TooManyBytes, &mut rng)?
             ),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_add(
                 p1,
-                invalid_g2(&host, InvalidPointTypes::InfinityFlagSetBitsNotAllZero)?
+                invalid_g2(&host, InvalidPointTypes::TooFewBytes, &mut rng)?
             ),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g2_add(p1, invalid_g2(&host, InvalidPointTypes::SortFlagSet)?),
-            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-        ));
-        assert!(HostError::result_matches_err(
-            host.bls12_381_g2_add(p1, invalid_g2(&host, InvalidPointTypes::PointNotOnCurve)?),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_add(
                 p1,
-                invalid_g2(&host, InvalidPointTypes::PointNotInSubgroup)?
+                invalid_g2(&host, InvalidPointTypes::CompressionFlagSet, &mut rng)?
             ),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_add(
+                p1,
+                invalid_g2(
+                    &host,
+                    InvalidPointTypes::InfinityFlagSetBitsNotAllZero,
+                    &mut rng
+                )?
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_add(
+                p1,
+                invalid_g2(&host, InvalidPointTypes::SortFlagSet, &mut rng)?
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_add(
+                p1,
+                invalid_g2(&host, InvalidPointTypes::PointNotOnCurve, &mut rng)?
+            ),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        // addition does not require input points to be in the correcct subgroup
+        assert!(host
+            .bls12_381_g2_add(
+                p1,
+                invalid_g2(&host, InvalidPointTypes::PointNotInSubgroup, &mut rng)?
+            )
+            .is_ok());
     }
     // 3. lhs.add(zero) = lhs
     {
-        let p1 = sample_g2(&host)?;
+        let p1 = sample_g2(&host, &mut rng)?;
         let res = host.bls12_381_g2_add(p1, g2_zero(&host)?)?;
         assert_eq!(host.obj_cmp(p1.into(), res.into())?, Ordering::Equal as i64);
     }
     // 4. zero.add(rhs) = rhs
     {
-        let p2 = sample_g2(&host)?;
+        let p2 = sample_g2(&host, &mut rng)?;
         let res = host.bls12_381_g2_add(g2_zero(&host)?, p2)?;
         assert_eq!(host.obj_cmp(p2.into(), res.into())?, Ordering::Equal as i64);
     }
     // 5. communitive a + b = b + a
     {
-        let a = sample_g2(&host)?;
-        let b = sample_g2(&host)?;
+        let a = sample_g2(&host, &mut rng)?;
+        let b = sample_g2(&host, &mut rng)?;
         let a_plus_b = host.bls12_381_g2_add(a, b)?;
         let b_plus_a = host.bls12_381_g2_add(b, a)?;
         assert_eq!(
@@ -862,9 +1110,9 @@ fn g2_add() -> Result<(), HostError> {
     }
     // 6. associative (a + b) + c = a + (b + c)
     {
-        let a = sample_g2(&host)?;
-        let b = sample_g2(&host)?;
-        let c = sample_g2(&host)?;
+        let a = sample_g2(&host, &mut rng)?;
+        let b = sample_g2(&host, &mut rng)?;
+        let c = sample_g2(&host, &mut rng)?;
         let aplusb = host.bls12_381_g2_add(a, b)?;
         let aplusb_plus_c = host.bls12_381_g2_add(aplusb, c)?;
         let bplusc = host.bls12_381_g2_add(b, c)?;
@@ -876,7 +1124,7 @@ fn g2_add() -> Result<(), HostError> {
     }
     // 7. a - a = zero
     {
-        let a = sample_g2(&host)?;
+        let a = sample_g2(&host, &mut rng)?;
         let neg_a = neg_g2(a.clone(), &host)?;
         let res = host.bls12_381_g2_add(a, neg_a)?;
         let zero = g2_zero(&host)?;
@@ -890,11 +1138,12 @@ fn g2_add() -> Result<(), HostError> {
 
 #[test]
 fn g2_mul() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // 2. lhs * 0 = 0
     {
-        let lhs = sample_g2(&host)?;
+        let lhs = sample_g2(&host, &mut rng)?;
         let rhs = host.obj_from_u256_pieces(0, 0, 0, 0)?;
         let res = host.bls12_381_g2_mul(lhs, rhs.into())?;
         let zero = g2_zero(&host)?;
@@ -905,7 +1154,7 @@ fn g2_mul() -> Result<(), HostError> {
     }
     // 3. lhs * 1 = lhs
     {
-        let lhs = sample_g2(&host)?;
+        let lhs = sample_g2(&host, &mut rng)?;
         let rhs = U256Val::from_u32(1);
         let res = host.bls12_381_g2_mul(lhs, rhs.into())?;
         assert_eq!(
@@ -915,9 +1164,9 @@ fn g2_mul() -> Result<(), HostError> {
     }
     // 4. associative P * a * b = P * b * a
     {
-        let p = sample_g2(&host)?;
-        let a = sample_fr(&host)?;
-        let b = sample_fr(&host)?;
+        let p = sample_g2(&host, &mut rng)?;
+        let a = sample_fr(&host, &mut rng)?;
+        let b = sample_fr(&host, &mut rng)?;
         let pa = host.bls12_381_g2_mul(p, a)?;
         let pab = host.bls12_381_g2_mul(pa, b)?;
         let pb = host.bls12_381_g2_mul(p, b)?;
@@ -932,6 +1181,7 @@ fn g2_mul() -> Result<(), HostError> {
 
 #[test]
 fn g2_msm() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // vector lengths are zero
@@ -945,8 +1195,8 @@ fn g2_msm() -> Result<(), HostError> {
     }
     // vector lengths not equal
     {
-        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2)?;
-        let vs = sample_fr_vec(&host, 3)?;
+        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2, &mut rng)?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_msm(vp, vs),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -955,11 +1205,11 @@ fn g2_msm() -> Result<(), HostError> {
     // vector g2 not valid
     {
         let vp = host.vec_new_from_slice(&[
-            sample_g2(&host)?.to_val(),
-            invalid_g2(&host, InvalidPointTypes::PointNotInSubgroup)?.to_val(),
-            sample_g2(&host)?.to_val(),
+            sample_g2(&host, &mut rng)?.to_val(),
+            invalid_g2(&host, InvalidPointTypes::PointNotInSubgroup, &mut rng)?.to_val(),
+            sample_g2(&host, &mut rng)?.to_val(),
         ])?;
-        let vs = sample_fr_vec(&host, 3)?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_msm(vp, vs),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -968,7 +1218,7 @@ fn g2_msm() -> Result<(), HostError> {
     // vector of zero points result zero
     {
         let vp = host.vec_new_from_slice(&[g2_zero(&host)?.to_val(); 3])?;
-        let vs = sample_fr_vec(&host, 3)?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
         let res = host.bls12_381_g2_msm(vp, vs)?;
         assert_eq!(
             host.obj_cmp(res.into(), g2_zero(&host)?.into())?,
@@ -977,7 +1227,7 @@ fn g2_msm() -> Result<(), HostError> {
     }
     // vector of zero scalars result in zero point
     {
-        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3)?;
+        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3, &mut rng)?;
         let vs = host.vec_new_from_slice(&[U256Val::from_u32(0).to_val(); 3])?;
         let res = host.bls12_381_g2_msm(vp, vs)?;
         assert_eq!(
@@ -987,7 +1237,7 @@ fn g2_msm() -> Result<(), HostError> {
     }
     // 6. g2 * (1) + g2 (-1) = 0
     {
-        let pt = sample_g2(&host)?;
+        let pt = sample_g2(&host, &mut rng)?;
         let zero = g2_zero(&host)?;
         assert_ne!(
             host.obj_cmp(pt.into(), zero.into())?,
@@ -1005,16 +1255,16 @@ fn g2_msm() -> Result<(), HostError> {
     // 7. associative: shuffle points orders results stay the same
     {
         let mut vp = vec![
-            sample_g2(&host)?.to_val(),
-            sample_g2(&host)?.to_val(),
-            sample_g2(&host)?.to_val(),
-            sample_g2(&host)?.to_val(),
+            sample_g2(&host, &mut rng)?.to_val(),
+            sample_g2(&host, &mut rng)?.to_val(),
+            sample_g2(&host, &mut rng)?.to_val(),
+            sample_g2(&host, &mut rng)?.to_val(),
         ];
         let mut vs = vec![
-            sample_fr(&host)?.to_val(),
-            sample_fr(&host)?.to_val(),
-            sample_fr(&host)?.to_val(),
-            sample_fr(&host)?.to_val(),
+            sample_fr(&host, &mut rng)?.to_val(),
+            sample_fr(&host, &mut rng)?.to_val(),
+            sample_fr(&host, &mut rng)?.to_val(),
+            sample_fr(&host, &mut rng)?.to_val(),
         ];
         let ref_res =
             host.bls12_381_g2_msm(host.vec_new_from_slice(&vp)?, host.vec_new_from_slice(&vs)?)?;
@@ -1045,8 +1295,8 @@ fn g2_msm() -> Result<(), HostError> {
     // 8. msm result is same as invidial mul and add
     {
         host.budget_ref().reset_default()?;
-        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 5)?;
-        let vs = sample_fr_vec(&host, 5)?;
+        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 5, &mut rng)?;
+        let vs = sample_fr_vec(&host, 5, &mut rng)?;
         let ref_res = host.bls12_381_g2_msm(vp, vs)?;
         let mut res = g2_zero(&host)?;
         for i in 0..5 {
@@ -1065,16 +1315,17 @@ fn g2_msm() -> Result<(), HostError> {
 
 #[test]
 fn map_fp2_to_g2() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // invalid fp2: wrong length
     {
-        let p1 = invalid_fp2(&host, InvalidPointTypes::TooFewBytes)?;
+        let p1 = invalid_fp2(&host, InvalidPointTypes::TooFewBytes, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_map_fp2_to_g2(p1),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
-        let p2 = invalid_fp2(&host, InvalidPointTypes::TooManyBytes)?;
+        let p2 = invalid_fp2(&host, InvalidPointTypes::TooManyBytes, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_map_fp2_to_g2(p2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -1160,12 +1411,13 @@ fn hash_to_g2() -> Result<(), HostError> {
 // pairing checks
 #[test]
 fn pairing() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
     let host = observe_host!(Host::test_host());
     host.enable_debug()?;
     // 1. vector lengths don't match
     {
-        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3)?;
-        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2)?;
+        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
+        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_multi_pairing_check(vp1, vp2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -1173,8 +1425,8 @@ fn pairing() -> Result<(), HostError> {
     }
     // 2. vector length is 0
     {
-        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 0)?;
-        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 0)?;
+        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 0, &mut rng)?;
+        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 0, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_multi_pairing_check(vp1, vp2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -1182,13 +1434,13 @@ fn pairing() -> Result<(), HostError> {
     }
     // 3. any g1 is invalid
     {
-        let mut vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3)?;
+        let mut vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
         vp1 = host.vec_put(
             vp1,
             U32Val::from(1),
-            sample_g1_not_in_subgroup(&host)?.to_val(),
+            sample_g1_not_in_subgroup(&host, &mut rng)?.to_val(),
         )?;
-        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2)?;
+        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_multi_pairing_check(vp1, vp2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -1196,12 +1448,12 @@ fn pairing() -> Result<(), HostError> {
     }
     // 4. any g2 is invalid
     {
-        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3)?;
-        let mut vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3)?;
+        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
+        let mut vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3, &mut rng)?;
         vp2 = host.vec_put(
             vp2,
             U32Val::from(1),
-            sample_g2_not_on_curve(&host)?.to_val(),
+            sample_g2_not_on_curve(&host, &mut rng)?.to_val(),
         )?;
         assert!(HostError::result_matches_err(
             host.bls12_381_multi_pairing_check(vp1, vp2),
@@ -1211,10 +1463,10 @@ fn pairing() -> Result<(), HostError> {
     // 5. e(P, Q+R) = e(P, Q)*e(P, R)
     {
         host.budget_ref().reset_default()?;
-        let p = sample_g1(&host)?;
+        let p = sample_g1(&host, &mut rng)?;
         let neg_p = neg_g1(p, &host)?;
-        let q = sample_g2(&host)?;
-        let r = sample_g2(&host)?;
+        let q = sample_g2(&host, &mut rng)?;
+        let r = sample_g2(&host, &mut rng)?;
         let q_plus_r = host.bls12_381_g2_add(q, r)?;
 
         //check e(-P, Q+R)*e(P, Q)*e(P, R) == 1
@@ -1226,9 +1478,9 @@ fn pairing() -> Result<(), HostError> {
     // 6. e(P+S, R) = e(P, R)*e(S, R)
     {
         host.budget_ref().reset_default()?;
-        let p = sample_g1(&host)?;
-        let s = sample_g1(&host)?;
-        let r = sample_g2(&host)?;
+        let p = sample_g1(&host, &mut rng)?;
+        let s = sample_g1(&host, &mut rng)?;
+        let r = sample_g2(&host, &mut rng)?;
         let neg_r = neg_g2(r, &host)?;
         let p_plus_s = host.bls12_381_g1_add(p, s)?;
         // check e(P+S, -R) * e(P, R)*e(S, R) == 1
@@ -1241,11 +1493,11 @@ fn pairing() -> Result<(), HostError> {
     // 7. e([a]P, [b]Q) = e([b]P, [a]Q) = e([ab]P, Q)= e(P, [ab]Q)
     {
         host.budget_ref().reset_default()?;
-        let a = sample_fr(&host)?;
-        let b = sample_fr(&host)?;
-        let p = sample_g1(&host)?;
+        let a = sample_fr(&host, &mut rng)?;
+        let b = sample_fr(&host, &mut rng)?;
+        let p = sample_g1(&host, &mut rng)?;
         let neg_p = neg_g1(p, &host)?;
-        let q = sample_g2(&host)?;
+        let q = sample_g2(&host, &mut rng)?;
         let neg_q = neg_g2(q, &host)?;
         let a_p = host.bls12_381_g1_mul(p, a)?;
         let b_p = host.bls12_381_g1_mul(p, b)?;

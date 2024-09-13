@@ -8,10 +8,10 @@ use crate::{
     xdr::ContractCostType::{
         self, Bls12381DecodeFp, Bls12381EncodeFp, Bls12381FrAddSub, Bls12381FrFromU256,
         Bls12381FrInv, Bls12381FrMul, Bls12381FrPow, Bls12381FrToU256, Bls12381G1Add,
-        Bls12381G1Msm, Bls12381G1Mul, Bls12381G1ProjectiveToAffine, Bls12381G1Validate,
-        Bls12381G2Add, Bls12381G2Msm, Bls12381G2Mul, Bls12381G2ProjectiveToAffine,
-        Bls12381G2Validate, Bls12381HashToG1, Bls12381HashToG2, Bls12381MapFp2ToG2,
-        Bls12381MapFpToG1, Bls12381Pairing,
+        Bls12381G1CheckPointInSubgroup, Bls12381G1CheckPointOnCurve, Bls12381G1Msm, Bls12381G1Mul,
+        Bls12381G1ProjectiveToAffine, Bls12381G2Add, Bls12381G2CheckPointInSubgroup,
+        Bls12381G2CheckPointOnCurve, Bls12381G2Msm, Bls12381G2Mul, Bls12381G2ProjectiveToAffine,
+        Bls12381HashToG1, Bls12381HashToG2, Bls12381MapFp2ToG2, Bls12381MapFpToG1, Bls12381Pairing,
     },
     Host, U256Val,
 };
@@ -19,8 +19,10 @@ use std::hint::black_box;
 
 pub struct Bls12381EncodeFpRun;
 pub struct Bls12381DecodeFpRun;
-pub struct Bls12381G1ValidateRun;
-pub struct Bls12381G2ValidateRun;
+pub struct Bls12381G1CheckPointOnCurveRun;
+pub struct Bls12381G1CheckPointInSubgroupRun;
+pub struct Bls12381G2CheckPointOnCurveRun;
+pub struct Bls12381G2CheckPointInSubgroupRun;
 pub struct Bls12381G1ProjectiveToAffineRun;
 pub struct Bls12381G2ProjectiveToAffineRun;
 pub struct Bls12381G1AddRun;
@@ -73,9 +75,13 @@ pub struct Bls12381EncodeFpSample(pub Vec<u8>, pub Fq);
 #[derive(Clone)]
 pub struct Bls12381DecodeFpSample(pub Vec<u8>);
 #[derive(Clone)]
-pub struct Bls12381G1ValidateSample(pub G1Affine, pub ContractCostType);
+pub struct Bls12381G1CheckPointOnCurveSample(pub G1Affine, pub ContractCostType);
 #[derive(Clone)]
-pub struct Bls12381G2ValidateSample(pub G2Affine, pub ContractCostType);
+pub struct Bls12381G1CheckPointInSubgroupSample(pub G1Affine, pub ContractCostType);
+#[derive(Clone)]
+pub struct Bls12381G2CheckPointOnCurveSample(pub G2Affine, pub ContractCostType);
+#[derive(Clone)]
+pub struct Bls12381G2CheckPointInSubgroupSample(pub G2Affine, pub ContractCostType);
 #[derive(Clone)]
 pub struct Bls12381FrToU256Sample(pub Fr);
 #[derive(Clone)]
@@ -155,24 +161,6 @@ impl_const_cost_runner_for_bls_consume_sample!(
     Bls12381MapFp2ToG2Sample,
     G2Affine,
     fq2
-);
-impl_const_cost_runner_for_bls_consume_sample!(
-    Bls12381G1ValidateRun,
-    Bls12381G1Validate,
-    metered_check_point,
-    Bls12381G1ValidateSample,
-    G1Affine,
-    pt,
-    ct
-);
-impl_const_cost_runner_for_bls_consume_sample!(
-    Bls12381G2ValidateRun,
-    Bls12381G2Validate,
-    metered_check_point,
-    Bls12381G2ValidateSample,
-    G2Affine,
-    pt,
-    ct
 );
 impl_const_cost_runner_for_bls_consume_sample!(
     Bls12381FrFromU256Run,
@@ -350,4 +338,41 @@ impl_lin_cost_runner_for_bls_deref_sample!(
     Fr,
     lhs,
     rhs
+);
+
+impl_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G1CheckPointOnCurveRun,
+    Bls12381G1CheckPointOnCurve,
+    check_point_is_on_curve,
+    Bls12381G1CheckPointOnCurveSample,
+    bool,
+    pt,
+    ty
+);
+impl_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G1CheckPointInSubgroupRun,
+    Bls12381G1CheckPointInSubgroup,
+    check_point_is_in_subgroup,
+    Bls12381G1CheckPointInSubgroupSample,
+    bool,
+    pt,
+    ty
+);
+impl_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G2CheckPointOnCurveRun,
+    Bls12381G2CheckPointOnCurve,
+    check_point_is_on_curve,
+    Bls12381G2CheckPointOnCurveSample,
+    bool,
+    pt,
+    ty
+);
+impl_const_cost_runner_for_bls_deref_sample!(
+    Bls12381G2CheckPointInSubgroupRun,
+    Bls12381G2CheckPointInSubgroup,
+    check_point_is_in_subgroup,
+    Bls12381G2CheckPointInSubgroupSample,
+    bool,
+    pt,
+    ty
 );

@@ -577,8 +577,10 @@ fn excessive_logging() -> Result<(), HostError> {
     VerifyEcdsaSecp256r1Sig            0              0              
     Bls12381EncodeFp                   0              0              
     Bls12381DecodeFp                   0              0              
-    Bls12381G1Validate                 0              0              
-    Bls12381G2Validate                 0              0              
+    Bls12381G1CheckPointOnCurve        0              0              
+    Bls12381G1CheckPointInSubgroup     0              0              
+    Bls12381G2CheckPointOnCurve        0              0              
+    Bls12381G2CheckPointInSubgroup     0              0              
     Bls12381G1ProjectiveToAffine       0              0              
     Bls12381G2ProjectiveToAffine       0              0              
     Bls12381G1Add                      0              0              

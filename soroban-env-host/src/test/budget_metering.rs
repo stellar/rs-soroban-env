@@ -399,8 +399,10 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     tracker.extend_from_slice(&[
         (1, None),    /* Bls12381EncodeFp */
         (1, None),    /* Bls12381DecodeFp */
-        (1, None),    /* Bls12381G1Validate */
-        (1, None),    /* Bls12381G2Validate */
+        (1, None),    /* Bls12381G1CheckPointOnCurve */
+        (1, None),    /* Bls12381G1CheckPointInSubgroup */
+        (1, None),    /* Bls12381G2CheckPointOnCurve */
+        (1, None),    /* Bls12381G2CheckPointInSubgroup */
         (1, None),    /* Bls12381G1ProjectiveToAffine */
         (1, None),    /* Bls12381G2ProjectiveToAffine */
         (1, None),    /* Bls12381G1Add */
@@ -436,7 +438,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     let expected = expect![[r#"
         ===============================================================================================================================================================================
-        Cpu limit: 100000000; used: 71071093
+        Cpu limit: 100000000; used: 71071547
         Mem limit: 41943040; used: 733666
         ===============================================================================================================================================================================
         CostType                           iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
@@ -487,8 +489,10 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         VerifyEcdsaSecp256r1Sig            1              None           3000906        0              3000906             0                   0                   0                   
         Bls12381EncodeFp                   1              None           661            0              661                 0                   0                   0                   
         Bls12381DecodeFp                   1              None           985            0              985                 0                   0                   0                   
-        Bls12381G1Validate                 1              None           732301         0              732301              0                   0                   0                   
-        Bls12381G2Validate                 1              None           1063432        0              1063432             0                   0                   0                   
+        Bls12381G1CheckPointOnCurve        1              None           1934           0              1934                0                   0                   0                   
+        Bls12381G1CheckPointInSubgroup     1              None           730510         0              730510              0                   0                   0                   
+        Bls12381G2CheckPointOnCurve        1              None           5921           0              5921                0                   0                   0                   
+        Bls12381G2CheckPointInSubgroup     1              None           1057822        0              1057822             0                   0                   0                   
         Bls12381G1ProjectiveToAffine       1              None           92642          0              92642               0                   0                   0                   
         Bls12381G2ProjectiveToAffine       1              None           100742         0              100742              0                   0                   0                   
         Bls12381G1Add                      1              None           7689           0              7689                0                   0                   0                   
@@ -510,8 +514,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bls12381FrInv                      1              None           35421          0              35421               0                   0                   0                   
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
-        Total # times meter was called: 68
-        Shadow cpu limit: 100000000; used: 71071093
+        Total # times meter was called: 70
+        Shadow cpu limit: 100000000; used: 71071547
         Shadow mem limit: 41943040; used: 733666
         ===============================================================================================================================================================================
 

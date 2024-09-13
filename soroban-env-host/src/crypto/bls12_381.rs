@@ -20,7 +20,7 @@ use ark_ec::{
     CurveGroup,
 };
 use ark_ff::{field_hashers::DefaultFieldHasher, BigInteger, Field, PrimeField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Valid, Validate};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use num_traits::Zero;
 use sha2::Sha256;
 use std::cmp::Ordering;
@@ -120,28 +120,30 @@ impl Host {
         }
     }
 
-    pub(crate) fn metered_check_point<P: SWCurveConfig>(
+    pub(crate) fn check_point_is_on_curve<P: SWCurveConfig>(
         &self,
-        pt: Affine<P>,
-        ty: ContractCostType,
-    ) -> Result<Affine<P>, HostError> {
-        self.charge_budget(ty, None)?;
-        // performs following checks 1. point belongs to the curve 2. point
-        // belongs to the correct subgroup
-        pt.check().map_err(|_| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                "bls12-381 G1 affine deserialize: invalid point",
-                &[],
-            )
-        })?;
-        Ok(pt)
+        pt: &Affine<P>,
+        ty: &ContractCostType,
+    ) -> Result<bool, HostError> {
+        // passing ty by reference in order to make it more template friendly for cost_runner code
+        self.charge_budget(*ty, None)?;
+        Ok(pt.is_on_curve())
+    }
+
+    pub(crate) fn check_point_is_in_subgroup<P: SWCurveConfig>(
+        &self,
+        pt: &Affine<P>,
+        ty: &ContractCostType,
+    ) -> Result<bool, HostError> {
+        // passing ty by reference in order to make it more template friendly for cost_runner code
+        self.charge_budget(*ty, None)?;
+        Ok(pt.is_in_correct_subgroup_assuming_on_curve())
     }
 
     pub(crate) fn g1_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
+        subgroup_check: bool,
     ) -> Result<G1Affine, HostError> {
         let msg: &str = "G1";
         let pt: G1Affine = self.visit_obj(bo, |bytes: &ScBytes| {
@@ -165,10 +167,79 @@ impl Host {
             // didn't find that being an invalid condition, so we will leave them as is.
             self.deserialize_uncompessed_no_validate(&bytes, 2, msg)
         })?;
-        self.metered_check_point::<ark_bls12_381::g1::Config>(
-            pt,
-            ContractCostType::Bls12381G1Validate,
-        )
+        if !self.check_point_is_on_curve(&pt, &ContractCostType::Bls12381G1CheckPointOnCurve)? {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("bls12-381 {}: point not on curve", msg).as_str(),
+                &[],
+            ));
+        }
+        if subgroup_check
+            && !self.check_point_is_in_subgroup(
+                &pt,
+                &ContractCostType::Bls12381G1CheckPointInSubgroup,
+            )?
+        {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("bls12-381 {}: point not in the correct subgroup", msg).as_str(),
+                &[],
+            ));
+        }
+        Ok(pt)
+    }
+
+    pub(crate) fn g2_affine_deserialize_from_bytesobj(
+        &self,
+        bo: BytesObject,
+        subgroup_check: bool,
+    ) -> Result<G2Affine, HostError> {
+        let msg: &str = "G2";
+        let pt: G2Affine = self.visit_obj(bo, |bytes: &ScBytes| {
+            self.validate_point_encoding::<G2_SERIALIZED_SIZE>(&bytes, msg)?;
+            // `CanonicalDeserialize` of `Affine<P>` calls into
+            // `P::deserialize_with_mode`, where `P` is `arc_bls12_381::g2::Config`, the
+            // core logic is in `arc_bls12_381::curves::util::read_g2_uncompressed`.
+            //
+            // The `arc_bls12_381` lib already expects the input to be serialized in
+            // big-endian order (aligning with the common standard and contrary
+            // to ark::serialize's convention),
+            //
+            // i.e. `input = be_bytes(X) || be_bytes(Y)` and the
+            // most-significant three bits of X are flags:
+            //
+            // `bits(X) = [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]`
+            //
+            // internally when deserializing `Fp`, the flag bits are masked off
+            // to get `X: Fp`. The Y however, does not have the top bits masked off
+            // so it is possible for Y to exceed 381 bits. I've checked all over and
+            // didn't find that being an invalid condition, so we will leave them as is.
+            self.deserialize_uncompessed_no_validate(&bytes, 4, msg)
+        })?;
+        if !self.check_point_is_on_curve(&pt, &ContractCostType::Bls12381G2CheckPointOnCurve)? {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("bls12-381 {}: point not on curve", msg).as_str(),
+                &[],
+            ));
+        }
+        if subgroup_check
+            && !self.check_point_is_in_subgroup(
+                &pt,
+                &ContractCostType::Bls12381G2CheckPointInSubgroup,
+            )?
+        {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("bls12-381 {}: point not in the correct subgroup", msg).as_str(),
+                &[],
+            ));
+        }
+        Ok(pt)
     }
 
     pub(crate) fn g1_projective_into_affine(
@@ -203,38 +274,6 @@ impl Host {
     ) -> Result<BytesObject, HostError> {
         let g1_affine = self.g1_projective_into_affine(g1)?;
         self.g1_affine_serialize_uncompressed(g1_affine)
-    }
-
-    pub(crate) fn g2_affine_deserialize_from_bytesobj(
-        &self,
-        bo: BytesObject,
-    ) -> Result<G2Affine, HostError> {
-        let msg: &str = "G2";
-        let pt: G2Affine = self.visit_obj(bo, |bytes: &ScBytes| {
-            self.validate_point_encoding::<G2_SERIALIZED_SIZE>(&bytes, msg)?;
-            // `CanonicalDeserialize` of `Affine<P>` calls into
-            // `P::deserialize_with_mode`, where `P` is `arc_bls12_381::g2::Config`, the
-            // core logic is in `arc_bls12_381::curves::util::read_g2_uncompressed`.
-            //
-            // The `arc_bls12_381` lib already expects the input to be serialized in
-            // big-endian order (aligning with the common standard and contrary
-            // to ark::serialize's convention),
-            //
-            // i.e. `input = be_bytes(X) || be_bytes(Y)` and the
-            // most-significant three bits of X are flags:
-            //
-            // `bits(X) = [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]`
-            //
-            // internally when deserializing `Fp`, the flag bits are masked off
-            // to get `X: Fp`. The Y however, does not have the top bits masked off
-            // so it is possible for Y to exceed 381 bits. I've checked all over and
-            // didn't find that being an invalid condition, so we will leave them as is.
-            self.deserialize_uncompessed_no_validate(&bytes, 4, msg)
-        })?;
-        self.metered_check_point::<ark_bls12_381::g2::Config>(
-            pt,
-            ContractCostType::Bls12381G2Validate,
-        )
     }
 
     pub(crate) fn g2_projective_into_affine(
@@ -371,8 +410,10 @@ impl Host {
         points.reserve(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp =
-                    self.g1_affine_deserialize_from_bytesobj(BytesObject::try_from_val(self, p)?)?;
+                let pp = self.g1_affine_deserialize_from_bytesobj(
+                    BytesObject::try_from_val(self, p)?,
+                    true,
+                )?;
                 points.push(pp);
             }
             Ok(())
@@ -492,8 +533,10 @@ impl Host {
         let mut points: Vec<G2Affine> = Vec::with_capacity(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp =
-                    self.g2_affine_deserialize_from_bytesobj(BytesObject::try_from_val(self, p)?)?;
+                let pp = self.g2_affine_deserialize_from_bytesobj(
+                    BytesObject::try_from_val(self, p)?,
+                    true,
+                )?;
                 points.push(pp);
             }
             Ok(())

@@ -9,17 +9,20 @@ use soroban_env_host::{
         Bls12381FrAddRun, Bls12381FrAddSubMulSample, Bls12381FrFromU256Run,
         Bls12381FrFromU256Sample, Bls12381FrInvRun, Bls12381FrInvSample, Bls12381FrMulRun,
         Bls12381FrPowRun, Bls12381FrPowSample, Bls12381FrSubRun, Bls12381FrToU256Run,
-        Bls12381FrToU256Sample, Bls12381G1AddRun, Bls12381G1AddSample, Bls12381G1MsmRun,
+        Bls12381FrToU256Sample, Bls12381G1AddRun, Bls12381G1AddSample,
+        Bls12381G1CheckPointInSubgroupRun, Bls12381G1CheckPointInSubgroupSample,
+        Bls12381G1CheckPointOnCurveRun, Bls12381G1CheckPointOnCurveSample, Bls12381G1MsmRun,
         Bls12381G1MsmSample, Bls12381G1MulRun, Bls12381G1MulSample,
-        Bls12381G1ProjectiveToAffineRun, Bls12381G1ProjectiveToAffineSample, Bls12381G1ValidateRun,
-        Bls12381G1ValidateSample, Bls12381G2AddRun, Bls12381G2AddSample, Bls12381G2MsmRun,
-        Bls12381G2MsmSample, Bls12381G2MulRun, Bls12381G2MulSample,
-        Bls12381G2ProjectiveToAffineRun, Bls12381G2ProjectiveToAffineSample, Bls12381G2ValidateRun,
-        Bls12381G2ValidateSample, Bls12381HashToG1Run, Bls12381HashToG1Sample, Bls12381HashToG2Run,
-        Bls12381HashToG2Sample, Bls12381MapFp2ToG2Run, Bls12381MapFp2ToG2Sample,
-        Bls12381MapFpToG1Run, Bls12381MapFpToG1Sample, Bls12381PairingRun, Bls12381PairingSample,
+        Bls12381G1ProjectiveToAffineRun, Bls12381G1ProjectiveToAffineSample, Bls12381G2AddRun,
+        Bls12381G2AddSample, Bls12381G2CheckPointInSubgroupRun,
+        Bls12381G2CheckPointInSubgroupSample, Bls12381G2CheckPointOnCurveRun,
+        Bls12381G2CheckPointOnCurveSample, Bls12381G2MsmRun, Bls12381G2MsmSample, Bls12381G2MulRun,
+        Bls12381G2MulSample, Bls12381G2ProjectiveToAffineRun, Bls12381G2ProjectiveToAffineSample,
+        Bls12381HashToG1Run, Bls12381HashToG1Sample, Bls12381HashToG2Run, Bls12381HashToG2Sample,
+        Bls12381MapFp2ToG2Run, Bls12381MapFp2ToG2Sample, Bls12381MapFpToG1Run,
+        Bls12381MapFpToG1Sample, Bls12381PairingRun, Bls12381PairingSample,
     },
-    xdr::ContractCostType,
+    xdr::ContractCostType::*,
     Host, TryIntoVal, U256Val, U256,
 };
 
@@ -43,20 +46,54 @@ impl HostCostMeasurement for Bls12381DecodeFpMeasure {
         Bls12381DecodeFpSample(buf)
     }
 }
-pub(crate) struct Bls12381G1ValidateMeasure;
-impl HostCostMeasurement for Bls12381G1ValidateMeasure {
-    type Runner = Bls12381G1ValidateRun;
-
-    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G1ValidateSample {
-        Bls12381G1ValidateSample(G1Affine::rand(rng), ContractCostType::Bls12381G1Validate)
+pub(crate) struct Bls12381G1CheckPointOnCurveMeasure;
+impl HostCostMeasurement for Bls12381G1CheckPointOnCurveMeasure {
+    type Runner = Bls12381G1CheckPointOnCurveRun;
+    fn new_random_case(
+        _host: &Host,
+        rng: &mut StdRng,
+        _input: u64,
+    ) -> Bls12381G1CheckPointOnCurveSample {
+        Bls12381G1CheckPointOnCurveSample(
+            G1Affine::new_unchecked(Fq::rand(rng), Fq::rand(rng)),
+            Bls12381G1CheckPointOnCurve,
+        )
     }
 }
-pub(crate) struct Bls12381G2ValidateMeasure;
-impl HostCostMeasurement for Bls12381G2ValidateMeasure {
-    type Runner = Bls12381G2ValidateRun;
-
-    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G2ValidateSample {
-        Bls12381G2ValidateSample(G2Affine::rand(rng), ContractCostType::Bls12381G2Validate)
+pub(crate) struct Bls12381G1CheckPointInSubgroupMeasure;
+impl HostCostMeasurement for Bls12381G1CheckPointInSubgroupMeasure {
+    type Runner = Bls12381G1CheckPointInSubgroupRun;
+    fn new_random_case(
+        _host: &Host,
+        rng: &mut StdRng,
+        _input: u64,
+    ) -> Bls12381G1CheckPointInSubgroupSample {
+        Bls12381G1CheckPointInSubgroupSample(G1Affine::rand(rng), Bls12381G1CheckPointInSubgroup)
+    }
+}
+pub(crate) struct Bls12381G2CheckPointOnCurveMeasure;
+impl HostCostMeasurement for Bls12381G2CheckPointOnCurveMeasure {
+    type Runner = Bls12381G2CheckPointOnCurveRun;
+    fn new_random_case(
+        _host: &Host,
+        rng: &mut StdRng,
+        _input: u64,
+    ) -> Bls12381G2CheckPointOnCurveSample {
+        Bls12381G2CheckPointOnCurveSample(
+            G2Affine::new_unchecked(Fq2::rand(rng), Fq2::rand(rng)),
+            Bls12381G2CheckPointOnCurve,
+        )
+    }
+}
+pub(crate) struct Bls12381G2CheckPointInSubgroupMeasure;
+impl HostCostMeasurement for Bls12381G2CheckPointInSubgroupMeasure {
+    type Runner = Bls12381G2CheckPointInSubgroupRun;
+    fn new_random_case(
+        _host: &Host,
+        rng: &mut StdRng,
+        _input: u64,
+    ) -> Bls12381G2CheckPointInSubgroupSample {
+        Bls12381G2CheckPointInSubgroupSample(G2Affine::rand(rng), Bls12381G2CheckPointInSubgroup)
     }
 }
 pub(crate) struct Bls12381FrFromU256Measure;

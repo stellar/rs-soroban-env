@@ -117,8 +117,10 @@ impl Default for BudgetTracker {
                 ContractCostType::VerifyEcdsaSecp256r1Sig => (),
                 ContractCostType::Bls12381EncodeFp => (),
                 ContractCostType::Bls12381DecodeFp => (),
-                ContractCostType::Bls12381G1Validate => (),
-                ContractCostType::Bls12381G2Validate => (),
+                ContractCostType::Bls12381G1CheckPointOnCurve => (),
+                ContractCostType::Bls12381G1CheckPointInSubgroup => (),
+                ContractCostType::Bls12381G2CheckPointOnCurve => (),
+                ContractCostType::Bls12381G2CheckPointInSubgroup => (),
                 ContractCostType::Bls12381G1ProjectiveToAffine => (),
                 ContractCostType::Bls12381G2ProjectiveToAffine => (),
                 ContractCostType::Bls12381G1Add => (),
@@ -588,12 +590,20 @@ impl Default for BudgetImpl {
                     cpu.const_term = 985;
                     cpu.lin_term = ScaledU64(0);
                 }
-                ContractCostType::Bls12381G1Validate => {
-                    cpu.const_term = 732301;
+                ContractCostType::Bls12381G1CheckPointOnCurve => {
+                    cpu.const_term = 1934;
                     cpu.lin_term = ScaledU64(0);
                 }
-                ContractCostType::Bls12381G2Validate => {
-                    cpu.const_term = 1063432;
+                ContractCostType::Bls12381G1CheckPointInSubgroup => {
+                    cpu.const_term = 730510;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2CheckPointOnCurve => {
+                    cpu.const_term = 5921;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2CheckPointInSubgroup => {
+                    cpu.const_term = 1057822;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381G1ProjectiveToAffine => {
@@ -871,11 +881,19 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                ContractCostType::Bls12381G1Validate => {
+                ContractCostType::Bls12381G1CheckPointOnCurve => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                ContractCostType::Bls12381G2Validate => {
+                ContractCostType::Bls12381G1CheckPointInSubgroup => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2CheckPointOnCurve => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bls12381G2CheckPointInSubgroup => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
