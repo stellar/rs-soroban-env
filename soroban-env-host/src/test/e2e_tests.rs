@@ -675,7 +675,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    let (expected_insns, expected_write_bytes) = (1036726, 684);
+    let (expected_insns, expected_write_bytes) = (1767136, 684);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -713,7 +713,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    let expected_instructions = 767816;
+    let expected_instructions = 1093647;
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1194,7 +1194,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 751027,
+            instructions: 831711,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1255,7 +1255,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 752472,
+            instructions: 833156,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1685,7 +1685,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 1131993,
+            instructions: 1431216,
             read_bytes: 3132,
             write_bytes: 80,
         }
@@ -1751,7 +1751,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 1245383,
+            instructions: 1543254,
             read_bytes: 3212,
             write_bytes: 0,
         }
