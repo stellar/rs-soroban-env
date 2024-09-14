@@ -322,6 +322,22 @@ fn sample_host_vec<T: UniformRand + CanonicalSerialize>(
     host.vec_new_from_slice(&vals)
 }
 
+fn zero_g1_vec(host: &Host, vec_len: usize) -> Result<VecObject, HostError> {
+    let vals: Vec<Val> = (0..vec_len)
+        .into_iter()
+        .map(|_| g1_zero(host).unwrap().to_val())
+        .collect();
+    host.vec_new_from_slice(&vals)
+}
+
+fn zero_g2_vec(host: &Host, vec_len: usize) -> Result<VecObject, HostError> {
+    let vals: Vec<Val> = (0..vec_len)
+        .into_iter()
+        .map(|_| g2_zero(host).unwrap().to_val())
+        .collect();
+    host.vec_new_from_slice(&vals)
+}
+
 fn sample_fr_vec(host: &Host, vec_len: usize, rng: &mut StdRng) -> Result<VecObject, HostError> {
     let vals: Vec<Val> = (0..vec_len)
         .into_iter()
@@ -1513,6 +1529,29 @@ fn pairing() -> Result<(), HostError> {
             host.vec_new_from_slice(&[b_q.to_val(), a_q.to_val(), neg_q.to_val(), ab_q.to_val()])?;
         let res = host.bls12_381_multi_pairing_check(g1_vec, g2_vec)?;
         assert!(res.as_val().is_true())
+    }
+    // 8. any of g1 point is infinity
+    {
+        host.budget_ref().reset_default()?;
+        let mut vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
+        vp1 = host.vec_put(vp1, U32Val::from(1), g1_zero(&host)?.to_val())?;
+        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3, &mut rng)?;
+        assert!(host.bls12_381_multi_pairing_check(vp1, vp2).is_ok());
+    }
+    // 9. any of g2 point is infinity
+    {
+        host.budget_ref().reset_default()?;
+        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
+        let mut vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3, &mut rng)?;
+        vp2 = host.vec_put(vp2, U32Val::from(2), g2_zero(&host)?.to_val())?;
+        assert!(host.bls12_381_multi_pairing_check(vp1, vp2).is_ok());
+    }
+    // 10. entire vector is zero
+    {
+        host.budget_ref().reset_default()?;
+        let vp1 = zero_g1_vec(&host, 5)?;
+        let vp2 = zero_g2_vec(&host, 5)?;
+        assert!(host.bls12_381_multi_pairing_check(vp1, vp2).is_ok());
     }
     Ok(())
 }

@@ -641,14 +641,40 @@ impl Host {
             );
         }
         self.charge_budget(ContractCostType::Bls12381Pairing, Some(vp1.len() as u64))?;
-        // This is doing exact same as `Bls12_381::pairing(p, q)`, but avoids
-        // the `unwrap`
+
+        // This calls into `Bls12<Config>::multi_miller_loop`, which just calls
+        // `ark_ec::models::bls12::Bls12Config::multi_miller_loop` with specific
+        // parameters defined in `ark_bls12_381::curves`.
+        //
+        // Panic analysis:
+        //
+        // The following potential panic conditions could exist:
+        // 1. if two input vector lengths are not equal. There is a `zip_eq`
+        // which panics if the length of the two vectors are not equal. This is
+        // weeded out up front.
+        //
+        // 2. `coeffs.next().unwrap()`. This occurs when the algorithm Loops
+        // over pairs of `(a: G1Affine, b: G2Affine)`, converting them into
+        // `Vec<(G1Prepared, G2Preared::EllCoeff<Config>)>`, the latter contains
+        // three elements of Fp2. For each pair, the coeffs.next() can at most
+        // be called twice, when the bit being looped over in `Config::X` is
+        // set. So this panic cannot happen.
+        //
+        // 3. if any of the G1Affine point is infinity. The ell() function which
+        // calls p.xy().unwrap(), which is when the point is infinity. This
+        // condition also cannot happen because when the pairs are generated,
+        // any pair containing a zero point is filtered.
+        //
+        // The above analysis is best effort to weed out panics from the source,
+        // however the algorithm is quite involved. So we cannot be 100% certain
+        // every panic condition has been excluded.
         let mlo = Bls12_381::multi_miller_loop(vp1, vp2);
+        // final_exponentiation returning None means the `mlo.0.is_zero()`
         Bls12_381::final_exponentiation(mlo).ok_or_else(|| {
             self.err(
                 ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                "fail to perform final exponentiation",
+                ScErrorCode::InvalidInput,
+                "final_exponentiation has failed, most likely multi_miller_loop produced infinity",
                 &[],
             )
         })
