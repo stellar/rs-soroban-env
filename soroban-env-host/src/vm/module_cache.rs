@@ -24,7 +24,7 @@ pub struct ModuleCache {
 
 impl ModuleCache {
     pub fn new(host: &Host) -> Result<Self, HostError> {
-        let config = get_wasmi_config(host.as_budget(), wasmi::CompilationMode::Lazy)?;
+        let config = get_wasmi_config(host.as_budget())?;
         let engine = Engine::new(&config);
         let modules = MeteredOrdMap::new();
         let mut cache = Self { engine, modules };

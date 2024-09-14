@@ -41,10 +41,9 @@ default-features = false
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
-version = "=0.36.1-soroban.22.0.0"
-features = ["no-hash-maps"]
-# git = "https://github.com/stellar/wasmi"
-# rev = "8eb77b143ca5382c349dd5a8170ffa32a2d0ef03"
+version = "=0.31.1-soroban.20.0.1"
+git = "https://github.com/stellar/wasmi"
+rev = "0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # [patch.crates-io]
