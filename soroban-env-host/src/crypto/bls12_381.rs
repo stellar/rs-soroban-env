@@ -6,18 +6,14 @@ use crate::{
     U256Small, U256Val, Val, VecObject, U256,
 };
 use ark_bls12_381::{
-    g1, g2, Bls12_381, Fq, Fq12, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective,
+    Bls12_381, Fq, Fq12, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective,
 };
 use ark_ec::{
     hashing::{
-        curve_maps::wb::WBMap,
+        curve_maps::wb::{WBConfig, WBMap},
         map_to_curve_hasher::{MapToCurve, MapToCurveBasedHasher},
         HashToCurve,
-    },
-    pairing::{Pairing, PairingOutput},
-    scalar_mul::variable_base::VariableBaseMSM,
-    short_weierstrass::{Affine, Projective, SWCurveConfig},
-    CurveGroup,
+    }, pairing::{Pairing, PairingOutput}, scalar_mul::variable_base::VariableBaseMSM, short_weierstrass::{Affine, Projective, SWCurveConfig}, AffineRepr, CurveGroup
 };
 use ark_ff::{field_hashers::DefaultFieldHasher, BigInteger, Field, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
@@ -475,55 +471,6 @@ impl Host {
         Ok(G1Projective::msm_unchecked(points, scalars))
     }
 
-    pub(crate) fn map_fp_to_g1_internal(&self, fp: Fq) -> Result<G1Affine, HostError> {
-        self.charge_budget(ContractCostType::Bls12381MapFpToG1, None)?;
-        let mapper = WBMap::<g1::Config>::new().map_err(|e| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                format!("hash-to-curve error {e}").as_str(),
-                &[],
-            )
-        })?;
-        mapper.map_to_curve(fp).map_err(|e| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                format!("hash-to-curve error {e}").as_str(),
-                &[],
-            )
-        })
-    }
-
-    pub(crate) fn hash_to_g1_internal(
-        &self,
-        domain: &[u8],
-        msg: &[u8],
-    ) -> Result<G1Affine, HostError> {
-        self.charge_budget(ContractCostType::Bls12381HashToG1, Some(msg.len() as u64))?;
-        let g1_mapper = MapToCurveBasedHasher::<
-            Projective<g1::Config>,
-            DefaultFieldHasher<Sha256, 128>,
-            WBMap<g1::Config>,
-        >::new(domain)
-        .map_err(|e| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                format!("hash-to-curve error {e}").as_str(),
-                &[],
-            )
-        })?;
-        g1_mapper.hash(msg.as_ref()).map_err(|e| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                format!("hash-to-curve error {e}").as_str(),
-                &[],
-            )
-        })
-    }
-
     pub(crate) fn g2_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G2Affine>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
         self.charge_budget(
@@ -580,9 +527,26 @@ impl Host {
         Ok(G2Projective::msm_unchecked(points, scalars))
     }
 
-    pub(crate) fn map_fp2_to_g2_internal(&self, fp: Fq2) -> Result<G2Affine, HostError> {
-        self.charge_budget(ContractCostType::Bls12381MapFp2ToG2, None)?;
-        let mapper = WBMap::<g2::Config>::new().map_err(|e| {
+    pub(crate) fn map_to_curve<P: WBConfig>(&self, fp: <Affine<P> as AffineRepr>::BaseField, ty: ContractCostType) -> Result<Affine<P>, HostError> {
+        self.charge_budget(ty, None)?;
+
+        // The `WBMap<g2::Config>::new()` first calls
+        // `P::ISOGENY_MAP.apply(GENERATOR)` which returns error if the result
+        // point is not on curve. This should not happen if the map constants
+        // have been correctly defined. otherwise it would be an internal error
+        // since it's a bug in the library implementation.
+        //
+        // Then it returns `WBMap`, which wraps a `SWUMap<P>` where P is the
+        // `ark_bls12_381::curves::g2_swu_iso::SwuIsoConfig`.
+        //
+        // Potential panic condition: `SWUMap::new().unwrap()`
+        //
+        // The `SWUMap::new()` function performs some validation on the static
+        // parameters `ZETA`, `COEFF_A`, `COEFF_B`, all of which are statically
+        // defined in `ark_bls12_381::curves::g1_swu_iso` and `g2_swu_iso`.
+        // Realistically this panic cannot occur, otherwise it will panic every
+        // time including during tests
+        let mapper = WBMap::<P>::new().map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InternalError,
@@ -590,6 +554,21 @@ impl Host {
                 &[],
             )
         })?;
+
+        // The `SWUMap::map_to_curve` function contains several panic conditions
+        // 1. assert!(!div3.is_zero())
+        // 2. gx1.sqrt().expect()
+        // 3. zeta_gx1.sqrt().expect()
+        // 4. assert!(point_on_curve.is_on_curve())
+        //
+        // While all of these should theoretically just be debug assertions that
+        // can't happen if the map parameters are correctly defined (several of
+        // these have recently been downgraded to debug_assert, e.g see
+        // https://github.com/arkworks-rs/algebra/pull/659#discussion_r1450808159),
+        // we cannot guaruantee with 100% confidence these panics will never
+        // happen.
+        //
+        // Otherwise, this function should never Err.
         mapper.map_to_curve(fp).map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
@@ -600,16 +579,24 @@ impl Host {
         })
     }
 
-    pub(crate) fn hash_to_g2_internal(
+    pub(crate) fn hash_to_curve<P: WBConfig>(
         &self,
         domain: &[u8],
         msg: &[u8],
-    ) -> Result<G2Affine, HostError> {
-        self.charge_budget(ContractCostType::Bls12381HashToG2, Some(msg.len() as u64))?;
+        ty: &ContractCostType
+    ) -> Result<Affine<P>, HostError> {
+        self.charge_budget(*ty, Some(msg.len() as u64))?;
+
+        // The `new` function here constructs a DefaultFieldHasher and a WBMap.
+        // - The DefaultFieldHasher::new() function creates an ExpanderXmd with
+        // Sha256. This cannot fail or panic.
+        // - Construction of WBMap follows the exact same analysis as map_to_curve
+        // function earlier.
+        // This function cannot realistically produce an error or panic.
         let mapper = MapToCurveBasedHasher::<
-            Projective<g2::Config>,
+            Projective<P>,
             DefaultFieldHasher<Sha256, 128>,
-            WBMap<g2::Config>,
+            WBMap<P>,
         >::new(domain)
         .map_err(|e| {
             self.err(
@@ -619,6 +606,34 @@ impl Host {
                 &[],
             )
         })?;
+
+        // `ark_ec::hashing::map_to_curve_hasher::MapToCurveBasedHasher::hash`
+        // contains the following calls
+        // - `DefaultFieldHasher::hash_to_field`
+        // - `SWUMap::map_to_curve`
+        // - `clear_cofactor`. This cannot fail or panic.
+        //
+        // `hash_to_field` calls the ExpanderXmd::expand function, there are two
+        // assertions on the length of bytes produced by the hash function. Both
+        // of these cannot happen because the output size can be computed
+        // analytically. Let's use G2:
+        // - `block_size = 384 (Fp bit size) + 128 (security padding) / 8 = 64`
+        // - `len_in_bytes = 2 (number of elements to produce) *  2 (extention
+        //   degree of Fp2) * 64 (block_size) = 256`
+        // - `ell = 256 (len_in_bytes) / 32 (sha256 output size) = 8`
+        //
+        // # Assertion #1. ell <= 255, which is saying the expander cannot expand
+        // up to a certain length. in our case ell == 8.
+        // # Assertion #2. len_in_bytes < 2^16, which is clearly true as well.
+        //
+        // The rest is just hashing, dividing bytes into element size, and
+        // producing field elements from bytes. None of these can panic or
+        // error.
+        //
+        // The only panic conditions we cannot 100% exclude comes from
+        // `map_to_curve`, see previous analysis.
+        //
+        // This function should not Err.
         mapper.hash(msg.as_ref()).map_err(|e| {
             self.err(
                 ScErrorType::Crypto,

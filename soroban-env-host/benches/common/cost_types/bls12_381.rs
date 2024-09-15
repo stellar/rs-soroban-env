@@ -225,7 +225,7 @@ impl HostCostMeasurement for Bls12381MapFpToG1Measure {
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381MapFpToG1Sample {
         let fp = Fq::rand(rng);
-        Bls12381MapFpToG1Sample(fp)
+        Bls12381MapFpToG1Sample(fp, Bls12381MapFpToG1)
     }
 }
 
@@ -242,7 +242,7 @@ impl HostCostMeasurement for Bls12381HashToG1Measure {
             .to_vec();
         let mut msg = vec![0u8; len as usize];
         rng.fill(msg.as_mut_slice());
-        Bls12381HashToG1Sample(domain, msg)
+        Bls12381HashToG1Sample(domain, msg, Bls12381HashToG1)
     }
 }
 
@@ -308,7 +308,7 @@ impl HostCostMeasurement for Bls12381MapFp2ToG2Measure {
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381MapFp2ToG2Sample {
         let fp2 = Fq2::rand(rng);
-        Bls12381MapFp2ToG2Sample(fp2)
+        Bls12381MapFp2ToG2Sample(fp2, Bls12381MapFp2ToG2)
     }
 }
 
@@ -325,7 +325,7 @@ impl HostCostMeasurement for Bls12381HashToG2Measure {
             .to_vec();
         let mut msg = vec![0u8; len as usize];
         rng.fill(msg.as_mut_slice());
-        Bls12381HashToG2Sample(domain, msg)
+        Bls12381HashToG2Sample(domain, msg, Bls12381HashToG2)
     }
 }
 

@@ -53,9 +53,9 @@ pub struct Bls12381G1MulSample(pub G1Affine, pub Fr);
 #[derive(Clone)]
 pub struct Bls12381G1MsmSample(pub Vec<G1Affine>, pub Vec<Fr>);
 #[derive(Clone)]
-pub struct Bls12381MapFpToG1Sample(pub Fq);
+pub struct Bls12381MapFpToG1Sample(pub Fq, pub ContractCostType);
 #[derive(Clone)]
-pub struct Bls12381HashToG1Sample(pub Vec<u8>, pub Vec<u8>);
+pub struct Bls12381HashToG1Sample(pub Vec<u8>, pub Vec<u8>, pub ContractCostType);
 #[derive(Clone)]
 pub struct Bls12381G2ProjectiveToAffineSample(pub G2Projective);
 #[derive(Clone)]
@@ -65,9 +65,9 @@ pub struct Bls12381G2MulSample(pub G2Affine, pub Fr);
 #[derive(Clone)]
 pub struct Bls12381G2MsmSample(pub Vec<G2Affine>, pub Vec<Fr>);
 #[derive(Clone)]
-pub struct Bls12381MapFp2ToG2Sample(pub Fq2);
+pub struct Bls12381MapFp2ToG2Sample(pub Fq2, pub ContractCostType);
 #[derive(Clone)]
-pub struct Bls12381HashToG2Sample(pub Vec<u8>, pub Vec<u8>);
+pub struct Bls12381HashToG2Sample(pub Vec<u8>, pub Vec<u8>, pub ContractCostType);
 #[derive(Clone)]
 pub struct Bls12381PairingSample(pub Vec<G1Affine>, pub Vec<G2Affine>);
 #[derive(Clone)]
@@ -122,10 +122,11 @@ impl_const_cost_runner_for_bls_consume_sample!(
 impl_const_cost_runner_for_bls_consume_sample!(
     Bls12381MapFpToG1Run,
     Bls12381MapFpToG1,
-    map_fp_to_g1_internal,
+    map_to_curve,
     Bls12381MapFpToG1Sample,
     G1Affine,
-    fq
+    fq,
+    ty
 );
 
 impl_const_cost_runner_for_bls_consume_sample!(
@@ -157,10 +158,11 @@ impl_const_cost_runner_for_bls_consume_sample!(
 impl_const_cost_runner_for_bls_consume_sample!(
     Bls12381MapFp2ToG2Run,
     Bls12381MapFp2ToG2,
-    map_fp2_to_g2_internal,
+    map_to_curve,
     Bls12381MapFp2ToG2Sample,
     G2Affine,
-    fq2
+    fq2,
+    ty
 );
 impl_const_cost_runner_for_bls_consume_sample!(
     Bls12381FrFromU256Run,
@@ -182,20 +184,22 @@ impl_const_cost_runner_for_bls_consume_sample!(
 impl_lin_cost_runner_for_bls_deref_sample!(
     Bls12381HashToG1Run,
     Bls12381HashToG1,
-    hash_to_g1_internal,
+    hash_to_curve,
     Bls12381HashToG1Sample,
     G1Affine,
     domain,
-    msg
+    msg,
+    ty
 );
 impl_lin_cost_runner_for_bls_deref_sample!(
     Bls12381HashToG2Run,
     Bls12381HashToG2,
-    hash_to_g2_internal,
+    hash_to_curve,
     Bls12381HashToG2Sample,
     G2Affine,
     domain,
-    msg
+    msg,
+    ty
 );
 
 impl_lin_cost_runner_for_bls_deref_sample!(

@@ -2978,7 +2978,7 @@ impl VmCallerEnv for Host {
         fp: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let fp = self.fp_deserialize_from_bytesobj(fp)?;
-        let g1 = self.map_fp_to_g1_internal(fp)?;
+        let g1 = self.map_to_curve(fp, ContractCostType::Bls12381MapFpToG1)?;
         self.g1_affine_serialize_uncompressed(g1)
     }
 
@@ -3002,7 +3002,7 @@ impl VmCallerEnv for Host {
                         &[],
                     ));
                 }
-                self.hash_to_g1_internal(dst.as_slice(), msg.as_slice())
+                self.hash_to_curve(dst.as_slice(), msg.as_slice(), &ContractCostType::Bls12381HashToG1)
             })
         })?;
         self.g1_affine_serialize_uncompressed(g1)
@@ -3070,8 +3070,8 @@ impl VmCallerEnv for Host {
         fp2: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let fp2 = self.fp2_deserialize_from_bytesobj(fp2)?;
-        let g2 = self.map_fp2_to_g2_internal(fp2)?;
-        self.g2_affine_serialize_uncompressed(g2)
+        let g2 = self.map_to_curve(fp2, ContractCostType::Bls12381MapFp2ToG2)?;
+        self.g2_affine_serialize_uncompressed(&g2)
     }
 
     fn bls12_381_hash_to_g2(
@@ -3094,7 +3094,7 @@ impl VmCallerEnv for Host {
                         &[],
                     ));
                 }
-                self.hash_to_g2_internal(dst.as_slice(), msg.as_slice())
+                self.hash_to_curve(dst.as_slice(), msg.as_slice(), &ContractCostType::Bls12381HashToG2)
             })
         })?;
         self.g2_affine_serialize_uncompressed(g2)
