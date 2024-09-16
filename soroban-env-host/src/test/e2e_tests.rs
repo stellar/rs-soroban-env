@@ -32,7 +32,7 @@ use rand::SeedableRng;
 use sha2::{Digest, Sha256};
 use soroban_env_common::TryIntoVal;
 use soroban_test_wasms::{
-    ADD_F32, ADD_I32, AUTH_TEST_CONTRACT, CONTRACT_STORAGE, DEPLOYER_TEST_CONTRACT, LINEAR_MEMORY,
+    ADD_I32, AUTH_TEST_CONTRACT, CONTRACT_STORAGE, DEPLOYER_TEST_CONTRACT, LINEAR_MEMORY,
     NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22, SIMPLE_ACCOUNT_CONTRACT, SUM_I32,
     UPDATEABLE_CONTRACT,
 };
@@ -1287,7 +1287,7 @@ fn test_create_contract_success_using_simulation() {
 #[test]
 fn test_create_contract_success_with_extra_footprint_entries() {
     let cd = CreateContractData::new([111; 32], ADD_I32);
-    let cd2 = CreateContractData::new([222; 32], ADD_F32);
+    let cd2 = CreateContractData::new([222; 32], CONTRACT_STORAGE);
     let ledger_info = default_ledger_info();
     let res = invoke_host_function_helper(
         true,
