@@ -611,6 +611,32 @@ fn test_wasm_upload_success() {
 }
 
 #[test]
+fn test_wasm_upload_failure_due_to_unsupported_wasm_features() {
+    let ledger_key = get_wasm_key(ADD_F32);
+    let ledger_info = default_ledger_info();
+
+    let res = invoke_host_function_helper(
+        false,
+        &upload_wasm_host_fn(ADD_F32),
+        &resources(10_000_000, vec![], vec![ledger_key.clone()]),
+        &get_account_id([123; 32]),
+        vec![],
+        &ledger_info,
+        vec![],
+        &prng_seed(),
+    )
+    .unwrap();
+    assert!(res.budget.get_cpu_insns_consumed().unwrap() > 0);
+    assert!(res.budget.get_mem_bytes_consumed().unwrap() > 0);
+
+    assert!(res.invoke_result.is_err());
+    assert!(HostError::result_matches_err(
+        res.invoke_result,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
+}
+
+#[test]
 fn test_wasm_upload_success_in_recording_mode() {
     let ledger_key = get_wasm_key(ADD_I32);
     let ledger_info = default_ledger_info();
@@ -700,6 +726,29 @@ fn test_wasm_upload_failure_in_recording_mode() {
             write_bytes: 0,
         }
     );
+}
+
+#[test]
+fn test_unsupported_wasm_upload_failure_in_recording_mode() {
+    let ledger_info = default_ledger_info();
+
+    let res = invoke_host_function_recording_helper(
+        true,
+        &upload_wasm_host_fn(ADD_F32),
+        &get_account_id([123; 32]),
+        None,
+        &ledger_info,
+        vec![],
+        &prng_seed(),
+        None,
+    )
+    .unwrap();
+    assert!(res.diagnostic_events.len() >= 1);
+    assert!(res.contract_events.is_empty());
+    assert!(HostError::result_matches_err(
+        res.invoke_result,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
 }
 
 #[test]
