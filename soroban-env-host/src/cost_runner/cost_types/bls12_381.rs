@@ -3,6 +3,7 @@ use ark_ec::pairing::PairingOutput;
 
 use crate::{
     cost_runner::{CostRunner, CostType},
+    crypto::bls12_381::FP_SERIALIZED_SIZE,
     impl_const_cost_runner_for_bls_consume_sample, impl_const_cost_runner_for_bls_deref_sample,
     impl_lin_cost_runner_for_bls_deref_sample,
     xdr::ContractCostType::{
@@ -251,7 +252,7 @@ impl CostRunner for Bls12381EncodeFpRun {
     ) -> Self::RecycledType {
         let Bls12381EncodeFpSample(buf, fp) = &mut sample;
         let _ = host
-            .serialize_uncompressed_into_slice(fp, buf, 1, "test")
+            .serialize_uncompressed_into_slice::<FP_SERIALIZED_SIZE, _>(fp, buf, "test")
             .unwrap();
         black_box(Some(sample))
     }
@@ -282,7 +283,7 @@ impl CostRunner for Bls12381DecodeFpRun {
     ) -> Self::RecycledType {
         let Bls12381DecodeFpSample(buf) = &sample;
         let res = host
-            .deserialize_uncompessed_no_validate(buf, 1, "test")
+            .deserialize_uncompessed_no_validate::<FP_SERIALIZED_SIZE, _>(buf, "test")
             .unwrap();
         black_box((Some(sample), Some(res)))
     }

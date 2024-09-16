@@ -2979,7 +2979,7 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let fp = self.fp_deserialize_from_bytesobj(fp)?;
         let g1 = self.map_to_curve(fp, ContractCostType::Bls12381MapFpToG1)?;
-        self.g1_affine_serialize_uncompressed(g1)
+        self.g1_affine_serialize_uncompressed(&g1)
     }
 
     fn bls12_381_hash_to_g1(
@@ -3002,10 +3002,14 @@ impl VmCallerEnv for Host {
                         &[],
                     ));
                 }
-                self.hash_to_curve(dst.as_slice(), msg.as_slice(), &ContractCostType::Bls12381HashToG1)
+                self.hash_to_curve(
+                    dst.as_slice(),
+                    msg.as_slice(),
+                    &ContractCostType::Bls12381HashToG1,
+                )
             })
         })?;
-        self.g1_affine_serialize_uncompressed(g1)
+        self.g1_affine_serialize_uncompressed(&g1)
     }
 
     fn bls12_381_check_g2_is_in_subgroup(
@@ -3094,10 +3098,14 @@ impl VmCallerEnv for Host {
                         &[],
                     ));
                 }
-                self.hash_to_curve(dst.as_slice(), msg.as_slice(), &ContractCostType::Bls12381HashToG2)
+                self.hash_to_curve(
+                    dst.as_slice(),
+                    msg.as_slice(),
+                    &ContractCostType::Bls12381HashToG2,
+                )
             })
         })?;
-        self.g2_affine_serialize_uncompressed(g2)
+        self.g2_affine_serialize_uncompressed(&g2)
     }
 
     fn bls12_381_multi_pairing_check(

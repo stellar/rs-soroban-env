@@ -5,7 +5,7 @@ use crate::{
     xdr::{ScErrorCode, ScErrorType},
     BytesObject, Env, EnvBase, Host, HostError, U256Val, U32Val, Val, VecObject,
 };
-use ark_bls12_381::{Fq, Fq2, G1Affine, G2Affine};
+use ark_bls12_381::{Fq, Fq2, Fr, G1Affine, G2Affine, FQ_ONE, FQ_ZERO};
 use ark_ec::AffineRepr;
 use ark_ff::UniformRand;
 use ark_serialize::CanonicalSerialize;
@@ -13,6 +13,22 @@ use hex::FromHex;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::Deserialize;
 use std::cmp::Ordering;
+
+impl Host {
+    pub(crate) fn fp_serialize_into_bytesobj(&self, fp: &Fq) -> Result<BytesObject, HostError> {
+        let mut buf = [0u8; FP_SERIALIZED_SIZE];
+        self.serialize_uncompressed_into_slice::<FP_SERIALIZED_SIZE, Fq>(&fp, &mut buf, "Fp")?;
+        buf.reverse();
+        self.add_host_object(self.scbytes_from_slice(&buf)?)
+    }
+
+    pub(crate) fn fp2_serialize_into_bytesobj(&self, fp2: &Fq2) -> Result<BytesObject, HostError> {
+        let mut buf = [0u8; FP2_SERIALIZED_SIZE];
+        self.serialize_uncompressed_into_slice::<FP2_SERIALIZED_SIZE, Fq2>(&fp2, &mut buf, "Fp")?;
+        buf.reverse();
+        self.add_host_object(self.scbytes_from_slice(&buf)?)
+    }
+}
 
 enum InvalidPointTypes {
     TooManyBytes,
@@ -75,7 +91,7 @@ fn parse_hex(s: &str) -> Vec<u8> {
 }
 
 fn sample_g1(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
-    host.g1_affine_serialize_uncompressed(G1Affine::rand(rng))
+    host.g1_affine_serialize_uncompressed(&G1Affine::rand(rng))
 }
 
 fn sample_g1_not_on_curve(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
@@ -84,7 +100,7 @@ fn sample_g1_not_on_curve(host: &Host, rng: &mut StdRng) -> Result<BytesObject, 
         let y = Fq::rand(rng);
         let p = G1Affine::new_unchecked(x, y);
         if !p.is_on_curve() {
-            return host.g1_affine_serialize_uncompressed(p);
+            return host.g1_affine_serialize_uncompressed(&p);
         }
     }
 }
@@ -95,19 +111,19 @@ fn sample_g1_not_in_subgroup(host: &Host, rng: &mut StdRng) -> Result<BytesObjec
         if let Some(p) = G1Affine::get_point_from_x_unchecked(x, true) {
             assert!(p.is_on_curve());
             if !p.is_in_correct_subgroup_assuming_on_curve() {
-                return host.g1_affine_serialize_uncompressed(p);
+                return host.g1_affine_serialize_uncompressed(&p);
             }
         }
     }
 }
 
 fn g1_zero(host: &Host) -> Result<BytesObject, HostError> {
-    host.g1_affine_serialize_uncompressed(G1Affine::zero())
+    host.g1_affine_serialize_uncompressed(&G1Affine::zero())
 }
 
 fn neg_g1(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
     let g1 = host.g1_affine_deserialize_from_bytesobj(bo, true)?;
-    host.g1_affine_serialize_uncompressed(-g1)
+    host.g1_affine_serialize_uncompressed(&-g1)
 }
 
 fn invalid_g1(
@@ -117,7 +133,7 @@ fn invalid_g1(
 ) -> Result<BytesObject, HostError> {
     let affine = G1Affine::rand(rng);
     assert!(!affine.is_zero());
-    let bo = host.g1_affine_serialize_uncompressed(affine)?;
+    let bo = host.g1_affine_serialize_uncompressed(&affine)?;
     match ty {
         InvalidPointTypes::TooManyBytes => {
             // insert an empty byte to the end
@@ -148,7 +164,7 @@ fn invalid_g1(
 }
 
 fn sample_g2(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
-    host.g2_affine_serialize_uncompressed(G2Affine::rand(rng))
+    host.g2_affine_serialize_uncompressed(&G2Affine::rand(rng))
 }
 
 fn sample_g2_not_on_curve(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
@@ -157,7 +173,7 @@ fn sample_g2_not_on_curve(host: &Host, rng: &mut StdRng) -> Result<BytesObject, 
         let y = Fq2::rand(rng);
         let p = G2Affine::new_unchecked(x, y);
         if !p.is_on_curve() {
-            return host.g2_affine_serialize_uncompressed(p);
+            return host.g2_affine_serialize_uncompressed(&p);
         }
     }
 }
@@ -168,19 +184,19 @@ fn sample_g2_not_in_subgroup(host: &Host, rng: &mut StdRng) -> Result<BytesObjec
         if let Some(p) = G2Affine::get_point_from_x_unchecked(x, true) {
             assert!(p.is_on_curve());
             if !p.is_in_correct_subgroup_assuming_on_curve() {
-                return host.g2_affine_serialize_uncompressed(p);
+                return host.g2_affine_serialize_uncompressed(&p);
             }
         }
     }
 }
 
 fn g2_zero(host: &Host) -> Result<BytesObject, HostError> {
-    host.g2_affine_serialize_uncompressed(G2Affine::zero())
+    host.g2_affine_serialize_uncompressed(&G2Affine::zero())
 }
 
 fn neg_g2(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
     let g2 = host.g2_affine_deserialize_from_bytesobj(bo, true)?;
-    host.g2_affine_serialize_uncompressed(-g2)
+    host.g2_affine_serialize_uncompressed(&-g2)
 }
 
 fn invalid_g2(
@@ -190,7 +206,7 @@ fn invalid_g2(
 ) -> Result<BytesObject, HostError> {
     let affine = G2Affine::rand(rng);
     assert!(!affine.is_zero());
-    let bo = host.g2_affine_serialize_uncompressed(affine)?;
+    let bo = host.g2_affine_serialize_uncompressed(&affine)?;
     match ty {
         InvalidPointTypes::TooManyBytes => {
             // insert an empty byte to the end
@@ -238,9 +254,7 @@ fn parse_g2_point_test_case(host: &Host, p: Point) -> Result<BytesObject, HostEr
 #[allow(unused)]
 fn sample_fp(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
     let fp = Fq::rand(rng);
-    let mut buf = [0u8; FP_SERIALIZED_SIZE];
-    host.serialize_uncompressed_into_slice(&fp, &mut buf, 1, "test")?;
-    host.bytes_new_from_slice(&buf)
+    host.fp_serialize_into_bytesobj(&fp)
 }
 
 fn invalid_fp(
@@ -252,12 +266,12 @@ fn invalid_fp(
     match ty {
         InvalidPointTypes::TooManyBytes => {
             let mut buf = [0u8; FP_SERIALIZED_SIZE + 1]; // one extra zero byte
-            host.serialize_uncompressed_into_slice(&fp, &mut buf, 1, "test")?;
+            host.serialize_uncompressed_into_slice::<49, _>(&fp, &mut buf, "test")?;
             host.bytes_new_from_slice(&buf)
         }
         InvalidPointTypes::TooFewBytes => {
             let mut buf = [0u8; FP_SERIALIZED_SIZE];
-            host.serialize_uncompressed_into_slice(&fp, &mut buf, 1, "test")?;
+            host.serialize_uncompressed_into_slice::<FP_SERIALIZED_SIZE, _>(&fp, &mut buf, "test")?;
             host.bytes_new_from_slice(&buf[0..FP_SERIALIZED_SIZE - 1]) // take one less byte
         }
         _ => panic!("not available"),
@@ -266,10 +280,8 @@ fn invalid_fp(
 
 #[allow(unused)]
 fn sample_fp2(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
-    let fp = Fq2::rand(rng);
-    let mut buf = [0u8; FP2_SERIALIZED_SIZE];
-    host.serialize_uncompressed_into_slice(&fp, &mut buf, 1, "test")?;
-    host.bytes_new_from_slice(&buf)
+    let fp2 = Fq2::rand(rng);
+    host.fp2_serialize_into_bytesobj(&fp2)
 }
 
 fn invalid_fp2(
@@ -281,12 +293,14 @@ fn invalid_fp2(
     match ty {
         InvalidPointTypes::TooManyBytes => {
             let mut buf = [0u8; FP2_SERIALIZED_SIZE + 1]; // one extra zero byte
-            host.serialize_uncompressed_into_slice(&fp, &mut buf, 1, "test")?;
+            host.serialize_uncompressed_into_slice::<97, _>(&fp, &mut buf, "test")?;
             host.bytes_new_from_slice(&buf)
         }
         InvalidPointTypes::TooFewBytes => {
             let mut buf = [0u8; FP2_SERIALIZED_SIZE];
-            host.serialize_uncompressed_into_slice(&fp, &mut buf, 1, "test")?;
+            host.serialize_uncompressed_into_slice::<FP2_SERIALIZED_SIZE, _>(
+                &fp, &mut buf, "test",
+            )?;
             host.bytes_new_from_slice(&buf[0..FP2_SERIALIZED_SIZE - 1]) // take one less byte
         }
         _ => panic!("not available"),
@@ -303,9 +317,8 @@ fn sample_fr(host: &Host, rng: &mut StdRng) -> Result<U256Val, HostError> {
     Ok(obj.into())
 }
 
-fn sample_host_vec<T: UniformRand + CanonicalSerialize>(
+fn sample_host_vec<const EXPECTED_SIZE: usize, T: UniformRand + CanonicalSerialize>(
     host: &Host,
-    buf_size: usize,
     vec_len: usize,
     rng: &mut StdRng,
 ) -> Result<VecObject, HostError> {
@@ -313,8 +326,8 @@ fn sample_host_vec<T: UniformRand + CanonicalSerialize>(
         .into_iter()
         .map(|_| {
             let t = T::rand(rng);
-            let mut buf = vec![0; buf_size];
-            host.serialize_uncompressed_into_slice(&t, &mut buf, 1, "test")
+            let mut buf = vec![0; EXPECTED_SIZE];
+            host.serialize_uncompressed_into_slice::<EXPECTED_SIZE, _>(&t, &mut buf, "test")
                 .unwrap();
             host.bytes_new_from_slice(&buf).unwrap().to_val()
         })
@@ -672,7 +685,7 @@ fn g1_msm() -> Result<(), HostError> {
     }
     // vector lengths not equal
     {
-        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 2, &mut rng)?;
+        let vp = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 2, &mut rng)?;
         let vs = sample_fr_vec(&host, 3, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g1_msm(vp, vs),
@@ -704,7 +717,7 @@ fn g1_msm() -> Result<(), HostError> {
     }
     // vector of zero scalars result in zero point
     {
-        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
+        let vp = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 3, &mut rng)?;
         let vs = host.vec_new_from_slice(&[U256Val::from_u32(0).to_val(); 3])?;
         let res = host.bls12_381_g1_msm(vp, vs)?;
         assert_eq!(
@@ -772,7 +785,7 @@ fn g1_msm() -> Result<(), HostError> {
     // 8. msm result is same as invidial mul and add
     {
         host.budget_ref().reset_default()?;
-        let vp = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 10, &mut rng)?;
+        let vp = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 10, &mut rng)?;
         let vs = sample_fr_vec(&host, 10, &mut rng)?;
         let ref_res = host.bls12_381_g1_msm(vp, vs)?;
         let mut res = g1_zero(&host)?;
@@ -1211,7 +1224,7 @@ fn g2_msm() -> Result<(), HostError> {
     }
     // vector lengths not equal
     {
-        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2, &mut rng)?;
+        let vp = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 2, &mut rng)?;
         let vs = sample_fr_vec(&host, 3, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_g2_msm(vp, vs),
@@ -1243,7 +1256,7 @@ fn g2_msm() -> Result<(), HostError> {
     }
     // vector of zero scalars result in zero point
     {
-        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3, &mut rng)?;
+        let vp = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 3, &mut rng)?;
         let vs = host.vec_new_from_slice(&[U256Val::from_u32(0).to_val(); 3])?;
         let res = host.bls12_381_g2_msm(vp, vs)?;
         assert_eq!(
@@ -1311,7 +1324,7 @@ fn g2_msm() -> Result<(), HostError> {
     // 8. msm result is same as invidial mul and add
     {
         host.budget_ref().reset_default()?;
-        let vp = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 5, &mut rng)?;
+        let vp = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 5, &mut rng)?;
         let vs = sample_fr_vec(&host, 5, &mut rng)?;
         let ref_res = host.bls12_381_g2_msm(vp, vs)?;
         let mut res = g2_zero(&host)?;
@@ -1432,8 +1445,8 @@ fn pairing() -> Result<(), HostError> {
     host.enable_debug()?;
     // 1. vector lengths don't match
     {
-        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
-        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2, &mut rng)?;
+        let vp1 = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 3, &mut rng)?;
+        let vp2 = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 2, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_multi_pairing_check(vp1, vp2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -1441,8 +1454,8 @@ fn pairing() -> Result<(), HostError> {
     }
     // 2. vector length is 0
     {
-        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 0, &mut rng)?;
-        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 0, &mut rng)?;
+        let vp1 = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 0, &mut rng)?;
+        let vp2 = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 0, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_multi_pairing_check(vp1, vp2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -1450,13 +1463,13 @@ fn pairing() -> Result<(), HostError> {
     }
     // 3. any g1 is invalid
     {
-        let mut vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
+        let mut vp1 = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 3, &mut rng)?;
         vp1 = host.vec_put(
             vp1,
             U32Val::from(1),
             sample_g1_not_in_subgroup(&host, &mut rng)?.to_val(),
         )?;
-        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 2, &mut rng)?;
+        let vp2 = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 2, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_multi_pairing_check(vp1, vp2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -1464,8 +1477,8 @@ fn pairing() -> Result<(), HostError> {
     }
     // 4. any g2 is invalid
     {
-        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
-        let mut vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3, &mut rng)?;
+        let vp1 = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 3, &mut rng)?;
+        let mut vp2 = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 3, &mut rng)?;
         vp2 = host.vec_put(
             vp2,
             U32Val::from(1),
@@ -1533,16 +1546,16 @@ fn pairing() -> Result<(), HostError> {
     // 8. any of g1 point is infinity
     {
         host.budget_ref().reset_default()?;
-        let mut vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
+        let mut vp1 = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 3, &mut rng)?;
         vp1 = host.vec_put(vp1, U32Val::from(1), g1_zero(&host)?.to_val())?;
-        let vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3, &mut rng)?;
+        let vp2 = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 3, &mut rng)?;
         assert!(host.bls12_381_multi_pairing_check(vp1, vp2).is_ok());
     }
     // 9. any of g2 point is infinity
     {
         host.budget_ref().reset_default()?;
-        let vp1 = sample_host_vec::<G1Affine>(&host, G1_SERIALIZED_SIZE, 3, &mut rng)?;
-        let mut vp2 = sample_host_vec::<G2Affine>(&host, G2_SERIALIZED_SIZE, 3, &mut rng)?;
+        let vp1 = sample_host_vec::<G1_SERIALIZED_SIZE, G1Affine>(&host, 3, &mut rng)?;
+        let mut vp2 = sample_host_vec::<G2_SERIALIZED_SIZE, G2Affine>(&host, 3, &mut rng)?;
         vp2 = host.vec_put(vp2, U32Val::from(2), g2_zero(&host)?.to_val())?;
         assert!(host.bls12_381_multi_pairing_check(vp1, vp2).is_ok());
     }
@@ -1556,10 +1569,130 @@ fn pairing() -> Result<(), HostError> {
     Ok(())
 }
 
-// ethereum test
-
 // fr arithmetics
 
 // serialization roundtrip
-
-// fuzzing tests
+#[test]
+fn test_serialization_roundtrip() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+    // g1
+    {
+        let g1_roundtrip_check = |g1: &G1Affine, subgroup_check: bool| -> Result<bool, HostError> {
+            let bo = host.g1_affine_serialize_uncompressed(&g1)?;
+            let g1_back = host.g1_affine_deserialize_from_bytesobj(bo, subgroup_check)?;
+            Ok(g1.eq(&g1_back))
+        };
+        assert!(g1_roundtrip_check(&G1Affine::zero(), true)?);
+        assert!(g1_roundtrip_check(&G1Affine::generator(), true)?);
+        for _ in 0..20 {
+            // on curve and in subgroup
+            let g1 = G1Affine::rand(&mut rng);
+            assert!(g1_roundtrip_check(&g1, true)?)
+        }
+        for i in 0..10 {
+            // on curve and not in subgroup
+            let g1 = G1Affine::get_point_from_x_unchecked(Fq::rand(&mut rng), (i % 2) != 0)
+                .unwrap_or(G1Affine::zero());
+            assert!(g1_roundtrip_check(&g1, false)?);
+            if !g1.is_in_correct_subgroup_assuming_on_curve() {
+                assert!(HostError::result_matches_err(
+                    g1_roundtrip_check(&g1, true),
+                    (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+                ));
+            }
+        }
+        for _ in 0..10 {
+            // not on curve
+            let g1 = G1Affine::new_unchecked(Fq::rand(&mut rng), Fq::rand(&mut rng));
+            if g1.is_on_curve() {
+                continue;
+            }
+            assert!(HostError::result_matches_err(
+                g1_roundtrip_check(&g1, false),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ));
+        }
+    }
+    // g2
+    {
+        let g2_roundtrip_check = |g2: &G2Affine, subgroup_check: bool| -> Result<bool, HostError> {
+            let bo = host.g2_affine_serialize_uncompressed(&g2)?;
+            let g2_back = host.g2_affine_deserialize_from_bytesobj(bo, subgroup_check)?;
+            Ok(g2.eq(&g2_back))
+        };
+        assert!(g2_roundtrip_check(&G2Affine::zero(), true)?);
+        assert!(g2_roundtrip_check(&G2Affine::generator(), true)?);
+        for _ in 0..20 {
+            // on curve and in subgroup
+            let g2 = G2Affine::rand(&mut rng);
+            assert!(g2_roundtrip_check(&g2, true)?)
+        }
+        for i in 0..10 {
+            // on curve and not in subgroup
+            let g2 = G2Affine::get_point_from_x_unchecked(Fq2::rand(&mut rng), (i % 2) != 0)
+                .unwrap_or(G2Affine::zero());
+            assert!(g2_roundtrip_check(&g2, false)?);
+            if !g2.is_in_correct_subgroup_assuming_on_curve() {
+                assert!(HostError::result_matches_err(
+                    g2_roundtrip_check(&g2, true),
+                    (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+                ));
+            }
+        }
+        for _ in 0..10 {
+            // not on curve
+            let g2 = G2Affine::new_unchecked(Fq2::rand(&mut rng), Fq2::rand(&mut rng));
+            if g2.is_on_curve() {
+                continue;
+            }
+            assert!(HostError::result_matches_err(
+                g2_roundtrip_check(&g2, false),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ));
+        }
+    }
+    // fp
+    {
+        let fp_roundtrip_check = |fp: &Fq| -> Result<bool, HostError> {
+            let mut buf = [0; FP_SERIALIZED_SIZE];
+            host.serialize_uncompressed_into_slice::<FP_SERIALIZED_SIZE, _>(fp, &mut buf, "Fp")?;
+            buf.reverse();
+            let bo = host.add_host_object(host.scbytes_from_slice(&buf)?)?;
+            let fp_back = host.fp_deserialize_from_bytesobj(bo)?;
+            Ok(fp.eq(&fp_back))
+        };
+        assert!(fp_roundtrip_check(&FQ_ZERO)?);
+        assert!(fp_roundtrip_check(&FQ_ONE)?);
+        for _ in 0..20 {
+            assert!(fp_roundtrip_check(&Fq::rand(&mut rng))?)
+        }
+    }
+    // fp2
+    {
+        let fp2_roundtrip_check = |fp2: &Fq2| -> Result<bool, HostError> {
+            let mut buf = [0; FP2_SERIALIZED_SIZE];
+            host.serialize_uncompressed_into_slice::<FP2_SERIALIZED_SIZE, _>(fp2, &mut buf, "Fp2")?;
+            buf.reverse();
+            let bo = host.add_host_object(host.scbytes_from_slice(&buf)?)?;
+            let fp2_back = host.fp2_deserialize_from_bytesobj(bo)?;
+            Ok(fp2.eq(&fp2_back))
+        };
+        for _ in 0..20 {
+            assert!(fp2_roundtrip_check(&Fq2::rand(&mut rng))?)
+        }
+    }
+    // fr
+    {
+        let fr_roundtrip_check = |fr: Fr| -> Result<bool, HostError> {
+            let uv = host.fr_to_u256val(fr.clone())?;
+            let fr_back = host.fr_from_u256val(uv)?;
+            Ok(fr == fr_back)
+        };
+        for _ in 0..20 {
+            assert!(fr_roundtrip_check(Fr::rand(&mut rng))?)
+        }
+    }
+    Ok(())
+}
