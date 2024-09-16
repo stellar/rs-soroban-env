@@ -11,7 +11,7 @@ rust-version.workspace = true
 publish = false
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tracy-client = { version = "=0.16.4", features = ["enable", "timer-fallback"], default-features = false, optional = true }
+tracy-client = { version = "=0.17.0", features = ["enable", "timer-fallback"], default-features = false, optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 perf-event = "0.4.7"
