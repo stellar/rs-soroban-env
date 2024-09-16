@@ -3114,14 +3114,14 @@ impl VmCallerEnv for Host {
         vp1: VecObject,
         vp2: VecObject,
     ) -> Result<Bool, HostError> {
-        let l1 = self.vec_len(vmcaller, vp1)?;
-        let l2 = self.vec_len(vmcaller, vp2)?;
-        if u32::from(l1) != u32::from(l2) || u32::from(l1) == 0 {
+        let l1: u32 = self.vec_len(vmcaller, vp1)?.into();
+        let l2: u32 = self.vec_len(vmcaller, vp2)?.into();
+        if l1 != l2 || l1 == 0 {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                "multi-pairing-check: invalid input vector lengths",
-                &[l1.to_val(), l2.to_val()],
+                format!("multi-pairing-check: invalid input vector lengths {l1} and {l2}").as_str(),
+                &[],
             ));
         }
         let vp1 = self.g1_vec_from_vecobj(vp1)?;
