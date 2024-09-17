@@ -283,7 +283,7 @@ impl CostRunner for Bls12381DecodeFpRun {
     ) -> Self::RecycledType {
         let Bls12381DecodeFpSample(buf) = &sample;
         let res = host
-            .deserialize_uncompessed_no_validate::<FP_SERIALIZED_SIZE, _>(buf, "test")
+            .deserialize_uncompressed_no_validate::<FP_SERIALIZED_SIZE, _>(buf, "test")
             .unwrap();
         black_box((Some(sample), Some(res)))
     }

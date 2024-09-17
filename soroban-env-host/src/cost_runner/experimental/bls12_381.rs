@@ -84,7 +84,7 @@ macro_rules! impl_deser_runner_for_bls {
 
             fn run_iter(host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
                 let res = host
-                    .deserialize_uncompessed_no_validate::<$expected_size, _>(&sample, "test")
+                    .deserialize_uncompressed_no_validate::<$expected_size, _>(&sample, "test")
                     .unwrap();
                 black_box((None, Some(res)))
             }

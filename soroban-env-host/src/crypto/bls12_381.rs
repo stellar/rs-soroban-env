@@ -45,7 +45,7 @@ impl Host {
     // (the base field element), and will be charged accordingly.
     // Validation of the deserialized entity must be performed outside of this
     // function, to keep budget charging isolated.
-    pub(crate) fn deserialize_uncompessed_no_validate<
+    pub(crate) fn deserialize_uncompressed_no_validate<
         const EXPECTED_SIZE: usize,
         T: CanonicalDeserialize,
     >(
@@ -188,7 +188,7 @@ impl Host {
     ) -> Result<Affine<P>, HostError> {
         let pt: Affine<P> = self.visit_obj(bo, |bytes: &ScBytes| {
             self.validate_point_encoding::<EXPECTED_SIZE>(&bytes, msg)?;
-            self.deserialize_uncompessed_no_validate::<EXPECTED_SIZE, _>(bytes.as_slice(), msg)
+            self.deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(bytes.as_slice(), msg)
         })?;
         if !self.check_point_is_on_curve(&pt, &ct_curve)? {
             return Err(self.err(
@@ -394,7 +394,7 @@ impl Host {
             let mut buf = [0u8; EXPECTED_SIZE];
             buf.copy_from_slice(bytes);
             buf.reverse();
-            self.deserialize_uncompessed_no_validate::<EXPECTED_SIZE, _>(&buf, msg)
+            self.deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(&buf, msg)
         })
     }
 
