@@ -229,8 +229,8 @@ impl Host {
         //
         // internally when deserializing `Fp`, the flag bits are masked off
         // to get `X: Fp`. The Y however, does not have the top bits masked off
-        // so it is possible for Y to exceed 381 bits. I've checked all over and
-        // didn't find that being an invalid condition, so we will leave them as is.
+        // so it is possible for Y to exceed 381 bits. Internally Fp deserialization
+        // makes sure any value >= prime modulus results in an error.
         self.affine_deserialize::<G1_SERIALIZED_SIZE, G1Config>(
             bo,
             ContractCostType::Bls12381G1CheckPointOnCurve,
@@ -260,8 +260,8 @@ impl Host {
         //
         // internally when deserializing `Fp`, the flag bits are masked off
         // to get `X: Fp`. The Y however, does not have the top bits masked off
-        // so it is possible for Y to exceed 381 bits. I've checked all over and
-        // didn't find that being an invalid condition, so we will leave them as is.
+        // so it is possible for Y to exceed 381 bits. Internally Fp deserialization
+        // makes sure any value >= prime modulus results in an error.
         self.affine_deserialize::<G2_SERIALIZED_SIZE, G2Config>(
             bo,
             ContractCostType::Bls12381G2CheckPointOnCurve,

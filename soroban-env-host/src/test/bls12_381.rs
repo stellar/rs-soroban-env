@@ -14,6 +14,8 @@ use rand::{rngs::StdRng, SeedableRng};
 use serde::Deserialize;
 use std::cmp::Ordering;
 
+const MODULUS: &str = "0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab";
+
 impl Host {
     pub(crate) fn fp_serialize_into_bytesobj(&self, fp: &Fq) -> Result<BytesObject, HostError> {
         let mut buf = [0u8; FP_SERIALIZED_SIZE];
@@ -38,6 +40,7 @@ enum InvalidPointTypes {
     SortFlagSet,
     PointNotOnCurve,
     PointNotInSubgroup,
+    OutOfRange,
 }
 
 #[allow(unused)]
@@ -117,6 +120,11 @@ fn sample_g1_not_in_subgroup(host: &Host, rng: &mut StdRng) -> Result<BytesObjec
     }
 }
 
+fn sample_g1_out_of_range(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
+    let g1 = sample_g1(host, rng)?;
+    host.bytes_copy_from_slice(g1, U32Val::from(0), MODULUS.as_bytes())
+}
+
 fn g1_zero(host: &Host) -> Result<BytesObject, HostError> {
     host.g1_affine_serialize_uncompressed(&G1Affine::zero())
 }
@@ -160,6 +168,7 @@ fn invalid_g1(
         }
         InvalidPointTypes::PointNotOnCurve => sample_g1_not_on_curve(host, rng),
         InvalidPointTypes::PointNotInSubgroup => sample_g1_not_in_subgroup(host, rng),
+        InvalidPointTypes::OutOfRange => sample_g1_out_of_range(host, rng),
     }
 }
 
@@ -192,6 +201,11 @@ fn sample_g2_not_in_subgroup(host: &Host, rng: &mut StdRng) -> Result<BytesObjec
 
 fn g2_zero(host: &Host) -> Result<BytesObject, HostError> {
     host.g2_affine_serialize_uncompressed(&G2Affine::zero())
+}
+
+fn sample_g2_out_of_range(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> {
+    let g2 = sample_g2(host, rng)?;
+    host.bytes_copy_from_slice(g2, U32Val::from(0), MODULUS.as_bytes())
 }
 
 fn neg_g2(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
@@ -233,6 +247,7 @@ fn invalid_g2(
         }
         InvalidPointTypes::PointNotOnCurve => sample_g2_not_on_curve(host, rng),
         InvalidPointTypes::PointNotInSubgroup => sample_g2_not_in_subgroup(host, rng),
+        InvalidPointTypes::OutOfRange => sample_g2_out_of_range(host, rng),
     }
 }
 
@@ -274,6 +289,11 @@ fn invalid_fp(
             host.serialize_uncompressed_into_slice::<FP_SERIALIZED_SIZE, _>(&fp, &mut buf, "test")?;
             host.bytes_new_from_slice(&buf[0..FP_SERIALIZED_SIZE - 1]) // take one less byte
         }
+        InvalidPointTypes::OutOfRange => {
+            // Fp can only take the range of (0, MODULUS-1)
+            let bytes = parse_hex(&MODULUS);
+            host.bytes_new_from_slice(bytes.as_slice())
+        }
         _ => panic!("not available"),
     }
 }
@@ -302,6 +322,11 @@ fn invalid_fp2(
                 &fp, &mut buf, "test",
             )?;
             host.bytes_new_from_slice(&buf[0..FP2_SERIALIZED_SIZE - 1]) // take one less byte
+        }
+        InvalidPointTypes::OutOfRange => {
+            // Each Fp can only take the range of (0, MODULUS-1)
+            let bytes = parse_hex(&MODULUS);
+            host.bytes_new_from_slice(bytes.as_slice())
         }
         _ => panic!("not available"),
     }
@@ -419,6 +444,14 @@ fn check_g1_is_in_subgroup() -> Result<(), HostError> {
             host.bls12_381_check_g1_is_in_subgroup(invalid_g1(
                 &host,
                 InvalidPointTypes::PointNotOnCurve,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g1_is_in_subgroup(invalid_g1(
+                &host,
+                InvalidPointTypes::OutOfRange,
                 &mut rng
             )?),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -820,6 +853,11 @@ fn map_fp_to_g1() -> Result<(), HostError> {
             host.bls12_381_map_fp_to_g1(p2),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
+        let p3 = invalid_fp(&host, InvalidPointTypes::OutOfRange, &mut rng)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp_to_g1(p3),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
     }
     // Test cases from https://datatracker.ietf.org/doc/html/rfc9380#name-bls12381g1_xmdsha-256_sswu_
     // To interpret the results, understand the steps it takes to hash a msg to curve
@@ -958,6 +996,14 @@ fn check_g2_is_in_subgroup() -> Result<(), HostError> {
             host.bls12_381_check_g2_is_in_subgroup(invalid_g2(
                 &host,
                 InvalidPointTypes::PointNotOnCurve,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_check_g2_is_in_subgroup(invalid_g2(
+                &host,
+                InvalidPointTypes::OutOfRange,
                 &mut rng
             )?),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
@@ -1357,6 +1403,11 @@ fn map_fp2_to_g2() -> Result<(), HostError> {
         let p2 = invalid_fp2(&host, InvalidPointTypes::TooManyBytes, &mut rng)?;
         assert!(HostError::result_matches_err(
             host.bls12_381_map_fp2_to_g2(p2),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        let p3 = invalid_fp2(&host, InvalidPointTypes::OutOfRange, &mut rng)?;
+        assert!(HostError::result_matches_err(
+            host.bls12_381_map_fp2_to_g2(p3),
             (ScErrorType::Crypto, ScErrorCode::InvalidInput)
         ));
     }
