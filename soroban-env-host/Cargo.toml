@@ -145,6 +145,10 @@ name = "secp256r1_sig_ver"
 path = "tests/secp256r1_sig_ver.rs"
 required-features = ["testutils"]
 
+[[test]]
+name = "bls-signature"
+path = "tests/bls.rs"
+required-features = ["testutils"]
 
 [package.metadata.docs.rs]
 features = ["recording_mode", "tracy", "testutils"]
