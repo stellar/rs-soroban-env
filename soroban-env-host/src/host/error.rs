@@ -5,7 +5,7 @@ use crate::{
     ConversionError, EnvBase, Error, Host, TryFromVal, U32Val, Val,
 };
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(any(test, all(feature = "testutils", feature = "backtrace")))]
 use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
 use std::{
@@ -18,7 +18,7 @@ use super::metered_clone::MeteredClone;
 #[derive(Clone)]
 pub(crate) struct DebugInfo {
     events: Events,
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(any(test, all(feature = "testutils", feature = "backtrace")))]
     backtrace: Backtrace,
 }
 
@@ -67,12 +67,12 @@ impl DebugInfo {
         Ok(())
     }
 
-    #[cfg(not(any(test, feature = "testutils")))]
+    #[cfg(not(any(test, all(feature = "testutils", feature = "backtrace"))))]
     fn write_backtrace(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(any(test, all(feature = "testutils", feature = "backtrace")))]
     fn write_backtrace(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // We do a little trimming here, skipping the first two frames (which
         // are always into, from, and one or more Host::err_foo calls) and all
@@ -296,8 +296,11 @@ impl Host {
             self.with_debug_mode(|| {
                 if let Ok(events_ref) = self.0.events.try_borrow() {
                     let events = events_ref.externalize(self)?;
-                    let backtrace = Backtrace::new_unresolved();
-                    res = Some(Box::new(DebugInfo { backtrace, events }));
+                    res = Some(Box::new(DebugInfo {
+                        #[cfg(any(test, all(feature = "testutils", feature = "backtrace")))]
+                        backtrace: Backtrace::new_unresolved(),
+                        events,
+                    }));
                 }
                 Ok(())
             });
