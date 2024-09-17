@@ -297,7 +297,7 @@ impl Host {
                 if let Ok(events_ref) = self.0.events.try_borrow() {
                     let events = events_ref.externalize(self)?;
                     res = Some(Box::new(DebugInfo {
-                        #[cfg(any(test, all(feature = "testutils", feature = "backtrace")))]
+                        #[cfg(any(test, feature = "backtrace"))]
                         backtrace: Backtrace::new_unresolved(),
                         events,
                     }));
