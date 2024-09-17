@@ -123,11 +123,33 @@ impl core::fmt::Display for HostEvent {
         match &self.event.body {
             ContractEventBody::V0(ceb) => {
                 write!(f, "topics:[")?;
+
+                let mut is_fn_call = false;
                 for (i, topic) in ceb.topics.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
                     }
-                    display_scval(topic, f)?;
+
+                    // The second topic of the fn_call event is the contract id as ScBytes,
+                    // but we want to display it as a C key instead, so this block
+                    // tries to deduce if the event is the fn_call event.
+                    if i == 1 && is_fn_call {
+                        if let ScVal::Bytes(bytes) = topic {
+                            let hash: [u8; 32] = bytes.clone().0.try_into().unwrap();
+                            let strkey = stellar_strkey::Contract(hash);
+                            write!(f, "{}", strkey)?
+                        } else {
+                            display_scval(topic, f)?;
+                        }
+                    } else {
+                        display_scval(topic, f)?;
+                    }
+
+                    if let ScVal::Symbol(first_topic_str) = topic {
+                        if first_topic_str.0.as_slice() == "fn_call".as_bytes() {
+                            is_fn_call = true;
+                        }
+                    }
                 }
                 write!(f, "], data:")?;
                 display_scval(&ceb.data, f)
