@@ -820,7 +820,7 @@ impl EnvBase for Host {
     // will display a relatively ugly message like "thread panicked at Box<dyn
     // Any>" to stderr, when it is much more useful to the user if we have it
     // print the result of HostError::Debug, with its glorious Error,
-    // site-of-origin debug log.
+    // site-of-origin backtrace and debug log.
     //
     // To get it to do that, we have to call `panic!()`, not `panic_any`.
     // Personally I think this is a glaring weakness of `panic_any` but we are

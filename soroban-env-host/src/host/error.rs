@@ -5,6 +5,8 @@ use crate::{
     ConversionError, EnvBase, Error, Host, TryFromVal, U32Val, Val,
 };
 
+#[cfg(any(test, feature = "testutils"))]
+use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
 use std::{
     cell::{Ref, RefCell, RefMut},
@@ -16,6 +18,8 @@ use super::metered_clone::MeteredClone;
 #[derive(Clone)]
 pub(crate) struct DebugInfo {
     events: Events,
+    #[cfg(any(test, feature = "testutils"))]
+    backtrace: Backtrace,
 }
 
 #[derive(Clone)]
@@ -62,13 +66,68 @@ impl DebugInfo {
         }
         Ok(())
     }
+
+    #[cfg(not(any(test, feature = "testutils")))]
+    fn write_backtrace(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    fn write_backtrace(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // We do a little trimming here, skipping the first two frames (which
+        // are always into, from, and one or more Host::err_foo calls) and all
+        // the frames _after_ the short-backtrace marker that rust compiles-in.
+
+        fn frame_name_matches(frame: &BacktraceFrame, pat: &str) -> bool {
+            for sym in frame.symbols() {
+                match sym.name() {
+                    Some(sn) if format!("{:}", sn).contains(pat) => {
+                        return true;
+                    }
+                    _ => (),
+                }
+            }
+            false
+        }
+
+        fn frame_is_short_backtrace_start(frame: &BacktraceFrame) -> bool {
+            frame_name_matches(frame, "__rust_begin_short_backtrace")
+        }
+
+        fn frame_is_initial_error_plumbing(frame: &BacktraceFrame) -> bool {
+            frame_name_matches(frame, "::from")
+                || frame_name_matches(frame, "::into")
+                || frame_name_matches(frame, "host::err")
+                || frame_name_matches(frame, "Host::err")
+                || frame_name_matches(frame, "Host>::err")
+                || frame_name_matches(frame, "::augment_err_result")
+                || frame_name_matches(frame, "::with_shadow_mode")
+                || frame_name_matches(frame, "::with_debug_mode")
+                || frame_name_matches(frame, "::maybe_get_debug_info")
+                || frame_name_matches(frame, "::map_err")
+        }
+        let mut bt = self.backtrace.clone();
+        bt.resolve();
+        let frames: Vec<BacktraceFrame> = bt
+            .frames()
+            .iter()
+            .skip_while(|f| frame_is_initial_error_plumbing(f))
+            .take_while(|f| !frame_is_short_backtrace_start(f))
+            .cloned()
+            .collect();
+        let bt: Backtrace = frames.into();
+        writeln!(f)?;
+        writeln!(f, "Backtrace (newest first):")?;
+        writeln!(f, "{:?}", bt)
+    }
 }
 
 impl Debug for HostError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "HostError: {:?}", self.error)?;
         if let Some(info) = &self.info {
-            info.write_events(f)
+            info.write_events(f)?;
+            info.write_backtrace(f)
         } else {
             writeln!(f, "DebugInfo not available")
         }
@@ -202,7 +261,7 @@ impl Host {
     /// [Error], and when running in [DiagnosticMode::Debug] additionally
     /// records a diagnostic event with the provided `msg` and `args` and then
     /// enriches the returned [Error] with [DebugInfo] in the form of a
-    /// snapshot of the [Events] buffer.
+    /// [Backtrace] and snapshot of the [Events] buffer.
     pub(crate) fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
         let mut he = HostError::from(error);
         self.with_debug_mode(|| {
@@ -237,7 +296,8 @@ impl Host {
             self.with_debug_mode(|| {
                 if let Ok(events_ref) = self.0.events.try_borrow() {
                     let events = events_ref.externalize(self)?;
-                    res = Some(Box::new(DebugInfo { events }));
+                    let backtrace = Backtrace::new_unresolved();
+                    res = Some(Box::new(DebugInfo { backtrace, events }));
                 }
                 Ok(())
             });
