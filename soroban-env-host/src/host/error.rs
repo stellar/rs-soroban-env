@@ -5,7 +5,7 @@ use crate::{
     ConversionError, EnvBase, Error, Host, TryFromVal, U32Val, Val,
 };
 
-#[cfg(any(test, all(feature = "testutils", feature = "backtrace")))]
+#[cfg(any(test, feature = "backtrace"))]
 use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
 use std::{
@@ -18,7 +18,7 @@ use super::metered_clone::MeteredClone;
 #[derive(Clone)]
 pub(crate) struct DebugInfo {
     events: Events,
-    #[cfg(any(test, all(feature = "testutils", feature = "backtrace")))]
+    #[cfg(any(test, feature = "backtrace"))]
     backtrace: Backtrace,
 }
 
@@ -67,12 +67,12 @@ impl DebugInfo {
         Ok(())
     }
 
-    #[cfg(not(any(test, all(feature = "testutils", feature = "backtrace"))))]
+    #[cfg(not(any(test, feature = "backtrace")))]
     fn write_backtrace(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 
-    #[cfg(any(test, all(feature = "testutils", feature = "backtrace")))]
+    #[cfg(any(test, feature = "backtrace"))]
     fn write_backtrace(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // We do a little trimming here, skipping the first two frames (which
         // are always into, from, and one or more Host::err_foo calls) and all
