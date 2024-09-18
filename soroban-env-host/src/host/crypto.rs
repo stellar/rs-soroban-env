@@ -328,7 +328,7 @@ pub(crate) fn chacha20_fill_bytes(
     dest: &mut [u8],
     budget: impl AsBudget,
 ) -> Result<(), HostError> {
-    tracy_span!("chacha20");
+    let _span = tracy_span!("chacha20");
     budget
         .as_budget()
         .charge(ContractCostType::ChaCha20DrawBytes, Some(dest.len() as u64))?;
@@ -353,7 +353,7 @@ pub(crate) fn unbias_prng_seed(
     seed: &[u8; SEED_BYTES as usize],
     budget: impl AsBudget,
 ) -> Result<[u8; SEED_BYTES as usize], HostError> {
-    tracy_span!("unbias_prng_seed");
+    let _span = tracy_span!("unbias_prng_seed");
 
     // Salt is fixed and must not be changed; it is effectively "part of the
     // protocol" and must be the same for all implementations.
