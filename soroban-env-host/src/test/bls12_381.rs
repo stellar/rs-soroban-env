@@ -1312,6 +1312,7 @@ fn g2_msm() -> Result<(), HostError> {
     }
     // 6. g2 * (1) + g2 (-1) = 0
     {
+        host.budget_ref().reset_default()?;
         let pt = sample_g2(&host, &mut rng)?;
         let zero = g2_zero(&host)?;
         assert_ne!(

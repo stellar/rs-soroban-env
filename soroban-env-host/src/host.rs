@@ -2952,20 +2952,10 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g1_msm(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<Host>,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
-        let p_len = self.vec_len(vmcaller, vp)?;
-        let s_len = self.vec_len(vmcaller, vs)?;
-        if u32::from(p_len) != u32::from(s_len) || u32::from(p_len) == 0 {
-            return Err(self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                "g1_msm: invalid input vector lengths",
-                &[p_len.to_val(), s_len.to_val()],
-            ));
-        }
         let points = self.checked_g1_vec_from_vecobj(vp)?;
         let scalars = self.fr_vec_from_vecobj(vs)?;
         let res = self.msm_internal(&points, &scalars, &ContractCostType::Bls12381G1Msm, "G1")?;
@@ -2990,18 +2980,6 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let g1 = self.visit_obj(mo, |msg: &ScBytes| {
             self.visit_obj(dst, |dst: &ScBytes| {
-                let dst_len = dst.len();
-                if dst_len == 0 || dst_len > 255 {
-                    return Err(self.err(
-                        ScErrorType::Crypto,
-                        ScErrorCode::InvalidInput,
-                        format!(
-                            "hash_to_g1: invalid input dst length {dst_len}, must be > 0 and < 256"
-                        )
-                        .as_str(),
-                        &[],
-                    ));
-                }
                 self.hash_to_curve(
                     dst.as_slice(),
                     msg.as_slice(),
@@ -3048,20 +3026,10 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g2_msm(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<Host>,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
-        let p_len = self.vec_len(vmcaller, vp)?;
-        let s_len = self.vec_len(vmcaller, vs)?;
-        if u32::from(p_len) != u32::from(s_len) || u32::from(p_len) == 0 {
-            return Err(self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                "g2_msm: invalid input vector lengths",
-                &[p_len.to_val(), s_len.to_val()],
-            ));
-        }
         let points = self.checked_g2_vec_from_vecobj(vp)?;
         let scalars = self.fr_vec_from_vecobj(vs)?;
         let res = self.msm_internal(&points, &scalars, &ContractCostType::Bls12381G2Msm, "G2")?;
@@ -3086,18 +3054,6 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let g2 = self.visit_obj(msg, |msg: &ScBytes| {
             self.visit_obj(dst, |dst: &ScBytes| {
-                let dst_len = dst.len();
-                if dst_len == 0 || dst_len > 255 {
-                    return Err(self.err(
-                        ScErrorType::Crypto,
-                        ScErrorCode::InvalidInput,
-                        format!(
-                            "hash_to_g2: invalid input dst length {dst_len}, must be > 0 and < 256"
-                        )
-                        .as_str(),
-                        &[],
-                    ));
-                }
                 self.hash_to_curve(
                     dst.as_slice(),
                     msg.as_slice(),
