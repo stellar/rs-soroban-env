@@ -2966,9 +2966,9 @@ impl VmCallerEnv for Host {
                 &[p_len.to_val(), s_len.to_val()],
             ));
         }
-        let points = self.g1_vec_from_vecobj(vp)?;
-        let scalars = self.scalar_vec_from_vecobj(vs)?;
-        let res = self.g1_msm_internal(&points, &scalars)?;
+        let points = self.checked_g1_vec_from_vecobj(vp)?;
+        let scalars = self.fr_vec_from_vecobj(vs)?;
+        let res = self.msm_internal(&points, &scalars, &ContractCostType::Bls12381G1Msm, "G1")?;
         self.g1_projective_serialize_uncompressed(res)
     }
 
@@ -3062,9 +3062,9 @@ impl VmCallerEnv for Host {
                 &[p_len.to_val(), s_len.to_val()],
             ));
         }
-        let points = self.g2_vec_from_vecobj(vp)?;
-        let scalars = self.scalar_vec_from_vecobj(vs)?;
-        let res = self.g2_msm_internal(&points, &scalars)?;
+        let points = self.checked_g2_vec_from_vecobj(vp)?;
+        let scalars = self.fr_vec_from_vecobj(vs)?;
+        let res = self.msm_internal(&points, &scalars, &ContractCostType::Bls12381G2Msm, "G2")?;
         self.g2_projective_serialize_uncompressed(res)
     }
 
@@ -3124,8 +3124,8 @@ impl VmCallerEnv for Host {
                 &[],
             ));
         }
-        let vp1 = self.g1_vec_from_vecobj(vp1)?;
-        let vp2 = self.g2_vec_from_vecobj(vp2)?;
+        let vp1 = self.checked_g1_vec_from_vecobj(vp1)?;
+        let vp2 = self.checked_g2_vec_from_vecobj(vp2)?;
         let output = self.pairing_internal(&vp1, &vp2)?;
         self.check_pairing_output(&output)
     }

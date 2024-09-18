@@ -2,8 +2,8 @@ use crate::{
     budget::AsBudget,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    Bool, BytesObject, ConversionError, Env, Error, Host, HostError, TryFromVal, U256Object,
-    U256Small, U256Val, Val, VecObject, U256,
+    Bool, BytesObject, ConversionError, Env, Host, HostError, TryFromVal, U256Object, U256Small,
+    U256Val, Val, VecObject, U256,
 };
 use ark_bls12_381::{
     g1::Config as G1Config, g2::Config as G2Config, Bls12_381, Fq, Fq12, Fq2, Fr, G1Affine,
@@ -18,7 +18,7 @@ use ark_ec::{
     pairing::{Pairing, PairingOutput},
     scalar_mul::variable_base::VariableBaseMSM,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
-    AffineRepr, CurveGroup,
+    AffineRepr, CurveConfig, CurveGroup,
 };
 use ark_ff::{field_hashers::DefaultFieldHasher, BigInteger, Field, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
@@ -51,13 +51,13 @@ impl Host {
     >(
         &self,
         slice: &[u8],
-        msg: &str,
+        tag: &str,
     ) -> Result<T, HostError> {
         if EXPECTED_SIZE == 0 || slice.len() != EXPECTED_SIZE {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                format!("bls12-381 {msg}: invalid input length to deserialize").as_str(),
+                format!("bls12-381 {tag}: invalid input length to deserialize").as_str(),
                 &[
                     Val::from_u32(slice.len() as u32).into(),
                     Val::from_u32(EXPECTED_SIZE as u32).into(),
@@ -75,7 +75,7 @@ impl Host {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                format!("bls12-381: unable to deserialize {msg}").as_str(),
+                format!("bls12-381: unable to deserialize {tag}").as_str(),
                 &[],
             )
         })
@@ -91,13 +91,13 @@ impl Host {
         &self,
         element: &T,
         buf: &mut [u8],
-        msg: &str,
+        tag: &str,
     ) -> Result<(), HostError> {
         if EXPECTED_SIZE == 0 || buf.len() != EXPECTED_SIZE {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                format!("bls12-381 {msg}: invalid buffer length to serialize into").as_str(),
+                format!("bls12-381 {tag}: invalid buffer length to serialize into").as_str(),
                 &[
                     Val::from_u32(buf.len() as u32).into(),
                     Val::from_u32(EXPECTED_SIZE as u32).into(),
@@ -113,7 +113,7 @@ impl Host {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InternalError,
-                format!("bls12-381: unable to serialize {msg}").as_str(),
+                format!("bls12-381: unable to serialize {tag}").as_str(),
                 &[],
             )
         })?;
@@ -123,14 +123,14 @@ impl Host {
     fn validate_point_encoding<const EXPECTED_SIZE: usize>(
         &self,
         bytes: &[u8],
-        msg: &str,
+        tag: &str,
     ) -> Result<(), HostError> {
         // validate input bytes length
         if EXPECTED_SIZE == 0 || bytes.len() != EXPECTED_SIZE {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                format!("bls12-381 {msg}: invalid input length to deserialize").as_str(),
+                format!("bls12-381 {tag}: invalid input length to deserialize").as_str(),
                 &[
                     Val::from_u32(bytes.len() as u32).into(),
                     Val::from_u32(EXPECTED_SIZE as u32).into(),
@@ -148,13 +148,13 @@ impl Host {
                 // infinite bit is set, check all other bits are zero
                 let is_valid = bytes[0] == 0b0100_0000 && bytes[1..].iter().all(|x| x.is_zero());
                 if !is_valid {
-                    Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, format!("bls12-381 {msg} deserialize: infinity flag (bit 1) is set while remaining bits are not all zero").as_str(), &[]))
+                    Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, format!("bls12-381 {tag} deserialize: infinity flag (bit 1) is set while remaining bits are not all zero").as_str(), &[]))
                 } else {
                     Ok(())
                 }
             },
             0b0000_0000 => Ok(()), // infinite bit is unset
-            _ => Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, format!("bls12-381 {msg} deserialize: either compression flag (bit 0) or the sort flag (bit 2) is set, while the input should be encoded uncompressed").as_str(), &[]))
+            _ => Err(self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, format!("bls12-381 {tag} deserialize: either compression flag (bit 0) or the sort flag (bit 2) is set, while the input should be encoded uncompressed").as_str(), &[]))
         }
     }
 
@@ -184,17 +184,39 @@ impl Host {
         ct_curve: ContractCostType,
         subgroup_check: bool,
         ct_subgroup: ContractCostType,
-        msg: &str,
+        tag: &str,
     ) -> Result<Affine<P>, HostError> {
         let pt: Affine<P> = self.visit_obj(bo, |bytes: &ScBytes| {
-            self.validate_point_encoding::<EXPECTED_SIZE>(&bytes, msg)?;
-            self.deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(bytes.as_slice(), msg)
+            self.validate_point_encoding::<EXPECTED_SIZE>(&bytes, tag)?;
+            // `CanonicalDeserialize` of `Affine<P>` calls into
+            // `P::deserialize_with_mode`, where `P` is `arc_bls12_381::{g1,g2}::Config`, the
+            // core logic is in `arc_bls12_381::curves::util::read_{g1,g2}_uncompressed`.
+            //
+            // The `arc_bls12_381` lib already expects the input to be serialized in
+            // big-endian order (aligning with the common standard and contrary
+            // to ark::serialize's convention),
+            //
+            // i.e. `input = be_bytes(X) || be_bytes(Y)` and the
+            // most-significant three bits of X are flags:
+            //
+            // `bits(Affine) = [compression_flag, infinity_flag, sort_flag, ..remaining X_bits.., ..Y_bits..]`
+            //
+            // For `G1Affine`, each coordinate is an `Fp` that is 48 bytes.
+            //
+            // For `G2Affine`, each coordinate is an `Fp2` which contains two `Fp`,
+            // i.e. `(c1: Fp, c0: Fp)` see `field_element_deserialize` for more details.
+            //
+            // Internally when deserializing `Fp`, the flag bits are masked off
+            // to get `X: Fp`. The Y however, does not have the top bits masked off
+            // so it is possible for Y to exceed 381 bits. Internally `Fp` deserialization
+            // makes sure any value >= prime modulus results in an error.
+            self.deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(bytes.as_slice(), tag)
         })?;
         if !self.check_point_is_on_curve(&pt, &ct_curve)? {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                format!("bls12-381 {}: point not on curve", msg).as_str(),
+                format!("bls12-381 {}: point not on curve", tag).as_str(),
                 &[],
             ));
         }
@@ -202,7 +224,7 @@ impl Host {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                format!("bls12-381 {}: point not in the correct subgroup", msg).as_str(),
+                format!("bls12-381 {}: point not in the correct subgroup", tag).as_str(),
                 &[],
             ));
         }
@@ -214,23 +236,6 @@ impl Host {
         bo: BytesObject,
         subgroup_check: bool,
     ) -> Result<G1Affine, HostError> {
-        // `CanonicalDeserialize` of `Affine<P>` calls into
-        // `P::deserialize_with_mode`, where `P` is `arc_bls12_381::g1::Config`, the
-        // core logic is in `arc_bls12_381::curves::util::read_g1_uncompressed`.
-        //
-        // The `arc_bls12_381` lib already expects the input to be serialized in
-        // big-endian order (aligning with the common standard and contrary
-        // to ark::serialize's convention),
-        //
-        // i.e. `input = be_bytes(X) || be_bytes(Y)` and the
-        // most-significant three bits of X are flags:
-        //
-        // `bits(X) = [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]`
-        //
-        // internally when deserializing `Fp`, the flag bits are masked off
-        // to get `X: Fp`. The Y however, does not have the top bits masked off
-        // so it is possible for Y to exceed 381 bits. Internally Fp deserialization
-        // makes sure any value >= prime modulus results in an error.
         self.affine_deserialize::<G1_SERIALIZED_SIZE, G1Config>(
             bo,
             ContractCostType::Bls12381G1CheckPointOnCurve,
@@ -245,23 +250,6 @@ impl Host {
         bo: BytesObject,
         subgroup_check: bool,
     ) -> Result<G2Affine, HostError> {
-        // `CanonicalDeserialize` of `Affine<P>` calls into
-        // `P::deserialize_with_mode`, where `P` is `arc_bls12_381::g2::Config`, the
-        // core logic is in `arc_bls12_381::curves::util::read_g2_uncompressed`.
-        //
-        // The `arc_bls12_381` lib already expects the input to be serialized in
-        // big-endian order (aligning with the common standard and contrary
-        // to ark::serialize's convention),
-        //
-        // i.e. `input = be_bytes(X) || be_bytes(Y)` and the
-        // most-significant three bits of X are flags:
-        //
-        // `bits(X) = [compression_flag, infinity_flag, sort_flag, bit_3, .. bit_383]`
-        //
-        // internally when deserializing `Fp`, the flag bits are masked off
-        // to get `X: Fp`. The Y however, does not have the top bits masked off
-        // so it is possible for Y to exceed 381 bits. Internally Fp deserialization
-        // makes sure any value >= prime modulus results in an error.
         self.affine_deserialize::<G2_SERIALIZED_SIZE, G2Config>(
             bo,
             ContractCostType::Bls12381G2CheckPointOnCurve,
@@ -372,7 +360,7 @@ impl Host {
     pub(crate) fn field_element_deserialize<const EXPECTED_SIZE: usize, T: CanonicalDeserialize>(
         &self,
         bo: BytesObject,
-        msg: &str,
+        tag: &str,
     ) -> Result<T, HostError> {
         self.visit_obj(bo, |bytes: &ScBytes| {
             if bytes.len() != EXPECTED_SIZE {
@@ -381,7 +369,7 @@ impl Host {
                     ScErrorCode::InvalidInput,
                     format!(
                         "bls12-381 field element {}: invalid input length to deserialize",
-                        msg
+                        tag
                     )
                     .as_str(),
                     &[
@@ -394,56 +382,40 @@ impl Host {
             let mut buf = [0u8; EXPECTED_SIZE];
             buf.copy_from_slice(bytes);
             buf.reverse();
-            self.deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(&buf, msg)
+
+            // The field element here an either be a Fp<P, N=6> (base field
+            // element) or QuadExtField<P> (quadratic extension)
+            //
+            // - `CanonicalDeserialize for Fp<P, N>` assumes input bytes in
+            // little-endian order, with the highest (right-most) bits being
+            // empty flags. This is reverse of our rule, which assumes
+            // big-endian order with the highest (left-most) bits for flags.
+            //
+            // - `CanonicalDeserialize for QuadExtField<P>` reads the first
+            // chunk, deserialize it into `Fp` as `c0`. Then repeat for `c1`. The
+            // deserialization for `Fp` follows same rules as above, where the
+            // bytes are expected in little-endian, with the highest bits being
+            // empty flags. There is no check involved. This is entirely
+            // reversed from our input format: `be_bytes(c1) || be_bytes(c0)` from
+            // [standard](https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization)
+            //
+            // In either case, we just need to reverse the input bytes before
+            // passing them in. There is no other check for `Fp` besides the
+            // length check, internally it makes sure `Fp` is valid integer
+            // modulo `q` (the prime modulus)
+            self.deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(&buf, tag)
         })
     }
 
     pub(crate) fn fp_deserialize_from_bytesobj(&self, bo: BytesObject) -> Result<Fq, HostError> {
-        // `CanonicalDeserialize for Fp<P, N>` assumes input bytes in
-        // little-endian order, with the highest bits being empty flags.
-        // thus we must first reverse the bytes before passing them in.
-        // there is no other check for Fp besides the length check.
         self.field_element_deserialize::<FP_SERIALIZED_SIZE, Fq>(bo, "Fp")
     }
 
     pub(crate) fn fp2_deserialize_from_bytesobj(&self, bo: BytesObject) -> Result<Fq2, HostError> {
-        // `CanonicalDeserialize for QuadExtField<P>` reads the first chunk,
-        // deserialize it into `Fp` as c0. Then repeat for c1. The
-        // deserialization for `Fp` follows same rules as above, where the
-        // bytes are expected in little-endian, with the highest bits being
-        // empty flags. There is no check involved.
-        //
-        // This is entirely reversed from the [standard](https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization)
-        // we have adopted. This is the input format we provide:
-        //
-        // `input = be_bytes(c1) || be_bytes(c0)`
-        //
-        // So we just need to reverse our input.
         self.field_element_deserialize::<FP2_SERIALIZED_SIZE, Fq2>(bo, "Fp2")
     }
 
-    pub(crate) fn g1_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G1Affine>, HostError> {
-        let len: u32 = self.vec_len(vp)?.into();
-        let mut points: Vec<G1Affine> = vec![];
-        self.charge_budget(
-            ContractCostType::MemAlloc,
-            Some(len as u64 * G1_SERIALIZED_SIZE as u64),
-        )?;
-        points.reserve(len as usize);
-        let _ = self.visit_obj(vp, |vp: &HostVec| {
-            for p in vp.iter() {
-                let pp = self.g1_affine_deserialize_from_bytesobj(
-                    BytesObject::try_from_val(self, p)?,
-                    true,
-                )?;
-                points.push(pp);
-            }
-            Ok(())
-        });
-        Ok(points)
-    }
-
-    pub(crate) fn scalar_vec_from_vecobj(&self, vs: VecObject) -> Result<Vec<Fr>, HostError> {
+    pub(crate) fn fr_vec_from_vecobj(&self, vs: VecObject) -> Result<Vec<Fr>, HostError> {
         let len: u32 = self.vec_len(vs)?.into();
         let mut scalars: Vec<Fr> = vec![];
         self.charge_budget(
@@ -457,7 +429,7 @@ impl Host {
                 scalars.push(ss);
             }
             Ok(())
-        });
+        })?;
         Ok(scalars)
     }
 
@@ -479,42 +451,60 @@ impl Host {
         Ok(p0.mul(scalar))
     }
 
-    pub(crate) fn g1_msm_internal(
+    pub(crate) fn affine_vec_from_vecobj<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
         &self,
-        points: &[G1Affine],
-        scalars: &[Fr],
-    ) -> Result<G1Projective, HostError> {
-        // this check should've been done outside, here is just extra caution
-        if points.len() != scalars.len() || points.len() == 0 {
-            return Err(
-                Error::from_type_and_code(ScErrorType::Crypto, ScErrorCode::InvalidInput).into(),
-            );
-        }
-        // The actual logic happens inside msm_bigint_wnaf (ark_ec/variable_base/mod.rs)
-        // under branch negation is cheap.
-        // the unchecked version just skips the length equal check
-        self.charge_budget(ContractCostType::Bls12381G1Msm, Some(points.len() as u64))?;
-        Ok(G1Projective::msm_unchecked(points, scalars))
-    }
-
-    pub(crate) fn g2_vec_from_vecobj(&self, vp: VecObject) -> Result<Vec<G2Affine>, HostError> {
+        vp: VecObject,
+        ct_curve: ContractCostType,
+        subgroup_check: bool,
+        ct_subgroup: ContractCostType,
+        tag: &str,
+    ) -> Result<Vec<Affine<P>>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
         self.charge_budget(
             ContractCostType::MemAlloc,
-            Some(len as u64 * G2_SERIALIZED_SIZE as u64),
+            Some(len as u64 * EXPECTED_SIZE as u64),
         )?;
-        let mut points: Vec<G2Affine> = Vec::with_capacity(len as usize);
+        let mut points: Vec<Affine<P>> = Vec::with_capacity(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self.g2_affine_deserialize_from_bytesobj(
+                let pp = self.affine_deserialize::<EXPECTED_SIZE, P>(
                     BytesObject::try_from_val(self, p)?,
-                    true,
+                    ct_curve,
+                    subgroup_check,
+                    ct_subgroup,
+                    tag,
                 )?;
                 points.push(pp);
             }
             Ok(())
-        });
+        })?;
         Ok(points)
+    }
+
+    pub(crate) fn checked_g1_vec_from_vecobj(
+        &self,
+        vp: VecObject,
+    ) -> Result<Vec<G1Affine>, HostError> {
+        self.affine_vec_from_vecobj::<G1_SERIALIZED_SIZE, G1Config>(
+            vp,
+            ContractCostType::Bls12381G1CheckPointOnCurve,
+            true,
+            ContractCostType::Bls12381G1CheckPointInSubgroup,
+            "G1",
+        )
+    }
+
+    pub(crate) fn checked_g2_vec_from_vecobj(
+        &self,
+        vp: VecObject,
+    ) -> Result<Vec<G2Affine>, HostError> {
+        self.affine_vec_from_vecobj::<G2_SERIALIZED_SIZE, G2Config>(
+            vp,
+            ContractCostType::Bls12381G2CheckPointOnCurve,
+            true,
+            ContractCostType::Bls12381G2CheckPointInSubgroup,
+            "G2",
+        )
     }
 
     pub(crate) fn g2_add_internal(
@@ -535,22 +525,31 @@ impl Host {
         Ok(p0.mul(scalar))
     }
 
-    pub(crate) fn g2_msm_internal(
+    pub(crate) fn msm_internal<P: SWCurveConfig>(
         &self,
-        points: &[G2Affine],
-        scalars: &[Fr],
-    ) -> Result<G2Projective, HostError> {
-        // this check should've been done outside, here is just extra caution
+        points: &[Affine<P>],
+        scalars: &[<P as CurveConfig>::ScalarField],
+        ty: &ContractCostType,
+        tag: &str,
+    ) -> Result<Projective<P>, HostError> {
+        self.charge_budget(*ty, Some(points.len() as u64))?;
         if points.len() != scalars.len() || points.len() == 0 {
-            return Err(
-                Error::from_type_and_code(ScErrorType::Crypto, ScErrorCode::InvalidInput).into(),
-            );
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!(
+                    "{tag} msm: invalid input vector lengths ({}, {})",
+                    points.len(),
+                    scalars.len()
+                )
+                .as_str(),
+                &[],
+            ));
         }
         // The actual logic happens inside msm_bigint_wnaf (ark_ec/variable_base/mod.rs)
         // under branch negation is cheap.
         // the unchecked version just skips the length equal check
-        self.charge_budget(ContractCostType::Bls12381G2Msm, Some(points.len() as u64))?;
-        Ok(G2Projective::msm_unchecked(points, scalars))
+        Ok(Projective::<P>::msm_unchecked(points, scalars))
     }
 
     pub(crate) fn map_to_curve<P: WBConfig>(
@@ -616,6 +615,17 @@ impl Host {
         ty: &ContractCostType,
     ) -> Result<Affine<P>, HostError> {
         self.charge_budget(*ty, Some(msg.len() as u64))?;
+        // check dst requirements
+        let dst_len = domain.len();
+        if dst_len == 0 || dst_len > 255 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("hash_to_curve: invalid input dst length {dst_len}, must be > 0 and < 256")
+                    .as_str(),
+                &[],
+            ));
+        }
 
         // The `new` function here constructs a DefaultFieldHasher and a WBMap.
         // - The DefaultFieldHasher::new() function creates an ExpanderXmd with
@@ -678,13 +688,21 @@ impl Host {
         vp1: &Vec<G1Affine>,
         vp2: &Vec<G2Affine>,
     ) -> Result<PairingOutput<Bls12_381>, HostError> {
-        // this check should've been done outside, here is just extra caution
-        if vp1.len() != vp2.len() || vp1.len() == 0 {
-            return Err(
-                Error::from_type_and_code(ScErrorType::Crypto, ScErrorCode::InvalidInput).into(),
-            );
-        }
         self.charge_budget(ContractCostType::Bls12381Pairing, Some(vp1.len() as u64))?;
+        // check length requirements
+        if vp1.len() != vp2.len() || vp1.len() == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!(
+                    "pairing: invalid input vector lengths ({}, {})",
+                    vp1.len(),
+                    vp2.len()
+                )
+                .as_str(),
+                &[],
+            ));
+        }
 
         // This calls into `Bls12<Config>::multi_miller_loop`, which just calls
         // `ark_ec::models::bls12::Bls12Config::multi_miller_loop` with specific

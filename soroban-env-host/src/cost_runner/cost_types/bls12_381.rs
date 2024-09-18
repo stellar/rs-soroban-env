@@ -52,7 +52,12 @@ pub struct Bls12381G1AddSample(pub G1Affine, pub G1Affine);
 #[derive(Clone)]
 pub struct Bls12381G1MulSample(pub G1Affine, pub Fr);
 #[derive(Clone)]
-pub struct Bls12381G1MsmSample(pub Vec<G1Affine>, pub Vec<Fr>);
+pub struct Bls12381G1MsmSample(
+    pub Vec<G1Affine>,
+    pub Vec<Fr>,
+    pub ContractCostType,
+    pub String,
+);
 #[derive(Clone)]
 pub struct Bls12381MapFpToG1Sample(pub Fq, pub ContractCostType);
 #[derive(Clone)]
@@ -64,7 +69,12 @@ pub struct Bls12381G2AddSample(pub G2Affine, pub G2Affine);
 #[derive(Clone)]
 pub struct Bls12381G2MulSample(pub G2Affine, pub Fr);
 #[derive(Clone)]
-pub struct Bls12381G2MsmSample(pub Vec<G2Affine>, pub Vec<Fr>);
+pub struct Bls12381G2MsmSample(
+    pub Vec<G2Affine>,
+    pub Vec<Fr>,
+    pub ContractCostType,
+    pub String,
+);
 #[derive(Clone)]
 pub struct Bls12381MapFp2ToG2Sample(pub Fq2, pub ContractCostType);
 #[derive(Clone)]
@@ -206,21 +216,25 @@ impl_lin_cost_runner_for_bls_deref_sample!(
 impl_lin_cost_runner_for_bls_deref_sample!(
     Bls12381G1MsmRun,
     Bls12381G1Msm,
-    g1_msm_internal,
+    msm_internal,
     Bls12381G1MsmSample,
     G1Projective,
     vp,
-    vs
+    vs,
+    ty,
+    tag
 );
 
 impl_lin_cost_runner_for_bls_deref_sample!(
     Bls12381G2MsmRun,
     Bls12381G2Msm,
-    g2_msm_internal,
+    msm_internal,
     Bls12381G2MsmSample,
     G2Projective,
     vp,
-    vs
+    vs,
+    ty,
+    tag
 );
 
 type InternalPairingOutput = PairingOutput<Bls12_381>;

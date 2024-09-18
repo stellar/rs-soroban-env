@@ -214,6 +214,8 @@ impl HostCostMeasurement for Bls12381G1MsmMeasure {
                 .map(|_| G1Affine::rand(rng))
                 .collect(),
             (0..input).into_iter().map(|_| Fr::rand(rng)).collect(),
+            Bls12381G1Msm,
+            "G1".to_string(),
         )
     }
 }
@@ -297,6 +299,8 @@ impl HostCostMeasurement for Bls12381G2MsmMeasure {
                 .map(|_| G2Affine::rand(rng))
                 .collect(),
             (0..input).into_iter().map(|_| Fr::rand(rng)).collect(),
+            Bls12381G2Msm,
+            "G2".to_string(),
         )
     }
 }
