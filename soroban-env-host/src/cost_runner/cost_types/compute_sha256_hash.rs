@@ -2,7 +2,7 @@ use std::hint::black_box;
 
 use crate::{
     cost_runner::{CostRunner, CostType},
-    host::crypto::sha256_hash_from_bytes_raw,
+    crypto::sha256_hash_from_bytes_raw,
     xdr::ContractCostType::ComputeSha256Hash,
 };
 

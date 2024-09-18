@@ -17,6 +17,7 @@ include = [
 [api.hash]
 include = [
     "core::hash",
+    "derivative::hash",
     "std::collections::HashMap",
     "std::collections::hash",
     "std::sys::unix::rand::hashmap_random_keys",
@@ -400,6 +401,10 @@ allow_apis = [
     "hash",
     "thread",
 ]
+build.allow_apis = [
+    "env",
+    "process",
+]
 
 [pkg.soroban-wasmi]
 allow_unsafe = true
@@ -498,4 +503,35 @@ build.allow_apis = [
 allow_unsafe = true
 
 [pkg.arrayvec]
+allow_unsafe = true
+
+[pkg.ark-serialize-derive]
+allow_proc_macro = true
+
+[pkg.zeroize_derive]
+allow_proc_macro = true
+
+[pkg.ark-ff-macros]
+allow_proc_macro = true
+
+[pkg.derivative]
+allow_proc_macro = true
+allow_apis = [
+    "hash",
+]
+
+[pkg.ark-ff-asm]
+allow_proc_macro = true
+
+[pkg.num-bigint]
+build.allow_apis = [
+    "env",
+    "fs",
+]
+allow_unsafe = true
+
+[pkg.data-encoding]
+allow_unsafe = true
+
+[pkg.ark-ff]
 allow_unsafe = true

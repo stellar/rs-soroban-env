@@ -66,3 +66,20 @@ macro_rules! impl_bignum_host_fns_rhs_u32 {
         }
     };
 }
+
+#[macro_export]
+macro_rules! impl_bls12_381_fr_arith_host_fns {
+    ($host_fn: ident, $method: ident) => {
+        fn $host_fn(
+            &self,
+            _vmcaller: &mut VmCaller<Self::VmUserState>,
+            lhs: U256Val,
+            rhs: U256Val,
+        ) -> Result<U256Val, Self::Error> {
+            let mut lhs = self.fr_from_u256val(lhs)?;
+            let rhs = self.fr_from_u256val(rhs)?;
+            self.$method(&mut lhs, &rhs)?;
+            self.fr_to_u256val(lhs)
+        }
+    };
+}

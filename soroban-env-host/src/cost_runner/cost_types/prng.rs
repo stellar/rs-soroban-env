@@ -4,7 +4,7 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::{
     cost_runner::{CostRunner, CostType},
-    host::crypto::chacha20_fill_bytes,
+    crypto::chacha20_fill_bytes,
     xdr::ContractCostType::ChaCha20DrawBytes,
 };
 

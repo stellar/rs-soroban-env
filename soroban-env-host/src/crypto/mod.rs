@@ -1,4 +1,4 @@
-use super::metered_clone::MeteredContainer;
+use crate::host::metered_clone::MeteredContainer;
 use crate::host::prng::SEED_BYTES;
 use crate::{
     budget::AsBudget,
@@ -17,6 +17,7 @@ use sha3::Keccak256;
 use ecdsa::{signature::hazmat::PrehashVerifier, PrimeCurve, Signature, SignatureSize};
 use elliptic_curve::CurveArithmetic;
 use generic_array::ArrayLength;
+pub(crate) mod bls12_381;
 
 impl Host {
     // Ed25519 functions

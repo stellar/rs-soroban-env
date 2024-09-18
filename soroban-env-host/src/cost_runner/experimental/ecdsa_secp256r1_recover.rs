@@ -38,7 +38,7 @@ impl CostRunner for EcdsaSecp256r1RecoverRun {
         black_box(sample)
     }
 
-    fn get_tracker(_host: &crate::Host) -> CostTracker {
+    fn get_tracker(_host: &crate::Host, _sample: &Self::SampleType) -> CostTracker {
         CostTracker {
             iterations: Self::RUN_ITERATIONS,
             inputs: None,

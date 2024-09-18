@@ -1,3 +1,4 @@
+mod bls12_381;
 mod compute_ed25519_pubkey;
 mod compute_keccak256_hash;
 mod compute_sha256_hash;
@@ -18,6 +19,7 @@ mod visit_object;
 mod vm_ops;
 mod wasm_insn_exec;
 
+pub use bls12_381::*;
 pub use compute_ed25519_pubkey::*;
 pub use compute_keccak256_hash::*;
 pub use compute_sha256_hash::*;

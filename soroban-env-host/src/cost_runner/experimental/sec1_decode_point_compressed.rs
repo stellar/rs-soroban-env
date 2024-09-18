@@ -30,7 +30,7 @@ impl CostRunner for Sec1DecodePointCompressedRun {
         Sec1DecodePointUncompressedRun::run_iter(host, iter, sample)
     }
 
-    fn get_tracker(_host: &crate::Host) -> CostTracker {
+    fn get_tracker(_host: &crate::Host, _sample: &Self::SampleType) -> CostTracker {
         CostTracker {
             iterations: Self::RUN_ITERATIONS,
             inputs: None,

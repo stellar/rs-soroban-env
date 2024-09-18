@@ -70,7 +70,7 @@ pub trait CostRunner: Sized {
     /// if overridden, there is a risk of the computed input being diverged from the
     /// actual input from the host's perspective. So use it carefully. This should be
     /// after the `run`, outside of the CPU-and-memory tracking machineary.
-    fn get_tracker(host: &Host) -> CostTracker {
+    fn get_tracker(host: &Host, _sample: &Self::SampleType) -> CostTracker {
         match Self::COST_TYPE {
             CostType::Contract(ct) => host.as_budget().get_tracker(ct).unwrap(),
             CostType::Experimental(_) => {

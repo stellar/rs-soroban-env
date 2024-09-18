@@ -1,6 +1,6 @@
 use crate::{
     budget::Budget,
-    host::crypto::sha256_hash_from_bytes_raw,
+    crypto::sha256_hash_from_bytes_raw,
     xdr::{ContractCostType, Limited, ReadXdr, ScBytes, ScErrorCode, ScErrorType, WriteXdr},
     BytesObject, Host, HostError, DEFAULT_XDR_RW_LIMITS,
 };

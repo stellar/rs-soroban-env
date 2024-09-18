@@ -680,7 +680,7 @@ mod cap_54_55_56 {
     use soroban_test_wasms::UPLOAD_CONTRACT;
 
     use crate::{
-        host::crypto::sha256_hash_from_bytes,
+        crypto::sha256_hash_from_bytes,
         storage::{FootprintMap, StorageMap},
         test::observe::ObservedHost,
         testutils::wasm::wasm_module_with_a_bit_of_everything,

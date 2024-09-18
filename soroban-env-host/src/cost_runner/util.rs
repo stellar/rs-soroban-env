@@ -48,3 +48,102 @@ impl Host {
         )?))
     }
 }
+
+#[macro_export]
+macro_rules! impl_const_cost_runner_for_bls_consume_sample {
+    ($runner: ident, $cost: ident, $host_fn: ident, $sample: ident, $rt: ty, $($arg: ident),*) => {
+        impl CostRunner for $runner {
+            const COST_TYPE: CostType = CostType::Contract($cost);
+
+            const RUN_ITERATIONS: u64 = 1;
+
+            type SampleType = $sample;
+
+            type RecycledType = (Option<$sample>, Option<$rt>);
+
+            fn run_iter(host: &Host, _iter: u64, sample: $sample) -> Self::RecycledType {
+                let $sample($( $arg ),*) = sample;
+                let res = host.$host_fn($($arg),*).unwrap();
+                black_box((None, Some(res)))
+            }
+
+            fn run_baseline_iter(
+                host: &Host,
+                _iter: u64,
+                sample: $sample,
+            ) -> Self::RecycledType {
+                black_box(
+                    host.charge_budget($cost, None)
+                        .unwrap(),
+                );
+                black_box((Some(sample), None))
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_lin_cost_runner_for_bls_deref_sample {
+    ($runner: ident, $cost: ident, $host_fn: ident, $sample: ident, $rt: ty, $($arg: ident),*) => {
+        impl CostRunner for $runner {
+            const COST_TYPE: CostType = CostType::Contract($cost);
+
+            const RUN_ITERATIONS: u64 = 100;
+
+            type SampleType = $sample;
+
+            type RecycledType = ($sample, Option<$rt>);
+
+            fn run_iter(host: &Host, _iter: u64, mut sample: $sample) -> Self::RecycledType {
+                let $sample($( $arg ),*) = &mut sample;
+                let res = host.$host_fn($($arg),*).unwrap();
+                black_box((sample, Some(res)))
+            }
+
+            fn run_baseline_iter(
+                host: &Host,
+                _iter: u64,
+                sample: $sample,
+            ) -> Self::RecycledType {
+                black_box(
+                    host.charge_budget($cost, Some(1))
+                        .unwrap(),
+                );
+                black_box((sample, None))
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_const_cost_runner_for_bls_deref_sample {
+    ($runner: ident, $cost: ident, $host_fn: ident, $sample: ident, $rt: ty, $($arg: ident),*) => {
+        impl CostRunner for $runner {
+            const COST_TYPE: CostType = CostType::Contract($cost);
+
+            const RUN_ITERATIONS: u64 = 1;
+
+            type SampleType = $sample;
+
+            type RecycledType = (Option<$sample>, Option<$rt>);
+
+            fn run_iter(host: &Host, _iter: u64, mut sample: $sample) -> Self::RecycledType {
+                let $sample($( $arg ),*) = &mut sample;
+                let res = host.$host_fn($($arg),*).unwrap();
+                black_box((Some(sample), Some(res)))
+            }
+
+            fn run_baseline_iter(
+                host: &Host,
+                _iter: u64,
+                sample: $sample,
+            ) -> Self::RecycledType {
+                black_box(
+                    host.charge_budget($cost, None)
+                        .unwrap(),
+                );
+                black_box((Some(sample), None))
+            }
+        }
+    };
+}
