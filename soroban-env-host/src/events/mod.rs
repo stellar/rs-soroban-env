@@ -135,19 +135,23 @@ impl core::fmt::Display for HostEvent {
                     // tries to deduce if the event is the fn_call event.
                     if i == 1 && is_fn_call {
                         if let ScVal::Bytes(bytes) = topic {
-                            let hash: [u8; 32] = bytes.clone().0.try_into().unwrap();
-                            let strkey = stellar_strkey::Contract(hash);
-                            write!(f, "{}", strkey)?
-                        } else {
-                            display_scval(topic, f)?;
+                            let try_convert_to_hash =
+                                TryInto::<[u8; 32]>::try_into(bytes.0.clone());
+                            if let Ok(contract_id) = try_convert_to_hash {
+                                let strkey = stellar_strkey::Contract(contract_id);
+                                write!(f, "{}", strkey)?;
+                                continue;
+                            }
                         }
-                    } else {
-                        display_scval(topic, f)?;
                     }
 
-                    if let ScVal::Symbol(first_topic_str) = topic {
-                        if first_topic_str.0.as_slice() == "fn_call".as_bytes() {
-                            is_fn_call = true;
+                    display_scval(topic, f)?;
+
+                    if i == 0 {
+                        if let ScVal::Symbol(first_topic_str) = topic {
+                            if first_topic_str.0.as_slice() == "fn_call".as_bytes() {
+                                is_fn_call = true;
+                            }
                         }
                     }
                 }
