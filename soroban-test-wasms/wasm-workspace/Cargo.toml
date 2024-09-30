@@ -69,7 +69,7 @@ version = "=21.4.0"
 # git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]
-version = "=22.0.0"
+version = "=22.0.0-rc.1"
 # git = "https://github.com/stellar/rs-soroban-env"
 
 # Always build from the local instance of env as we need to rebuild test Wasms
