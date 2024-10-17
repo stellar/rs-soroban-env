@@ -1623,6 +1623,7 @@ dependencies = [
  "soroban-env-host",
  "soroban-test-wasms",
  "static_assertions",
+ "stellar-xdr",
  "tap",
  "thiserror",
 ]

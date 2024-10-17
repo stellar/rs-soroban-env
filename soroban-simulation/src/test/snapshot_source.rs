@@ -1,41 +1,114 @@
 use crate::network_config::NetworkConfig;
 use crate::simulation::{RestoreOpSimulationResult, SimulationAdjustmentConfig};
-use crate::snapshot_source::{AutoRestoringSnapshotSource, SimulationSnapshotSource};
-use crate::testutils::{ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource};
+use crate::snapshot_source::{
+    AutoRestoringSnapshotSource, LedgerEntryArchivalState, SimulationSnapshotSource,
+};
+use crate::testutils::{
+    ledger_entry_to_ledger_key, temp_entry, temp_entry_key, MockSnapshotSource,
+};
 use pretty_assertions::assert_eq;
 use soroban_env_host::e2e_testutils::{
-    account_entry, get_account_id, ledger_entry, wasm_entry_non_validated,
+    account_entry, get_account_id, get_wasm_key, ledger_entry, wasm_entry_non_validated,
 };
 use soroban_env_host::fees::{FeeConfiguration, RentFeeConfiguration};
 use soroban_env_host::storage::SnapshotSource;
 use soroban_env_host::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
-    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountEntryExtensionV3, ExtensionPoint,
-    LedgerEntryData, LedgerFootprint, Liabilities, SequenceNumber, Signer, SignerKey,
-    SorobanResources, SorobanTransactionData, SponsorshipDescriptor, Thresholds, TimePoint,
-    Uint256,
+    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountEntryExtensionV3, ArchivalProof,
+    ArchivalProofBody, ColdArchiveArchivedLeaf, ColdArchiveBucketEntry, ExistenceProofBody,
+    ExtensionPoint, LedgerEntryData, LedgerFootprint, Liabilities, NonexistenceProofBody,
+    SequenceNumber, Signer, SignerKey, SorobanResources, SorobanTransactionData,
+    SorobanTransactionDataExt, SponsorshipDescriptor, Thresholds, TimePoint, Uint256,
 };
 use soroban_env_host::LedgerInfo;
 use std::rc::Rc;
 
 #[test]
-fn test_automatic_restoration() {
+fn test_automatic_restoration_with_archival_state() {
     let ledger_seq = 300;
     let snapshot = Rc::new(
-        MockSnapshotSource::from_entries(
-            vec![
-                (wasm_entry_non_validated(b"1"), Some(100)), // persistent, expired
-                (wasm_entry_non_validated(b"2"), Some(299)), // persistent, expired
-                (wasm_entry_non_validated(b"3"), Some(300)), // persistent, live
-                (wasm_entry_non_validated(b"4"), Some(400)), // persistent, live
-                (temp_entry(b"5"), Some(299)),               // temp, removed
-                (temp_entry(b"6"), Some(300)),               // temp, live
-                (temp_entry(b"7"), Some(400)),               // temp, live
-            ],
-            ledger_seq,
-        )
+        MockSnapshotSource::from_entries_with_archival_state(vec![
+            // persistent, archived, no proof
+            (
+                None,
+                Some(wasm_entry_non_validated(b"persistent_archived_no_proof")),
+                None,
+                LedgerEntryArchivalState::Archived(false),
+            ),
+            // persistent, archived, need proof
+            (
+                None,
+                Some(wasm_entry_non_validated(b"persistent_archived_need_proof")),
+                None,
+                LedgerEntryArchivalState::Archived(true),
+            ),
+            // persistent, live
+            (
+                None,
+                Some(wasm_entry_non_validated(b"persistent_live_1")),
+                Some(300),
+                LedgerEntryArchivalState::Live,
+            ),
+            // persistent, live
+            (
+                None,
+                Some(wasm_entry_non_validated(b"persistent_live_2")),
+                Some(400),
+                LedgerEntryArchivalState::Live,
+            ),
+            // persistent, archived, no proof, no entry
+            (
+                Some(get_wasm_key(b"persistent_archived_no_proof_no_entry")),
+                None,
+                None,
+                LedgerEntryArchivalState::Archived(false),
+            ),
+            // persistent, archived, need proof, no entry
+            (
+                Some(get_wasm_key(b"persistent_archived_need_proof_no_entry")),
+                None,
+                None,
+                LedgerEntryArchivalState::Archived(true),
+            ),
+            // persistent, new, no proof
+            (
+                Some(get_wasm_key(b"persistent_new_no_proof")),
+                None,
+                None,
+                LedgerEntryArchivalState::New(false),
+            ),
+            // persistent, new, need proof
+            (
+                Some(get_wasm_key(b"persistent_new_need_proof")),
+                None,
+                None,
+                LedgerEntryArchivalState::New(true),
+            ),
+            // temp, new
+            (
+                Some(temp_entry_key(b"temp_new")),
+                None,
+                None,
+                LedgerEntryArchivalState::Live,
+            ),
+            // temp, live
+            (
+                None,
+                Some(temp_entry(b"temp_live_1")),
+                Some(300),
+                LedgerEntryArchivalState::Live,
+            ),
+            // temp, live
+            (
+                None,
+                Some(temp_entry(b"temp_live_2")),
+                Some(400),
+                LedgerEntryArchivalState::New(false),
+            ),
+        ])
         .unwrap(),
     );
+
     let ledger_info = LedgerInfo {
         sequence_number: ledger_seq,
         min_persistent_entry_ttl: 1000,
@@ -71,79 +144,82 @@ fn test_automatic_restoration() {
             .unwrap(),
         None
     );
+    assert_eq!(auto_restoring_snapshot.get_new_keys_proof().unwrap(), None);
 
     let restored_entry_expiration = ledger_seq + 1000 - 1;
 
     assert_eq!(
         auto_restoring_snapshot
-            .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"1111")).unwrap()
-            ))
+            .get(&Rc::new(get_wasm_key(b"1111")))
             .unwrap(),
         None
     );
     assert_eq!(
         auto_restoring_snapshot
-            .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"1")).unwrap()
-            ))
+            .get(&Rc::new(get_wasm_key(b"persistent_archived_no_proof")))
             .unwrap(),
         Some((
-            Rc::new(wasm_entry_non_validated(b"1")),
+            Rc::new(wasm_entry_non_validated(b"persistent_archived_no_proof")),
             Some(restored_entry_expiration)
         ))
     );
     assert_eq!(
         auto_restoring_snapshot
-            .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"2")).unwrap()
-            ))
+            .get(&Rc::new(get_wasm_key(b"persistent_archived_need_proof")))
             .unwrap(),
         Some((
-            Rc::new(wasm_entry_non_validated(b"2")),
+            Rc::new(wasm_entry_non_validated(b"persistent_archived_need_proof")),
             Some(restored_entry_expiration)
         ))
     );
     assert_eq!(
         auto_restoring_snapshot
-            .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"3")).unwrap()
-            ))
+            .get(&Rc::new(get_wasm_key(b"persistent_live_1")))
             .unwrap(),
-        Some((Rc::new(wasm_entry_non_validated(b"3")), Some(300)))
+        Some((
+            Rc::new(wasm_entry_non_validated(b"persistent_live_1")),
+            Some(300)
+        ))
     );
     assert_eq!(
         auto_restoring_snapshot
-            .get(&Rc::new(
-                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"4")).unwrap()
-            ))
+            .get(&Rc::new(get_wasm_key(b"persistent_live_2")))
             .unwrap(),
-        Some((Rc::new(wasm_entry_non_validated(b"4")), Some(400)))
+        Some((
+            Rc::new(wasm_entry_non_validated(b"persistent_live_2")),
+            Some(400)
+        ))
+    );
+    assert_eq!(
+        auto_restoring_snapshot
+            .get(&Rc::new(get_wasm_key(b"persistent_new_no_proof")))
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        auto_restoring_snapshot
+            .get(&Rc::new(get_wasm_key(b"persistent_new_need_proof")))
+            .unwrap(),
+        None
     );
 
     assert_eq!(
         auto_restoring_snapshot
-            .get(&Rc::new(
-                ledger_entry_to_ledger_key(&temp_entry(b"5")).unwrap()
-            ))
+            .get(&Rc::new(temp_entry_key(b"temp_new")))
             .unwrap(),
         None
     );
     assert_eq!(
         auto_restoring_snapshot
-            .get(&Rc::new(
-                ledger_entry_to_ledger_key(&temp_entry(b"6")).unwrap()
-            ))
+            .get(&Rc::new(temp_entry_key(b"temp_live_1")))
             .unwrap(),
-        Some((Rc::new(temp_entry(b"6")), Some(300)))
+        Some((Rc::new(temp_entry(b"temp_live_1")), Some(300)))
     );
     assert_eq!(
         auto_restoring_snapshot
-            .get(&Rc::new(
-                ledger_entry_to_ledger_key(&temp_entry(b"7")).unwrap()
-            ))
+            .get(&Rc::new(temp_entry_key(b"temp_live_2")))
             .unwrap(),
-        Some((Rc::new(temp_entry(b"7")), Some(400)))
+        Some((Rc::new(temp_entry(b"temp_live_2")), Some(400)))
     );
 
     assert_eq!(
@@ -156,27 +232,85 @@ fn test_automatic_restoration() {
             .unwrap(),
         Some(RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V1(
+                    vec![ArchivalProof {
+                        epoch: 12345,
+                        body: ArchivalProofBody::Existence(ExistenceProofBody {
+                            entries_to_prove: vec![ColdArchiveBucketEntry::ArchivedLeaf(
+                                ColdArchiveArchivedLeaf {
+                                    index: 111,
+                                    archived_entry: wasm_entry_non_validated(
+                                        b"persistent_archived_need_proof"
+                                    ),
+                                }
+                            )]
+                            .try_into()
+                            .unwrap(),
+                            proof_levels: Default::default(),
+                        }),
+                    }]
+                    .try_into()
+                    .unwrap()
+                ),
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
                         read_write: vec![
-                            ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"1")).unwrap(),
-                            ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"2")).unwrap(),
+                            get_wasm_key(b"persistent_archived_no_proof"),
+                            get_wasm_key(b"persistent_archived_need_proof"),
                         ]
                         .try_into()
                         .unwrap()
                     },
                     instructions: 0,
-                    read_bytes: 112,
-                    write_bytes: 112,
+                    read_bytes: 164,
+                    write_bytes: 164,
                 },
-                resource_fee: 62192,
+                resource_fee: 87587,
             }
         })
     );
 
-    auto_restoring_snapshot.reset_restored_keys();
+    assert_eq!(
+        auto_restoring_snapshot.get_new_keys_proof().unwrap(),
+        Some(ArchivalProof {
+            epoch: 12345,
+            body: ArchivalProofBody::Nonexistence(NonexistenceProofBody {
+                keys_to_prove: vec![get_wasm_key(b"persistent_new_need_proof")]
+                    .try_into()
+                    .unwrap(),
+                low_bound_entries: Default::default(),
+                high_bound_entries: Default::default(),
+                proof_levels: Default::default(),
+            }),
+        })
+    );
+
+    auto_restoring_snapshot.reset_tracked_keys();
+    assert_eq!(
+        auto_restoring_snapshot
+            .simulate_restore_keys_op(
+                &network_config,
+                &SimulationAdjustmentConfig::no_adjustments(),
+                &ledger_info
+            )
+            .unwrap(),
+        None
+    );
+    assert_eq!(auto_restoring_snapshot.get_new_keys_proof().unwrap(), None);
+
+    assert!(auto_restoring_snapshot
+        .get(&Rc::new(get_wasm_key(
+            b"persistent_archived_no_proof_no_entry"
+        )))
+        .is_err());
+    assert!(auto_restoring_snapshot
+        .get(&Rc::new(get_wasm_key(
+            b"persistent_archived_need_proof_no_entry"
+        )))
+        .is_err());
+    // We don't try to restore the non-existent entires (this shouldn't 
+    // normally be called at all though in such case).
     assert_eq!(
         auto_restoring_snapshot
             .simulate_restore_keys_op(
