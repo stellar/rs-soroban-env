@@ -6,6 +6,8 @@ use crate::{
 };
 use std::io::Write;
 
+use super::ErrorHandler;
+
 struct MeteredWrite<'a, W: Write> {
     budget: &'a Budget,
     w: &'a mut W,

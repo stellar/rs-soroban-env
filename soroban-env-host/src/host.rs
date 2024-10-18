@@ -43,7 +43,7 @@ pub(crate) mod prng;
 pub(crate) mod trace;
 mod validity;
 
-pub use error::HostError;
+pub use error::{ErrorHandler, HostError};
 use frame::CallParams;
 pub use prng::{Seed, SEED_BYTES};
 pub use trace::{TraceEvent, TraceHook, TraceRecord, TraceState};
@@ -91,7 +91,6 @@ pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 23;
 #[derive(Clone, Default)]
 struct HostImpl {
     module_cache: RefCell<Option<ModuleCache>>,
-    shared_linker: RefCell<Option<wasmi::Linker<Host>>>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
@@ -215,12 +214,6 @@ impl_checked_borrow_helpers!(
     Option<ModuleCache>,
     try_borrow_module_cache,
     try_borrow_module_cache_mut
-);
-impl_checked_borrow_helpers!(
-    shared_linker,
-    Option<wasmi::Linker<Host>>,
-    try_borrow_linker,
-    try_borrow_linker_mut
 );
 impl_checked_borrow_helpers!(
     source_account,
@@ -359,7 +352,6 @@ impl Host {
         let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
             module_cache: RefCell::new(None),
-            shared_linker: RefCell::new(None),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
@@ -397,11 +389,42 @@ impl Host {
     pub fn build_module_cache_if_needed(&self) -> Result<(), HostError> {
         if self.try_borrow_module_cache()?.is_none() {
             let cache = ModuleCache::new(self)?;
-            let linker = cache.make_linker(self)?;
             *self.try_borrow_module_cache_mut()? = Some(cache);
-            *self.try_borrow_linker_mut()? = Some(linker);
         }
         Ok(())
+    }
+
+    // Install a module cache from _outside_ the Host. Doing this is potentially
+    // delicate: the cache must contain all contracts that will be run by the
+    // host, and will not be further populated during execution. This is
+    // only allowed if the cache is of "reusable" type, i.e. it was created
+    // using `ModuleCache::new_reusable`.
+    pub fn set_module_cache(&self, cache: ModuleCache) -> Result<(), HostError> {
+        if !cache.is_reusable() {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "module cache not reusable",
+                &[],
+            ));
+        }
+        *self.try_borrow_module_cache_mut()? = Some(cache);
+        Ok(())
+    }
+
+    // Remove and return the module cache, to allow reuse in another host. Should
+    // typically only be called during the "finish" sequence of a host's lifecycle,
+    // i.e. when [Self::can_finish] returns `true` and the host is about to be
+    // destroyed.
+    pub fn take_module_cache(&self) -> Result<ModuleCache, HostError> {
+        self.try_borrow_module_cache_mut()?.take().ok_or_else(|| {
+            self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "missing module cache",
+                &[],
+            )
+        })
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
@@ -416,7 +439,6 @@ impl Host {
     #[cfg(any(test, feature = "recording_mode"))]
     pub fn clear_module_cache(&self) -> Result<(), HostError> {
         *self.try_borrow_module_cache_mut()? = None;
-        *self.try_borrow_linker_mut()? = None;
         Ok(())
     }
 

@@ -15,7 +15,7 @@ use crate::{
         LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
         ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
     },
-    AddressObject, Env, Host, HostError, StorageType, U32Val, Val,
+    AddressObject, Env, ErrorHandler, Host, HostError, StorageType, U32Val, Val,
 };
 
 impl Host {

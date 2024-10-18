@@ -18,7 +18,7 @@ use crate::{
         LedgerEntry, LedgerEntryData, LedgerKey, ScAddress, TrustLineAsset, TrustLineEntry,
         TrustLineEntryExt, TrustLineFlags,
     },
-    Env, Host, HostError, StorageType, TryIntoVal,
+    Env, ErrorHandler, Host, HostError, StorageType, TryIntoVal,
 };
 
 use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRESHOLD};
