@@ -2328,6 +2328,7 @@ impl Host {
             CallParams::default_internal_call(),
         );
         if let Err(e) = &res {
+            use crate::ErrorHandler;
             self.error(
                 e.error,
                 "check auth invocation for a custom account contract failed",

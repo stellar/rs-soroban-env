@@ -11,8 +11,8 @@ use crate::{
         ContractExecutable, ContractIdPreimage, CreateContractArgsV2, Hash, HostFunction,
         HostFunctionType, ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScVal,
     },
-    AddressObject, Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
-    Vm, DEFAULT_HOST_DEPTH_LIMIT,
+    AddressObject, Error, ErrorHandler, Host, HostError, Object, Symbol, SymbolStr, TryFromVal,
+    TryIntoVal, Val, Vm, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
 #[cfg(any(test, feature = "testutils"))]
