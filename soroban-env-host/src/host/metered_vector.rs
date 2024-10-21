@@ -287,7 +287,7 @@ where
     {
         self.charge_binsearch(budget)?;
         let mut err: Option<HostError> = None;
-        let res = self.vec.binary_search_by(|probe| {
+        let res = binary_search_by_pre_rust_182(self.vec.as_slice(), |probe| {
             // We've already hit an error, return Ordering::Equal
             // to terminate search asap.
             if err.is_some() {
@@ -372,4 +372,58 @@ where
         )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
+}
+
+/// This is a copy of implementation of Rust stdlib `binary_search_by` function
+/// pre-Rust-1.82 with a minor modifications.
+///
+/// We cannot rely on the standard library implementation as it might change and
+/// thus change the observed metering as well. Thus we are just using the same
+/// hardcoded implementation.
+///
+/// The code is copied from the following file revision:
+/// https://github.com/rust-lang/rust/blob/8f7af88b33771ab5ec92a2a767a97a068f2ea17b/library/core/src/slice/mod.rs#L2769
+/// Modifications are no-op: switched &self to an explicit `slice` argument,
+/// removed assertions and unsafe blocks.
+pub(crate) fn binary_search_by_pre_rust_182<F, T>(slice: &[T], mut f: F) -> Result<usize, usize>
+where
+    F: FnMut(&T) -> std::cmp::Ordering,
+{
+    // INVARIANTS:
+    // - 0 <= left <= left + size = right <= self.len()
+    // - f returns Less for everything in self[..left]
+    // - f returns Greater for everything in self[right..]
+    let mut size = slice.len();
+    let mut left = 0;
+    let mut right = size;
+    while left < right {
+        let mid = left + size / 2;
+
+        // SAFETY: the while condition means `size` is strictly positive, so
+        // `size/2 < size`. Thus `left + size/2 < left + size`, which
+        // coupled with the `left + size <= self.len()` invariant means
+        // we have `left + size/2 < self.len()`, and this is in-bounds.
+        let cmp = f(slice.get(mid).unwrap());
+
+        // This control flow produces conditional moves, which results in
+        // fewer branches and instructions than if/else or matching on
+        // cmp::Ordering.
+        // This is x86 asm for u8: https://rust.godbolt.org/z/698eYffTx.
+        left = if cmp == std::cmp::Ordering::Less {
+            mid + 1
+        } else {
+            left
+        };
+        right = if cmp == std::cmp::Ordering::Greater {
+            mid
+        } else {
+            right
+        };
+        if cmp == std::cmp::Ordering::Equal {
+            return Ok(mid);
+        }
+
+        size = right - left;
+    }
+    Err(left)
 }
