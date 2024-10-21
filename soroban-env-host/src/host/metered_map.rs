@@ -7,6 +7,8 @@ use crate::{
 
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
+use super::metered_vector::binary_search_by_pre_rust_182;
+
 const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
 pub struct MeteredOrdMap<K, V, Ctx> {
@@ -161,7 +163,7 @@ where
         let _span = tracy_span!("map lookup");
         self.charge_binsearch(ctx)?;
         let mut err: Option<HostError> = None;
-        let res = self.map.binary_search_by(|probe| {
+        let res = binary_search_by_pre_rust_182(self.map.as_slice(), |probe| {
             // We've already hit an error, return Ordering::Equal
             // to terminate search asap.
             if err.is_some() {
