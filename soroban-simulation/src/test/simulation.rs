@@ -3,8 +3,9 @@ use crate::simulation::{
     ExtendTtlOpSimulationResult, LedgerEntryDiff, RestoreOpSimulationResult,
     SimulationAdjustmentConfig, SimulationAdjustmentFactor,
 };
+use crate::snapshot_source::LedgerEntryArchivalState;
 use crate::testutils::{ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource};
-use crate::NetworkConfig;
+use crate::{AutoRestoringSnapshotSource, NetworkConfig};
 use pretty_assertions::assert_eq;
 use soroban_env_host::e2e_testutils::{
     account_entry, auth_contract_invocation, bytes_sc_val, create_contract_auth,
@@ -14,11 +15,12 @@ use soroban_env_host::e2e_testutils::{
 };
 use soroban_env_host::fees::{FeeConfiguration, RentFeeConfiguration};
 use soroban_env_host::xdr::{
-    ContractCostParamEntry, ContractCostParams, ContractCostType, ContractDataDurability,
-    ContractDataEntry, ExtensionPoint, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
-    LedgerKeyContractData, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
-    SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
-    SorobanTransactionData,
+    ArchivalProof, ArchivalProofBody, ContractCostParamEntry, ContractCostParams, ContractCostType,
+    ContractDataDurability, ContractDataEntry, ExtensionPoint, LedgerEntry, LedgerEntryData,
+    LedgerFootprint, LedgerKey, LedgerKeyContractData, NonexistenceProofBody, ScAddress,
+    ScErrorCode, ScErrorType, ScNonceKey, ScVal, SorobanAddressCredentials,
+    SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, SorobanTransactionData,
+    SorobanTransactionDataExt,
 };
 use soroban_env_host::HostError;
 use soroban_test_wasms::{ADD_I32, AUTH_TEST_CONTRACT};
@@ -104,7 +106,8 @@ fn test_simulate_upload_wasm() {
     let network_config = default_network_config();
     let snapshot_source =
         Rc::new(MockSnapshotSource::from_entries(vec![], ledger_info.sequence_number).unwrap());
-
+    let snapshot_source =
+        Rc::new(AutoRestoringSnapshotSource::new(snapshot_source, &ledger_info).unwrap());
     let res = simulate_invoke_host_function_op(
         snapshot_source.clone(),
         &network_config,
@@ -115,6 +118,7 @@ fn test_simulate_upload_wasm() {
         &source_account,
         [1; 32],
         true,
+        || snapshot_source.get_new_keys_proof(),
     )
     .unwrap();
     assert_eq!(
@@ -131,7 +135,7 @@ fn test_simulate_upload_wasm() {
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: Default::default(),
@@ -155,7 +159,7 @@ fn test_simulate_upload_wasm() {
     );
 
     let res_with_adjustments = simulate_invoke_host_function_op(
-        snapshot_source,
+        snapshot_source.clone(),
         &network_config,
         &test_adjustment_config(),
         &ledger_info,
@@ -164,6 +168,7 @@ fn test_simulate_upload_wasm() {
         &source_account,
         [1; 32],
         true,
+        || snapshot_source.get_new_keys_proof(),
     )
     .unwrap();
     assert_eq!(
@@ -185,7 +190,135 @@ fn test_simulate_upload_wasm() {
     assert_eq!(
         res_with_adjustments.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
+            resources: SorobanResources {
+                footprint: LedgerFootprint {
+                    read_only: Default::default(),
+                    read_write: vec![get_wasm_key(ADD_I32)].try_into().unwrap()
+                },
+                instructions: (expected_instructions as f64 * 1.1) as u32,
+                read_bytes: 0,
+                write_bytes: expected_write_bytes + 300,
+            },
+            resource_fee: 135867,
+        })
+    );
+}
+
+#[test]
+fn test_simulate_upload_wasm_with_new_entry_proof() {
+    let source_account = get_account_id([123; 32]);
+    let ledger_info = default_ledger_info();
+    let network_config = default_network_config();
+    let snapshot_source = Rc::new(
+        MockSnapshotSource::from_entries_with_archival_state(vec![(
+            Some(get_wasm_key(ADD_I32)),
+            None,
+            None,
+            LedgerEntryArchivalState::New(true),
+        )])
+        .unwrap(),
+    );
+    let snapshot_source =
+        Rc::new(AutoRestoringSnapshotSource::new(snapshot_source, &ledger_info).unwrap());
+    let res = simulate_invoke_host_function_op(
+        snapshot_source.clone(),
+        &network_config,
+        &SimulationAdjustmentConfig::no_adjustments(),
+        &ledger_info,
+        upload_wasm_host_fn(ADD_I32),
+        None,
+        &source_account,
+        [1; 32],
+        true,
+        || snapshot_source.get_new_keys_proof(),
+    )
+    .unwrap();
+    assert_eq!(
+        res.invoke_result.unwrap(),
+        bytes_sc_val(&get_wasm_hash(ADD_I32))
+    );
+
+    assert_eq!(res.auth, vec![]);
+    assert!(res.contract_events.is_empty());
+    assert!(res.diagnostic_events.is_empty());
+
+    let expected_instructions = 1644789;
+    let expected_write_bytes = 684;
+
+    let proof_ext = SorobanTransactionDataExt::V1(
+        vec![ArchivalProof {
+            epoch: 12345,
+            body: ArchivalProofBody::Nonexistence(NonexistenceProofBody {
+                keys_to_prove: vec![get_wasm_key(ADD_I32)].try_into().unwrap(),
+                low_bound_entries: Default::default(),
+                high_bound_entries: Default::default(),
+                proof_levels: Default::default(),
+            }),
+        }]
+        .try_into()
+        .unwrap(),
+    );
+
+    assert_eq!(
+        res.transaction_data,
+        Some(SorobanTransactionData {
+            ext: proof_ext.clone(),
+            resources: SorobanResources {
+                footprint: LedgerFootprint {
+                    read_only: Default::default(),
+                    read_write: vec![get_wasm_key(ADD_I32)].try_into().unwrap()
+                },
+                instructions: expected_instructions,
+                read_bytes: 0,
+                write_bytes: expected_write_bytes,
+            },
+            resource_fee: 35548,
+        })
+    );
+    assert_eq!(res.simulated_instructions, expected_instructions);
+    assert_eq!(res.simulated_memory, 822393);
+    assert_eq!(
+        res.modified_entries,
+        vec![LedgerEntryDiff {
+            state_before: None,
+            state_after: Some(wasm_entry(ADD_I32))
+        }]
+    );
+
+    let res_with_adjustments = simulate_invoke_host_function_op(
+        snapshot_source.clone(),
+        &network_config,
+        &test_adjustment_config(),
+        &ledger_info,
+        upload_wasm_host_fn(ADD_I32),
+        None,
+        &source_account,
+        [1; 32],
+        true,
+        || snapshot_source.get_new_keys_proof(),
+    )
+    .unwrap();
+    assert_eq!(
+        res_with_adjustments.invoke_result.unwrap(),
+        bytes_sc_val(&get_wasm_hash(ADD_I32))
+    );
+
+    assert_eq!(res_with_adjustments.auth, res.auth);
+    assert_eq!(res_with_adjustments.contract_events, res.contract_events);
+    assert_eq!(
+        res_with_adjustments.diagnostic_events,
+        res.diagnostic_events
+    );
+    assert_eq!(
+        res_with_adjustments.simulated_instructions,
+        res.simulated_instructions
+    );
+    assert_eq!(res_with_adjustments.simulated_memory, res.simulated_memory);
+    assert_eq!(
+        res_with_adjustments.transaction_data,
+        Some(SorobanTransactionData {
+            ext: proof_ext,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: Default::default(),
@@ -208,7 +341,8 @@ fn test_simulation_returns_insufficient_budget_error() {
     network_config.tx_max_instructions = 100_000;
     let snapshot_source =
         Rc::new(MockSnapshotSource::from_entries(vec![], ledger_info.sequence_number).unwrap());
-
+    let snapshot_source =
+        Rc::new(AutoRestoringSnapshotSource::new(snapshot_source, &ledger_info).unwrap());
     let res = simulate_invoke_host_function_op(
         snapshot_source.clone(),
         &network_config,
@@ -219,6 +353,7 @@ fn test_simulation_returns_insufficient_budget_error() {
         &source_account,
         [1; 32],
         true,
+        || snapshot_source.get_new_keys_proof(),
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -242,6 +377,8 @@ fn test_simulation_returns_logic_error() {
     let network_config = default_network_config();
     let snapshot_source =
         Rc::new(MockSnapshotSource::from_entries(vec![], ledger_info.sequence_number).unwrap());
+    let snapshot_source =
+        Rc::new(AutoRestoringSnapshotSource::new(snapshot_source, &ledger_info).unwrap());
     let bad_wasm = [0; 1000];
 
     let res = simulate_invoke_host_function_op(
@@ -254,6 +391,7 @@ fn test_simulation_returns_logic_error() {
         &source_account,
         [1; 32],
         true,
+        || snapshot_source.get_new_keys_proof(),
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -287,6 +425,8 @@ fn test_simulate_create_contract() {
         )
         .unwrap(),
     );
+    let snapshot_source =
+        Rc::new(AutoRestoringSnapshotSource::new(snapshot_source, &ledger_info).unwrap());
 
     let res = simulate_invoke_host_function_op(
         snapshot_source.clone(),
@@ -298,6 +438,7 @@ fn test_simulate_create_contract() {
         &source_account,
         [1; 32],
         true,
+        || snapshot_source.get_new_keys_proof(),
     )
     .unwrap();
     assert_eq!(
@@ -318,7 +459,7 @@ fn test_simulate_create_contract() {
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: vec![contract.wasm_key.clone()].try_into().unwrap(),
@@ -420,9 +561,11 @@ fn test_simulate_invoke_contract_with_auth() {
         )
         .unwrap(),
     );
+    let snapshot_source =
+        Rc::new(AutoRestoringSnapshotSource::new(snapshot_source, &ledger_info).unwrap());
 
     let res = simulate_invoke_host_function_op(
-        snapshot_source,
+        snapshot_source.clone(),
         &network_config,
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
@@ -431,6 +574,7 @@ fn test_simulate_invoke_contract_with_auth() {
         &source_account,
         [1; 32],
         true,
+        || snapshot_source.get_new_keys_proof(),
     )
     .unwrap();
     assert_eq!(res.invoke_result.unwrap(), ScVal::Void);
@@ -464,7 +608,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: vec![
@@ -552,7 +696,7 @@ fn test_simulate_extend_ttl_op() {
         no_op_extension,
         ExtendTtlOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -581,7 +725,7 @@ fn test_simulate_extend_ttl_op() {
         extension_for_some_entries,
         ExtendTtlOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: vec![
@@ -618,7 +762,7 @@ fn test_simulate_extend_ttl_op() {
         extension_for_all_entries,
         ExtendTtlOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: keys.clone().tap_mut(|v| v.sort()).try_into().unwrap(),
@@ -663,7 +807,7 @@ fn test_simulate_extend_ttl_op() {
         extension_for_all_entries_with_adjustment,
         ExtendTtlOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: extension_for_all_entries
                         .transaction_data
@@ -700,14 +844,13 @@ fn test_simulate_restore_op() {
         ),
     ];
     let keys: Vec<LedgerKey> = entries
+        .clone()
         .iter()
         .map(|e| ledger_entry_to_ledger_key(&e.0).unwrap())
         .collect();
-    let snapshot_source =
-        MockSnapshotSource::from_entries(entries, ledger_info.sequence_number).unwrap();
 
     let no_op_restoration = simulate_restore_op(
-        &snapshot_source,
+        &MockSnapshotSource::from_entries(entries.clone(), ledger_info.sequence_number).unwrap(),
         &network_config,
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
@@ -719,7 +862,7 @@ fn test_simulate_restore_op() {
         no_op_restoration,
         RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -737,7 +880,7 @@ fn test_simulate_restore_op() {
     let init_seq_num = ledger_info.sequence_number;
     ledger_info.sequence_number = init_seq_num + 100_001;
     let restoration_for_some_entries = simulate_restore_op(
-        &snapshot_source,
+        &MockSnapshotSource::from_entries(entries.clone(), ledger_info.sequence_number).unwrap(),
         &network_config,
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
@@ -749,7 +892,7 @@ fn test_simulate_restore_op() {
         restoration_for_some_entries,
         RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -769,7 +912,7 @@ fn test_simulate_restore_op() {
 
     ledger_info.sequence_number = init_seq_num + 1_000_001;
     let extension_for_all_entries = simulate_restore_op(
-        &snapshot_source,
+        &MockSnapshotSource::from_entries(entries.clone(), ledger_info.sequence_number).unwrap(),
         &network_config,
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
@@ -781,7 +924,7 @@ fn test_simulate_restore_op() {
         extension_for_all_entries,
         RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -797,7 +940,7 @@ fn test_simulate_restore_op() {
     );
 
     let extension_for_all_entries_with_adjustment = simulate_restore_op(
-        &snapshot_source,
+        &MockSnapshotSource::from_entries(entries.clone(), ledger_info.sequence_number).unwrap(),
         &network_config,
         &test_adjustment_config(),
         &ledger_info,
@@ -809,7 +952,7 @@ fn test_simulate_restore_op() {
         extension_for_all_entries_with_adjustment,
         RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -847,12 +990,17 @@ fn test_simulate_restore_op_returns_error_for_temp_entries() {
 }
 
 #[test]
-fn test_simulate_restore_op_returns_error_for_non_existent_entry() {
+fn test_simulate_restore_op_returns_error_for_non_existent_archived_entry() {
     let ledger_info = default_ledger_info();
     let network_config = default_network_config();
 
-    let snapshot_source =
-        MockSnapshotSource::from_entries(vec![], ledger_info.sequence_number).unwrap();
+    let snapshot_source = MockSnapshotSource::from_entries_with_archival_state(vec![(
+        Some(get_wasm_key(b"123")),
+        None,
+        None,
+        LedgerEntryArchivalState::Archived(false),
+    )])
+    .unwrap();
 
     let res = simulate_restore_op(
         &snapshot_source,

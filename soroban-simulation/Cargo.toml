@@ -19,12 +19,15 @@ testutils = ["soroban-env-host/testutils"]
 [dependencies]
 anyhow = { version = "1.0.75", features = [] }
 thiserror = "1.0.40"
-soroban-env-host = { workspace = true,  features = ["recording_mode", "unstable-next-api"]}
+soroban-env-host = { workspace = true,  features = ["recording_mode", "unstable-next-api", "next"]}
+stellar-xdr = { workspace = true,  features = ["next"]}
 static_assertions = "1.1.0"
 rand = "0.8.5"
 
+
 [dev-dependencies]
-soroban-env-host = { workspace = true,  features = ["recording_mode", "testutils", "unstable-next-api"]}
+soroban-env-host = { workspace = true,  features = ["recording_mode", "testutils", "unstable-next-api", "next"]}
+stellar-xdr = { workspace = true,  features = ["next"]}
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 pretty_assertions = "1.4"
 tap = "1.0.1"

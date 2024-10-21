@@ -1,8 +1,10 @@
 use super::snapshot_source::SnapshotSourceWithArchive;
 use crate::network_config::NetworkConfig;
 use crate::simulation::{SimulationAdjustmentConfig, SimulationAdjustmentFactor};
-use anyhow::{anyhow, ensure, Context, Result};
+use crate::snapshot_source::LedgerEntryArchivalState;
+use anyhow::{anyhow, bail, ensure, Context, Result};
 
+use soroban_env_host::xdr::ArchivalProof;
 use soroban_env_host::{
     e2e_invoke::{extract_rent_changes, LedgerEntryChange},
     fees::{
@@ -12,12 +14,12 @@ use soroban_env_host::{
     ledger_info::get_key_durability,
     storage::SnapshotSource,
     xdr::{
-        BytesM, ContractDataDurability, DecoratedSignature, Duration, ExtensionPoint, Hash,
-        LedgerBounds, LedgerFootprint, LedgerKey, Limits, Memo, MuxedAccount, MuxedAccountMed25519,
-        Operation, OperationBody, Preconditions, PreconditionsV2, ReadXdr, SequenceNumber,
-        Signature, SignatureHint, SignerKey, SignerKeyEd25519SignedPayload, SorobanResources,
-        SorobanTransactionData, TimeBounds, TimePoint, Transaction, TransactionExt,
-        TransactionV1Envelope, Uint256, WriteXdr,
+        BytesM, ContractDataDurability, DecoratedSignature, Duration, Hash, LedgerBounds,
+        LedgerFootprint, LedgerKey, Limits, Memo, MuxedAccount, MuxedAccountMed25519, Operation,
+        OperationBody, Preconditions, PreconditionsV2, ReadXdr, SequenceNumber, Signature,
+        SignatureHint, SignerKey, SignerKeyEd25519SignedPayload, SorobanResources,
+        SorobanTransactionData, SorobanTransactionDataExt, TimeBounds, TimePoint, Transaction,
+        TransactionExt, TransactionV1Envelope, Uint256, WriteXdr,
     },
     LedgerInfo, DEFAULT_XDR_RW_LIMITS,
 };
@@ -193,7 +195,11 @@ pub(crate) fn simulate_restore_op_resources(
     keys_to_restore: &[LedgerKey],
     snapshot_source: &impl SnapshotSourceWithArchive,
     ledger_info: &LedgerInfo,
-) -> Result<(SorobanResources, Vec<LedgerEntryRentChange>)> {
+) -> Result<(
+    SorobanResources,
+    Vec<LedgerEntryRentChange>,
+    Option<ArchivalProof>,
+)> {
     let restored_live_until_ledger = ledger_info
         .min_live_until_ledger_checked(ContractDataDurability::Persistent)
         .ok_or_else(|| {
@@ -202,6 +208,8 @@ pub(crate) fn simulate_restore_op_resources(
     let mut restored_bytes = 0_u32;
     let mut rent_changes: Vec<LedgerEntryRentChange> = Vec::with_capacity(keys_to_restore.len());
     let mut restored_keys = Vec::<LedgerKey>::with_capacity(keys_to_restore.len());
+    let mut restored_keys_needing_proof =
+        Vec::<Rc<LedgerKey>>::with_capacity(keys_to_restore.len());
 
     for key in keys_to_restore {
         let durability = get_key_durability(key);
@@ -209,29 +217,33 @@ pub(crate) fn simulate_restore_op_resources(
             durability == Some(ContractDataDurability::Persistent),
             "Can't restore a ledger entry with key: {key:?}. Only persistent ledger entries with TTL can be restored."
         );
-        let entry_with_live_until = snapshot_source
-            .get_including_archived(&Rc::new(key.clone()))?
-            .ok_or_else(|| anyhow!("Missing entry to restore for key {key:?}"))?;
-        let (entry, live_until) = entry_with_live_until;
-
-        let current_live_until_ledger = live_until.ok_or_else(|| {
-            anyhow!("Internal error: missing TTL for ledger key that must have TTL: `{key:?}`")
-        })?;
-
-        if current_live_until_ledger >= ledger_info.sequence_number {
-            continue;
+        let rc_key = Rc::new(key.clone());
+        let entry_state = snapshot_source.get_including_archived(&rc_key)?;
+        match &entry_state.state {
+            LedgerEntryArchivalState::Archived(need_proof) => {
+                if *need_proof {
+                    restored_keys_needing_proof.push(rc_key.clone());
+                }
+                restored_keys.push(key.clone());
+            }
+            _ => {
+                continue;
+            }
         }
-        restored_keys.push(key.clone());
 
-        let entry_size: u32 = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
-        restored_bytes = restored_bytes.saturating_add(entry_size);
-        rent_changes.push(LedgerEntryRentChange {
-            is_persistent: true,
-            old_size_bytes: 0,
-            new_size_bytes: entry_size,
-            old_live_until_ledger: 0,
-            new_live_until_ledger: restored_live_until_ledger,
-        });
+        if let Some(entry) = &entry_state.entry {
+            let entry_size: u32 = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
+            restored_bytes = restored_bytes.saturating_add(entry_size);
+            rent_changes.push(LedgerEntryRentChange {
+                is_persistent: true,
+                old_size_bytes: 0,
+                new_size_bytes: entry_size,
+                old_live_until_ledger: 0,
+                new_live_until_ledger: restored_live_until_ledger,
+            });
+        } else {
+            bail!("missing entry to be restored for key '{key:?}', is the archive incomplete?");
+        }
     }
     restored_keys.sort();
     let resources = SorobanResources {
@@ -243,7 +255,12 @@ pub(crate) fn simulate_restore_op_resources(
         read_bytes: restored_bytes,
         write_bytes: restored_bytes,
     };
-    Ok((resources, rent_changes))
+    let archival_proof = if !restored_keys_needing_proof.is_empty() {
+        Some(snapshot_source.generate_restoration_proof(restored_keys_needing_proof.as_slice())?)
+    } else {
+        None
+    };
+    Ok((resources, rent_changes, archival_proof))
 }
 
 fn estimate_max_transaction_size_for_operation(
@@ -299,7 +316,7 @@ fn estimate_max_transaction_size_for_operation(
                     write_bytes: 0,
                 },
                 resource_fee: 0,
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
             }),
         },
         signatures: signatures.try_into()?,

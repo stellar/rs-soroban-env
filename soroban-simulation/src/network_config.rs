@@ -35,8 +35,9 @@ fn load_configuration_setting(
     let key = Rc::new(LedgerKey::ConfigSetting(LedgerKeyConfigSetting {
         config_setting_id: setting_id,
     }));
-    let (entry, _) = snapshot
+    let entry = snapshot
         .get_including_archived(&key)?
+        .entry
         .ok_or_else(|| anyhow!("setting {setting_id:?} is not present in the snapshot"))?;
     if let LedgerEntry {
         data: LedgerEntryData::ConfigSetting(cs),
