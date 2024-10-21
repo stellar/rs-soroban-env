@@ -383,8 +383,8 @@ where
 ///
 /// The code is copied from the following file revision:
 /// https://github.com/rust-lang/rust/blob/8f7af88b33771ab5ec92a2a767a97a068f2ea17b/library/core/src/slice/mod.rs#L2769
-/// Modifications are no-op: switched &self to an explicit `slice` argument and
-/// removed assertions.
+/// Modifications are no-op: switched &self to an explicit `slice` argument,
+/// removed assertions and unsafe blocks.
 pub(crate) fn binary_search_by_pre_rust_182<F, T>(slice: &[T], mut f: F) -> Result<usize, usize>
 where
     F: FnMut(&T) -> std::cmp::Ordering,
@@ -403,7 +403,7 @@ where
         // `size/2 < size`. Thus `left + size/2 < left + size`, which
         // coupled with the `left + size <= self.len()` invariant means
         // we have `left + size/2 < self.len()`, and this is in-bounds.
-        let cmp = f(unsafe { slice.get_unchecked(mid) });
+        let cmp = f(slice.get(mid).unwrap());
 
         // This control flow produces conditional moves, which results in
         // fewer branches and instructions than if/else or matching on
