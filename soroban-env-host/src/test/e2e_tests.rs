@@ -19,9 +19,10 @@ use crate::{
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, DiagnosticEvent,
         ExtensionPoint, HashIdPreimage, HashIdPreimageSorobanAuthorization, HostFunction,
         InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
-        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScErrorCode,
-        ScErrorType, ScMap, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials,
-        SorobanResources, TtlEntry, Uint256, WriteXdr,
+        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
+        SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
+        WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -1197,6 +1198,147 @@ fn test_create_contract_success_in_recording_mode() {
             instructions: 831711,
             read_bytes: 684,
             write_bytes: 104,
+        }
+    );
+}
+
+#[test]
+fn test_create_contract_success_in_recording_mode_with_custom_account() {
+    // We don't try to invoke `__check_auth` in recording mode in order to not output confusing
+    // side-effects. Thus any Wasm can stand for a custom account.
+    let custom_account_wasm = CONTRACT_STORAGE;
+    let custom_account_address = ScAddress::Contract([222; 32].into());
+    let expected_nonce = 801925984706572462_i64;
+
+    let cd = CreateContractData::new_with_refined_contract_cost_inputs_and_deployer(
+        Some((custom_account_address.clone(), expected_nonce)),
+        [111; 32],
+        ADD_I32,
+        true,
+    );
+
+    let custom_account_instance_entry =
+        ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
+            ext: ExtensionPoint::V0,
+            contract: custom_account_address.clone(),
+            key: ScVal::LedgerKeyContractInstance,
+            durability: ContractDataDurability::Persistent,
+            val: ScVal::ContractInstance(ScContractInstance {
+                executable: ContractExecutable::Wasm(
+                    get_wasm_hash(custom_account_wasm).try_into().unwrap(),
+                ),
+                storage: None,
+            }),
+        }));
+    let ledger_info = default_ledger_info();
+    let res = invoke_host_function_recording_helper(
+        true,
+        &cd.host_fn,
+        &cd.deployer,
+        None,
+        &ledger_info,
+        vec![
+            (
+                cd.wasm_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                wasm_entry(custom_account_wasm),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            (
+                custom_account_instance_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+        ],
+        &prng_seed(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        res.invoke_result.unwrap(),
+        ScVal::Address(cd.contract_address.clone())
+    );
+    assert!(res.contract_events.is_empty());
+
+    let nonce_key = ScVal::LedgerKeyNonce(ScNonceKey {
+        nonce: expected_nonce,
+    });
+    let nonce_entry_key = LedgerKey::ContractData(LedgerKeyContractData {
+        contract: custom_account_address.clone(),
+        key: nonce_key.clone(),
+        durability: ContractDataDurability::Temporary,
+    });
+    assert_eq!(
+        res.ledger_changes,
+        vec![
+            LedgerEntryChangeHelper {
+                read_only: false,
+                key: cd.contract_key.clone(),
+                old_entry_size_bytes: 0,
+                new_value: Some(cd.contract_entry),
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&cd.contract_key),
+                    durability: ContractDataDurability::Persistent,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: ledger_info.sequence_number
+                        + ledger_info.min_persistent_entry_ttl
+                        - 1,
+                }),
+            },
+            LedgerEntryChangeHelper::no_op_change(
+                &custom_account_instance_entry,
+                ledger_info.sequence_number + 1000,
+            ),
+            LedgerEntryChangeHelper {
+                read_only: false,
+                key: nonce_entry_key.clone(),
+                old_entry_size_bytes: 0,
+                new_value: Some(ledger_entry(LedgerEntryData::ContractData(
+                    ContractDataEntry {
+                        ext: ExtensionPoint::V0,
+                        contract: custom_account_address.clone(),
+                        key: nonce_key.clone(),
+                        durability: ContractDataDurability::Temporary,
+                        val: ScVal::Void,
+                    }
+                ))),
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&nonce_entry_key),
+                    durability: ContractDataDurability::Temporary,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: ledger_info.sequence_number + ledger_info.max_entry_ttl
+                        - 1,
+                }),
+            },
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100
+            ),
+            LedgerEntryChangeHelper::no_op_change(
+                &wasm_entry(custom_account_wasm),
+                ledger_info.sequence_number + 1000
+            ),
+        ]
+    );
+    assert_eq!(res.auth, vec![cd.auth_entry]);
+    assert_eq!(
+        res.resources,
+        SorobanResources {
+            footprint: LedgerFootprint {
+                read_only: vec![
+                    ledger_entry_to_ledger_key(&custom_account_instance_entry, &Budget::default())
+                        .unwrap(),
+                    cd.wasm_key,
+                    get_wasm_key(custom_account_wasm),
+                ]
+                .try_into()
+                .unwrap(),
+                read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
+            },
+            instructions: 1767122,
+            read_bytes: 3816,
+            write_bytes: 176,
         }
     );
 }
