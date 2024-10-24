@@ -86,6 +86,14 @@ impl<E: Env> TryFromVal<E, i64> for Val {
     }
 }
 
+impl<E: Env> TryFromVal<E, &i64> for Val {
+    type Error = crate::Error;
+
+    fn try_from_val(env: &E, v: &&i64) -> Result<Self, Self::Error> {
+        Self::try_from_val(env, *v)
+    }
+}
+
 // u64 conversions
 
 impl<E: Env> TryFromVal<E, Val> for u64 {
@@ -107,6 +115,14 @@ impl<E: Env> TryFromVal<E, u64> for Val {
 
     fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
         Ok(U64Val::try_from_val(env, v)?.to_val())
+    }
+}
+
+impl<E: Env> TryFromVal<E, &u64> for Val {
+    type Error = crate::Error;
+
+    fn try_from_val(env: &E, v: &&u64) -> Result<Self, Self::Error> {
+        Self::try_from_val(env, *v)
     }
 }
 
@@ -219,6 +235,14 @@ impl<E: Env> TryFromVal<E, i128> for Val {
     }
 }
 
+impl<E: Env> TryFromVal<E, &i128> for Val {
+    type Error = crate::Error;
+
+    fn try_from_val(env: &E, v: &&i128) -> Result<Self, Self::Error> {
+        Self::try_from_val(env, *v)
+    }
+}
+
 impl<E: Env> TryFromVal<E, i128> for I128Val {
     type Error = crate::Error;
 
@@ -258,6 +282,14 @@ impl<E: Env> TryFromVal<E, u128> for Val {
 
     fn try_from_val(env: &E, v: &u128) -> Result<Self, Self::Error> {
         Ok(U128Val::try_from_val(env, v)?.to_val())
+    }
+}
+
+impl<E: Env> TryFromVal<E, &u128> for Val {
+    type Error = crate::Error;
+
+    fn try_from_val(env: &E, v: &&u128) -> Result<Self, Self::Error> {
+        Self::try_from_val(env, *v)
     }
 }
 
@@ -304,6 +336,14 @@ impl<E: Env> TryFromVal<E, I256> for Val {
     }
 }
 
+impl<E: Env> TryFromVal<E, &I256> for Val {
+    type Error = crate::Error;
+
+    fn try_from_val(env: &E, v: &&I256) -> Result<Self, Self::Error> {
+        Self::try_from_val(env, *v)
+    }
+}
+
 impl<E: Env> TryFromVal<E, I256> for I256Val {
     type Error = crate::Error;
 
@@ -345,6 +385,14 @@ impl<E: Env> TryFromVal<E, U256> for Val {
 
     fn try_from_val(env: &E, v: &U256) -> Result<Self, Self::Error> {
         Ok(U256Val::try_from_val(env, v)?.to_val())
+    }
+}
+
+impl<E: Env> TryFromVal<E, &U256> for Val {
+    type Error = crate::Error;
+
+    fn try_from_val(env: &E, v: &&U256) -> Result<Self, Self::Error> {
+        Self::try_from_val(env, *v)
     }
 }
 
@@ -548,5 +596,17 @@ where
             | ScVal::LedgerKeyContractInstance
             | ScVal::ContractInstance(_) => return Err(ConversionError.into()),
         })
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryFromVal<E, &ScVal> for Val
+where
+    Object: for<'a> TryFromVal<E, ScValObjRef<'a>>,
+    for<'a> <Object as TryFromVal<E, ScValObjRef<'a>>>::Error: Into<crate::Error>,
+{
+    type Error = crate::Error;
+    fn try_from_val(env: &E, val: &&ScVal) -> Result<Val, Self::Error> {
+        Self::try_from_val(env, *val)
     }
 }
