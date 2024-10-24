@@ -74,6 +74,12 @@ macro_rules! impl_tryfroms_and_tryfromvals_delegating_to_valconvert {
                 Ok((*val).into())
             }
         }
+        impl<E: $crate::Env> $crate::TryFromVal<E, &$T> for $crate::Val {
+            type Error = $crate::ConversionError;
+            fn try_from_val(_env: &E, val: &&$T) -> Result<Self, Self::Error> {
+                Ok((**val).into())
+            }
+        }
     };
 }
 

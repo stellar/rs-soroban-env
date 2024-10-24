@@ -275,6 +275,13 @@ impl<E: Env> TryFromVal<E, Val> for Val {
     }
 }
 
+impl<E: Env> TryFromVal<E, &Val> for Val {
+    type Error = ConversionError;
+    fn try_from_val(_env: &E, val: &&Val) -> Result<Self, Self::Error> {
+        Ok(**val)
+    }
+}
+
 // Declare a few extra small-value wrapper types that don't live anywhere else.
 declare_tag_based_wrapper!(Void);
 

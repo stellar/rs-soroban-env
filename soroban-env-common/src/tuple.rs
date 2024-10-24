@@ -33,6 +33,16 @@ macro_rules! impl_for_tuple {
             }
         }
 
+        impl<E: Env, $($typ),*> TryFromVal<E, &($($typ,)*)> for Val
+        where
+            $($typ: TryIntoVal<E, Val>),*
+        {
+            type Error = crate::Error;
+            fn try_from_val(env: &E, v: &&($($typ,)*)) -> Result<Self, Self::Error> {
+                Self::try_from_val(env, *v)
+            }
+        }
+
 
         // Conversions to and from Array of Val.
 

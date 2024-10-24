@@ -28,3 +28,14 @@ where
         }
     }
 }
+
+impl<E: Env, T> TryFromVal<E, &Option<T>> for Val
+where
+    T: TryIntoVal<E, Val>,
+{
+    type Error = T::Error;
+
+    fn try_from_val(env: &E, v: &&Option<T>) -> Result<Self, Self::Error> {
+        Self::try_from_val(env, *v)
+    }
+}
