@@ -28,6 +28,8 @@ mod data_helper;
 mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
+#[cfg(any(test, feature = "testutils"))]
+mod invocation_metering;
 pub(crate) mod ledger_info_helper;
 pub(crate) mod lifecycle;
 mod mem_helper;
@@ -60,6 +62,9 @@ pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "recording_mode"))]
 use rand_chacha::ChaCha20Rng;
+
+#[cfg(any(test, feature = "testutils"))]
+use invocation_metering::InvocationMeter;
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Copy)]
@@ -166,6 +171,9 @@ struct HostImpl {
     #[doc(hidden)]
     #[cfg(any(test, feature = "recording_mode"))]
     need_to_build_module_cache: RefCell<bool>,
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) invocation_meter: RefCell<InvocationMeter>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -382,6 +390,8 @@ impl Host {
             suppress_diagnostic_events: RefCell::new(false),
             #[cfg(any(test, feature = "recording_mode"))]
             need_to_build_module_cache: RefCell::new(false),
+            #[cfg(any(test, feature = "testutils"))]
+            invocation_meter: Default::default(),
         }))
     }
 
@@ -2330,6 +2340,9 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         wasm: BytesObject,
     ) -> Result<BytesObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+
         let wasm_vec =
             self.visit_obj(wasm, |bytes: &ScBytes| bytes.as_vec().metered_clone(self))?;
         self.upload_contract_wasm(wasm_vec)
@@ -2369,6 +2382,9 @@ impl VmCallerEnv for Host {
         func: Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+
         let argvec = self.call_args_from_obj(args)?;
         // this is the recommended path of calling a contract, with `reentry`
         // always set `ContractReentryMode::Prohibited`
@@ -2396,6 +2412,9 @@ impl VmCallerEnv for Host {
         func: Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+
         let argvec = self.call_args_from_obj(args)?;
         // this is the "loosened" path of calling a contract.
         // TODO: A `reentry` flag will be passed from `try_call` into here.
@@ -3476,6 +3495,31 @@ impl Host {
                 &[key],
             )
         })
+    }
+
+    /// Returns the resources metered during the last logical contract invocation.
+    ///
+    /// Logical invocations include the direct `invoke_host_function` calls,
+    /// `call`/`try_call` functions, contract lifecycle management operations.
+    ///
+    /// Take the return value with a grain of salt. The returned resources mostly
+    /// correspond only to the operations that have happened during the host
+    /// invocation, i.e. this won't try to simulate the work that happens in
+    /// production scenarios (e.g. certain XDR rountrips). This also doesn't try
+    /// to model resources related to the transaction size.
+    ///
+    /// The returned value is as useful as the preceding setup, e.g. if a test
+    /// contract is used instead of a Wasm contract, all the costs related to
+    /// VM instantiation and execution, as well as Wasm reads/rent bumps will be
+    /// missed.
+    pub fn get_last_invocation_resources(
+        &self,
+    ) -> Option<invocation_metering::InvocationResources> {
+        if let Ok(scope) = self.0.invocation_meter.try_borrow() {
+            scope.get_invocation_resources()
+        } else {
+            None
+        }
     }
 }
 

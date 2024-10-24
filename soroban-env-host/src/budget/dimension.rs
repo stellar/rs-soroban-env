@@ -131,8 +131,12 @@ impl BudgetDimension {
 
     pub(crate) fn reset(&mut self, limit: u64) {
         self.limit = limit;
-        self.total_count = 0;
         self.shadow_limit = limit;
+        self.reset_count();
+    }
+
+    pub(crate) fn reset_count(&mut self) {
+        self.total_count = 0;
         self.shadow_total_count = 0;
     }
 

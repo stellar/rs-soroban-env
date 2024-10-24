@@ -289,6 +289,9 @@ impl Host {
         salt: [u8; 32],
     ) -> Result<AddressObject, HostError> {
         let _span = tracy_span!("register_test_contract_wasm_from_source_account");
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+
         // Use source account-based auth in order to avoid using nonces which
         // won't work well with enforcing ledger footprint.
         let prev_source_account = self.source_account_id()?;
