@@ -643,6 +643,7 @@ impl Host {
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
         self.with_frame(
             Frame::TestContract(self.create_test_contract_frame(id, func, vec![])?),
             f,
