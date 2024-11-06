@@ -2401,8 +2401,13 @@ mod cap_58_constructor {
 mod cap_xx_opt_in_reentry {
     use crate::{Host, HostError, MeteredOrdMap};
     use soroban_env_common::{AddressObject, Env, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
-    use soroban_test_wasms::{SIMPLE_NO_REENTRY_CONTRACT_B, SIMPLE_REENTRY_CONTRACT_A, SIMPLE_REENTRY_CONTRACT_B};
-    use stellar_xdr::curr::{ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash, ScSymbol, ScVal};
+    use soroban_test_wasms::{
+        SIMPLE_NO_REENTRY_CONTRACT_B, SIMPLE_REENTRY_CONTRACT_A, SIMPLE_REENTRY_CONTRACT_B,
+    };
+    use stellar_xdr::curr::{
+        ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
+        ScSymbol, ScVal,
+    };
 
     #[test]
     fn test_reentry_enabled() {
@@ -2410,19 +2415,25 @@ mod cap_xx_opt_in_reentry {
         let contract_id_a = host.register_test_contract_wasm(SIMPLE_REENTRY_CONTRACT_A);
         let contract_id_b = host.register_test_contract_wasm(SIMPLE_REENTRY_CONTRACT_B);
         host.enable_debug().unwrap();
-        let args = test_vec![
-            &host,
-            contract_id_b 
-        ].into();
+        let args = test_vec![&host, contract_id_b].into();
         call_contract(&host, contract_id_a, args);
 
         let event_body = ContractEventBody::V0(ContractEventV0 {
-                topics: host.map_err(vec![ScVal::Symbol(ScSymbol("first_soroban_reentry".try_into().unwrap()))].try_into()).unwrap(),
-                data: ScVal::Void
-            }
-        );
+            topics: host
+                .map_err(
+                    vec![ScVal::Symbol(ScSymbol(
+                        "first_soroban_reentry".try_into().unwrap(),
+                    ))]
+                    .try_into(),
+                )
+                .unwrap(),
+            data: ScVal::Void,
+        });
         let events = host.get_events().unwrap().0;
-        match events.iter().find(|he| he.event.type_ == ContractEventType::Contract) {
+        match events
+            .iter()
+            .find(|he| he.event.type_ == ContractEventType::Contract)
+        {
             Some(he) if he.event.type_ == ContractEventType::Contract => {
                 assert_eq!(he.event.body, event_body)
             }
@@ -2437,20 +2448,12 @@ mod cap_xx_opt_in_reentry {
         let contract_id_a = host.register_test_contract_wasm(SIMPLE_REENTRY_CONTRACT_A);
         let contract_id_b = host.register_test_contract_wasm(SIMPLE_NO_REENTRY_CONTRACT_B);
         host.enable_debug().unwrap();
-        let args = test_vec![
-            &host,
-            contract_id_b 
-        ].into();
+        let args = test_vec![&host, contract_id_b].into();
         call_contract(&host, contract_id_a, args);
     }
 
     fn call_contract(host: &Host, called: AddressObject, args: VecObject) {
         let fname = Symbol::try_from_val(host, &"test_reentry").unwrap();
-        host.call(
-            called,
-            fname,
-            args
-        )
-        .unwrap();
+        host.call(called, fname, args).unwrap();
     }
 }

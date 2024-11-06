@@ -862,7 +862,7 @@ impl Host {
         // this is the "loosened" path of calling a contract.
         // TODO: A `reentry` flag will be passed from `try_call` into here.
         // Default behaviour is to pass in `ContractReentryMode::Prohibited` to disable
-        // reentry, but it is the `call_data` parameter that controls this mode. 
+        // reentry, but it is the `call_data` parameter that controls this mode.
         let res = self.call_n_internal(
             &self.contract_id_from_address(contract_address)?,
             func,
