@@ -2369,23 +2369,8 @@ impl VmCallerEnv for Host {
         func: Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
-        let argvec = self.call_args_from_obj(args)?;
-        // this is the recommended path of calling a contract, with `reentry`
-        // always set `ContractReentryMode::Prohibited`
-        let res = self.call_n_internal(
-            &self.contract_id_from_address(contract_address)?,
-            func,
-            argvec.as_slice(),
-            CallParams::default_external_call(),
-        );
-        if let Err(e) = &res {
-            self.error(
-                e.error,
-                "contract call failed",
-                &[func.to_val(), args.to_val()],
-            );
-        }
-        res
+        let call_params = CallParams::default_external_call();
+        self.call_with_params(contract_address, func, args, call_params)
     }
 
     // Notes on metering: covered by the components.
@@ -2396,54 +2381,30 @@ impl VmCallerEnv for Host {
         func: Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
-        let argvec = self.call_args_from_obj(args)?;
-        // this is the "loosened" path of calling a contract.
-        // TODO: A `reentry` flag will be passed from `try_call` into here.
-        // For now, we are passing in `ContractReentryMode::Prohibited` to disable
-        // reentry.
-        let res = self.call_n_internal(
-            &self.contract_id_from_address(contract_address)?,
-            func,
-            argvec.as_slice(),
-            CallParams::default_external_call(),
-        );
-        match res {
-            Ok(rv) => Ok(rv),
-            Err(e) => {
-                self.error(
-                    e.error,
-                    "contract try_call failed",
-                    &[func.to_val(), args.to_val()],
-                );
-                // Only allow to gracefully handle the recoverable errors.
-                // Non-recoverable errors should still cause guest to panic and
-                // abort execution.
-                if e.is_recoverable() {
-                    // Pass contract error _codes_ through, while switching
-                    // from Err(ce) to Ok(ce), i.e. recovering.
-                    if e.error.is_type(ScErrorType::Contract) {
-                        Ok(e.error.to_val())
-                    } else {
-                        // Narrow all the remaining host errors down to a single
-                        // error type. We don't want to expose the granular host
-                        // errors to the guest, consistently with how every
-                        // other host function works. This reduces the risk of
-                        // implementation being 'locked' into specific error
-                        // codes due to them being exposed to the guest and
-                        // hashed into blockchain.
-                        // The granular error codes are still observable with
-                        // diagnostic events.
-                        Ok(Error::from_type_and_code(
-                            ScErrorType::Context,
-                            ScErrorCode::InvalidAction,
-                        )
-                        .to_val())
-                    }
-                } else {
-                    Err(e)
-                }
-            }
-        }
+        let call_params = CallParams::default_external_call();
+        self.try_call_with_params(contract_address, func, args, call_params)
+    }
+
+    fn call_reentrant(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        contract_address: AddressObject,
+        func: Symbol,
+        args: VecObject,
+    ) -> Result<Val, Self::Error> {
+        let call_params = CallParams::reentrant_external_call();
+        self.call_with_params(contract_address, func, args, call_params)
+    }
+
+    fn try_call_reentrant(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        contract_address: AddressObject,
+        func: Symbol,
+        args: VecObject,
+    ) -> Result<Val, Self::Error> {
+        let call_params = CallParams::reentrant_external_call();
+        self.try_call_with_params(contract_address, func, args, call_params)
     }
 
     // endregion: "call" module functions

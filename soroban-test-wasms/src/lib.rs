@@ -118,3 +118,14 @@ pub const CONSTRUCTOR_WITH_RESULT: &[u8] =
     include_bytes!("../wasm-workspace/opt/22/test_constructor_with_result.wasm").as_slice();
 pub const CUSTOM_ACCOUNT_CONTEXT_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/22/test_custom_account_context.wasm").as_slice();
+
+
+// Protocol 23 Wasms.
+pub const SIMPLE_REENTRY_CONTRACT_A: &[u8] =
+    include_bytes!("../wasm-workspace/opt/23/example_reentry_a.wasm").as_slice();
+
+pub const SIMPLE_REENTRY_CONTRACT_B: &[u8] =
+include_bytes!("../wasm-workspace/opt/23/example_reentry_b.wasm").as_slice();
+
+pub const SIMPLE_NO_REENTRY_CONTRACT_B: &[u8] =
+include_bytes!("../wasm-workspace/opt/23/example_no_reentry_b.wasm").as_slice();

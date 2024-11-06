@@ -1,3 +1,5 @@
+use soroban_env_common::VecObject;
+
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
@@ -106,6 +108,14 @@ impl CallParams {
     pub(crate) fn default_external_call() -> Self {
         Self {
             reentry_mode: ContractReentryMode::Prohibited,
+            internal_host_call: false,
+            treat_missing_function_as_noop: false,
+        }
+    }
+
+    pub(crate) fn reentrant_external_call() -> Self {
+        Self {
+            reentry_mode: ContractReentryMode::Allowed,
             internal_host_call: false,
             treat_missing_function_as_noop: false,
         }
@@ -811,6 +821,90 @@ impl Host {
                 Ok(vm.module.proto_version)
             }
             ContractExecutable::StellarAsset => self.get_ledger_protocol_version(),
+        }
+    }
+
+    pub(crate) fn call_with_params(
+        &self,
+        contract_address: AddressObject,
+        func: Symbol,
+        args: VecObject,
+        call_params: CallParams,
+    ) -> Result<Val, HostError> {
+        let argvec = self.call_args_from_obj(args)?;
+        // this is the recommended path of calling a contract, with `reentry`
+        // always set `ContractReentryMode::Prohibited` unless the reentrant
+        // flag is enabled.
+        let res = self.call_n_internal(
+            &self.contract_id_from_address(contract_address)?,
+            func,
+            argvec.as_slice(),
+            call_params,
+        );
+        if let Err(e) = &res {
+            self.error(
+                e.error,
+                "contract call failed",
+                &[func.to_val(), args.to_val()],
+            );
+        }
+        res
+    }
+
+    pub(crate) fn try_call_with_params(
+        &self,
+        contract_address: AddressObject,
+        func: Symbol,
+        args: VecObject,
+        call_params: CallParams,
+    ) -> Result<Val, HostError> {
+        let argvec = self.call_args_from_obj(args)?;
+        // this is the "loosened" path of calling a contract.
+        // TODO: A `reentry` flag will be passed from `try_call` into here.
+        // Default behaviour is to pass in `ContractReentryMode::Prohibited` to disable
+        // reentry, but it is the `call_data` parameter that controls this mode. 
+        let res = self.call_n_internal(
+            &self.contract_id_from_address(contract_address)?,
+            func,
+            argvec.as_slice(),
+            call_params,
+        );
+        match res {
+            Ok(rv) => Ok(rv),
+            Err(e) => {
+                self.error(
+                    e.error,
+                    "contract try_call failed",
+                    &[func.to_val(), args.to_val()],
+                );
+                // Only allow to gracefully handle the recoverable errors.
+                // Non-recoverable errors should still cause guest to panic and
+                // abort execution.
+                if e.is_recoverable() {
+                    // Pass contract error _codes_ through, while switching
+                    // from Err(ce) to Ok(ce), i.e. recovering.
+                    if e.error.is_type(ScErrorType::Contract) {
+                        Ok(e.error.to_val())
+                    } else {
+                        // Narrow all the remaining host errors down to a single
+                        // error type. We don't want to expose the granular host
+                        // errors to the guest, consistently with how every
+                        // other host function works. This reduces the risk of
+                        // implementation being 'locked' into specific error
+                        // codes due to them being exposed to the guest and
+                        // hashed into blockchain.
+                        // The granular error codes are still observable with
+                        // diagnostic events.
+                        Ok(Error::from_type_and_code(
+                            ScErrorType::Context,
+                            ScErrorCode::InvalidAction,
+                        )
+                        .to_val())
+                    }
+                } else {
+                    Err(e)
+                }
+            }
         }
     }
 
