@@ -49,7 +49,8 @@ members = [
     "deployer_with_constructor",
     "constructor_with_return_value",
     "constructor_with_result",
-    "custom_account_context"
+    "custom_account_context",
+    "try_call_sac"
 ]
 [profile.release]
 opt-level = "z"

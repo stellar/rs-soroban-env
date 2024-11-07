@@ -95,6 +95,9 @@ pub const HOSTILE_LARGE_VALUE: &[u8] =
 pub const DEPLOYER_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/20/test_deployer.wasm").as_slice();
 
+pub const TRY_CALL_SAC: &[u8] =
+    include_bytes!("../wasm-workspace/opt/20/test_try_call_sac.wasm").as_slice();
+
 // Protocol 21 Wasms.
 pub const CONSTRUCTOR_TEST_CONTRACT_P21: &[u8] =
     include_bytes!("../wasm-workspace/opt/21/test_constructor.wasm").as_slice();

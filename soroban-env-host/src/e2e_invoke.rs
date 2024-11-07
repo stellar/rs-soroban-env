@@ -200,6 +200,35 @@ pub fn get_ledger_changes(
     Ok(changes)
 }
 
+/// Creates ledger changes for entries that don't exist in the storage.
+///
+/// In recording mode it's possible to have discrepancies between the storage
+/// and the footprint. Specifically, if an entry is only accessed from a
+/// function that has failed and had its failure handled gracefully (via
+/// `try_call`), then the storage map will get rolled back and the access will
+/// only be recorded in the footprint. However, we still need to account for
+/// these in the ledger entry changes, as downstream consumers (simulation) rely
+/// on that to determine the fees.
+#[cfg(any(test, feature = "recording_mode"))]
+fn add_footprint_only_ledger_changes(
+    budget: &Budget,
+    storage: &Storage,
+    changes: &mut Vec<LedgerEntryChange>,
+) -> Result<(), HostError> {
+    for (key, access_type) in storage.footprint.0.iter(budget)? {
+        // We have to check if the entry exists in the internal storage map
+        // because `has` check on storage affects the footprint.
+        if storage.map.contains_key(key, budget)? {
+            continue;
+        }
+        let mut entry_change = LedgerEntryChange::default();
+        metered_write_xdr(budget, key.as_ref(), &mut entry_change.encoded_key)?;
+        entry_change.read_only = matches!(*access_type, AccessType::ReadOnly);
+        changes.push(entry_change);
+    }
+    Ok(())
+}
+
 /// Extracts the rent-related changes from the provided ledger changes.
 ///
 /// Only meaningful changes are returned (i.e. no-op changes are skipped).
@@ -608,8 +637,15 @@ pub fn invoke_host_function_in_recording_mode(
     }
 
     let (ledger_changes, contract_events) = if invoke_result.is_ok() {
-        let ledger_changes =
+        let mut ledger_changes =
             get_ledger_changes(&budget, &storage, &*ledger_snapshot, init_ttl_map)?;
+        // Add the keys that only exist in the footprint, but not in the
+        // storage. This doesn't resemble anything in the enforcing mode, so use
+        // the shadow budget for this.
+        budget.with_shadow_mode(|| {
+            add_footprint_only_ledger_changes(budget, &storage, &mut ledger_changes)
+        });
+
         let encoded_contract_events = encode_contract_events(budget, &events)?;
         for e in &encoded_contract_events {
             contract_events_and_return_value_size =

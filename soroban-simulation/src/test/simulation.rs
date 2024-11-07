@@ -14,14 +14,17 @@ use soroban_env_host::e2e_testutils::{
 };
 use soroban_env_host::fees::{FeeConfiguration, RentFeeConfiguration};
 use soroban_env_host::xdr::{
-    ContractCostParamEntry, ContractCostParams, ContractCostType, ContractDataDurability,
-    ContractDataEntry, ExtensionPoint, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
-    LedgerKeyContractData, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
-    SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
-    SorobanTransactionData,
+    AccountId, AlphaNum4, AssetCode4, ContractCostParamEntry, ContractCostParams, ContractCostType,
+    ContractDataDurability, ContractDataEntry, ContractExecutable, ExtensionPoint, Hash,
+    HostFunction, Int128Parts, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint,
+    LedgerKey, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
+    ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScSymbol, ScVal,
+    SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, SorobanTransactionData,
+    TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256, VecM,
 };
 use soroban_env_host::HostError;
-use soroban_test_wasms::{ADD_I32, AUTH_TEST_CONTRACT};
+use soroban_test_wasms::{ADD_I32, AUTH_TEST_CONTRACT, TRY_CALL_SAC};
 use std::rc::Rc;
 use tap::prelude::*;
 
@@ -862,4 +865,287 @@ fn test_simulate_restore_op_returns_error_for_non_existent_entry() {
         &[get_wasm_key(b"123")],
     );
     assert!(res.is_err());
+}
+
+fn sc_symbol(s: &str) -> ScVal {
+    ScVal::Symbol(s.try_into().unwrap())
+}
+
+fn sc_symbol_vec(s: &str) -> ScVal {
+    ScVal::Vec(Some(vec![sc_symbol(s)].try_into().unwrap()))
+}
+
+fn create_sac_ledger_entry(sac_address: &ScAddress, admin_address: &ScAddress) -> LedgerEntry {
+    let contract_instance_entry = ContractDataEntry {
+        ext: ExtensionPoint::V0,
+        contract: sac_address.clone(),
+        key: ScVal::LedgerKeyContractInstance,
+        durability: ContractDataDurability::Persistent,
+        val: ScVal::ContractInstance(ScContractInstance {
+            executable: ContractExecutable::StellarAsset,
+            storage: Some(
+                ScMap::sorted_from_pairs(
+                    [
+                        (
+                            sc_symbol_vec("Admin"),
+                            ScVal::Address(admin_address.clone()),
+                        ),
+                        (
+                            sc_symbol("METADATA"),
+                            ScVal::Map(Some(
+                                ScMap::sorted_from_pairs(
+                                    [
+                                        (
+                                            sc_symbol("name"),
+                                            ScVal::String(ScString("aaaa".try_into().unwrap())),
+                                        ),
+                                        (sc_symbol("decimal"), ScVal::U32(7)),
+                                        (
+                                            sc_symbol("symbol"),
+                                            ScVal::String(ScString("aaaa".try_into().unwrap())),
+                                        ),
+                                    ]
+                                    .into_iter(),
+                                )
+                                .unwrap(),
+                            )),
+                        ),
+                        (
+                            sc_symbol_vec("AssetInfo"),
+                            ScVal::Vec(Some(
+                                vec![
+                                    sc_symbol("AlphaNum4"),
+                                    ScVal::Map(Some(
+                                        ScMap::sorted_from_pairs(
+                                            [
+                                                (
+                                                    sc_symbol("asset_code"),
+                                                    ScVal::String(ScString(
+                                                        "aaaa".try_into().unwrap(),
+                                                    )),
+                                                ),
+                                                (
+                                                    sc_symbol("issuer"),
+                                                    ScVal::Bytes(ScBytes(
+                                                        vec![0; 32].try_into().unwrap(),
+                                                    )),
+                                                ),
+                                            ]
+                                            .into_iter(),
+                                        )
+                                        .unwrap(),
+                                    )),
+                                ]
+                                .try_into()
+                                .unwrap(),
+                            )),
+                        ),
+                    ]
+                    .into_iter(),
+                )
+                .unwrap(),
+            ),
+        }),
+    };
+    ledger_entry(LedgerEntryData::ContractData(contract_instance_entry))
+}
+
+#[test]
+fn test_simulate_successful_sac_call() {
+    let source_account = get_account_id([123; 32]);
+    let other_account = get_account_id([124; 32]);
+    let sac_address = ScAddress::Contract(Hash([111; 32]));
+    let call_args: VecM<_> = vec![
+        ScVal::Address(ScAddress::Account(other_account.clone())),
+        ScVal::I128(Int128Parts { hi: 0, lo: 1 }),
+    ]
+    .try_into()
+    .unwrap();
+    let host_fn = HostFunction::InvokeContract(InvokeContractArgs {
+        contract_address: sac_address.clone(),
+        function_name: "mint".try_into().unwrap(),
+        args: call_args.clone(),
+    });
+    let contract_instance_le =
+        create_sac_ledger_entry(&sac_address, &ScAddress::Account(source_account.clone()));
+    let trustline = TrustLineEntry {
+        account_id: other_account.clone(),
+        asset: TrustLineAsset::CreditAlphanum4(AlphaNum4 {
+            asset_code: AssetCode4([b'a'; 4]),
+            issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+        }),
+        balance: 0,
+        limit: 1_000_000_000,
+        flags: TrustLineFlags::AuthorizedFlag as u32,
+        ext: TrustLineEntryExt::V0,
+    };
+    let trustline_le = ledger_entry(LedgerEntryData::Trustline(trustline));
+    let ledger_info = default_ledger_info();
+    let network_config = default_network_config();
+    let snapshot_source = Rc::new(
+        MockSnapshotSource::from_entries(
+            vec![
+                (
+                    contract_instance_le.clone(),
+                    Some(ledger_info.sequence_number + 100),
+                ),
+                (trustline_le.clone(), None),
+                (account_entry(&source_account), None),
+                (account_entry(&other_account), None),
+            ],
+            ledger_info.sequence_number,
+        )
+        .unwrap(),
+    );
+    let res = simulate_invoke_host_function_op(
+        snapshot_source,
+        &network_config,
+        &SimulationAdjustmentConfig::no_adjustments(),
+        &ledger_info,
+        host_fn,
+        None,
+        &source_account,
+        [1; 32],
+        true,
+    )
+    .unwrap();
+    assert_eq!(res.invoke_result.unwrap(), ScVal::Void);
+    assert_eq!(res.contract_events.len(), 1);
+    assert_eq!(
+        res.auth,
+        vec![SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::SourceAccount,
+            root_invocation: SorobanAuthorizedInvocation {
+                function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: sac_address,
+                    function_name: ScSymbol("mint".try_into().unwrap()),
+                    args: call_args,
+                },),
+                sub_invocations: Default::default(),
+            },
+        },]
+    );
+    assert_eq!(
+        res.transaction_data,
+        Some(SorobanTransactionData {
+            ext: ExtensionPoint::V0,
+            resources: SorobanResources {
+                footprint: LedgerFootprint {
+                    read_only: vec![ledger_entry_to_ledger_key(&contract_instance_le).unwrap(),]
+                        .try_into()
+                        .unwrap(),
+                    read_write: vec![ledger_entry_to_ledger_key(&trustline_le).unwrap()]
+                        .try_into()
+                        .unwrap()
+                },
+                instructions: 3302139,
+                read_bytes: 532,
+                write_bytes: 116,
+            },
+            resource_fee: 28345,
+        })
+    );
+}
+
+// This test covers an edge-case scenario of a SAC failure due to missing
+// trustline handled with `try_call`, which had an issue in recording mode that
+// led to incorrect footprint.
+// While this doesn't have to be a SAC failure, the issue has been discovered
+// in SAC specifically and seems more likely to occur compared to the regular
+// contracts (as the regular contracts can normally create their entries, unlike
+// the SAC/trustline case).
+#[test]
+fn test_simulate_unsuccessful_sac_call_with_try_call() {
+    let source_account = get_account_id([123; 32]);
+    let other_account = get_account_id([124; 32]);
+    let sac_address = ScAddress::Contract(Hash([111; 32]));
+    let contract = CreateContractData::new([1; 32], TRY_CALL_SAC);
+    let host_fn = HostFunction::InvokeContract(InvokeContractArgs {
+        contract_address: contract.contract_address.clone(),
+        function_name: "mint".try_into().unwrap(),
+        args: vec![
+            ScVal::Address(sac_address.clone()),
+            ScVal::Address(ScAddress::Account(other_account.clone())),
+        ]
+        .try_into()
+        .unwrap(),
+    });
+    let sac_instance_le = create_sac_ledger_entry(&sac_address, &contract.contract_address);
+    let ledger_info = default_ledger_info();
+    let network_config = default_network_config();
+
+    let snapshot_source = Rc::new(
+        MockSnapshotSource::from_entries(
+            vec![
+                (
+                    sac_instance_le.clone(),
+                    Some(ledger_info.sequence_number + 100),
+                ),
+                (
+                    contract.wasm_entry.clone(),
+                    Some(ledger_info.sequence_number + 100),
+                ),
+                (
+                    contract.contract_entry.clone(),
+                    Some(ledger_info.sequence_number + 100),
+                ),
+                (account_entry(&source_account), None),
+                (account_entry(&other_account), None),
+            ],
+            ledger_info.sequence_number,
+        )
+        .unwrap(),
+    );
+
+    let res = simulate_invoke_host_function_op(
+        snapshot_source,
+        &network_config,
+        &SimulationAdjustmentConfig::no_adjustments(),
+        &ledger_info,
+        host_fn,
+        None,
+        &source_account,
+        [1; 32],
+        true,
+    )
+    .unwrap();
+    // The return value indicates the whether the internal `mint` call has
+    // succeeded.
+    assert_eq!(res.invoke_result.unwrap(), ScVal::Bool(false));
+    assert!(res.contract_events.is_empty());
+    assert_eq!(res.auth, vec![]);
+    let trustline_key = LedgerKey::Trustline(LedgerKeyTrustLine {
+        account_id: other_account.clone(),
+        asset: TrustLineAsset::CreditAlphanum4(AlphaNum4 {
+            asset_code: AssetCode4([b'a'; 4]),
+            issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+        }),
+    });
+    assert_eq!(
+        res.transaction_data,
+        Some(SorobanTransactionData {
+            ext: ExtensionPoint::V0,
+            resources: SorobanResources {
+                footprint: LedgerFootprint {
+                    read_only: vec![
+                        // Trustline key must appear in the footprint, even
+                        // though it's not present in the storage.
+                        trustline_key,
+                        contract.wasm_key.clone(),
+                        contract.contract_key.clone(),
+                        ledger_entry_to_ledger_key(&sac_instance_le).unwrap(),
+                    ]
+                    .tap_mut(|v| v.sort())
+                    .try_into()
+                    .unwrap(),
+                    // No entries should be actually modified.
+                    read_write: Default::default(),
+                },
+                instructions: 5768570,
+                read_bytes: 1196,
+                write_bytes: 0,
+            },
+            resource_fee: 6224,
+        })
+    );
 }
