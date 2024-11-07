@@ -1,3 +1,5 @@
+use soroban_env_common::VecObject;
+
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
@@ -111,6 +113,14 @@ impl CallParams {
         }
     }
 
+    pub(crate) fn reentrant_external_call() -> Self {
+        Self {
+            reentry_mode: ContractReentryMode::Allowed,
+            internal_host_call: false,
+            treat_missing_function_as_noop: false,
+        }
+    }
+
     #[allow(unused)]
     pub(crate) fn default_internal_call() -> Self {
         Self {
@@ -174,6 +184,10 @@ impl Frame {
 }
 
 impl Host {
+    pub(crate) fn get_reentrancy_flag(&self) -> Result<bool, HostError> {
+        Ok(*self.0.enable_reentrant.borrow())
+    }
+
     /// Returns if the host currently has a frame on the stack.
     ///
     /// A frame being on the stack usually indicates that a contract is currently
@@ -676,7 +690,7 @@ impl Host {
         let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
-                let vm = self.instantiate_vm(id, wasm_hash)?;
+                let vm = self.instantiate_vm(id, wasm_hash, true)?;
                 let relative_objects = Vec::new();
                 self.with_frame(
                     Frame::ContractVM {
@@ -699,7 +713,12 @@ impl Host {
         }
     }
 
-    fn instantiate_vm(&self, id: &Hash, wasm_hash: &Hash) -> Result<Rc<Vm>, HostError> {
+    fn instantiate_vm(
+        &self,
+        id: &Hash,
+        wasm_hash: &Hash,
+        reentry_guard: bool,
+    ) -> Result<Rc<Vm>, HostError> {
         #[cfg(any(test, feature = "recording_mode"))]
         {
             if !self.in_storage_recording_mode()? {
@@ -792,7 +811,14 @@ impl Host {
         #[cfg(not(any(test, feature = "recording_mode")))]
         let cost_mode = crate::vm::ModuleParseCostMode::Normal;
 
-        Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs, cost_mode)
+        Vm::new_with_cost_inputs(
+            self,
+            contract_id,
+            code.as_slice(),
+            costs,
+            cost_mode,
+            reentry_guard,
+        )
     }
 
     pub(crate) fn get_contract_protocol_version(
@@ -807,10 +833,94 @@ impl Host {
         let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
-                let vm = self.instantiate_vm(contract_id, wasm_hash)?;
+                let vm = self.instantiate_vm(contract_id, wasm_hash, false)?;
                 Ok(vm.module.proto_version)
             }
             ContractExecutable::StellarAsset => self.get_ledger_protocol_version(),
+        }
+    }
+
+    pub(crate) fn call_with_params(
+        &self,
+        contract_address: AddressObject,
+        func: Symbol,
+        args: VecObject,
+        call_params: CallParams,
+    ) -> Result<Val, HostError> {
+        let argvec = self.call_args_from_obj(args)?;
+        // this is the recommended path of calling a contract, with `reentry`
+        // always set `ContractReentryMode::Prohibited` unless the reentrant
+        // flag is enabled.
+        let res = self.call_n_internal(
+            &self.contract_id_from_address(contract_address)?,
+            func,
+            argvec.as_slice(),
+            call_params,
+        );
+        if let Err(e) = &res {
+            self.error(
+                e.error,
+                "contract call failed",
+                &[func.to_val(), args.to_val()],
+            );
+        }
+        res
+    }
+
+    pub(crate) fn try_call_with_params(
+        &self,
+        contract_address: AddressObject,
+        func: Symbol,
+        args: VecObject,
+        call_params: CallParams,
+    ) -> Result<Val, HostError> {
+        let argvec = self.call_args_from_obj(args)?;
+        // this is the "loosened" path of calling a contract.
+        // TODO: A `reentry` flag will be passed from `try_call` into here.
+        // Default behaviour is to pass in `ContractReentryMode::Prohibited` to disable
+        // reentry, but it is the `call_data` parameter that controls this mode.
+        let res = self.call_n_internal(
+            &self.contract_id_from_address(contract_address)?,
+            func,
+            argvec.as_slice(),
+            call_params,
+        );
+        match res {
+            Ok(rv) => Ok(rv),
+            Err(e) => {
+                self.error(
+                    e.error,
+                    "contract try_call failed",
+                    &[func.to_val(), args.to_val()],
+                );
+                // Only allow to gracefully handle the recoverable errors.
+                // Non-recoverable errors should still cause guest to panic and
+                // abort execution.
+                if e.is_recoverable() {
+                    // Pass contract error _codes_ through, while switching
+                    // from Err(ce) to Ok(ce), i.e. recovering.
+                    if e.error.is_type(ScErrorType::Contract) {
+                        Ok(e.error.to_val())
+                    } else {
+                        // Narrow all the remaining host errors down to a single
+                        // error type. We don't want to expose the granular host
+                        // errors to the guest, consistently with how every
+                        // other host function works. This reduces the risk of
+                        // implementation being 'locked' into specific error
+                        // codes due to them being exposed to the guest and
+                        // hashed into blockchain.
+                        // The granular error codes are still observable with
+                        // diagnostic events.
+                        Ok(Error::from_type_and_code(
+                            ScErrorType::Context,
+                            ScErrorCode::InvalidAction,
+                        )
+                        .to_val())
+                    }
+                } else {
+                    Err(e)
+                }
+            }
         }
     }
 

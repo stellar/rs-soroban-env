@@ -132,7 +132,10 @@ impl ModuleCache {
     }
 
     pub fn make_linker(&self, host: &Host) -> Result<wasmi::Linker<Host>, HostError> {
-        self.with_import_symbols(host, |symbols| Host::make_linker(&self.engine, symbols))
+        let enable_reentrant_linking = host.get_reentrancy_flag()?;
+        self.with_import_symbols(host, |symbols| {
+            Host::make_linker(&self.engine, symbols, enable_reentrant_linking)
+        })
     }
 
     pub fn get_module(

@@ -49,7 +49,11 @@ members = [
     "deployer_with_constructor",
     "constructor_with_return_value",
     "constructor_with_result",
-    "custom_account_context"
+    "custom_account_context",
+    "reentry_a",
+    "no_reentry_a",
+    "no_reentry_b",
+    "reentry_b",
 ]
 [profile.release]
 opt-level = "z"

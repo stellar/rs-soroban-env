@@ -102,9 +102,20 @@ impl Host {
     pub(crate) fn make_linker(
         engine: &wasmi::Engine,
         symbols: &BTreeSet<(&str, &str)>,
+        enable_reentrant_linking: bool,
     ) -> Result<Linker<Host>, HostError> {
         let mut linker = Linker::new(&engine);
         for hf in HOST_FUNCTIONS {
+            if !enable_reentrant_linking {
+                if symbols.contains(&("d", "1")) || symbols.contains(&("d", "2")) {
+                    return Err(crate::Error::from_type_and_code(
+                        ScErrorType::WasmVm,
+                        ScErrorCode::InvalidAction,
+                    )
+                    .try_into()?);
+                }
+            }
+
             if symbols.contains(&(hf.mod_str, hf.fn_str)) {
                 (hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le))?;
             }
@@ -257,7 +268,7 @@ impl Vm {
         if let Some(linker) = &*host.try_borrow_linker()? {
             Self::instantiate(host, contract_id, parsed_module, linker)
         } else {
-            let linker = parsed_module.make_linker(host)?;
+            let linker = parsed_module.make_linker(host, true)?;
             Self::instantiate(host, contract_id, parsed_module, &linker)
         }
     }
@@ -286,13 +297,16 @@ impl Vm {
         let cost_inputs = VersionedContractCodeCostInputs::V0 {
             wasm_bytes: wasm.len(),
         };
-        Self::new_with_cost_inputs(
+
+        let vm = Self::new_with_cost_inputs(
             host,
             contract_id,
             wasm,
             cost_inputs,
             ModuleParseCostMode::Normal,
-        )
+            false,
+        );
+        vm
     }
 
     pub(crate) fn new_with_cost_inputs(
@@ -301,11 +315,13 @@ impl Vm {
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
         cost_mode: ModuleParseCostMode,
+        reentry_guard: bool,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
         VmInstantiationTimer::new(host.clone());
         let parsed_module = Self::parse_module(host, wasm, cost_inputs, cost_mode)?;
-        let linker = parsed_module.make_linker(host)?;
+        let linker = parsed_module.make_linker(host, reentry_guard)?;
+
         Self::instantiate(host, contract_id, parsed_module, &linker)
     }
 
