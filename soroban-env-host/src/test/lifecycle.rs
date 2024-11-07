@@ -2402,7 +2402,7 @@ mod cap_xx_opt_in_reentry {
     use crate::{Host, HostError, MeteredOrdMap};
     use soroban_env_common::{AddressObject, Env, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
     use soroban_test_wasms::{
-        SIMPLE_NO_REENTRY_CONTRACT_B, SIMPLE_REENTRY_CONTRACT_A, SIMPLE_REENTRY_CONTRACT_B,
+        SIMPLE_NO_REENTRY_CONTRACT_A, SIMPLE_NO_REENTRY_CONTRACT_B, SIMPLE_REENTRY_CONTRACT_A, SIMPLE_REENTRY_CONTRACT_B
     };
     use stellar_xdr::curr::{
         ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
@@ -2450,6 +2450,18 @@ mod cap_xx_opt_in_reentry {
         let contract_id_b = host.register_test_contract_wasm(SIMPLE_NO_REENTRY_CONTRACT_B);
         host.enable_debug().unwrap();
         let args = test_vec![&host, contract_id_b].into();
+        call_contract(&host, contract_id_a, args);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_reentry_disabled_from_caller() {
+        let host = Host::test_host_with_recording_footprint();
+        let contract_id_a = host.register_test_contract_wasm(SIMPLE_NO_REENTRY_CONTRACT_A);
+        let contract_id_b = host.register_test_contract_wasm(SIMPLE_REENTRY_CONTRACT_B);
+        host.enable_debug().unwrap();
+        let args = test_vec![&host, contract_id_b].into();
+
         call_contract(&host, contract_id_a, args);
     }
 

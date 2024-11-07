@@ -51,6 +51,7 @@ members = [
     "constructor_with_result",
     "custom_account_context",
     "reentry_a",
+    "no_reentry_a",
     "no_reentry_b",
     "reentry_b",
 ]

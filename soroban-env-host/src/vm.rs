@@ -110,7 +110,7 @@ impl Host {
                 if symbols.contains(&("d", "1")) || symbols.contains(&("d", "2")) {
                     return Err(crate::Error::from_type_and_code(
                         ScErrorType::WasmVm,
-                        ScErrorCode::ArithDomain,
+                        ScErrorCode::InvalidAction,
                     )
                     .try_into()?);
                 }

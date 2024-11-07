@@ -123,6 +123,9 @@ pub const CUSTOM_ACCOUNT_CONTEXT_TEST_CONTRACT: &[u8] =
 pub const SIMPLE_REENTRY_CONTRACT_A: &[u8] =
     include_bytes!("../wasm-workspace/opt/23/example_reentry_a.wasm").as_slice();
 
+pub const SIMPLE_NO_REENTRY_CONTRACT_A: &[u8] =
+    include_bytes!("../wasm-workspace/opt/23/example_no_reentry_a.wasm").as_slice();
+
 pub const SIMPLE_REENTRY_CONTRACT_B: &[u8] =
     include_bytes!("../wasm-workspace/opt/23/example_reentry_b.wasm").as_slice();
 
