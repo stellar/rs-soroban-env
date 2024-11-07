@@ -319,6 +319,9 @@ impl Host {
         contract_address: AddressObject,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+
         use crate::Env;
         self.register_test_contract_with_constructor(
             contract_address,
@@ -333,6 +336,9 @@ impl Host {
         contract_fns: Rc<dyn ContractFunctionSet>,
         constructor_args: crate::VecObject,
     ) -> Result<(), HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+
         let contract_id = self.contract_id_from_address(contract_address)?;
         let instance_key = self.contract_instance_ledger_key(&contract_id)?;
         let wasm_hash_obj = self.upload_contract_wasm(vec![])?;

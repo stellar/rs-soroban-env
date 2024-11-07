@@ -223,7 +223,7 @@ impl Storage {
         }
     }
 
-    fn try_get_full_with_host(
+    pub(crate) fn try_get_full_with_host(
         &mut self,
         key: &Rc<LedgerKey>,
         host: &Host,
@@ -594,6 +594,11 @@ impl Storage {
             }
         };
         Ok(())
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) fn reset_footprint(&mut self) {
+        self.footprint = Footprint::default();
     }
 }
 

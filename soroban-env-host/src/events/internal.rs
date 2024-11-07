@@ -267,4 +267,9 @@ impl InternalEventsBuffer {
 
         Ok(Events(vec))
     }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) fn clear(&mut self) {
+        self.vec.clear();
+    }
 }

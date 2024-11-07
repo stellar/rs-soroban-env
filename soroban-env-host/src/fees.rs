@@ -10,8 +10,8 @@ pub const TX_BASE_RESULT_SIZE: u32 = 300;
 /// Estimate for any `TtlEntry` ledger entry
 pub const TTL_ENTRY_SIZE: u32 = 48;
 
-const INSTRUCTIONS_INCREMENT: i64 = 10000;
-const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
+pub const INSTRUCTIONS_INCREMENT: i64 = 10000;
+pub const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
 
 // minimum effective write fee per 1KB
 pub const MINIMUM_WRITE_FEE_PER_1KB: i64 = 1000;

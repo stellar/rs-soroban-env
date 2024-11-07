@@ -12,7 +12,6 @@ use soroban_test_wasms::{
 };
 
 use crate::auth::RecordedAuthPayload;
-use crate::budget::AsBudget;
 use crate::builtin_contracts::base_types::Address;
 use crate::builtin_contracts::testutils::{
     create_account, generate_signing_key, sign_payload_for_account, signing_key_to_account_id,
@@ -116,9 +115,7 @@ impl SignNode {
 impl AuthTest {
     fn setup_with_contract(signer_cnt: usize, contract_cnt: usize, contract_wasm: &[u8]) -> Self {
         let host = Host::test_host_with_recording_footprint();
-        // TODO: remove the `reset_unlimited` and instead reset inputs wherever appropriate
-        // to respect the budget limit.
-        host.as_budget().reset_unlimited().unwrap();
+        host.enable_invocation_metering();
         host.enable_debug().unwrap();
 
         host.with_mut_ledger_info(|li| {

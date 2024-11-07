@@ -643,6 +643,7 @@ impl Host {
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
         self.with_frame(
             Frame::TestContract(self.create_test_contract_frame(id, func, vec![])?),
             f,
@@ -1069,6 +1070,9 @@ impl Host {
 
     // Notes on metering: covered by the called components.
     pub fn invoke_function(&self, hf: HostFunction) -> Result<ScVal, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+
         let rv = self.invoke_function_and_return_val(hf)?;
         self.from_host_val(rv)
     }

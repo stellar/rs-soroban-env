@@ -69,6 +69,15 @@ impl Budget {
         Ok(())
     }
 
+    pub fn reset(&self) -> Result<(), HostError> {
+        self.with_mut_budget(|mut b| {
+            b.cpu_insns.reset_count();
+            b.mem_bytes.reset_count();
+            Ok(())
+        })?;
+        self.reset_tracker()
+    }
+
     pub fn reset_cpu_limit(&self, cpu: u64) -> Result<(), HostError> {
         self.with_mut_budget(|mut b| {
             b.cpu_insns.reset(cpu);
@@ -157,7 +166,7 @@ impl Budget {
     }
 }
 
-#[cfg(any(test, feature = "recording_mode"))]
+#[cfg(any(test, feature = "recording_mode", feature = "testutils"))]
 impl Budget {
     /// Variant of `with_shadow_mode`, enabled only in testing and
     /// non-production scenarios, that produces a `Result<>` rather than eating
