@@ -2402,7 +2402,8 @@ mod cap_xx_opt_in_reentry {
     use crate::{Host, HostError, MeteredOrdMap};
     use soroban_env_common::{AddressObject, Env, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
     use soroban_test_wasms::{
-        SIMPLE_NO_REENTRY_CONTRACT_A, SIMPLE_NO_REENTRY_CONTRACT_B, SIMPLE_REENTRY_CONTRACT_A, SIMPLE_REENTRY_CONTRACT_B
+        SIMPLE_NO_REENTRY_CONTRACT_A, SIMPLE_NO_REENTRY_CONTRACT_B, SIMPLE_REENTRY_CONTRACT_A,
+        SIMPLE_REENTRY_CONTRACT_B,
     };
     use stellar_xdr::curr::{
         ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
