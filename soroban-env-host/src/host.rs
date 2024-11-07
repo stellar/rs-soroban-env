@@ -166,6 +166,9 @@ struct HostImpl {
     #[doc(hidden)]
     #[cfg(any(test, feature = "recording_mode"))]
     need_to_build_module_cache: RefCell<bool>,
+
+    // Enables calling modules that link functions that call with reentry.
+    enable_reentrant: RefCell<bool>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -382,6 +385,8 @@ impl Host {
             suppress_diagnostic_events: RefCell::new(false),
             #[cfg(any(test, feature = "recording_mode"))]
             need_to_build_module_cache: RefCell::new(false),
+
+            enable_reentrant: RefCell::new(false),
         }))
     }
 
@@ -2405,6 +2410,15 @@ impl VmCallerEnv for Host {
     ) -> Result<Val, Self::Error> {
         let call_params = CallParams::reentrant_external_call();
         self.try_call_with_params(contract_address, func, args, call_params)
+    }
+
+    fn set_reentrant(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        enabled: Bool,
+    ) -> Result<Void, HostError> {
+        *self.0.enable_reentrant.borrow_mut() = enabled.try_into()?;
+        Ok(Void::from(()))
     }
 
     // endregion: "call" module functions

@@ -184,6 +184,10 @@ impl Frame {
 }
 
 impl Host {
+    pub(crate) fn get_reentrancy_flag(&self) -> Result<bool, HostError> {
+        Ok(*self.0.enable_reentrant.borrow())
+    }
+
     /// Returns if the host currently has a frame on the stack.
     ///
     /// A frame being on the stack usually indicates that a contract is currently
@@ -686,7 +690,7 @@ impl Host {
         let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
-                let vm = self.instantiate_vm(id, wasm_hash)?;
+                let vm = self.instantiate_vm(id, wasm_hash, true)?;
                 let relative_objects = Vec::new();
                 self.with_frame(
                     Frame::ContractVM {
@@ -709,7 +713,12 @@ impl Host {
         }
     }
 
-    fn instantiate_vm(&self, id: &Hash, wasm_hash: &Hash) -> Result<Rc<Vm>, HostError> {
+    fn instantiate_vm(
+        &self,
+        id: &Hash,
+        wasm_hash: &Hash,
+        reentry_guard: bool,
+    ) -> Result<Rc<Vm>, HostError> {
         #[cfg(any(test, feature = "recording_mode"))]
         {
             if !self.in_storage_recording_mode()? {
@@ -802,7 +811,14 @@ impl Host {
         #[cfg(not(any(test, feature = "recording_mode")))]
         let cost_mode = crate::vm::ModuleParseCostMode::Normal;
 
-        Vm::new_with_cost_inputs(self, contract_id, code.as_slice(), costs, cost_mode)
+        Vm::new_with_cost_inputs(
+            self,
+            contract_id,
+            code.as_slice(),
+            costs,
+            cost_mode,
+            reentry_guard,
+        )
     }
 
     pub(crate) fn get_contract_protocol_version(
@@ -817,7 +833,7 @@ impl Host {
         let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
-                let vm = self.instantiate_vm(contract_id, wasm_hash)?;
+                let vm = self.instantiate_vm(contract_id, wasm_hash, false)?;
                 Ok(vm.module.proto_version)
             }
             ContractExecutable::StellarAsset => self.get_ledger_protocol_version(),

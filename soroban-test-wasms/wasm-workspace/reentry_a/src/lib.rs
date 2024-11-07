@@ -4,8 +4,12 @@ use soroban_sdk::{contract, contractimpl, Env, Address, Symbol, TryIntoVal, Vec,
 #[link(wasm_import_module = "d")]
 extern "C" {
     #[allow(improper_ctypes)]
-    #[link_name = "1"]
-    pub fn call_reentrant(contract: i64, func: i64, args: i64, ) -> i64;
+    #[link_name = "_"]
+    pub fn call_contract(contract: i64, func: i64, args: i64, ) -> i64;
+
+    #[allow(improper_ctypes)]
+    #[link_name = "3"]
+    pub fn set_reentrant(enabled: i64, ) -> i64;
 }
 
 #[contract]
@@ -19,9 +23,12 @@ impl Contract {
         let called_val = called.as_val().get_payload() as i64;
         let func_val = func.as_val().get_payload() as i64;
         let args_val = args.as_val().get_payload() as i64;
+
+        let set_reentrant_flag = Val::from_bool(true).as_val().get_payload() as i64;
         
         unsafe {
-            call_reentrant(called_val, func_val, args_val);
+            set_reentrant(set_reentrant_flag);
+            call_contract(called_val, func_val, args_val);
         };
     }
 

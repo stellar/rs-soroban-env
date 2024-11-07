@@ -193,9 +193,19 @@ impl ParsedModule {
         callback(&symbols)
     }
 
-    pub fn make_linker(&self, host: &Host) -> Result<wasmi::Linker<Host>, HostError> {
+    pub fn make_linker(
+        &self,
+        host: &Host,
+        reentry_guard: bool,
+    ) -> Result<wasmi::Linker<Host>, HostError> {
         self.with_import_symbols(host, |symbols| {
-            Host::make_linker(self.module.engine(), symbols)
+            let enable_reentrant_linking = if reentry_guard {
+                host.get_reentrancy_flag()?
+            } else {
+                true
+            };
+
+            Host::make_linker(self.module.engine(), symbols, enable_reentrant_linking)
         })
     }
 

@@ -2416,6 +2416,7 @@ mod cap_xx_opt_in_reentry {
         let contract_id_b = host.register_test_contract_wasm(SIMPLE_REENTRY_CONTRACT_B);
         host.enable_debug().unwrap();
         let args = test_vec![&host, contract_id_b].into();
+
         call_contract(&host, contract_id_a, args);
 
         let event_body = ContractEventBody::V0(ContractEventV0 {
