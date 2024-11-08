@@ -13,7 +13,3 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true, features = ["alloc"] }
-soroban-env-common = { workspace = true }
-
-[features]
-next = ["soroban-env-common/next"]

@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Bytes, Env, U256};
+use soroban_sdk::{contract, contractimpl, symbol_short, Bytes, Env, U256};
 
 #[contract]
 pub struct Contract;
@@ -43,6 +43,26 @@ impl Contract {
         let u256_1 = U256::from_u32(&e, 1);
         for _ in 0..host_cycles {
             u256_val = u256_val.add(&u256_1);
+        }
+
+        // Return has data dependency on both values to make sure nothing gets optimized out
+        u256_val
+    }
+
+    pub fn do_cpu_only_work(e: Env, guest_cycles: u32, host_cycles: u32, event_count: u32) -> U256 {
+        let mut val: i64 = 3;
+        for _ in 0..guest_cycles {
+            val = (val * 1664525 + 1013904223) >> 32;
+        }
+
+        let mut u256_val = U256::from_u32(&e, val as u32);
+        let u256_1 = U256::from_u32(&e, 1);
+        for _ in 0..host_cycles {
+            u256_val = u256_val.add(&u256_1);
+        }
+
+        for _ in 0..event_count {
+            e.events().publish((symbol_short!("event"),), val);
         }
 
         // Return has data dependency on both values to make sure nothing gets optimized out
