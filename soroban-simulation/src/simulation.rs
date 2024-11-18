@@ -12,10 +12,11 @@ use soroban_env_host::{
     e2e_invoke::LedgerEntryChange,
     storage::SnapshotSource,
     xdr::{
-        AccountId, ContractEvent, DiagnosticEvent, HostFunction, InvokeHostFunctionOp, LedgerKey,
-        OperationBody, ScVal, SorobanAuthorizationEntry, SorobanResources, SorobanTransactionData,
+        AccountId, ArchivalProof, ContractEvent, DiagnosticEvent, ExtendFootprintTtlOp,
+        ExtensionPoint, HostFunction, InvokeHostFunctionOp, LedgerEntry, LedgerKey, OperationBody,
+        ReadXdr, RestoreFootprintOp, ScVal, SorobanAuthorizationEntry, SorobanResources,
+        SorobanTransactionData, SorobanTransactionDataExt,
     },
-    xdr::{ExtendFootprintTtlOp, ExtensionPoint, LedgerEntry, ReadXdr, RestoreFootprintOp},
     HostError, LedgerInfo, DEFAULT_XDR_RW_LIMITS,
 };
 use std::rc::Rc;
@@ -116,7 +117,7 @@ pub struct RestoreOpSimulationResult {
 /// for failed invocations. It should only fail if ledger is
 /// mis-configured (e.g. when computed fees cause overflows).
 #[allow(clippy::too_many_arguments)]
-pub fn simulate_invoke_host_function_op(
+pub fn simulate_invoke_host_function_op<F>(
     snapshot_source: Rc<dyn SnapshotSource>,
     network_config: &NetworkConfig,
     adjustment_config: &SimulationAdjustmentConfig,
@@ -126,7 +127,11 @@ pub fn simulate_invoke_host_function_op(
     source_account: &AccountId,
     base_prng_seed: [u8; 32],
     enable_diagnostics: bool,
-) -> Result<InvokeHostFunctionSimulationResult> {
+    generate_new_entry_proof: F,
+) -> Result<InvokeHostFunctionSimulationResult>
+where
+    F: FnOnce() -> Result<Option<ArchivalProof>>,
+{
     let snapshot_source = Rc::new(SimulationSnapshotSource::new_from_rc(snapshot_source));
     let budget = network_config.create_budget()?;
     let mut diagnostic_events = vec![];
@@ -194,7 +199,11 @@ pub fn simulate_invoke_host_function_op(
         &rent_changes,
         adjustment_config,
     );
-    simulation_result.transaction_data = Some(create_transaction_data(resources, resource_fee));
+    simulation_result.transaction_data = Some(create_transaction_data(
+        resources,
+        resource_fee,
+        generate_new_entry_proof()?,
+    ));
 
     Ok(simulation_result)
 }
@@ -243,7 +252,7 @@ pub fn simulate_extend_ttl_op(
         adjustment_config,
     );
     Ok(ExtendTtlOpSimulationResult {
-        transaction_data: create_transaction_data(resources, resource_fee),
+        transaction_data: create_transaction_data(resources, resource_fee, None),
     })
 }
 
@@ -271,7 +280,7 @@ pub fn simulate_restore_op(
     keys_to_restore: &[LedgerKey],
 ) -> Result<RestoreOpSimulationResult> {
     let snapshot_source = SimulationSnapshotSourceWithArchive::new(snapshot_source);
-    let (mut resources, rent_changes) =
+    let (mut resources, rent_changes, archival_proof) =
         simulate_restore_op_resources(keys_to_restore, &snapshot_source, ledger_info)?;
     let operation = OperationBody::RestoreFootprint(RestoreFootprintOp {
         ext: ExtensionPoint::V0,
@@ -286,7 +295,7 @@ pub fn simulate_restore_op(
         adjustment_config,
     );
     Ok(RestoreOpSimulationResult {
-        transaction_data: create_transaction_data(resources, resource_fee),
+        transaction_data: create_transaction_data(resources, resource_fee, archival_proof),
     })
 }
 
@@ -333,11 +342,16 @@ impl SimulationAdjustmentConfig {
 fn create_transaction_data(
     resources: SorobanResources,
     resource_fee: i64,
+    new_entries_proof: Option<ArchivalProof>,
 ) -> SorobanTransactionData {
     SorobanTransactionData {
         resources,
         resource_fee,
-        ext: ExtensionPoint::V0,
+        ext: if let Some(proof) = new_entries_proof {
+            SorobanTransactionDataExt::V1(vec![proof].try_into().unwrap())
+        } else {
+            SorobanTransactionDataExt::V0
+        },
     }
 }
 
