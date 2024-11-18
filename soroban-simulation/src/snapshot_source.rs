@@ -70,7 +70,7 @@ impl<T: SnapshotSourceWithArchive> AutoRestoringSnapshotSource<T> {
         Ok(Self {
             snapshot_source,
             min_persistent_live_until_ledger: ledger_info.min_live_until_ledger_checked(
-                ContractDataDurability::Persistent).ok_or_else(|| 
+                ContractDataDurability::Persistent).ok_or_else(||
                     anyhow!("minimum persistent live until ledger overflows - ledger info is misconfigured"))?,
             current_ledger_sequence: ledger_info.sequence_number,
             new_keys_requiring_proof: RefCell::new(Default::default()),
@@ -91,7 +91,9 @@ impl<T: SnapshotSourceWithArchive> AutoRestoringSnapshotSource<T> {
         if keys.is_empty() {
             return Ok(None);
         }
-        Ok(Some(self.snapshot_source.generate_new_entries_proof(keys.iter().cloned().collect::<Vec<_>>().as_slice())?))
+        Ok(Some(self.snapshot_source.generate_new_entries_proof(
+            keys.iter().cloned().collect::<Vec<_>>().as_slice(),
+        )?))
     }
 
     /// Simulates a `RestoreFootprintOp` for all the keys that have been
@@ -294,7 +296,7 @@ impl<'a> SnapshotSource for SimulationSnapshotSource<'a> {
                 .borrow_mut()
                 .maybe_update_entry(key, entry)
             {
-                return Ok(Some((updated_entry, live_until.clone())));
+                return Ok(Some((updated_entry, *live_until)));
             }
         }
         Ok(entry_with_live_until)
@@ -318,7 +320,7 @@ impl<'a, T: SnapshotSourceWithArchive> SnapshotSourceWithArchive
             {
                 return Ok(LedgerEntryWithArchivalState {
                     entry: Some(updated_entry),
-                    live_until_ledger: entry_state.live_until_ledger.clone(),
+                    live_until_ledger: entry_state.live_until_ledger,
                     state: entry_state.state,
                 });
             }

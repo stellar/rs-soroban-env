@@ -15,14 +15,16 @@ use soroban_env_host::e2e_testutils::{
 };
 use soroban_env_host::fees::{FeeConfiguration, RentFeeConfiguration};
 use soroban_env_host::xdr::{
-    AccountId, AlphaNum4, AssetCode4, ContractCostParamEntry, ContractCostParams, ContractCostType,
-    ContractDataDurability, ContractDataEntry, ContractExecutable, ExtensionPoint, Hash,
-    HostFunction, Int128Parts, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint,
-    LedgerKey, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
-    ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScSymbol, ScVal,
+    AccountId, AlphaNum4, ArchivalProof, ArchivalProofBody, AssetCode4, ContractCostParamEntry,
+    ContractCostParams, ContractCostType, ContractDataDurability, ContractDataEntry,
+    ContractExecutable, ExtensionPoint, Hash, HostFunction, Int128Parts, InvokeContractArgs,
+    LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyContractData,
+    LedgerKeyTrustLine, NonexistenceProofBody, PublicKey, ScAddress, ScBytes, ScContractInstance,
+    ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScSymbol, ScVal,
     SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, SorobanTransactionData,
-    TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256, VecM,
+    SorobanTransactionDataExt, TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags,
+    Uint256, VecM,
 };
 use soroban_env_host::HostError;
 use soroban_test_wasms::{ADD_I32, AUTH_TEST_CONTRACT, TRY_CALL_SAC};
@@ -1144,8 +1146,10 @@ fn test_simulate_successful_sac_call() {
         )
         .unwrap(),
     );
+    let snapshot_source =
+        Rc::new(AutoRestoringSnapshotSource::new(snapshot_source, &ledger_info).unwrap());
     let res = simulate_invoke_host_function_op(
-        snapshot_source,
+        snapshot_source.clone(),
         &network_config,
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
@@ -1154,6 +1158,7 @@ fn test_simulate_successful_sac_call() {
         &source_account,
         [1; 32],
         true,
+        || snapshot_source.get_new_keys_proof(),
     )
     .unwrap();
     assert_eq!(res.invoke_result.unwrap(), ScVal::Void);
@@ -1175,7 +1180,7 @@ fn test_simulate_successful_sac_call() {
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: vec![ledger_entry_to_ledger_key(&contract_instance_le).unwrap(),]
@@ -1243,9 +1248,11 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
         )
         .unwrap(),
     );
+    let snapshot_source =
+        Rc::new(AutoRestoringSnapshotSource::new(snapshot_source, &ledger_info).unwrap());
 
     let res = simulate_invoke_host_function_op(
-        snapshot_source,
+        snapshot_source.clone(),
         &network_config,
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
@@ -1254,6 +1261,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
         &source_account,
         [1; 32],
         true,
+        || snapshot_source.get_new_keys_proof(),
     )
     .unwrap();
     // The return value indicates the whether the internal `mint` call has
@@ -1271,7 +1279,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: vec![

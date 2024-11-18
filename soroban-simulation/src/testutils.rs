@@ -22,6 +22,13 @@ pub struct MockSnapshotSource {
     map: BTreeMap<Rc<LedgerKey>, LedgerEntryWithArchivalState>,
 }
 
+pub type EntriesWithArchivalState = Vec<(
+    Option<LedgerKey>,
+    Option<LedgerEntry>,
+    Option<u32>,
+    LedgerEntryArchivalState,
+)>;
+
 impl MockSnapshotSource {
     pub fn from_entries(
         entries: Vec<(LedgerEntry, Option<u32>)>,
@@ -33,7 +40,7 @@ impl MockSnapshotSource {
             let state = if let Some(live_until_ledger) = &live_until_ledger {
                 if *live_until_ledger < current_ledger_seq {
                     if matches!(
-                        get_key_durability(&*key),
+                        get_key_durability(&key),
                         Some(ContractDataDurability::Persistent)
                     ) {
                         LedgerEntryArchivalState::Archived(false)
@@ -68,14 +75,7 @@ impl MockSnapshotSource {
         Ok(Self { map })
     }
 
-    pub fn from_entries_with_archival_state(
-        entries: Vec<(
-            Option<LedgerKey>,
-            Option<LedgerEntry>,
-            Option<u32>,
-            LedgerEntryArchivalState,
-        )>,
-    ) -> Result<Self> {
+    pub fn from_entries_with_archival_state(entries: EntriesWithArchivalState) -> Result<Self> {
         let mut map = BTreeMap::<Rc<LedgerKey>, LedgerEntryWithArchivalState>::new();
         for (maybe_key, maybe_entry, live_until_ledger, state) in entries {
             let key = if let Some(k) = maybe_key {
@@ -195,7 +195,7 @@ impl SnapshotSource for MockSnapshotSource {
     ) -> std::result::Result<Option<EntryWithLiveUntil>, HostError> {
         if let Some(entry_state) = self.map.get(key) {
             if let Some(entry) = &entry_state.entry {
-                Ok(Some((entry.clone(), entry_state.live_until_ledger.clone())))
+                Ok(Some((entry.clone(), entry_state.live_until_ledger)))
             } else {
                 if matches!(entry_state.state, LedgerEntryArchivalState::Archived(_)) {
                     Err(HostError::from((

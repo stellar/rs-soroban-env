@@ -309,7 +309,7 @@ fn test_automatic_restoration_with_archival_state() {
             b"persistent_archived_need_proof_no_entry"
         )))
         .is_err());
-    // We don't try to restore the non-existent entires (this shouldn't 
+    // We don't try to restore the non-existent entires (this shouldn't
     // normally be called at all though in such case).
     assert_eq!(
         auto_restoring_snapshot
