@@ -238,7 +238,6 @@ pub trait EnvBase: Sized + Clone {
 /// This trait is used by macro-generated dispatch and forwarding functions to
 /// check arguments being passed to the Env. The default implementations call
 /// through to the Env integrity-checking functions.
-
 pub trait CheckedEnvArg: Sized {
     fn check_env_arg<E: crate::Env>(self, _e: &E) -> Result<Self, E::Error> {
         Ok(self)
@@ -327,7 +326,7 @@ generate_call_macro_with_all_host_functions!("env.json");
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: defining trait Env
 ///////////////////////////////////////////////////////////////////////////////
-
+//
 // This is a helper macro used only by generate_env_trait below. It consumes
 // a token-tree of the form:
 //

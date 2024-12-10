@@ -24,7 +24,6 @@ use core::marker::PhantomData;
 /// allows code to import and use `Env` directly (such as the native
 /// contract) to call host methods without having to write `VmCaller::none()`
 /// everywhere.
-
 #[cfg(feature = "wasmi")]
 pub struct VmCaller<'a, T>(pub Option<wasmi::Caller<'a, T>>);
 #[cfg(feature = "wasmi")]
@@ -68,7 +67,7 @@ impl<'a, T> VmCaller<'a, T> {
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: defining trait VmCallerEnv
 ///////////////////////////////////////////////////////////////////////////////
-
+//
 // This is a helper macro used only by generate_vmcaller_checked_env_trait
 // below. It consumes a token-tree of the form:
 //
@@ -160,7 +159,7 @@ call_macro_with_all_host_functions! { generate_vmcaller_checked_env_trait }
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: impl<E> Env for VmCallerEnv<E>
 ///////////////////////////////////////////////////////////////////////////////
-
+//
 // This is a helper macro used only by
 // generate_impl_checked_env_for_vmcaller_checked_env below. It consumes a
 // token-tree of the form:
