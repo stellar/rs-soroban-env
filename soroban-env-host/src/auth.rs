@@ -2335,6 +2335,28 @@ impl Host {
         Ok(self.try_borrow_authorization_manager()?.clone())
     }
 
+    /// Switches host to the recording authorization mode and inherits the
+    /// recording mode settings from the provided authorization manager settings
+    /// in case if it used the recording mode.
+    ///
+    /// This is similar to `switch_to_recording_auth`, but should be preferred
+    /// to use in conjunction with `snapshot_auth_manager`, such that the
+    /// recording mode settings are not overridden.
+    pub fn switch_to_recording_auth_inherited_from_snapshot(
+        &self,
+        auth_manager_snapshot: &AuthorizationManager,
+    ) -> Result<(), HostError> {
+        let disable_non_root_auth = match &auth_manager_snapshot.mode {
+            AuthorizationMode::Enforcing => true,
+            AuthorizationMode::Recording(recording_auth_info) => {
+                recording_auth_info.disable_non_root_auth
+            }
+        };
+        *self.try_borrow_authorization_manager_mut()? =
+            AuthorizationManager::new_recording(disable_non_root_auth);
+        Ok(())
+    }
+
     /// Replaces authorization manager with the provided new instance.
     ///
     /// Use this in conjunction with `snapshot_auth_manager` to do authorized
