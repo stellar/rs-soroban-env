@@ -2,7 +2,7 @@ use super::{TraceEvent, TraceState};
 use crate::{host::Frame, xdr::ContractExecutable, Symbol, SymbolObject, SymbolSmall, Val};
 use core::fmt::{Debug, Display};
 
-impl<'a> Debug for TraceEvent<'a> {
+impl Debug for TraceEvent<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TraceEvent::Begin => write!(f, "TraceEvent::Begin"),
@@ -86,7 +86,7 @@ impl Display for FrameId {
     }
 }
 
-impl<'a> TraceEvent<'a> {
+impl TraceEvent<'_> {
     pub fn is_begin(&self) -> bool {
         match self {
             TraceEvent::Begin => true,
@@ -146,7 +146,7 @@ impl<'a> TraceEvent<'a> {
     }
 }
 
-impl<'a> Display for TraceEvent<'a> {
+impl Display for TraceEvent<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TraceEvent::PushCtx(ctx) => {

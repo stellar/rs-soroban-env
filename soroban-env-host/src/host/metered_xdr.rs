@@ -11,7 +11,7 @@ struct MeteredWrite<'a, W: Write> {
     w: &'a mut W,
 }
 
-impl<'a, W> Write for MeteredWrite<'a, W>
+impl<W> Write for MeteredWrite<'_, W>
 where
     W: Write,
 {

@@ -129,7 +129,7 @@ impl RelativeObjectConversion for U32Val {}
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: dispatch functions
 ///////////////////////////////////////////////////////////////////////////////
-
+//
 // This is a callback macro that pattern-matches the token-tree passed by the
 // x-macro (call_macro_with_all_host_functions) and produces a suite of
 // dispatch-function definitions.

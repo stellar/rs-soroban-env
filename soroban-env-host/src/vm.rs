@@ -281,7 +281,6 @@ impl Vm {
     /// With the introduction of the granular cost inputs this method
     /// should only be used for the one-off full parses of the new Wasms
     /// during the initial upload verification.
-
     pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Rc<Self>, HostError> {
         let cost_inputs = VersionedContractCodeCostInputs::V0 {
             wasm_bytes: wasm.len(),

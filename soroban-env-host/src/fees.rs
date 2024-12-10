@@ -3,7 +3,7 @@
 /// This is technically not part of the Soroban host and is provided here for
 /// the sake of sharing between the systems that run Soroban host (such as
 /// Stellar core or Soroban RPC service).
-
+///
 /// Rough estimate of the base size of any transaction result in the archives
 /// (independent of the transaction envelope size).
 pub const TX_BASE_RESULT_SIZE: u32 = 300;
