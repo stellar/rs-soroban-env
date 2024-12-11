@@ -29,7 +29,7 @@ mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 #[cfg(any(test, feature = "testutils"))]
-mod invocation_metering;
+pub mod invocation_metering;
 pub(crate) mod ledger_info_helper;
 pub(crate) mod lifecycle;
 mod mem_helper;
