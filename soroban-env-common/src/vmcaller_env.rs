@@ -1,3 +1,4 @@
+#![allow(clippy::needless_lifetimes)]
 #[cfg(feature = "wasmi")]
 use crate::xdr::{ScErrorCode, ScErrorType};
 
