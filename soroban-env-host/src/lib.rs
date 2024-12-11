@@ -37,10 +37,12 @@ pub use vm::Vm;
 pub mod storage;
 pub use budget::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use host::{
-    invocation_metering::FeeEstimate, invocation_metering::InvocationResources,
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, Seed, SEED_BYTES,
 };
 pub use soroban_env_common::*;
+
+#[cfg(any(test, feature = "testutils"))]
+pub use host::invocation_metering::{FeeEstimate, InvocationResources};
 
 pub mod ledger_info;
 pub use ledger_info::LedgerInfo;
