@@ -5,7 +5,7 @@
 /// panic handler has been already linked in. If soroban_env_common imports
 /// libstd by accident then this crate will fail to build because there will be
 /// two panic hanlders.
-
+//
 // Import a type from soroban_env_common so that the compiler includes it in the
 // build.
 #[allow(unused_imports)]

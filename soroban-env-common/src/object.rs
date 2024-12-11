@@ -115,7 +115,7 @@ impl<'a> From<ScValObjRef<'a>> for &'a ScVal {
     }
 }
 
-impl<'a> AsRef<ScVal> for ScValObjRef<'a> {
+impl AsRef<ScVal> for ScValObjRef<'_> {
     fn as_ref(&self) -> &ScVal {
         self.0
     }

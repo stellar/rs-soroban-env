@@ -1,3 +1,4 @@
+#![allow(non_local_definitions)]
 use num_derive::FromPrimitive;
 use soroban_env_common::Error;
 

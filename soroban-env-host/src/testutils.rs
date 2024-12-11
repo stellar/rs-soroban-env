@@ -297,7 +297,7 @@ impl Host {
         let prev_source_account = self.source_account_id()?;
         // Use recording auth to skip specifying the auth payload.
         let prev_auth_manager = self.snapshot_auth_manager()?;
-        self.switch_to_recording_auth(true)?;
+        self.switch_to_recording_auth_inherited_from_snapshot(&prev_auth_manager)?;
 
         let wasm_hash = self.upload_wasm(self.bytes_new_from_slice(contract_wasm)?)?;
         self.set_source_account(account.clone())?;

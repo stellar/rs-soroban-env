@@ -195,7 +195,7 @@ pub(crate) struct InvocationMeterScope<'a> {
     host: &'a Host,
 }
 
-impl<'a> Drop for InvocationMeterScope<'a> {
+impl Drop for InvocationMeterScope<'_> {
     fn drop(&mut self) {
         self.meter.finish_invocation(self.host);
     }

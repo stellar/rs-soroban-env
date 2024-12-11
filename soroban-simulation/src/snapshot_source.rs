@@ -162,7 +162,7 @@ enum SnapshotSourceHolder<'a> {
     Rc(Rc<dyn SnapshotSource>),
 }
 
-impl<'a> SnapshotSource for SnapshotSourceHolder<'a> {
+impl SnapshotSource for SnapshotSourceHolder<'_> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
         match self {
             SnapshotSourceHolder::Ref(r) => r.get(key),
@@ -216,7 +216,7 @@ impl<'a, T: SnapshotSourceWithArchive> SimulationSnapshotSourceWithArchive<'a, T
     }
 }
 
-impl<'a> SnapshotSource for SimulationSnapshotSource<'a> {
+impl SnapshotSource for SimulationSnapshotSource<'_> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
         Ok(self
             .entry_updater
@@ -225,8 +225,8 @@ impl<'a> SnapshotSource for SimulationSnapshotSource<'a> {
     }
 }
 
-impl<'a, T: SnapshotSourceWithArchive> SnapshotSourceWithArchive
-    for SimulationSnapshotSourceWithArchive<'a, T>
+impl<T: SnapshotSourceWithArchive> SnapshotSourceWithArchive
+    for SimulationSnapshotSourceWithArchive<'_, T>
 {
     fn get_including_archived(
         &self,

@@ -856,7 +856,7 @@ struct StorageMapSnapshotSource<'a> {
     map: &'a StorageMap,
 }
 
-impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
+impl SnapshotSource for StorageMapSnapshotSource<'_> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
         if let Some(Some((entry, live_until_ledger))) =
             self.map.get::<Rc<LedgerKey>>(key, self.budget)?

@@ -85,7 +85,7 @@ macro_rules! host_function_info_helper {
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: static HOST_FUNCTIONS array of HostFuncInfo
 ///////////////////////////////////////////////////////////////////////////////
-
+//
 // This is a callback macro that pattern-matches the token-tree passed by the
 // x-macro (call_macro_with_all_host_functions) and produces a suite of
 // dispatch-function definitions.

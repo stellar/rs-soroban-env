@@ -32,7 +32,7 @@ use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRE
 /// semantics have been implemented for these balances. If the asset issuer has
 /// the AUTH_REQUIRED flag set, then the non-account identifier must first be authorized
 /// by the issuer/admin before it's allowed to hold a balance.
-
+//
 // Metering: covered by components.
 pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
     match addr.to_sc_address()? {

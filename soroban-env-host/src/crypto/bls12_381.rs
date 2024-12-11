@@ -36,7 +36,7 @@ pub(crate) const FR_SERIALIZED_SIZE: usize = 32;
 
 #[inline(always)]
 fn units_of_fp<const EXPECTED_SIZE: usize>() -> u64 {
-    ((EXPECTED_SIZE + FP_SERIALIZED_SIZE - 1) / FP_SERIALIZED_SIZE) as u64
+    EXPECTED_SIZE.div_ceil(FP_SERIALIZED_SIZE) as u64
 }
 
 impl Host {

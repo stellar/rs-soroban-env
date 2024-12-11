@@ -1,3 +1,4 @@
+#![allow(non_local_definitions)]
 use crate::{
     declare_wasmi_marshal_for_enum,
     xdr::{ContractDataDurability, ScErrorCode, ScErrorType},
