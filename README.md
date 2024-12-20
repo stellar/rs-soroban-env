@@ -14,4 +14,4 @@ The `soroban-builtin-sdk-macros` and `soroban-env-macros` are crates dedicated t
 
 The `soroban-bench-utils` crate contains the utilties for running the benchmarks using for calibration of the Soroban execution costs via benchmarks.
 
-The `soroban-synth-wasm` and `soroban-test-wasms` are crates used for tests that use smart contract. THe former synthesizes simple parametric Wasms, and the latter contains various pre-compiled smart contract contracts used by tests.
+The `soroban-synth-wasm` and `soroban-test-wasms` are crates used for tests that use smart contract. The former synthesizes simple parametric Wasms, and the latter contains various pre-compiled smart contract contracts used by tests.
