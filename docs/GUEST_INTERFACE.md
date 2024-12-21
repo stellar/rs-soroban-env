@@ -1,6 +1,6 @@
 # Guest interface
 
-Soroban provides an abstract interface `Env`(soroban-env-common/src/env.rs) -- called "the environment interface" or "the env interface" -- which is implemented by two concrete types:
+Soroban provides an abstract interface `Env`(../soroban-env-common/src/env.rs) -- called "the environment interface" or "the env interface" -- which is implemented by two concrete types:
 
   - The Soroban [`Host`](../soroban-env-host/src/host.rs) which is compiled to native code, and houses (at runtime) various [_host objects_](../soroban-env-host/src/host/host_object.rs) as well as the implementation of many _host functions_, many of which operate on host objects.
   - The Soroban [`Guest`](../soroban-env-guest/src/guest.rs) which is compiled to Wasm and simply _declares_ the same set of host functions, as Wasm imports.
