@@ -6,6 +6,7 @@ use crate::simulation::{
 use crate::testutils::{ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource};
 use crate::NetworkConfig;
 use pretty_assertions::assert_eq;
+use soroban_env_host::e2e_invoke::RecordingInvocationAuthMode;
 use soroban_env_host::e2e_testutils::{
     account_entry, auth_contract_invocation, bytes_sc_val, create_contract_auth,
     default_ledger_info, get_account_id, get_contract_id_preimage, get_wasm_hash, get_wasm_key,
@@ -100,6 +101,16 @@ fn nonce_entry(address: ScAddress, nonce: i64) -> LedgerEntry {
     }))
 }
 
+// NB: this is a temporary helper function that we should remove and embed
+// RecordingInvocationAuthMode into code during the `unstable-next-api` cleanup
+// when switching to v23.
+fn recording_auth_mode() -> RecordingInvocationAuthMode {
+    #[cfg(not(feature = "unstable-next-api"))]
+    return None;
+    #[cfg(feature = "unstable-next-api")]
+    return RecordingInvocationAuthMode::Recording(true);
+}
+
 #[test]
 fn test_simulate_upload_wasm() {
     let source_account = get_account_id([123; 32]);
@@ -114,7 +125,7 @@ fn test_simulate_upload_wasm() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         upload_wasm_host_fn(ADD_I32),
-        None,
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -163,7 +174,7 @@ fn test_simulate_upload_wasm() {
         &test_adjustment_config(),
         &ledger_info,
         upload_wasm_host_fn(ADD_I32),
-        None,
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -218,7 +229,7 @@ fn test_simulation_returns_insufficient_budget_error() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         upload_wasm_host_fn(ADD_I32),
-        None,
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -253,7 +264,7 @@ fn test_simulation_returns_logic_error() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         upload_wasm_host_fn(&bad_wasm),
-        None,
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -297,7 +308,7 @@ fn test_simulate_create_contract() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         contract.host_fn.clone(),
-        None,
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -430,7 +441,7 @@ fn test_simulate_invoke_contract_with_auth() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         host_fn,
-        None,
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -1003,7 +1014,7 @@ fn test_simulate_successful_sac_call() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         host_fn,
-        None,
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -1103,7 +1114,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         host_fn,
-        None,
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,

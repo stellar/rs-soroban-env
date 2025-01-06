@@ -9,7 +9,7 @@ use crate::snapshot_source::{
 use anyhow::Result;
 use soroban_env_host::{
     e2e_invoke::invoke_host_function_in_recording_mode,
-    e2e_invoke::LedgerEntryChange,
+    e2e_invoke::{LedgerEntryChange, RecordingInvocationAuthMode},
     storage::SnapshotSource,
     xdr::{
         AccountId, ContractEvent, DiagnosticEvent, HostFunction, InvokeHostFunctionOp, LedgerKey,
@@ -100,9 +100,10 @@ pub struct RestoreOpSimulationResult {
 /// relevant payload parts.
 ///
 /// The operation is defined by the host function itself (`host_fn`)
-/// and optionally signed `auth_entries`. In case if `auth_entries` are
-/// omitted, the simulation will use recording authorization mode and
-/// return non-signed recorded authorization entries.
+/// and `auth_mode`. In case if `auth_mode` is `None`, the simulation will
+/// use recording authorization mode and  return non-signed recorded
+/// authorization entries. Otherwise, the signed entries will be used for
+/// authorization and authentication enforcement.
 ///
 /// The rest of parameters define the ledger state (`snapshot_source`,
 /// `network_config`, `ledger_info`), simulation adjustment
@@ -122,7 +123,7 @@ pub fn simulate_invoke_host_function_op(
     adjustment_config: &SimulationAdjustmentConfig,
     ledger_info: &LedgerInfo,
     host_fn: HostFunction,
-    auth_entries: Option<Vec<SorobanAuthorizationEntry>>,
+    auth_mode: RecordingInvocationAuthMode,
     source_account: &AccountId,
     base_prng_seed: [u8; 32],
     enable_diagnostics: bool,
@@ -135,7 +136,7 @@ pub fn simulate_invoke_host_function_op(
         enable_diagnostics,
         &host_fn,
         source_account,
-        auth_entries,
+        auth_mode,
         ledger_info.clone(),
         snapshot_source.clone(),
         base_prng_seed,

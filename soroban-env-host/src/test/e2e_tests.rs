@@ -1,4 +1,5 @@
 use crate::builtin_contracts::testutils::AccountContractSigner;
+use crate::e2e_invoke::RecordingInvocationAuthMode;
 use crate::e2e_testutils::{account_entry, bytes_sc_val, upload_wasm_host_fn};
 use crate::testutils::simple_account_sign_fn;
 use crate::{
@@ -191,6 +192,28 @@ impl LedgerEntryChangeHelper {
     }
 }
 
+// NB: this is a temporary helper function that we should remove and embed
+// RecordingInvocationAuthMode into code during the `unstable-next-api` cleanup
+// when switching to v23.
+fn recording_auth_mode() -> RecordingInvocationAuthMode {
+    #[cfg(not(feature = "unstable-next-api"))]
+    return None;
+    #[cfg(feature = "unstable-next-api")]
+    return RecordingInvocationAuthMode::Recording(true);
+}
+
+// NB: this is a temporary helper function that we should remove and embed
+// RecordingInvocationAuthMode into code during the `unstable-next-api` cleanup
+// when switching to v23.
+fn enforcing_auth_mode(
+    auth_entries: Vec<SorobanAuthorizationEntry>,
+) -> RecordingInvocationAuthMode {
+    #[cfg(not(feature = "unstable-next-api"))]
+    return Some(auth_entries);
+    #[cfg(feature = "unstable-next-api")]
+    return RecordingInvocationAuthMode::Enforcing(auth_entries);
+}
+
 struct InvokeHostFunctionHelperResult {
     invoke_result: Result<ScVal, HostError>,
     ledger_changes: Vec<LedgerEntryChangeHelper>,
@@ -294,7 +317,7 @@ fn invoke_host_function_recording_helper(
     enable_diagnostics: bool,
     host_fn: &HostFunction,
     source_account: &AccountId,
-    auth_entries: Option<Vec<SorobanAuthorizationEntry>>,
+    auth_mode: RecordingInvocationAuthMode,
     ledger_info: &LedgerInfo,
     ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
     prng_seed: &[u8; 32],
@@ -311,7 +334,7 @@ fn invoke_host_function_recording_helper(
         enable_diagnostics,
         host_fn,
         source_account,
-        auth_entries,
+        auth_mode,
         ledger_info.clone(),
         snapshot,
         *prng_seed,
@@ -342,7 +365,7 @@ fn invoke_host_function_using_simulation_with_signers(
         enable_diagnostics,
         host_fn,
         source_account,
-        None,
+        recording_auth_mode(),
         ledger_info,
         ledger_entries_with_ttl.clone(),
         prng_seed,
@@ -360,7 +383,7 @@ fn invoke_host_function_using_simulation_with_signers(
         enable_diagnostics,
         host_fn,
         source_account,
-        Some(signed_auth.clone()),
+        enforcing_auth_mode(signed_auth.clone()),
         ledger_info,
         ledger_entries_with_ttl.clone(),
         prng_seed,
@@ -557,7 +580,7 @@ fn test_run_out_of_budget_before_calling_host_in_recording_mode() {
         true,
         &upload_wasm_host_fn(ADD_I32),
         &get_account_id([0; 32]),
-        None,
+        recording_auth_mode(),
         &default_ledger_info(),
         vec![],
         &prng_seed(),
@@ -646,7 +669,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         false,
         &upload_wasm_host_fn(ADD_I32),
         &get_account_id([123; 32]),
-        None,
+        recording_auth_mode(),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -699,7 +722,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
         true,
         &upload_wasm_host_fn(&[0_u8; 1000]),
         &get_account_id([123; 32]),
-        None,
+        recording_auth_mode(),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -737,7 +760,7 @@ fn test_unsupported_wasm_upload_failure_in_recording_mode() {
         true,
         &upload_wasm_host_fn(ADD_F32),
         &get_account_id([123; 32]),
-        None,
+        recording_auth_mode(),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -1149,7 +1172,7 @@ fn test_create_contract_success_in_recording_mode() {
         true,
         &cd.host_fn,
         &cd.deployer,
-        None,
+        recording_auth_mode(),
         &ledger_info,
         vec![(
             cd.wasm_entry.clone(),
@@ -1235,7 +1258,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         true,
         &cd.host_fn,
         &cd.deployer,
-        None,
+        recording_auth_mode(),
         &ledger_info,
         vec![
             (
@@ -1351,7 +1374,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
         true,
         &cd.host_fn,
         &cd.deployer,
-        Some(vec![cd.auth_entry.clone()]),
+        enforcing_auth_mode(vec![cd.auth_entry.clone()]),
         &ledger_info,
         vec![(
             cd.wasm_entry.clone(),
@@ -1767,7 +1790,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         true,
         &host_fn,
         &cd.deployer,
-        None,
+        recording_auth_mode(),
         &ledger_info,
         vec![
             (
@@ -1842,7 +1865,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         true,
         &extend_host_fn,
         &cd.deployer,
-        None,
+        recording_auth_mode(),
         &ledger_info,
         vec![
             (
@@ -1945,7 +1968,7 @@ fn test_invoke_contract_with_storage_ops_success_using_simulation() {
         true,
         &extend_host_fn,
         &cd.deployer,
-        None,
+        recording_auth_mode(),
         &ledger_info,
         vec![
             (
