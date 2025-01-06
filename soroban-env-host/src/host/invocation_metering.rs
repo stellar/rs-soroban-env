@@ -366,6 +366,17 @@ mod test {
     use expect_test::expect;
     use soroban_test_wasms::CONTRACT_STORAGE;
 
+    fn assert_resources_equal_to_budget(host: &Host) {
+        assert_eq!(
+            host.get_last_invocation_resources().unwrap().instructions as u64,
+            host.budget_ref().get_cpu_insns_consumed().unwrap()
+        );
+        assert_eq!(
+            host.get_last_invocation_resources().unwrap().mem_bytes as u64,
+            host.budget_ref().get_mem_bytes_consumed().unwrap()
+        );
+    }
+
     // run `UPDATE_EXPECT=true cargo test` to update this test.
     // The exact values of don't matter too much here (unless the diffs are
     // produced without a protocol upgrade), but the presence/absence of certain
@@ -401,6 +412,7 @@ mod test {
                 temporary_entry_rent_bumps: 0,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
 
         let key = Symbol::try_from_small_str("key_1").unwrap();
 
@@ -427,6 +439,7 @@ mod test {
                 temporary_entry_rent_bumps: 0,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
 
         // 1 persistent write together with the respective initial rent bump.
         let _ = &host
@@ -451,6 +464,7 @@ mod test {
                 temporary_entry_rent_bumps: 0,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
 
         // Another has check, should have more data read than the first one.
         let _ = &host
@@ -475,6 +489,7 @@ mod test {
                 temporary_entry_rent_bumps: 0,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
 
         // 1 temporary entry write with the initial rent bump.
         let _ = &host
@@ -499,6 +514,7 @@ mod test {
                 temporary_entry_rent_bumps: 1,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
 
         // Has check, same amount of data is read as for persistent has check.
         let _ = &host
@@ -523,6 +539,7 @@ mod test {
                 temporary_entry_rent_bumps: 0,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
 
         // Extend persistent entry, 1 persistent extension is expected.
         let _ = &host
@@ -547,6 +564,7 @@ mod test {
                 temporary_entry_rent_bumps: 0,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
 
         // Extend temp entry, 1 persistent extension is expected.
         let _ = &host
@@ -571,6 +589,32 @@ mod test {
                 temporary_entry_rent_bumps: 1,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
+
+        // Try extending entry for a non-existent key, this should fail.
+        let non_existent_key = Symbol::try_from_small_str("non_exist").unwrap();
+        let res = &host.call(
+            contract_id,
+            Symbol::try_from_val(&host, &"extend_persistent").unwrap(),
+            test_vec![&host, non_existent_key, &5000_u32, &5000_u32].into(),
+        );
+        assert!(res.is_err());
+        expect![[r#"
+            InvocationResources {
+                instructions: 847829,
+                mem_bytes: 1216209,
+                read_entries: 3,
+                write_entries: 0,
+                read_bytes: 3132,
+                write_bytes: 0,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
     }
 
     #[test]
