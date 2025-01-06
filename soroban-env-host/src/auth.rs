@@ -2307,6 +2307,8 @@ impl Host {
         contract: AddressObject,
         args: VecObject,
     ) -> Result<Val, HostError> {
+        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+
         use crate::builtin_contracts::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
         let contract_id = self.contract_id_from_address(contract)?;
         let args_vec = self.call_args_from_obj(args)?;
