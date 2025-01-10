@@ -15,8 +15,9 @@ exclude = ["observations/"]
 
 [dependencies]
 soroban-builtin-sdk-macros = { workspace = true }
-soroban-env-common = { workspace = true, features = ["std", "wasmi", "shallow-val-hash"] }
-wasmi = { workspace = true }
+soroban-env-common = { workspace = true, features = ["std", "shallow-val-hash"] }
+wasmi = { workspace = true, optional = true }
+wasmtime = { workspace = true, optional = true }
 wasmparser = { workspace = true }
 stellar-strkey = "0.0.13"
 static_assertions = "1.1.0"
@@ -90,6 +91,9 @@ default-features = false
 features = ["arbitrary"]
 
 [features]
+default = ["wasmi", "wasmtime"]
+wasmi = ["dep:wasmi", "soroban-env-common/wasmi"]
+wasmtime = ["dep:wasmtime", "soroban-env-common/wasmtime"]
 testutils = ["soroban-env-common/testutils", "recording_mode"]
 backtrace = ["dep:backtrace"]
 next = ["soroban-env-common/next", "stellar-xdr/next"]

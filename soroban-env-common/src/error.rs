@@ -283,6 +283,49 @@ impl From<wasmparser::BinaryReaderError> for Error {
     }
 }
 
+#[cfg(feature = "wasmtime")]
+impl From<wasmtime::Trap> for Error {
+    #[allow(clippy::wildcard_in_or_patterns)]
+    fn from(trap: wasmtime::Trap) -> Self {
+        let ec = match trap {
+            wasmtime::Trap::UnreachableCodeReached => ScErrorCode::InvalidAction,
+
+            wasmtime::Trap::MemoryOutOfBounds | wasmtime::Trap::TableOutOfBounds => {
+                ScErrorCode::IndexBounds
+            }
+
+            wasmtime::Trap::IndirectCallToNull => ScErrorCode::MissingValue,
+
+            wasmtime::Trap::IntegerDivisionByZero
+            | wasmtime::Trap::IntegerOverflow
+            | wasmtime::Trap::BadConversionToInteger => ScErrorCode::ArithDomain,
+
+            wasmtime::Trap::BadSignature => ScErrorCode::UnexpectedType,
+
+            wasmtime::Trap::StackOverflow
+            | wasmtime::Trap::Interrupt
+            | wasmtime::Trap::OutOfFuel => {
+                return Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+            }
+
+            wasmtime::Trap::HeapMisaligned
+            | wasmtime::Trap::AlwaysTrapAdapter
+            | wasmtime::Trap::AtomicWaitNonSharedMemory
+            | wasmtime::Trap::NullReference
+            | wasmtime::Trap::CannotEnterComponent
+            | _ => ScErrorCode::InvalidAction,
+        };
+        Error::from_type_and_code(ScErrorType::WasmVm, ec)
+    }
+}
+
+#[cfg(feature = "wasmtime")]
+impl From<wasmtime::MemoryAccessError> for Error {
+    fn from(_: wasmtime::MemoryAccessError) -> Self {
+        Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds)
+    }
+}
+
 impl Error {
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScErrorType. Instead we provide an "is_type" to check any specific

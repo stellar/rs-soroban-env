@@ -92,6 +92,7 @@ pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 23;
 #[derive(Clone, Default)]
 struct HostImpl {
     module_cache: RefCell<Option<ModuleCache>>,
+    last_vm_fuel: RefCell<u64>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
@@ -208,6 +209,12 @@ impl_checked_borrow_helpers!(
     Option<ModuleCache>,
     try_borrow_module_cache,
     try_borrow_module_cache_mut
+);
+impl_checked_borrow_helpers!(
+    last_vm_fuel,
+    u64,
+    try_borrow_last_vm_fuel,
+    try_borrow_last_vm_fuel_mut
 );
 impl_checked_borrow_helpers!(
     source_account,
@@ -345,6 +352,7 @@ impl Host {
         let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
             module_cache: RefCell::new(None),
+            last_vm_fuel: RefCell::new(0),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
@@ -414,6 +422,15 @@ impl Host {
                 &[],
             )
         })
+    }
+
+    pub(crate) fn get_last_vm_fuel(&self) -> Result<u64, HostError> {
+        Ok(*self.try_borrow_last_vm_fuel()?)
+    }
+
+    pub(crate) fn set_last_vm_fuel(&self, fuel: u64) -> Result<(), HostError> {
+        *self.try_borrow_last_vm_fuel_mut()? = fuel;
+        Ok(())
     }
 
     #[cfg(any(test, feature = "recording_mode"))]

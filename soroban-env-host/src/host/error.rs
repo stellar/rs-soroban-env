@@ -176,6 +176,31 @@ impl HostError {
 
         true
     }
+
+    // Wasmtime uses anyhow::Error for its error type which may carry either a
+    // HostError or a wasmtime::Trap, or "something else entirely" since it's a
+    // dyn Error type. This is a somewhat different pattern to what we have in
+    // wasmi.
+    #[cfg(feature = "wasmtime")]
+    pub fn map_wasmtime_error<T>(r: Result<T, wasmtime::Error>) -> Result<T, HostError> {
+        match r {
+            Ok(t) => Ok(t),
+            Err(e) => match e.downcast::<HostError>() {
+                Ok(hosterror) => Err(hosterror),
+                Err(e) => {
+                    let e = if let Some(trap) = e.root_cause().downcast_ref::<wasmtime::Trap>() {
+                        HostError::from(Error::from(*trap))
+                    } else {
+                        HostError::from(Error::from_type_and_code(
+                            ScErrorType::WasmVm,
+                            ScErrorCode::InvalidAction,
+                        ))
+                    };
+                    Err(e)
+                }
+            },
+        }
+    }
 }
 
 impl<T> From<T> for HostError
@@ -245,6 +270,8 @@ pub trait ErrorHandler {
     where
         Error: From<E>,
         E: Debug;
+    #[cfg(feature = "wasmtime")]
+    fn map_wasmtime_error<T>(&self, r: Result<T, wasmtime::Error>) -> Result<T, HostError>;
     fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError;
 }
 
@@ -283,6 +310,35 @@ impl ErrorHandler for Host {
             });
             self.error(e.into(), &msg, &[])
         })
+    }
+
+    // Wasmtime uses anyhow::Error for its error type which may carry either a
+    // HostError or a wasmtime::Trap, or "something else entirely" since it's a
+    // dyn Error type. This is a somewhat different pattern to what we have in
+    // wasmi.
+    #[cfg(feature = "wasmtime")]
+    fn map_wasmtime_error<T>(&self, r: Result<T, wasmtime::Error>) -> Result<T, HostError> {
+        match r {
+            Ok(t) => Ok(t),
+            Err(e) => match e.downcast::<HostError>() {
+                Ok(hosterror) => Err(hosterror),
+                Err(e) => {
+                    let e = if let Some(trap) = e.root_cause().downcast_ref::<wasmtime::Trap>() {
+                        self.error(Error::from(*trap), "wasmtime trap", &[])
+                    } else {
+                        self.error(
+                            Error::from_type_and_code(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::InvalidAction,
+                            ),
+                            "wasmtime error",
+                            &[],
+                        )
+                    };
+                    Err(e)
+                }
+            },
+        }
     }
 
     /// At minimum constructs and returns a [HostError] built from the provided

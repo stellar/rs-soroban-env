@@ -699,11 +699,10 @@ impl Host {
                 .has_with_host(&wasm_key, self, None)?
             {
                 if let Some(parsed_module) = cache.get_module(wasm_hash)? {
-                    return Vm::from_parsed_module_and_wasmi_linker(
+                    return Vm::from_parsed_module(
                         self,
                         contract_id,
                         parsed_module,
-                        &cache.wasmi_linker,
                     );
                 }
             }
@@ -750,7 +749,7 @@ impl Host {
         // it during execution. Those would be cache misses in enforcing mode, and so it is right to
         // continue to charge for them as such (charging the parse cost on each call) in recording.
         if self.in_storage_recording_mode()? {
-            if let Some((parsed_module, wasmi_linker)) =
+            if let Some((parsed_module, _wasmi_linker)) =
                 self.budget_ref().with_observable_shadow_mode(|| {
                     use crate::vm::ParsedModule;
                     let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
@@ -769,11 +768,10 @@ impl Host {
                     }
                 })?
             {
-                return Vm::from_parsed_module_and_wasmi_linker(
+                return Vm::from_parsed_module(
                     self,
                     contract_id,
                     parsed_module,
-                    &wasmi_linker,
                 );
             }
         }

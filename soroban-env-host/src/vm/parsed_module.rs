@@ -3,6 +3,7 @@ use crate::{
     err,
     host::metered_clone::MeteredContainer,
     meta,
+    vm::get_wasmtime_config,
     xdr::{
         ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion,
         ScErrorCode, ScErrorType,
@@ -147,6 +148,7 @@ impl CompilationContext for Host {}
 /// from the module when it was parsed.
 pub struct ParsedModule {
     pub wasmi_module: wasmi::Module,
+    pub wasmtime_module: wasmtime::Module,
     pub proto_version: u32,
     pub cost_inputs: VersionedContractCodeCostInputs,
 }
@@ -156,14 +158,21 @@ impl ParsedModule {
         context: &Ctx,
         curr_ledger_protocol: u32,
         wasmi_engine: &wasmi::Engine,
+        wasmtime_engine: &wasmtime::Engine,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Arc<Self>, HostError> {
         cost_inputs.charge_for_parsing(context.as_budget())?;
-        let (wasmi_module, proto_version) =
-            Self::parse_wasm(context, curr_ledger_protocol, wasmi_engine, wasm)?;
+        let (wasmi_module, wasmtime_module, proto_version) = Self::parse_wasm(
+            context,
+            curr_ledger_protocol,
+            wasmi_engine,
+            wasmtime_engine,
+            wasm,
+        )?;
         Ok(Arc::new(Self {
             wasmi_module,
+            wasmtime_module,
             proto_version,
             cost_inputs,
         }))
@@ -179,6 +188,26 @@ impl ParsedModule {
         // we'll leave some future-proofing room here. The important point
         // is to not be introducing a DoS vector.
         const SYM_LEN_LIMIT: usize = 10;
+
+        #[cfg(feature = "wasmtime")]
+        #[allow(unused_variables)]
+        let symbols: BTreeSet<(&str, &str)> = self
+            .wasmtime_module
+            .imports()
+            .filter_map(|i| {
+                if i.ty().func().is_some() {
+                    let mod_str = i.module();
+                    let fn_str = i.name();
+                    if mod_str.len() < SYM_LEN_LIMIT && fn_str.len() < SYM_LEN_LIMIT {
+                        return Some((mod_str, fn_str));
+                    }
+                }
+                None
+            })
+            .collect();
+
+        #[cfg(feature = "wasmi")]
+        #[allow(unused_variables)]
         let symbols: BTreeSet<(&str, &str)> = self
             .wasmi_module
             .imports()
@@ -210,6 +239,16 @@ impl ParsedModule {
         })
     }
 
+    pub fn make_wasmtime_linker(&self, host: &Host) -> Result<wasmtime::Linker<Host>, HostError> {
+        self.with_import_symbols(host, |symbols| {
+            Host::make_minimal_wasmtime_linker_for_symbols(
+                host,
+                self.wasmtime_module.engine(),
+                symbols,
+            )
+        })
+    }
+
     pub fn new_with_isolated_engine(
         host: &Host,
         wasm: &[u8],
@@ -219,10 +258,14 @@ impl ParsedModule {
         let wasmi_config = crate::vm::get_wasmi_config(host.as_budget())?;
         let wasmi_engine = wasmi::Engine::new(&wasmi_config);
 
+        let wasmtime_config = get_wasmtime_config(host.as_budget())?;
+        let wasmtime_engine = host.map_wasmtime_error(wasmtime::Engine::new(&wasmtime_config))?;
+
         Self::new(
             host,
             host.get_ledger_protocol_version()?,
             &wasmi_engine,
+            &wasmtime_engine,
             wasm,
             cost_inputs,
         )
@@ -233,17 +276,22 @@ impl ParsedModule {
         context: &Ctx,
         curr_ledger_protocol: u32,
         wasmi_engine: &wasmi::Engine,
+        wasmtime_engine: &wasmtime::Engine,
         wasm: &[u8],
-    ) -> Result<(wasmi::Module, u32), HostError> {
+    ) -> Result<(wasmi::Module, wasmtime::Module, u32), HostError> {
         let module = {
             let _span = tracy_span!("wasmi::Module::new");
             context.map_err(wasmi::Module::new(&wasmi_engine, wasm))?
+        };
+        let wasmtime_module = {
+            let _span = tracy_span!("wasmtime::Module::new");
+            context.map_wasmtime_error(wasmtime::Module::new(&wasmtime_engine, &wasm))?
         };
         Self::check_max_args(context, &module)?;
         let interface_version = Self::check_meta_section(context, curr_ledger_protocol, &module)?;
         let contract_proto = interface_version.protocol;
 
-        Ok((module, contract_proto))
+        Ok((module, wasmtime_module, contract_proto))
     }
 
     fn check_contract_interface_version<Ctx: CompilationContext>(

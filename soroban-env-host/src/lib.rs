@@ -54,6 +54,14 @@ pub mod fees;
 #[doc(hidden)]
 pub use host::{TraceEvent, TraceHook, TraceRecord, TraceState};
 
+#[doc(hidden)]
+#[cfg(feature = "wasmi")]
+pub use wasmi;
+
+#[doc(hidden)]
+#[cfg(feature = "wasmtime")]
+pub use wasmtime;
+
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 pub mod cost_runner;

@@ -18,9 +18,10 @@ mod parsed_module;
 pub(crate) use dispatch::dummy0;
 #[cfg(test)]
 pub(crate) use dispatch::protocol_gated_dummy;
+use soroban_env_common::WasmtimeMarshal;
 
 use crate::{
-    budget::{get_wasmi_config, AsBudget, Budget},
+    budget::{get_wasmi_config, get_wasmtime_config, AsBudget, Budget},
     host::{
         error::TryBorrowOrErr,
         metered_clone::MeteredContainer,
@@ -89,6 +90,10 @@ pub struct Vm {
     wasmi_store: RefCell<wasmi::Store<Host>>,
     wasmi_instance: wasmi::Instance,
     pub(crate) wasmi_memory: Option<wasmi::Memory>,
+
+    wasmtime_store: RefCell<wasmtime::Store<Host>>,
+    wasmtime_instance: wasmtime::Instance,
+    pub(crate) wasmtime_memory: Option<wasmtime::Memory>,
 }
 
 impl std::hash::Hash for Vm {
@@ -122,6 +127,34 @@ impl Host {
         let mut linker = wasmi::Linker::new(&engine);
         for hf in HOST_FUNCTIONS {
             context.map_err((hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le)))?;
+        }
+        Ok(linker)
+    }
+
+    // Make a wasmtime linker restricted to _only_ importing the symbols
+    // mentioned in `symbols`.
+    pub(crate) fn make_minimal_wasmtime_linker_for_symbols<Ctx: ErrorHandler>(
+        context: &Ctx,
+        engine: &wasmtime::Engine,
+        symbols: &BTreeSet<(&str, &str)>,
+    ) -> Result<wasmtime::Linker<Host>, HostError> {
+        let mut linker = wasmtime::Linker::new(engine);
+        for hf in HOST_FUNCTIONS {
+            if symbols.contains(&(hf.mod_str, hf.fn_str)) {
+                context.map_wasmtime_error((hf.wrap_wasmtime)(&mut linker))?;
+            }
+        }
+        Ok(linker)
+    }
+
+    // Make a wasmtime linker that imports all the symbols.
+    pub(crate) fn make_maximal_wasmtime_linker<Ctx: ErrorHandler>(
+        context: &Ctx,
+        engine: &wasmtime::Engine,
+    ) -> Result<wasmtime::Linker<Host>, HostError> {
+        let mut linker = wasmtime::Linker::new(engine);
+        for hf in HOST_FUNCTIONS {
+            context.map_wasmtime_error((hf.wrap_wasmtime)(&mut linker))?;
         }
         Ok(linker)
     }
@@ -184,13 +217,48 @@ impl Vm {
         Ok((store, instance, memory))
     }
 
-    /// Instantiates a VM given more concrete inputs, called by
-    /// [Vm::new] via [Vm::new_with_cost_inputs].
-    pub fn from_parsed_module_and_wasmi_linker(
+    fn instantiate_wasmtime(
+        host: &Host,
+        parsed_module: &Arc<ParsedModule>,
+        wasmtime_linker: &wasmtime::Linker<Host>,
+    ) -> Result<
+        (
+            wasmtime::Store<Host>,
+            wasmtime::Instance,
+            Option<wasmtime::Memory>,
+        ),
+        HostError,
+    > {
+        let _span = tracy_span!("Vm::instantiate_wasmtime");
+
+        let wasmtime_engine = parsed_module.wasmtime_module.engine();
+        let mut wasmtime_store = {
+            let _span = tracy_span!("Vm::instantiate_wasmtime - store");
+            wasmtime::Store::new(&wasmtime_engine, host.clone())
+        };
+        let wasmtime_instance = {
+            let _span = tracy_span!("Vm::instantiate_wasmtime - instantiate");
+            host.map_wasmtime_error(
+                wasmtime_linker.instantiate(&mut wasmtime_store, &parsed_module.wasmtime_module),
+            )?
+        };
+        let wasmtime_memory =
+            if let Some(ext) = wasmtime_instance.get_export(&mut wasmtime_store, "memory") {
+                ext.into_memory()
+            } else {
+                None
+            };
+        Ok((wasmtime_store, wasmtime_instance, wasmtime_memory))
+    }
+
+    /// Instantiates a VM given the arguments provided in [`Self::new`],
+    /// or [`Self::new_from_module_cache`]
+    fn instantiate(
         host: &Host,
         contract_id: Hash,
         parsed_module: Arc<ParsedModule>,
         wasmi_linker: &wasmi::Linker<Host>,
+        wasmtime_linker: &wasmtime::Linker<Host>,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::instantiate");
 
@@ -203,6 +271,9 @@ impl Vm {
         let (wasmi_store, wasmi_instance, wasmi_memory) =
             Self::instantiate_wasmi(host, &parsed_module, wasmi_linker)?;
 
+        let (wasmtime_store, wasmtime_instance, wasmtime_memory) =
+            Self::instantiate_wasmtime(host, &parsed_module, wasmtime_linker)?;
+
         // Here we do _not_ supply the store with any fuel. Fuel is supplied
         // right before the VM is being run, i.e., before crossing the host->VM
         // boundary.
@@ -212,7 +283,38 @@ impl Vm {
             wasmi_store: RefCell::new(wasmi_store),
             wasmi_instance,
             wasmi_memory,
+            wasmtime_store: RefCell::new(wasmtime_store),
+            wasmtime_instance,
+            wasmtime_memory,
         }))
+    }
+
+    pub fn from_parsed_module(
+        host: &Host,
+        contract_id: Hash,
+        parsed_module: Arc<ParsedModule>,
+    ) -> Result<Rc<Self>, HostError> {
+        let _span = tracy_span!("Vm::from_parsed_module");
+        VmInstantiationTimer::new(host.clone());
+        if let Some(cache) = &*host.try_borrow_module_cache()? {
+            Self::instantiate(
+                host,
+                contract_id,
+                parsed_module,
+                &cache.wasmi_linker,
+                &cache.wasmtime_linker,
+            )
+        } else {
+            let wasmi_linker = parsed_module.make_wasmi_linker(host)?;
+            let wasmtime_linker = parsed_module.make_wasmtime_linker(host)?;
+            Self::instantiate(
+                host,
+                contract_id,
+                parsed_module,
+                &wasmi_linker,
+                &wasmtime_linker,
+            )
+        }
     }
 
     /// Constructs a new instance of a [Vm] within the provided [Host],
@@ -251,11 +353,30 @@ impl Vm {
         VmInstantiationTimer::new(host.clone());
         let parsed_module = ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)?;
         let wasmi_linker = parsed_module.make_wasmi_linker(host)?;
-        Self::from_parsed_module_and_wasmi_linker(host, contract_id, parsed_module, &wasmi_linker)
+        let wasmtime_linker = parsed_module.make_wasmtime_linker(host)?;
+        Self::instantiate(
+            host,
+            contract_id,
+            parsed_module,
+            &wasmi_linker,
+            &wasmtime_linker,
+        )
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<wasmi::Memory, HostError> {
         match self.wasmi_memory {
+            Some(mem) => Ok(mem),
+            None => Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::MissingValue,
+                "no linear memory named `memory`",
+                &[],
+            )),
+        }
+    }
+
+    pub(crate) fn get_wasmtime_memory(&self, host: &Host) -> Result<wasmtime::Memory, HostError> {
+        match self.wasmtime_memory {
             Some(mem) => Ok(mem),
             None => Err(host.err(
                 ScErrorType::WasmVm,
@@ -322,9 +443,11 @@ impl Vm {
 
         // call the function
         let mut wasm_ret: [wasmi::Value; 1] = [wasmi::Value::I64(0)];
-        self.wasmi_store
+        let added_fuel = self.wasmi_store
             .try_borrow_mut_or_err()?
             .add_fuel_to_vm(host)?;
+        host.set_last_vm_fuel(added_fuel)?;
+
         // Metering: the `func.call` will trigger `wasmi::Call` (or `CallIndirect`) instruction,
         // which is technically covered by wasmi fuel metering. So we are double charging a bit
         // here (by a few 100s cpu insns). It is better to be safe.
@@ -338,9 +461,10 @@ impl Vm {
         // wasmi instruction) remaining when the `OutOfFuel` trap occurs. This is only observable
         // if the contract traps with `OutOfFuel`, which may appear confusing if they look closely
         // at the budget amount consumed. So it should be fine.
+        let last_fuel = host.get_last_vm_fuel()?;
         self.wasmi_store
             .try_borrow_mut_or_err()?
-            .return_fuel_to_host(host)?;
+            .return_fuel_to_host(host, last_fuel)?;
 
         if let Err(e) = res {
             use std::borrow::Cow;
@@ -388,6 +512,93 @@ impl Vm {
         )
     }
 
+    pub(crate) fn metered_wasmtime_func_call(
+        self: &Rc<Self>,
+        host: &Host,
+        func_sym: &Symbol,
+        inputs: &[wasmtime::Val],
+        treat_missing_function_as_noop: bool,
+    ) -> Result<Val, HostError> {
+        let _span = tracy_span!("Vm::metered_wasmtime_func_call");
+
+        host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
+
+        // resolve the function entity to be called
+        let func_ss: SymbolStr = func_sym.try_into_val(host)?;
+        let ext = match self.wasmtime_instance.get_export(
+            &mut *self.wasmtime_store.try_borrow_mut_or_err()?,
+            func_ss.as_ref(),
+        ) {
+            None => {
+                if treat_missing_function_as_noop {
+                    return Ok(Val::VOID.into());
+                } else {
+                    return Err(host.err(
+                        ScErrorType::WasmVm,
+                        ScErrorCode::MissingValue,
+                        "trying to invoke non-existent contract function",
+                        &[func_sym.to_val()],
+                    ));
+                }
+            }
+            Some(e) => e,
+        };
+        let func = match ext.into_func() {
+            None => {
+                return Err(host.err(
+                    ScErrorType::WasmVm,
+                    ScErrorCode::UnexpectedType,
+                    "trying to invoke Wasm export that is not a function",
+                    &[func_sym.to_val()],
+                ))
+            }
+            Some(e) => e,
+        };
+
+        if inputs.len() > Vm::MAX_VM_ARGS {
+            return Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidInput,
+                "Too many arguments in Wasm invocation",
+                &[func_sym.to_val()],
+            ));
+        }
+
+        // call the function
+        let mut wasm_ret: [wasmtime::Val; 1] = [wasmtime::Val::I64(0)];
+        let added_fuel = self
+            .wasmtime_store
+            .try_borrow_mut_or_err()?
+            .add_fuel_to_vm(host)?;
+        host.set_last_vm_fuel(added_fuel)?;
+
+        let res = {
+            let _span = tracy_span!("Vm::metered_wasmtime_func_call - actual call");
+            func.call(
+                &mut *self.wasmtime_store.try_borrow_mut_or_err()?,
+                inputs,
+                &mut wasm_ret,
+            )
+        };
+
+        let last_fuel = host.get_last_vm_fuel()?;
+        self.wasmtime_store
+            .try_borrow_mut_or_err()?
+            .return_fuel_to_host(host, last_fuel)?;
+
+        if let Err(e) = res {
+            // FIXME: this needs to be fairly careful about correct propagation.
+            // currently we're just doing a crude downcast attempt.
+            return host.map_wasmtime_error(Err(e));
+        }
+        host.relative_to_absolute(
+            Val::try_marshal_from_wasmtime_value(wasm_ret[0]).ok_or(ConversionError)?,
+        )
+    }
+
+    // FIXME: remove when/if we decide to commit to this transition.
+    const FIRST_PROTOCOL_TO_RUN_ON_WASMTIME: u32 = 21;
+
     pub(crate) fn invoke_function_raw(
         self: &Rc<Self>,
         host: &Host,
@@ -397,16 +608,32 @@ impl Vm {
     ) -> Result<Val, HostError> {
         let _span = tracy_span!("Vm::invoke_function_raw");
         Vec::<wasmi::Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
-        let wasm_args: Vec<wasmi::Value> = args
-            .iter()
-            .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
-            .collect::<Result<Vec<wasmi::Value>, HostError>>()?;
-        self.metered_func_call(
-            host,
-            func_sym,
-            wasm_args.as_slice(),
-            treat_missing_function_as_noop,
-        )
+        if host.get_ledger_protocol_version()? >= Self::FIRST_PROTOCOL_TO_RUN_ON_WASMTIME {
+            let wasmtime_args: Vec<wasmtime::Val> = args
+                .iter()
+                .map(|i| {
+                    host.absolute_to_relative(*i)
+                        .map(|v| v.marshal_wasmtime_from_self())
+                })
+                .collect::<Result<Vec<wasmtime::Val>, HostError>>()?;
+            self.metered_wasmtime_func_call(
+                host,
+                func_sym,
+                wasmtime_args.as_slice(),
+                treat_missing_function_as_noop,
+            )
+        } else {
+            let wasm_args: Vec<wasmi::Value> = args
+                .iter()
+                .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
+                .collect::<Result<Vec<wasmi::Value>, HostError>>()?;
+            self.metered_func_call(
+                host,
+                func_sym,
+                wasm_args.as_slice(),
+                treat_missing_function_as_noop,
+            )
+        }
     }
 
     /// Returns the raw bytes content of a named custom section from the WASM
@@ -425,7 +652,7 @@ impl Vm {
         let store: &mut wasmi::Store<Host> = &mut *self.wasmi_store.try_borrow_mut_or_err()?;
         let mut ctx: StoreContextMut<Host> = store.into();
         let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.wasmi_instance));
-        let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
+        let mut vmcaller: VmCaller<Host> = VmCaller::WasmiCaller(caller);
         f(&mut vmcaller)
     }
 

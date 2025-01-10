@@ -2,7 +2,7 @@ use super::parsed_module::{CompilationContext, ParsedModule, VersionedContractCo
 #[cfg(any(test, feature = "testutils"))]
 use crate::budget::AsBudget;
 use crate::{
-    budget::get_wasmi_config,
+    budget::{get_wasmi_config, get_wasmtime_config},
     host::metered_clone::MeteredClone,
     xdr::{Hash, ScErrorCode, ScErrorType},
     Host, HostError,
@@ -20,7 +20,9 @@ use std::{
 #[derive(Clone, Default)]
 pub struct ModuleCache {
     pub(crate) wasmi_engine: wasmi::Engine,
+    pub(crate) wasmtime_engine: wasmtime::Engine,
     pub(crate) wasmi_linker: wasmi::Linker<Host>,
+    pub(crate) wasmtime_linker: wasmtime::Linker<Host>,
     modules: ModuleCacheMap,
 }
 
@@ -86,12 +88,19 @@ impl ModuleCache {
     pub fn new<Ctx: CompilationContext>(context: &Ctx) -> Result<Self, HostError> {
         let wasmi_config = get_wasmi_config(context.as_budget())?;
         let wasmi_engine = wasmi::Engine::new(&wasmi_config);
+
+        let wasmtime_config = get_wasmtime_config(context.as_budget())?;
+        let wasmtime_engine = context.map_wasmtime_error(wasmtime::Engine::new(&wasmtime_config))?;
+
         let modules = ModuleCacheMap::default();
         let wasmi_linker = Host::make_maximal_wasmi_linker(context, &wasmi_engine)?;
+        let wasmtime_linker = Host::make_maximal_wasmtime_linker(context, &wasmtime_engine)?;
         Ok(Self {
             wasmi_engine,
+            wasmtime_engine,
             modules,
             wasmi_linker,
+            wasmtime_linker,
         })
     }
 
@@ -173,6 +182,7 @@ impl ModuleCache {
             context,
             curr_ledger_protocol,
             &self.wasmi_engine,
+            &self.wasmtime_engine,
             &wasm,
             cost_inputs,
         )?;
