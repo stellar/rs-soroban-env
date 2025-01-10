@@ -238,17 +238,51 @@ impl<T> TryBorrowOrErr<T> for RefCell<T> {
     }
 }
 
-impl Host {
-    /// Convenience function to construct an [Error] and pass to [Host::error].
-    pub(crate) fn err(
-        &self,
-        type_: ScErrorType,
-        code: ScErrorCode,
-        msg: &str,
-        args: &[Val],
-    ) -> HostError {
-        let error = Error::from_type_and_code(type_, code);
-        self.error(error, msg, args)
+/// This is a trait for mapping Results carrying various error types into `HostError`,
+/// while potentially recording the existence of the error to diagnostic logs.
+pub trait ErrorHandler {
+    fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
+    where
+        Error: From<E>,
+        E: Debug;
+    fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError;
+}
+
+impl ErrorHandler for Host {
+    /// Given a result carrying some error type that can be converted to an
+    /// [Error] and supports [core::fmt::Debug], calls [Host::error] with the
+    /// error when there's an error, also passing the result of
+    /// [core::fmt::Debug::fmt] when [Host::is_debug] is `true`. Returns a
+    /// [Result] over [HostError].
+    ///
+    /// If you have an error type `T` you want to record as a detailed debug
+    /// event and a less-detailed [Error] code embedded in a [HostError], add an
+    /// `impl From<T> for Error` over in `soroban_env_common::error`, or in the
+    /// module defining `T`, and call this where the error is generated.
+    ///
+    /// Note: we do _not_ want to `impl From<T> for HostError` for such types,
+    /// as doing so will avoid routing them through the host in order to record
+    /// their extended diagnostic information into the event log. This means you
+    /// will wind up writing `host.map_err(...)?` a bunch in code that you used
+    /// to be able to get away with just writing `...?`, there's no way around
+    /// this if we want to record the diagnostic information.
+    fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
+    where
+        Error: From<E>,
+        E: Debug,
+    {
+        res.map_err(|e| {
+            use std::borrow::Cow;
+            let mut msg: Cow<'_, str> = Cow::Borrowed(&"");
+            // This observes the debug state, but it only causes a different
+            // (richer) string to be logged as a diagnostic event, which
+            // is itself not observable outside the debug state.
+            self.with_debug_mode(|| {
+                msg = Cow::Owned(format!("{:?}", e));
+                Ok(())
+            });
+            self.error(e.into(), &msg, &[])
+        })
     }
 
     /// At minimum constructs and returns a [HostError] built from the provided
@@ -256,7 +290,7 @@ impl Host {
     /// records a diagnostic event with the provided `msg` and `args` and then
     /// enriches the returned [Error] with [DebugInfo] in the form of a
     /// [Backtrace] and snapshot of the [Events] buffer.
-    pub(crate) fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
+    fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
         let mut he = HostError::from(error);
         self.with_debug_mode(|| {
             // We _try_ to take a mutable borrow of the events buffer refcell
@@ -276,6 +310,20 @@ impl Host {
             Ok(())
         });
         he
+    }
+}
+
+impl Host {
+    /// Convenience function to construct an [Error] and pass to [Host::error].
+    pub(crate) fn err(
+        &self,
+        type_: ScErrorType,
+        code: ScErrorCode,
+        msg: &str,
+        args: &[Val],
+    ) -> HostError {
+        let error = Error::from_type_and_code(type_, code);
+        self.error(error, msg, args)
     }
 
     pub(crate) fn maybe_get_debug_info(&self) -> Option<Box<DebugInfo>> {
@@ -330,42 +378,6 @@ impl Host {
             None => self.err(type_, code, msg, &[]),
             Some(index) => self.err(type_, code, msg, &[U32Val::from(index).to_val()]),
         }
-    }
-
-    /// Given a result carrying some error type that can be converted to an
-    /// [Error] and supports [core::fmt::Debug], calls [Host::error] with the
-    /// error when there's an error, also passing the result of
-    /// [core::fmt::Debug::fmt] when [Host::is_debug] is `true`. Returns a
-    /// [Result] over [HostError].
-    ///
-    /// If you have an error type `T` you want to record as a detailed debug
-    /// event and a less-detailed [Error] code embedded in a [HostError], add an
-    /// `impl From<T> for Error` over in `soroban_env_common::error`, or in the
-    /// module defining `T`, and call this where the error is generated.
-    ///
-    /// Note: we do _not_ want to `impl From<T> for HostError` for such types,
-    /// as doing so will avoid routing them through the host in order to record
-    /// their extended diagnostic information into the event log. This means you
-    /// will wind up writing `host.map_err(...)?` a bunch in code that you used
-    /// to be able to get away with just writing `...?`, there's no way around
-    /// this if we want to record the diagnostic information.
-    pub(crate) fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
-    where
-        Error: From<E>,
-        E: Debug,
-    {
-        res.map_err(|e| {
-            use std::borrow::Cow;
-            let mut msg: Cow<'_, str> = Cow::Borrowed(&"");
-            // This observes the debug state, but it only causes a different
-            // (richer) string to be logged as a diagnostic event, which
-            // is itself not observable outside the debug state.
-            self.with_debug_mode(|| {
-                msg = Cow::Owned(format!("{:?}", e));
-                Ok(())
-            });
-            self.error(e.into(), &msg, &[])
-        })
     }
 
     // Extracts the account id from the given ledger key as address object `Val`.
@@ -471,7 +483,7 @@ macro_rules! err {
                 )*
                 Ok(())
             });
-            $host.error($error.into(), $msg, &buf[0..i])
+            <_ as $crate::ErrorHandler>::error($host, $error.into(), $msg, &buf[0..i])
         }
     };
 }

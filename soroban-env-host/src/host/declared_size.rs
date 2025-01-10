@@ -264,6 +264,11 @@ impl<T> DeclaredSizeForMetering for Rc<T> {
     const DECLARED_SIZE: u64 = 16;
 }
 
+// Arc is the same.
+impl<T> DeclaredSizeForMetering for std::sync::Arc<T> {
+    const DECLARED_SIZE: u64 = 16;
+}
+
 // RefCell is the underlying data plus an `isize` flag
 impl<T: DeclaredSizeForMetering> DeclaredSizeForMetering for RefCell<T> {
     const DECLARED_SIZE: u64 = T::DECLARED_SIZE + 8;

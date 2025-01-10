@@ -4,13 +4,13 @@ use crate::{
     xdr::{ContractCostType::VmInstantiation, Hash},
     Vm,
 };
-use std::{hint::black_box, rc::Rc};
+use std::{hint::black_box, rc::Rc, sync::Arc};
 
 #[derive(Clone)]
 pub struct VmInstantiationSample {
     pub id: Option<Hash>,
     pub wasm: Vec<u8>,
-    pub module: Rc<ParsedModule>,
+    pub module: Arc<ParsedModule>,
 }
 
 // Protocol 20 coarse and unified cost model
@@ -73,7 +73,7 @@ mod v21 {
 
                 type SampleType = VmInstantiationSample;
 
-                type RecycledType = (Option<Rc<ParsedModule>>, Vec<u8>);
+                type RecycledType = (Option<Arc<ParsedModule>>, Vec<u8>);
 
                 fn run_iter(
                     host: &crate::Host,
@@ -83,7 +83,9 @@ mod v21 {
                     let module = black_box(
                         ParsedModule::new(
                             host,
-                            sample.module.module.engine(),
+                            host.get_ledger_protocol_version()
+                                .expect("protocol version"),
+                            sample.module.wasmi_module.engine(),
                             &sample.wasm[..],
                             sample.module.cost_inputs.clone(),
                         )

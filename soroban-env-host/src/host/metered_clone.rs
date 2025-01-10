@@ -341,6 +341,10 @@ impl MeteredClone for Asset {}
 // cloning Rc is just a ref-count bump
 impl<T> MeteredClone for Rc<T> {}
 
+// cloning Arc is just an _atomic_ ref-count bump, but still O(1)
+// too cheap to meter. We don't use Arcs very much.
+impl<T> MeteredClone for std::sync::Arc<T> {}
+
 // cloning a RefCell clones its underlying data structure
 impl<T: MeteredClone> MeteredClone for RefCell<T> {
     const IS_SHALLOW: bool = T::IS_SHALLOW;

@@ -1093,7 +1093,7 @@ mod cap_54_55_56 {
         let wasm = get_contract_wasm_ref(&host, contract_id);
         let module_cache = host.try_borrow_module_cache()?;
         if let Some(module_cache) = &*module_cache {
-            assert!(module_cache.get_module(&host, &wasm).is_ok());
+            assert!(module_cache.get_module(&*host, &wasm).is_ok());
         } else {
             panic!("expected module cache");
         }
@@ -1409,7 +1409,7 @@ mod cap_54_55_56 {
 
         // Check that the module cache did not get populated with the new wasm.
         if let Some(module_cache) = &*host.try_borrow_module_cache()? {
-            assert!(module_cache.get_module(&host, &wasm_hash)?.is_none());
+            assert!(module_cache.get_module(&*host, &wasm_hash)?.is_none());
         } else {
             panic!("expected module cache");
         }

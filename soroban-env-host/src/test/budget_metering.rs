@@ -1,9 +1,11 @@
 use crate::{
     budget::{AsBudget, Budget},
-    host::metered_clone::{MeteredClone, MeteredIterator},
-    host::metered_xdr::metered_write_xdr,
+    host::{
+        metered_clone::{MeteredClone, MeteredIterator},
+        metered_xdr::metered_write_xdr,
+    },
     xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
-    Env, Host, HostError, Symbol, Val,
+    Env, ErrorHandler, Host, HostError, Symbol, Val,
 };
 use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};

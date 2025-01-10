@@ -21,7 +21,7 @@ use crate::{
     err,
     host::{metered_clone::MeteredClone, Host},
     xdr::Asset,
-    BytesObject, Compare, Env, EnvBase, HostError, TryFromVal, TryIntoVal,
+    BytesObject, Compare, Env, EnvBase, ErrorHandler, HostError, TryFromVal, TryIntoVal,
 };
 
 use soroban_builtin_sdk_macros::contractimpl;
