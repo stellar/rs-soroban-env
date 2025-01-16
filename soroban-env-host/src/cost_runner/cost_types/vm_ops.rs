@@ -1,8 +1,8 @@
 use crate::{
     cost_runner::{CostRunner, CostType},
-    vm::{ModuleParseCostMode, ParsedModule},
+    vm::ParsedModule,
     xdr::{ContractCostType::VmInstantiation, Hash},
-    Vm,
+    Host, Vm,
 };
 use std::{hint::black_box, rc::Rc, sync::Arc};
 
@@ -11,6 +11,7 @@ pub struct VmInstantiationSample {
     pub id: Option<Hash>,
     pub wasm: Vec<u8>,
     pub module: Arc<ParsedModule>,
+    pub linker: wasmi::Linker<Host>,
 }
 
 // Protocol 20 coarse and unified cost model
@@ -23,7 +24,7 @@ impl CostRunner for VmInstantiationRun {
 
     type SampleType = VmInstantiationSample;
 
-    type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
+    type RecycledType = (Option<Rc<Vm>>, Vec<u8>, wasmi::Linker<Host>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         let vm = black_box(
@@ -32,11 +33,10 @@ impl CostRunner for VmInstantiationRun {
                 sample.id.unwrap(),
                 &sample.wasm[..],
                 sample.module.cost_inputs.clone(),
-                ModuleParseCostMode::Normal,
             )
             .unwrap(),
         );
-        (Some(vm), sample.wasm)
+        (Some(vm), sample.wasm, sample.linker)
     }
 
     fn run_baseline_iter(
@@ -45,7 +45,7 @@ impl CostRunner for VmInstantiationRun {
         sample: Self::SampleType,
     ) -> Self::RecycledType {
         black_box(host.charge_budget(VmInstantiation, Some(0)).unwrap());
-        black_box((None, sample.wasm))
+        black_box((None, sample.wasm, sample.linker))
     }
 }
 
@@ -73,7 +73,7 @@ mod v21 {
 
                 type SampleType = VmInstantiationSample;
 
-                type RecycledType = (Option<Arc<ParsedModule>>, Vec<u8>);
+                type RecycledType = (Option<Arc<ParsedModule>>, Vec<u8>, wasmi::Linker<Host>);
 
                 fn run_iter(
                     host: &crate::Host,
@@ -91,7 +91,7 @@ mod v21 {
                         )
                         .unwrap(),
                     );
-                    (Some(module), sample.wasm)
+                    (Some(module), sample.wasm, sample.linker)
                 }
 
                 fn run_baseline_iter(
@@ -100,7 +100,7 @@ mod v21 {
                     sample: Self::SampleType,
                 ) -> Self::RecycledType {
                     black_box(host.charge_budget($COST, Some(0)).unwrap());
-                    black_box((None, sample.wasm))
+                    black_box((None, sample.wasm, sample.linker))
                 }
             }
         };
@@ -115,7 +115,7 @@ mod v21 {
 
                 type SampleType = VmInstantiationSample;
 
-                type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
+                type RecycledType = (Option<Rc<Vm>>, Vec<u8>, wasmi::Linker<Host>);
 
                 fn run_iter(
                     host: &crate::Host,
@@ -123,9 +123,15 @@ mod v21 {
                     sample: Self::SampleType,
                 ) -> Self::RecycledType {
                     let vm = black_box(
-                        Vm::from_parsed_module(host, sample.id.unwrap(), sample.module).unwrap(),
+                        Vm::from_parsed_module_and_wasmi_linker(
+                            host,
+                            sample.id.unwrap(),
+                            sample.module,
+                            &sample.linker,
+                        )
+                        .unwrap(),
                     );
-                    (Some(vm), sample.wasm)
+                    (Some(vm), sample.wasm, sample.linker)
                 }
 
                 fn run_baseline_iter(
@@ -138,7 +144,7 @@ mod v21 {
                     } else {
                         black_box(host.charge_budget($COST, Some(0)).unwrap());
                     }
-                    black_box((None, sample.wasm))
+                    black_box((None, sample.wasm, sample.linker))
                 }
             }
         };
