@@ -526,14 +526,14 @@ fn excessive_logging() -> Result<(), HostError> {
 
     let expected_budget = expect![[r#"
     =================================================================
-    Cpu limit: 2000000; used: 215305
-    Mem limit: 500000; used: 166764
+    Cpu limit: 2000000; used: 214289
+    Mem limit: 500000; used: 166780
     =================================================================
     CostType                           cpu_insns      mem_bytes      
     WasmInsnExec                       300            0              
-    MemAlloc                           17058          67344          
-    MemCpy                             2866           0              
-    MemCmp                             512            0              
+    MemAlloc                           16628          67360          
+    MemCpy                             2328           0              
+    MemCmp                             464            0              
     DispatchHostFunction               310            0              
     VisitObject                        244            0              
     ValSer                             0              0              

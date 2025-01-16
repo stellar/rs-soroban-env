@@ -328,7 +328,7 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    let expected_instructions = 2979643;
+    let expected_instructions = 2586867;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -342,11 +342,11 @@ fn test_simulate_create_contract() {
                 read_bytes: 684,
                 write_bytes: 104,
             },
-            resource_fee: 8542,
+            resource_fee: 8149,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 1489810);
+    assert_eq!(res.simulated_memory, 1293424);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -474,7 +474,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 41269703;
+    let expected_instructions = 40293491;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -503,11 +503,11 @@ fn test_simulate_invoke_contract_with_auth() {
                 read_bytes: 7540,
                 write_bytes: 76,
             },
-            resource_fee: 79533,
+            resource_fee: 78557,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 20634711);
+    assert_eq!(res.simulated_memory, 20146607);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -1152,11 +1152,11 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
                     // No entries should be actually modified.
                     read_write: Default::default(),
                 },
-                instructions: 5768570,
+                instructions: 5352005,
                 read_bytes: 1196,
                 write_bytes: 0,
             },
-            resource_fee: 6224,
+            resource_fee: 5808,
         })
     );
 }

@@ -242,6 +242,11 @@ impl InvocationMeter {
             self.invocation_resources = None;
         }
 
+        // Emulate the write-back to the module cache (typically done by the
+        // embedding environment) of any new contracts added during the
+        // invocation.
+        budget.with_shadow_mode(|| host.ensure_module_cache_contains_host_storage_contracts());
+
         self.storage_snapshot = None;
     }
 
@@ -426,8 +431,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 846137,
-                mem_bytes: 1215737,
+                instructions: 314913,
+                mem_bytes: 1134843,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3132,
@@ -451,8 +456,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 850395,
-                mem_bytes: 1216336,
+                instructions: 318203,
+                mem_bytes: 1135306,
                 read_entries: 2,
                 write_entries: 1,
                 read_bytes: 3132,
@@ -476,8 +481,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 846406,
-                mem_bytes: 1215721,
+                instructions: 314214,
+                mem_bytes: 1134691,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3216,
@@ -501,8 +506,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 852007,
-                mem_bytes: 1216692,
+                instructions: 319806,
+                mem_bytes: 1135662,
                 read_entries: 2,
                 write_entries: 1,
                 read_bytes: 3132,
@@ -526,8 +531,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 846795,
-                mem_bytes: 1215789,
+                instructions: 314576,
+                mem_bytes: 1134759,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3216,
@@ -551,8 +556,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 847840,
-                mem_bytes: 1216141,
+                instructions: 315621,
+                mem_bytes: 1135111,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3216,
@@ -576,8 +581,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 847960,
-                mem_bytes: 1216141,
+                instructions: 315741,
+                mem_bytes: 1135111,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3216,
@@ -601,8 +606,8 @@ mod test {
         assert!(res.is_err());
         expect![[r#"
             InvocationResources {
-                instructions: 847829,
-                mem_bytes: 1216209,
+                instructions: 315602,
+                mem_bytes: 1135179,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3132,

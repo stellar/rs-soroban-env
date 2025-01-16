@@ -127,17 +127,6 @@ impl Host {
     }
 }
 
-// In one very narrow context -- when recording, and with a module cache -- we
-// defer the cost of parsing a module until we pop a control frame.
-// Unfortunately we have to thread this information from the call site to here.
-// See comment below where this type is used.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ModuleParseCostMode {
-    Normal,
-    #[cfg(any(test, feature = "recording_mode"))]
-    PossiblyDeferredIfRecording,
-}
-
 impl Vm {
     /// The maximum number of arguments that can be passed to a VM function.
     pub const MAX_VM_ARGS: usize = 32;
@@ -195,9 +184,9 @@ impl Vm {
         Ok((store, instance, memory))
     }
 
-    /// Instantiates a VM given the arguments provided in [`Self::new`],
-    /// or [`Self::new_from_module_cache`]
-    fn instantiate(
+    /// Instantiates a VM given more concrete inputs, called by
+    /// [Vm::new] via [Vm::new_with_cost_inputs].
+    pub fn from_parsed_module_and_wasmi_linker(
         host: &Host,
         contract_id: Hash,
         parsed_module: Arc<ParsedModule>,
@@ -226,21 +215,6 @@ impl Vm {
         }))
     }
 
-    pub fn from_parsed_module(
-        host: &Host,
-        contract_id: Hash,
-        parsed_module: Arc<ParsedModule>,
-    ) -> Result<Rc<Self>, HostError> {
-        let _span = tracy_span!("Vm::from_parsed_module");
-        VmInstantiationTimer::new(host.clone());
-        if let Some(cache) = &*host.try_borrow_module_cache()? {
-            Self::instantiate(host, contract_id, parsed_module, &cache.wasmi_linker)
-        } else {
-            let wasmi_linker = parsed_module.make_wasmi_linker(host)?;
-            Self::instantiate(host, contract_id, parsed_module, &wasmi_linker)
-        }
-    }
-
     /// Constructs a new instance of a [Vm] within the provided [Host],
     /// establishing a new execution context for a contract identified by
     /// `contract_id` with Wasm bytecode provided in `module_wasm_code`.
@@ -264,13 +238,7 @@ impl Vm {
         let cost_inputs = VersionedContractCodeCostInputs::V0 {
             wasm_bytes: wasm.len(),
         };
-        Self::new_with_cost_inputs(
-            host,
-            contract_id,
-            wasm,
-            cost_inputs,
-            ModuleParseCostMode::Normal,
-        )
+        Self::new_with_cost_inputs(host, contract_id, wasm, cost_inputs)
     }
 
     pub(crate) fn new_with_cost_inputs(
@@ -278,75 +246,12 @@ impl Vm {
         contract_id: Hash,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
-        cost_mode: ModuleParseCostMode,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
         VmInstantiationTimer::new(host.clone());
-        let parsed_module = Self::parse_module(host, wasm, cost_inputs, cost_mode)?;
+        let parsed_module = ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)?;
         let wasmi_linker = parsed_module.make_wasmi_linker(host)?;
-        Self::instantiate(host, contract_id, parsed_module, &wasmi_linker)
-    }
-
-    #[cfg(not(any(test, feature = "recording_mode")))]
-    fn parse_module(
-        host: &Host,
-        wasm: &[u8],
-        cost_inputs: VersionedContractCodeCostInputs,
-        _cost_mode: ModuleParseCostMode,
-    ) -> Result<Arc<ParsedModule>, HostError> {
-        ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
-    }
-
-    /// This method exists to support [crate::storage::FootprintMode::Recording]
-    /// when running in protocol versions that feature the [ModuleCache].
-    ///
-    /// There are two ways we can get to here:
-    ///
-    ///   1. When we're running in a protocol that doesn't support the
-    ///   [ModuleCache] at all. In this case, we just parse the module and
-    ///   charge for it as normal.
-    ///
-    ///   2. When we're in a protocol that _does_ support the [ModuleCache] but
-    ///   are _also_ in [crate::storage::FootprintMode::Recording] mode and
-    ///   _also_ being instantiated from [Host::call_contract_fn]. Then the
-    ///   [ModuleCache] _did not get built_ during host setup (because we had
-    ///   no footprint yet to buid the cache from), so our caller
-    ///   [Host::call_contract_fn] sees no module cache, and so each call winds
-    ///   up calling us here, reparsing each module as it's called, and then
-    ///   throwing it away.
-    ///
-    /// When we are in case 2, we don't want to charge for all those reparses:
-    /// we want to charge only for the post-parse instantiations _as if_ we had
-    /// had the cache. The cache will actually be added in [Host::pop_context]
-    /// _after_ a top-level recording-mode invocation completes, by reading the
-    /// storage and parsing all the modules in it, in order to charge for
-    /// parsing each used module _once_ and thereby produce a mostly-correct
-    /// total cost.
-    ///
-    /// We still charge the reparses to the shadow budget, to avoid a DoS risk,
-    /// and we still charge the instantiations to the real budget, to behave the
-    /// same as if we had a cache.
-    ///
-    /// Finally, for those scratching their head about the overall structure:
-    /// all of this happens as a result of the "module cache" not being
-    /// especially cache-like (i.e. not being populated lazily, on-access). It's
-    /// populated all at once, up front, because wasmi does not allow adding
-    /// modules to an engine that's currently running.
-    #[cfg(any(test, feature = "recording_mode"))]
-    fn parse_module(
-        host: &Host,
-        wasm: &[u8],
-        cost_inputs: VersionedContractCodeCostInputs,
-        cost_mode: ModuleParseCostMode,
-    ) -> Result<Arc<ParsedModule>, HostError> {
-        if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording {
-            if host.in_storage_recording_mode()? {
-                return host.budget_ref().with_observable_shadow_mode(|| {
-                    ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
-                });
-            }
-        }
-        ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
+        Self::from_parsed_module_and_wasmi_linker(host, contract_id, parsed_module, &wasmi_linker)
     }
 
     pub(crate) fn get_memory(&self, host: &Host) -> Result<wasmi::Memory, HostError> {
