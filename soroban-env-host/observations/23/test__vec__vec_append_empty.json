@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_append(Vec(obj#1), Vec(obj#1))": "cpu:961, mem:80, objs:-/1@3e25b2a0",
+  "   2 ret vec_append -> Ok(Vec(obj#3))": "cpu:2227, mem:160, objs:-/2@14339b3d",
+  "   3 call obj_cmp(Vec(obj#1), Vec(obj#3))": "",
+  "   4 ret obj_cmp -> Ok(0)": "cpu:2513",
+  "   5 end": "cpu:2513, mem:160, prngs:-/-, objs:-/2@14339b3d, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
