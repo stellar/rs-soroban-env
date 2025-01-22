@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_slice(Vec(obj#1), U32(1), U32(3))": "cpu:967, mem:104, objs:-/1@c38361c",
+  "   2 ret vec_slice -> Ok(Vec(obj#3))": "cpu:2115, mem:200, objs:-/2@c081953a",
+  "   3 call obj_cmp(Vec(obj#3), Vec(obj#5))": "cpu:3080, mem:296, objs:-/3@acf14aae",
+  "   4 ret obj_cmp -> Ok(0)": "cpu:3368",
+  "   5 call vec_slice(Vec(obj#1), U32(0), U32(3))": "",
+  "   6 ret vec_slice -> Ok(Vec(obj#7))": "cpu:4518, mem:400, objs:-/4@884606ef",
+  "   7 call obj_cmp(Vec(obj#7), Vec(obj#1))": "",
+  "   8 ret obj_cmp -> Ok(0)": "cpu:4807",
+  "   9 end": "cpu:4807, mem:400, prngs:-/-, objs:-/4@884606ef, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

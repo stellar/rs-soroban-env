@@ -1,0 +1,20 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_put(Vec(obj#1), U32(1), Vec(obj#1))": "cpu:967, mem:104, objs:-/1@c38361c",
+  "   2 ret vec_put -> Ok(Vec(obj#3))": "cpu:2221, mem:208, objs:-/2@4bf24109",
+  "   3 call vec_push_front(Vec(obj#1), Vec(obj#1))": "",
+  "   4 ret vec_push_front -> Ok(Vec(obj#5))": "cpu:3434, mem:320, objs:-/3@57a26e0a",
+  "   5 call vec_push_back(Vec(obj#1), Vec(obj#1))": "",
+  "   6 ret vec_push_back -> Ok(Vec(obj#7))": "cpu:4647, mem:432, objs:-/4@9f0d923e",
+  "   7 call vec_new_from_slice(1)": "",
+  "   8 ret vec_new_from_slice -> Ok(Vec(obj#9))": "cpu:5671, mem:520, objs:-/5@e9381547",
+  "   9 call vec_put(Vec(obj#1), U32(1), Map(obj#1))": "",
+  "  10 call vec_push_front(Vec(obj#1), Map(obj#1))": "cpu:5793",
+  "  11 call vec_push_back(Vec(obj#1), Map(obj#1))": "cpu:5915",
+  "  12 call vec_new_from_slice(1)": "cpu:6037",
+  "  13 call vec_put(Vec(obj#1), U32(1), Vec(obj#16711681))": "cpu:6621, mem:544",
+  "  14 call vec_push_front(Vec(obj#1), Vec(obj#16711681))": "cpu:6743",
+  "  15 call vec_push_back(Vec(obj#1), Vec(obj#16711681))": "cpu:6865",
+  "  16 call vec_new_from_slice(1)": "cpu:6987",
+  "  17 end": "cpu:7571, mem:568, prngs:-/-, objs:-/5@e9381547, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
