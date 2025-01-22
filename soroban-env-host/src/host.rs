@@ -82,12 +82,11 @@ pub struct CoverageScoreboard {
     pub vm_to_vm_calls: usize,
 }
 
-// The soroban 22.x host only supports protocol 22 and later, having
-// adopted a new version of wasmi with a new fuel metering system, it
-// cannot accurately replay earlier contracts. Earlier protocols
-// must run on Soroban 21.x or earlier.
+// The soroban 23.x host only supports protocol 23 and later, having adopted a
+// new module caching strategy, it cannot accurately replay earlier contracts.
+// Earlier protocols must run on Soroban 22.x or earlier.
 
-pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 22;
+pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 23;
 
 #[derive(Clone, Default)]
 struct HostImpl {
