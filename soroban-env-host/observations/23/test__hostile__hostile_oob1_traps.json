@@ -15,6 +15,6 @@
   "  13 call call(Address(obj#13), Symbol(oob1), Vec(obj#15))": "cpu:3315783, mem:2884789, objs:-/8@2a540d72, auth:-/-",
   "  14 push VM:cd475327:oob1()": "cpu:3960344, mem:4140022, objs:-/9@430dbbfd, vm:1114112@415819ab/16@b860c029, stk:1@b3372320, auth:1@c80a506a/-",
   "  15 pop VM:cd475327:oob1 -> Err(Error(WasmVm, InvalidAction))": "cpu:3962821, mem:4140052",
-  "  16 ret call -> Err(Error(WasmVm, InvalidAction))": "cpu:3963443, mem:4140068, vm:-/-, stk:-, auth:-/-",
-  "  17 end": "cpu:3963443, mem:4140068, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@4b95aafd, foot:2@9ddf4d04, stk:-, auth:-/-"
+  "  16 ret call -> Err(Error(WasmVm, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
+  "  17 end": "cpu:3962821, mem:4140052, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@4b95aafd, foot:2@9ddf4d04, stk:-, auth:-/-"
 }

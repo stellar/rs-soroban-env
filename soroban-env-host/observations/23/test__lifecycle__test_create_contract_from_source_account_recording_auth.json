@@ -8,5 +8,5 @@
   "   6 call get_ledger_network_id()": "cpu:1525854, auth:1@8db3bc90/1@34655d49",
   "   7 ret get_ledger_network_id -> Ok(Bytes(obj#9))": "cpu:1526886, mem:1429181, objs:-/5@e4947c99",
   "   8 pop CreateContract: -> Ok(Address(obj#11))": "cpu:1946580, mem:2585292, objs:-/6@bdd6d9d4, store:-/2@1602cc31, foot:2@8c5cee49, auth:-/1@eafb0833",
-  "   9 end": "cpu:1947311, mem:2585308, prngs:-/9b4a753, objs:-/6@bdd6d9d4, vm:-/-, evt:-, store:-/2@1602cc31, foot:2@8c5cee49, stk:-, auth:-/-"
+  "   9 end": "cpu:1946689, mem:2585292, prngs:-/9b4a753, objs:-/6@bdd6d9d4, vm:-/-, evt:-, store:-/2@1602cc31, foot:2@8c5cee49, stk:-, auth:-/-"
 }
