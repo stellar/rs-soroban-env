@@ -95,7 +95,7 @@ backtrace = ["dep:backtrace"]
 next = ["soroban-env-common/next", "stellar-xdr/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_mode = []
-bench = []
+bench = ["testutils"]
 # This feature guards the work-in-progress changes in soroban-env-host
 # API. Its main purpose is to be able to make API changes without bumping
 # the crate version.

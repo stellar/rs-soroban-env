@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1498234",
   "  19 pop VM:495ea73e:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1499357, mem:742556, objs:-/9@da26ed99, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "cpu:1499797, mem:742620, objs:-/10@fb1f0781",
-  "  22 push VM:495ea73e:test(Map(obj#123))": "cpu:1710811, mem:909122, objs:-/11@c9f3eb3b, vm:65536@b1cd98b9/2@2f94d90d, stk:1@c13362fe, auth:1@b1b428e/-",
-  "  23 call map_len(Map(obj#123))": "cpu:1713719, mem:909192, objs:1@a940116a/11@c9f3eb3b, vm:-/-, stk:1@c92c7d8e",
-  "  24 pop VM:495ea73e:test -> Err(Error(Value, InvalidInput))": "cpu:1714378, vm:65536@b1cd98b9/2@2f94d90d",
-  "  25 ret call -> Err(Error(Value, InvalidInput))": "cpu:1715000, mem:909208, objs:-/11@c9f3eb3b, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1715000, mem:909208, prngs:-/9b4a753, objs:-/11@c9f3eb3b, vm:-/-, evt:-, store:-/2@53076093, foot:2@44d68ac2, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1498735, mem:742540, objs:-/9@da26ed99, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "cpu:1499175, mem:742604, objs:-/10@fb1f0781",
+  "  22 push VM:495ea73e:test(Map(obj#123))": "cpu:1709221, mem:908970, objs:-/11@c9f3eb3b, vm:65536@b1cd98b9/2@2f94d90d, stk:1@c13362fe, auth:1@b1b428e/-",
+  "  23 call map_len(Map(obj#123))": "cpu:1712129, mem:909040, objs:1@a940116a/11@c9f3eb3b, vm:-/-, stk:1@c92c7d8e",
+  "  24 pop VM:495ea73e:test -> Err(Error(Value, InvalidInput))": "cpu:1712788, vm:65536@b1cd98b9/2@2f94d90d",
+  "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/11@c9f3eb3b, vm:-/-, stk:-, auth:-/-",
+  "  26 end": "cpu:1712788, mem:909040, prngs:-/9b4a753, objs:-/11@c9f3eb3b, vm:-/-, evt:-, store:-/2@53076093, foot:2@44d68ac2, stk:-, auth:-/-"
 }

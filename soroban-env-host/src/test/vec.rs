@@ -1,7 +1,8 @@
 use crate::{
     testutils::wasm,
     xdr::{ContractCostType, ScErrorCode, ScErrorType, ScVal},
-    Compare, Env, Host, HostError, Object, Symbol, Tag, TryFromVal, U32Val, Val, VecObject,
+    Compare, Env, ErrorHandler, Host, HostError, Object, Symbol, Tag, TryFromVal, U32Val, Val,
+    VecObject,
 };
 use core::cmp::Ordering;
 use more_asserts::assert_ge;

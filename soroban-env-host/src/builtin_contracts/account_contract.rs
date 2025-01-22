@@ -18,7 +18,7 @@ use crate::{
         self, AccountId, ContractIdPreimage, Hash, ScErrorCode, ScErrorType, ThresholdIndexes,
         Uint256,
     },
-    Env, EnvBase, HostError, Symbol, TryFromVal, TryIntoVal, Val,
+    Env, EnvBase, ErrorHandler, HostError, Symbol, TryFromVal, TryIntoVal, Val,
 };
 use core::cmp::Ordering;
 

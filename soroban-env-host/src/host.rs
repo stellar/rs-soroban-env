@@ -43,7 +43,7 @@ pub(crate) mod prng;
 pub(crate) mod trace;
 mod validity;
 
-pub use error::HostError;
+pub use error::{ErrorHandler, HostError};
 use frame::CallParams;
 pub use prng::{Seed, SEED_BYTES};
 pub use trace::{TraceEvent, TraceHook, TraceRecord, TraceState};
@@ -91,7 +91,6 @@ pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 23;
 #[derive(Clone, Default)]
 struct HostImpl {
     module_cache: RefCell<Option<ModuleCache>>,
-    shared_linker: RefCell<Option<wasmi::Linker<Host>>>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
@@ -163,14 +162,6 @@ struct HostImpl {
     #[cfg(any(test, feature = "recording_mode"))]
     suppress_diagnostic_events: RefCell<bool>,
 
-    // This flag marks the call of `build_module_cache` that would happen
-    // in enforcing mode. In recording mode we need to use this flag to
-    // determine whether we need to rebuild module cache after the host
-    // invocation has been done.
-    #[doc(hidden)]
-    #[cfg(any(test, feature = "recording_mode"))]
-    need_to_build_module_cache: RefCell<bool>,
-
     #[cfg(any(test, feature = "testutils"))]
     pub(crate) invocation_meter: RefCell<InvocationMeter>,
 }
@@ -215,12 +206,6 @@ impl_checked_borrow_helpers!(
     Option<ModuleCache>,
     try_borrow_module_cache,
     try_borrow_module_cache_mut
-);
-impl_checked_borrow_helpers!(
-    shared_linker,
-    Option<wasmi::Linker<Host>>,
-    try_borrow_linker,
-    try_borrow_linker_mut
 );
 impl_checked_borrow_helpers!(
     source_account,
@@ -330,14 +315,6 @@ impl_checked_borrow_helpers!(
     try_borrow_suppress_diagnostic_events_mut
 );
 
-#[cfg(any(test, feature = "recording_mode"))]
-impl_checked_borrow_helpers!(
-    need_to_build_module_cache,
-    bool,
-    try_borrow_need_to_build_module_cache,
-    try_borrow_need_to_build_module_cache_mut
-);
-
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -359,7 +336,6 @@ impl Host {
         let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
             module_cache: RefCell::new(None),
-            shared_linker: RefCell::new(None),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
@@ -387,21 +363,47 @@ impl Host {
             coverage_scoreboard: Default::default(),
             #[cfg(any(test, feature = "recording_mode"))]
             suppress_diagnostic_events: RefCell::new(false),
-            #[cfg(any(test, feature = "recording_mode"))]
-            need_to_build_module_cache: RefCell::new(false),
             #[cfg(any(test, feature = "testutils"))]
             invocation_meter: Default::default(),
         }))
     }
 
-    pub fn build_module_cache_if_needed(&self) -> Result<(), HostError> {
-        if self.try_borrow_module_cache()?.is_none() {
+    #[cfg(any(test, feature = "testutils"))]
+    // This builds a module cache instance for just the contracts stored
+    // in the host's storage map, and is used only in testing.
+    pub fn ensure_module_cache_contains_host_storage_contracts(&self) -> Result<(), HostError> {
+        let mut guard = self.try_borrow_module_cache_mut()?;
+        if let Some(cache) = &*guard {
+            cache.add_stored_contracts(self)?;
+        } else {
             let cache = ModuleCache::new(self)?;
-            let linker = cache.make_linker(self)?;
-            *self.try_borrow_module_cache_mut()? = Some(cache);
-            *self.try_borrow_linker_mut()? = Some(linker);
+            cache.add_stored_contracts(self)?;
+            *guard = Some(cache);
         }
         Ok(())
+    }
+
+    // Install a module cache from _outside_ the Host. Doing this is potentially
+    // delicate: the cache must contain all contracts that will be run by the
+    // host, and will not be further populated during execution.
+    pub fn set_module_cache(&self, cache: ModuleCache) -> Result<(), HostError> {
+        *self.try_borrow_module_cache_mut()? = Some(cache);
+        Ok(())
+    }
+
+    // Remove and return the module cache, to allow reuse in another host. Should
+    // typically only be called during the "finish" sequence of a host's lifecycle,
+    // i.e. when [Self::can_finish] returns `true` and the host is about to be
+    // destroyed.
+    pub fn take_module_cache(&self) -> Result<ModuleCache, HostError> {
+        self.try_borrow_module_cache_mut()?.take().ok_or_else(|| {
+            self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "missing module cache",
+                &[],
+            )
+        })
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
@@ -415,15 +417,10 @@ impl Host {
 
     #[cfg(any(test, feature = "recording_mode"))]
     pub fn clear_module_cache(&self) -> Result<(), HostError> {
-        *self.try_borrow_module_cache_mut()? = None;
-        *self.try_borrow_linker_mut()? = None;
+        if let Some(cache) = &mut *self.try_borrow_module_cache_mut()? {
+            cache.clear()?;
+        }
         Ok(())
-    }
-
-    #[cfg(any(test, feature = "recording_mode"))]
-    pub fn rebuild_module_cache(&self) -> Result<(), HostError> {
-        self.clear_module_cache()?;
-        self.build_module_cache_if_needed()
     }
 
     pub fn set_source_account(&self, source_account: AccountId) -> Result<(), HostError> {

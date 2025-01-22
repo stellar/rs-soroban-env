@@ -853,6 +853,6 @@
   " 851 pop VM:5cf712f4:sym#1617 -> Ok(Void)": " vm:1114112@e86028c5/7@ae192e85",
   " 852 ret require_auth_for_args -> Ok(Void)": "cpu:5472555, mem:5508256, objs:2@a89f593d/811@f51a86a8, vm:-/-, store:-/3@d714b6e6, foot:3@408ae479, stk:1@3ac41f13, auth:1@36c5ef60/99@4a65c68a",
   " 853 pop VM:5cf712f4:call -> Ok(Void)": " vm:1114112@a6f378b8/7@ae192e85",
-  " 854 ret call -> Ok(Void)": "cpu:5473185, mem:5508272, objs:-/811@f51a86a8, vm:-/-, stk:-, auth:-/-",
-  " 855 end": "cpu:5473185, mem:5508272, prngs:-/9b4a753, objs:-/811@f51a86a8, vm:-/-, evt:-, store:-/3@d714b6e6, foot:3@408ae479, stk:-, auth:-/-"
+  " 854 ret call -> Ok(Void)": " objs:-/811@f51a86a8, vm:-/-, stk:-, auth:-/-",
+  " 855 end": "cpu:5472555, mem:5508256, prngs:-/9b4a753, objs:-/811@f51a86a8, vm:-/-, evt:-, store:-/3@d714b6e6, foot:3@408ae479, stk:-, auth:-/-"
 }
