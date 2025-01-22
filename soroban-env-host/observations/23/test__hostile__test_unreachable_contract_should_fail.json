@@ -19,10 +19,10 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1472154",
   "  19 pop VM:2cdf5c2a:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1473277, mem:737024, objs:-/9@edfe7d73, vm:-/-, stk:-, auth:-/-",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1472655, mem:737008, objs:-/9@edfe7d73, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "cpu:961, mem:80, objs:-/10@939b4b1e",
-  "  22 push VM:2cdf5c2a:test()": "cpu:199393, mem:164746, objs:-/11@edd2ae4c, vm:65536@b1cd98b9/2@2f94d90d, stk:1@32bf6d28, auth:1@b1b428e/-",
-  "  23 pop VM:2cdf5c2a:test -> Err(Error(WasmVm, InvalidAction))": "cpu:201870, mem:164776",
-  "  24 ret call -> Err(Error(WasmVm, InvalidAction))": "cpu:202492, mem:164792, vm:-/-, stk:-, auth:-/-",
-  "  25 end": "cpu:202492, mem:164792, prngs:-/9b4a753, objs:-/11@edd2ae4c, vm:-/-, evt:-, store:-/2@d7f867fe, foot:2@11690dec, stk:-, auth:-/-"
+  "  22 push VM:2cdf5c2a:test()": "cpu:198425, mem:164610, objs:-/11@edd2ae4c, vm:65536@b1cd98b9/2@2f94d90d, stk:1@32bf6d28, auth:1@b1b428e/-",
+  "  23 pop VM:2cdf5c2a:test -> Err(Error(WasmVm, InvalidAction))": "cpu:200902, mem:164640",
+  "  24 ret call -> Err(Error(WasmVm, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
+  "  25 end": "cpu:200902, mem:164640, prngs:-/9b4a753, objs:-/11@edd2ae4c, vm:-/-, evt:-, store:-/2@d7f867fe, foot:2@11690dec, stk:-, auth:-/-"
 }

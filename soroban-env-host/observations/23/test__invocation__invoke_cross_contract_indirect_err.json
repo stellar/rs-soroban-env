@@ -19,10 +19,10 @@
   "  17 call try_call(Address(obj#13), Symbol(add_with), Vec(obj#19))": "",
   "  18 push VM:3f2c7e4c:add_with(I32(2147483647), I32(1), Bytes(obj#17))": "cpu:4433150, mem:4210472, objs:-/11@a33ab8f2, vm:1114112@e6a5c288/10@a420633f, stk:1@2aaba6be, auth:1@bfa8d8/-",
   "  19 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:4436186, mem:4210574, objs:1@e42086ac/11@a33ab8f2, stk:1@82638e5a",
-  "  20 ret try_call -> Ok(Error(Context, InvalidAction))": "cpu:4436808, mem:4210590, objs:-/11@a33ab8f2, vm:-/-, stk:-, auth:-/-",
+  "  20 ret try_call -> Ok(Error(Context, InvalidAction))": " objs:-/11@a33ab8f2, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#13), Symbol(add_with), Vec(obj#19))": "",
-  "  22 push VM:3f2c7e4c:add_with(I32(2147483647), I32(1), Bytes(obj#17))": "cpu:5117529, mem:5477608, objs:-/12@a24be952, vm:1114112@e6a5c288/10@a420633f, stk:1@2aaba6be, auth:1@36e6e42c/-",
-  "  23 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:5120565, mem:5477710, objs:1@e42086ac/12@a24be952, stk:1@82638e5a",
-  "  24 ret call -> Err(Error(WasmVm, InvalidAction))": "cpu:5121187, mem:5477726, objs:-/12@a24be952, vm:-/-, stk:-, auth:-/-",
-  "  25 end": "cpu:5121187, mem:5477726, prngs:-/9b4a753, objs:-/12@a24be952, vm:-/-, evt:-, store:-/2@9edb245b, foot:2@b3f027d3, stk:-, auth:-/-"
+  "  22 push VM:3f2c7e4c:add_with(I32(2147483647), I32(1), Bytes(obj#17))": "cpu:5115939, mem:5477456, objs:-/12@a24be952, vm:1114112@e6a5c288/10@a420633f, stk:1@2aaba6be, auth:1@36e6e42c/-",
+  "  23 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:5118975, mem:5477558, objs:1@e42086ac/12@a24be952, stk:1@82638e5a",
+  "  24 ret call -> Err(Error(WasmVm, InvalidAction))": " objs:-/12@a24be952, vm:-/-, stk:-, auth:-/-",
+  "  25 end": "cpu:5118975, mem:5477558, prngs:-/9b4a753, objs:-/12@a24be952, vm:-/-, evt:-, store:-/2@9edb245b, foot:2@b3f027d3, stk:-, auth:-/-"
 }

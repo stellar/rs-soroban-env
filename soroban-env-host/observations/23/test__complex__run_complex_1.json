@@ -43,6 +43,6 @@
   "  41 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:2989867, mem:4021383, objs:7@929806d2/18@bcb9b937, stk:1@8b608bf2",
   "  42 ret put_contract_data -> Ok(Void)": "cpu:2997516, mem:4023015, store:-/3@87a693d7, foot:3@2f0e11c9",
   "  43 pop VM:2c0dcac5:go -> Ok(Void)": " vm:1114112@afb7d9b2/5@8d05851",
-  "  44 ret call -> Ok(Void)": "cpu:2998146, mem:4023031, objs:-/18@bcb9b937, vm:-/-, stk:-, auth:-/-",
-  "  45 end": "cpu:2998146, mem:4023031, prngs:-/9b4a753, objs:-/18@bcb9b937, vm:-/-, evt:1@4403228c, store:-/3@87a693d7, foot:3@2f0e11c9, stk:-, auth:-/-"
+  "  44 ret call -> Ok(Void)": " objs:-/18@bcb9b937, vm:-/-, stk:-, auth:-/-",
+  "  45 end": "cpu:2997516, mem:4023015, prngs:-/9b4a753, objs:-/18@bcb9b937, vm:-/-, evt:1@4403228c, store:-/3@87a693d7, foot:3@2f0e11c9, stk:-, auth:-/-"
 }

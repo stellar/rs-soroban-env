@@ -19,10 +19,10 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1581110",
   "  19 pop VM:d553299b:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1582233, mem:752279, objs:-/9@ab35a682, vm:-/-, stk:-, auth:-/-",
-  "  21 call bytes_new_from_slice(300086)": "cpu:1582280",
-  "  22 ret bytes_new_from_slice -> Ok(Bytes(obj#19))": "cpu:1658261, mem:1052445, objs:-/10@d9d8a7e3",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1581611, mem:752263, objs:-/9@ab35a682, vm:-/-, stk:-, auth:-/-",
+  "  21 call bytes_new_from_slice(300086)": "cpu:1581658",
+  "  22 ret bytes_new_from_slice -> Ok(Bytes(obj#19))": "cpu:1657639, mem:1052429, objs:-/10@d9d8a7e3",
   "  23 call upload_wasm(Bytes(obj#19))": "",
-  "  24 ret upload_wasm -> Err(Error(Budget, ExceededLimit))": "cpu:125077424, mem:1352595",
-  "  25 end": "cpu:125077424, mem:1352595, prngs:-/9b4a753, objs:-/10@d9d8a7e3, vm:-/-, evt:-, store:-/2@232a59cc, foot:2@caa52d19, stk:-, auth:-/-"
+  "  24 ret upload_wasm -> Err(Error(Budget, ExceededLimit))": "cpu:125076802, mem:1352579",
+  "  25 end": "cpu:125076802, mem:1352579, prngs:-/9b4a753, objs:-/10@d9d8a7e3, vm:-/-, evt:-, store:-/2@232a59cc, foot:2@caa52d19, stk:-, auth:-/-"
 }
