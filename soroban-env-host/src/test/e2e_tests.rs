@@ -1,7 +1,9 @@
 use crate::builtin_contracts::testutils::AccountContractSigner;
+use crate::crypto::sha256_hash_from_bytes_raw;
 use crate::e2e_invoke::RecordingInvocationAuthMode;
 use crate::e2e_testutils::{account_entry, bytes_sc_val, upload_wasm_host_fn};
 use crate::testutils::simple_account_sign_fn;
+use crate::vm::VersionedContractCodeCostInputs;
 use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::testutils::TestSigner,
@@ -17,10 +19,10 @@ use crate::{
     },
     testutils::MockSnapshotSource,
     xdr::{
-        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable,
-        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, DiagnosticEvent,
-        ExtensionPoint, HashIdPreimage, HashIdPreimageSorobanAuthorization, HostFunction,
-        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
+        AccountId, ContractCodeEntryExt, ContractDataDurability, ContractDataEntry, ContractEvent,
+        ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
+        DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
+        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
         LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
         SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
@@ -50,7 +52,7 @@ use std::rc::Rc;
 // We don't anticipate this divergence to be too high though: specifically,
 // we expect the estimated instructions to be within a range of
 // [1 - RECORDING_MODE_INSTRUCTIONS_RANGE, 1 + RECORDING_MODE_INSTRUCTIONS_RANGE] * real_instructions
-const RECORDING_MODE_INSTRUCTIONS_RANGE: f64 = 0.3;
+const RECORDING_MODE_INSTRUCTIONS_RANGE: f64 = 0.02;
 
 fn wasm_entry_size(wasm: &[u8]) -> u32 {
     wasm_entry(wasm).to_xdr(Limits::none()).unwrap().len() as u32
@@ -318,13 +320,7 @@ fn invoke_host_function_helper(
         })
         .collect();
 
-    let ctx = E2eTestCompilationContext::new()?;
-    let cache = ModuleCache::new(&ctx)?;
-    for (e, _) in ledger_entries_with_ttl.iter() {
-        if let LedgerEntryData::ContractCode(cd) = &e.data {
-            cache.parse_and_cache_module_simple(&ctx, ledger_info.protocol_version, &cd.code)?;
-        }
-    }
+    let module_cache = build_module_cache_for_entries(ledger_info, ledger_entries_with_ttl)?;
 
     let budget = Budget::default();
     budget
@@ -344,7 +340,7 @@ fn invoke_host_function_helper(
         prng_seed.to_vec(),
         &mut diagnostic_events,
         None,
-        Some(cache),
+        Some(module_cache),
     )?;
     Ok(InvokeHostFunctionHelperResult {
         invoke_result: res
@@ -359,6 +355,35 @@ fn invoke_host_function_helper(
         diagnostic_events,
         budget,
     })
+}
+
+fn build_module_cache_for_entries(
+    ledger_info: &LedgerInfo,
+    ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
+) -> Result<ModuleCache, HostError> {
+    let ctx = E2eTestCompilationContext::new()?;
+    let cache = ModuleCache::new(&ctx)?;
+    for (e, _) in ledger_entries_with_ttl.iter() {
+        if let LedgerEntryData::ContractCode(cd) = &e.data {
+            let contract_id = Hash(sha256_hash_from_bytes_raw(&cd.code, ctx.as_budget())?);
+            let code_cost_inputs = match &cd.ext {
+                ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
+                    wasm_bytes: cd.code.len(),
+                },
+                ContractCodeEntryExt::V1(v1) => {
+                    VersionedContractCodeCostInputs::V1(v1.cost_inputs.clone())
+                }
+            };
+            cache.parse_and_cache_module(
+                &ctx,
+                ledger_info.protocol_version,
+                &contract_id,
+                &cd.code,
+                code_cost_inputs,
+            )?;
+        }
+    }
+    Ok(cache)
 }
 
 fn invoke_host_function_recording_helper(
