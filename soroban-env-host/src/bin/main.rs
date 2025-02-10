@@ -7,7 +7,7 @@
 // In the future this might also provide some other top-level host functionality
 // that users or developers might wish to run on the command-line.
 
-use soroban_env_host::{budget::Budget, e2e_invoke::invoke_host_function, LedgerInfo};
+use soroban_env_host::{budget::Budget, e2e_invoke::invoke_host_function, xdr::Memo, LedgerInfo};
 
 fn main() {
     let budget = Budget::default();
@@ -32,6 +32,7 @@ fn main() {
         encoded_ledger_entries,
         encoded_ttl_entries,
         base_prng_seed,
+        Memo::None,
         &mut diagnostic_events,
     );
 }

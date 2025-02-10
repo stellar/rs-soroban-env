@@ -12,10 +12,11 @@ use soroban_env_host::{
     e2e_invoke::{LedgerEntryChange, RecordingInvocationAuthMode},
     storage::SnapshotSource,
     xdr::{
-        AccountId, ContractEvent, DiagnosticEvent, HostFunction, InvokeHostFunctionOp, LedgerKey,
-        OperationBody, ScVal, SorobanAuthorizationEntry, SorobanResources, SorobanTransactionData,
+        AccountId, ContractEvent, DiagnosticEvent, ExtendFootprintTtlOp, ExtensionPoint,
+        HostFunction, InvokeHostFunctionOp, LedgerEntry, LedgerKey, Memo, OperationBody, ReadXdr,
+        RestoreFootprintOp, ScVal, SorobanAuthorizationEntry, SorobanResources,
+        SorobanTransactionData, SorobanTransactionDataExt,
     },
-    xdr::{ExtendFootprintTtlOp, ExtensionPoint, LedgerEntry, ReadXdr, RestoreFootprintOp},
     HostError, LedgerInfo, DEFAULT_XDR_RW_LIMITS,
 };
 use std::rc::Rc;
@@ -126,6 +127,7 @@ pub fn simulate_invoke_host_function_op(
     auth_mode: RecordingInvocationAuthMode,
     source_account: &AccountId,
     base_prng_seed: [u8; 32],
+    tx_memo: Memo,
     enable_diagnostics: bool,
 ) -> Result<InvokeHostFunctionSimulationResult> {
     let snapshot_source = Rc::new(SimulationSnapshotSource::new_from_rc(snapshot_source));
@@ -136,6 +138,7 @@ pub fn simulate_invoke_host_function_op(
         enable_diagnostics,
         &host_fn,
         source_account,
+        tx_memo,
         auth_mode,
         ledger_info.clone(),
         snapshot_source.clone(),
@@ -338,7 +341,7 @@ fn create_transaction_data(
     SorobanTransactionData {
         resources,
         resource_fee,
-        ext: ExtensionPoint::V0,
+        ext: SorobanTransactionDataExt::V0,
     }
 }
 

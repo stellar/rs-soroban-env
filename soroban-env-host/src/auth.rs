@@ -41,11 +41,11 @@
 //! In other words: authorization happens _in terms of_ invocations; they are
 //! the conceptual units for which authorization is granted or denied.
 //!
-//! Note that invocations are _not_ function calls within a contract's own WASM
-//! bytecode. The host can't see a call from one WASM function to another inside
-//! a single WASM blob, and in general it does not concern itself with authorizing
+//! Note that invocations are _not_ function calls within a contract's own
+//! bytecode. The host can't see a call from one Wasm function to another inside
+//! a single Wasm blob, and in general it does not concern itself with authorizing
 //! those. Invocations are bigger: what are often called "cross-contract calls",
-//! that transfer control from one WASM VM to another.
+//! that transfer control from one Wasm VM to another.
 //!
 //! ## Authorized Invocations
 //!
@@ -161,16 +161,16 @@ use crate::{
     },
     host_object::HostVec,
     xdr::{
-        ContractDataEntry, CreateContractArgsV2, HashIdPreimage,
-        HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
-        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanCredentials,
+        ContractDataEntry, CreateContractArgsV2, ExtensionPoint, Hash, HashIdPreimage,
+        HashIdPreimageSorobanAuthorization, HashIdPreimageSorobanAuthorizationV2,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, Memo, ScAddress,
+        ScErrorCode, ScErrorType, ScNonceKey, ScVal, SorobanAuthorizationEntry,
+        SorobanAuthorizedFunction, SorobanCredentials,
     },
     AddressObject, Compare, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val, VecObject,
 };
 
 use super::xdr;
-use super::xdr::Hash;
 
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
@@ -435,6 +435,12 @@ struct InvocationTracker {
     is_fully_processed: bool,
 }
 
+#[derive(Clone, Hash)]
+enum AccountSignaturePayloadVersion {
+    V1,
+    V2,
+}
+
 // Stores all the authorizations that are authorized by an address.
 // In the enforcing mode this performs authentication and makes sure that only
 // pre-authorized invocations can happen on behalf of the `address`.
@@ -463,6 +469,8 @@ pub(crate) struct AccountAuthorizationTracker {
     // The value of nonce authorized by the address with its live_until ledger.
     // Must not exist in the ledger.
     nonce: Option<(i64, u32)>,
+    tx_memo: Memo,
+    payload_version: AccountSignaturePayloadVersion,
 }
 
 pub(crate) struct AccountAuthorizationTrackerSnapshot {
@@ -1738,7 +1746,7 @@ impl AccountAuthorizationTracker {
         host: &Host,
         auth_entry: SorobanAuthorizationEntry,
     ) -> Result<Self, HostError> {
-        let (address, nonce, signature, is_transaction_source_account) =
+        let (address, nonce, signature, is_transaction_source_account, memo, payload_version) =
             match auth_entry.credentials {
                 SorobanCredentials::SourceAccount => (
                     host.source_account_address()?.ok_or_else(|| {
@@ -1752,6 +1760,8 @@ impl AccountAuthorizationTracker {
                     None,
                     Val::VOID.into(),
                     true,
+                    Memo::None,
+                    AccountSignaturePayloadVersion::V1,
                 ),
                 SorobanCredentials::Address(address_creds) => (
                     host.add_host_object(address_creds.address)?,
@@ -1761,6 +1771,19 @@ impl AccountAuthorizationTracker {
                     )),
                     host.to_host_val(&address_creds.signature)?,
                     false,
+                    Memo::None,
+                    AccountSignaturePayloadVersion::V1,
+                ),
+                SorobanCredentials::AddressV2(address_creds) => (
+                    host.add_host_object(address_creds.address)?,
+                    Some((
+                        address_creds.nonce,
+                        address_creds.signature_expiration_ledger,
+                    )),
+                    host.to_host_val(&address_creds.signature)?,
+                    false,
+                    address_creds.tx_memo.metered_clone(host)?,
+                    AccountSignaturePayloadVersion::V2,
                 ),
             };
         Ok(Self {
@@ -1770,6 +1793,8 @@ impl AccountAuthorizationTracker {
             verified: false,
             is_transaction_source_account,
             nonce,
+            tx_memo: memo,
+            payload_version,
         })
     }
 
@@ -1812,6 +1837,12 @@ impl AccountAuthorizationTracker {
         } else {
             None
         };
+        let tx_memo = host.get_tx_memo()?;
+        let payload_version = if matches!(tx_memo, Memo::None) {
+            AccountSignaturePayloadVersion::V1
+        } else {
+            AccountSignaturePayloadVersion::V2
+        };
         Ok(Self {
             address,
             invocation_tracker: InvocationTracker::new_recording(function, current_stack_len),
@@ -1819,6 +1850,8 @@ impl AccountAuthorizationTracker {
             verified: true,
             is_transaction_source_account,
             nonce,
+            tx_memo,
+            payload_version,
         })
     }
 
@@ -1996,23 +2029,50 @@ impl AccountAuthorizationTracker {
                 &[],
             )
         })?;
-        let payload_preimage =
-            HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
-                network_id: Hash(host.with_ledger_info(|li| li.network_id.metered_clone(host))?),
-                nonce,
-                signature_expiration_ledger: live_until_ledger,
-                invocation: self.root_invocation_to_xdr(host)?,
-            });
+        let payload_preimage = match self.payload_version {
+            AccountSignaturePayloadVersion::V1 => {
+                HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                    network_id: Hash(
+                        host.with_ledger_info(|li| li.network_id.metered_clone(host))?,
+                    ),
+                    nonce,
+                    signature_expiration_ledger: live_until_ledger,
+                    invocation: self.root_invocation_to_xdr(host)?,
+                })
+            }
+            AccountSignaturePayloadVersion::V2 => {
+                HashIdPreimage::SorobanAuthorizationV2(HashIdPreimageSorobanAuthorizationV2 {
+                    network_id: Hash(
+                        host.with_ledger_info(|li| li.network_id.metered_clone(host))?,
+                    ),
+                    nonce,
+                    signature_expiration_ledger: live_until_ledger,
+                    invocation: self.root_invocation_to_xdr(host)?,
+                    // Technically, this must now be equivalent to the memo
+                    // stored inside `self`, but use the actual tx memo just in
+                    // case.
+                    tx_memo: host.get_tx_memo()?,
+                    ext: ExtensionPoint::V0,
+                })
+            }
+        };
 
         host.metered_hash_xdr(&payload_preimage)
     }
 
-    // metering: covered by the hsot
+    // metering: covered by the host
     fn authenticate(&self, host: &Host) -> Result<(), HostError> {
         if self.is_transaction_source_account {
             return Ok(());
         }
-
+        if !host.compare(&host.get_tx_memo()?, &self.tx_memo)?.is_eq() {
+            return Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InvalidAction,
+                "Signed memo does not match the transaction memo for address",
+                &[self.address.to_val()],
+            ));
+        }
         let sc_addr = host.scaddress_from_address(self.address)?;
         // TODO: there should also be a mode where a dummy payload is used
         // instead (for enforcing mode preflight).

@@ -3,9 +3,10 @@ use rand::Rng;
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::xdr::{
     AccountId, ContractDataDurability, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-    InvokeContractArgs, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScNonceKey,
-    ScSymbol, ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
+    HashIdPreimageSorobanAuthorizationV2, InvokeContractArgs, Memo, PublicKey, ScAddress, ScBytes,
+    ScErrorCode, ScErrorType, ScNonceKey, ScSymbol, ScVal, SorobanAddressCredentials,
+    SorobanAddressCredentialsV2, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
 };
 use soroban_test_wasms::{
     AUTH_TEST_CONTRACT, CONDITIONAL_ACCOUNT_TEST_CONTRACT, DELEGATED_ACCOUNT_TEST_CONTRACT,
@@ -51,6 +52,7 @@ struct SignNode {
     fn_name: Symbol,
     args: VecM<ScVal>,
     children: Vec<SignNode>,
+    tx_memo: Option<Memo>,
 }
 
 impl SetupNode {
@@ -89,6 +91,7 @@ impl SignNode {
             fn_name,
             args,
             children,
+            tx_memo: None,
         }
     }
 
@@ -98,6 +101,17 @@ impl SignNode {
             children,
             fn_name: Symbol::try_from_small_str("tree_fn").unwrap(),
             args: VecM::default(),
+            tx_memo: None,
+        }
+    }
+
+    fn tree_fn_with_memo(contract_id: &Address, children: Vec<SignNode>, tx_memo: Memo) -> Self {
+        Self {
+            contract_address: contract_id.clone(),
+            children,
+            fn_name: Symbol::try_from_small_str("tree_fn").unwrap(),
+            args: VecM::default(),
+            tx_memo: Some(tx_memo),
         }
     }
 
@@ -107,6 +121,7 @@ impl SignNode {
             children,
             fn_name: Symbol::try_from_small_str("stree_fn").unwrap(),
             args: VecM::default(),
+            tx_memo: None,
         }
     }
 }
@@ -239,7 +254,21 @@ impl AuthTest {
                     .unwrap();
                 curr_nonces.push(nonce);
                 let root_invocation = self.convert_sign_node(sign_root);
-                let payload_preimage =
+                let payload_preimage = if let Some(tx_memo) = &sign_root.tx_memo {
+                    HashIdPreimage::SorobanAuthorizationV2(HashIdPreimageSorobanAuthorizationV2 {
+                        network_id: self
+                            .host
+                            .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                        invocation: root_invocation.clone(),
+                        nonce,
+                        signature_expiration_ledger: 1000,
+                        ext: soroban_env_common::xdr::ExtensionPoint::V0,
+                        tx_memo: tx_memo.clone(),
+                    })
+                } else {
                     HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
                         network_id: self
                             .host
@@ -250,26 +279,45 @@ impl AuthTest {
                         invocation: root_invocation.clone(),
                         nonce,
                         signature_expiration_ledger: 1000,
-                    });
+                    })
+                };
+
                 let payload = self.host.metered_hash_xdr(&payload_preimage).unwrap();
                 let signature_args = test_vec![
                     &self.host,
                     sign_payload_for_account(&self.host, &self.keys[address_id], &payload)
                 ];
-                contract_auth.push(SorobanAuthorizationEntry {
-                    credentials: SorobanCredentials::Address(SorobanAddressCredentials {
-                        address: sc_address.clone(),
-                        nonce,
-                        signature: ScVal::Vec(Some(
-                            self.host
-                                .vecobject_to_scval_vec(signature_args.into())
-                                .unwrap()
-                                .into(),
-                        )),
-                        signature_expiration_ledger: 1000,
-                    }),
-                    root_invocation,
-                });
+                let signature = ScVal::Vec(Some(
+                    self.host
+                        .vecobject_to_scval_vec(signature_args.into())
+                        .unwrap()
+                        .into(),
+                ));
+                let auth_entry = if let Some(tx_memo) = &sign_root.tx_memo {
+                    SorobanAuthorizationEntry {
+                        credentials: SorobanCredentials::AddressV2(SorobanAddressCredentialsV2 {
+                            address: sc_address.clone(),
+                            nonce,
+                            signature,
+                            signature_expiration_ledger: 1000,
+                            tx_memo: tx_memo.clone(),
+                            ext: soroban_env_common::xdr::ExtensionPoint::V0,
+                        }),
+                        root_invocation,
+                    }
+                } else {
+                    SorobanAuthorizationEntry {
+                        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                            address: sc_address.clone(),
+                            nonce,
+                            signature,
+                            signature_expiration_ledger: 1000,
+                        }),
+                        root_invocation,
+                    }
+                };
+
+                contract_auth.push(auth_entry);
             }
             self.last_nonces.push(curr_nonces);
         }
@@ -3206,4 +3254,157 @@ fn test_rollback_with_conditional_custom_account_auth() {
     assert_eq!(test.read_nonce_live_until(&account, 555), Some(1000));
     // Third call still can't succeed and won't consume nonce.
     assert_eq!(test.read_nonce_live_until(&account, 666), None);
+}
+
+#[test]
+fn test_cap64_memo_auth() {
+    let mut test = AuthTest::setup(1, 2);
+    let setup = SetupNode::new(&test.contracts[0], vec![true], vec![]);
+
+    // Failure scenario - no memo set in the host yet, but memo is set in the
+    // payload. Note, that this has to be covered before `host.set_tx_memo` call.
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn_with_memo(
+            &test.contracts[0],
+            vec![],
+            Memo::Id(456),
+        )]],
+        false,
+    );
+
+    // Correct scenarios
+
+    // No memo
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn_with_memo(
+            &test.contracts[0],
+            vec![],
+            Memo::None,
+        )]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // No memo, auth payload without memo at all (implicit `Memo::None`).
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn(&test.contracts[0], vec![])]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Same as two scenarios above, but set the 'None' memo in host explicitly
+    test.host.set_tx_memo(Memo::None).unwrap();
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn_with_memo(
+            &test.contracts[0],
+            vec![],
+            Memo::None,
+        )]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn(&test.contracts[0], vec![])]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Correct call with non-none memo
+    test.host.set_tx_memo(Memo::Id(123)).unwrap();
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn_with_memo(
+            &test.contracts[0],
+            vec![],
+            Memo::Id(123),
+        )]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Extra top-level payload with non-matching memo (but following the correct
+    // one)
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![
+            SignNode::tree_fn_with_memo(&test.contracts[0], vec![], Memo::Id(123)),
+            SignNode::tree_fn_with_memo(&test.contracts[0], vec![], Memo::Id(321)),
+        ]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Another memo type
+    test.host
+        .set_tx_memo(Memo::Text("sample memo text".try_into().unwrap()))
+        .unwrap();
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn_with_memo(
+            &test.contracts[0],
+            vec![],
+            Memo::Text("sample memo text".try_into().unwrap()),
+        )]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Failing scenarios
+
+    // Memo type mismatch
+    test.host.set_tx_memo(Memo::Id(123)).unwrap();
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn_with_memo(
+            &test.contracts[0],
+            vec![],
+            Memo::Text("sample memo text".try_into().unwrap()),
+        )]],
+        false,
+    );
+
+    // Memo contents mismatch
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn_with_memo(
+            &test.contracts[0],
+            vec![],
+            Memo::Id(124),
+        )]],
+        false,
+    );
+
+    // `None` memo, while non-none memo is expected
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn_with_memo(
+            &test.contracts[0],
+            vec![],
+            Memo::None,
+        )]],
+        false,
+    );
+
+    // Implicit `None` memo with v1 payload
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn(&test.contracts[0], vec![])]],
+        false,
+    );
+
+    // Multiple payloads with memo, first one has mismatched memo.
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![
+            SignNode::tree_fn_with_memo(&test.contracts[0], vec![], Memo::Id(321)),
+            SignNode::tree_fn_with_memo(&test.contracts[0], vec![], Memo::Id(123)),
+        ]],
+        false,
+    );
 }
