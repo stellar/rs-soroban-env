@@ -27,10 +27,11 @@ use crate::{
         ContractCodeEntryExt, ContractCodeEntryV1, ContractCostType, ContractExecutable,
         ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash,
         InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
-        ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, Memo, PublicKey, ScAddress,
+        ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey,
+        ScString, ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry,
+        SorobanAuthorizedFunction, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
+        TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -77,7 +78,8 @@ pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
     // budget charging.
     debug_assert!(
         mem::size_of::<T>() as u64 <= T::DECLARED_SIZE,
-        "mem size: {}, declared: {}",
+        "{}: mem size: {}, declared: {}",
+        std::any::type_name::<T>(),
         std::mem::size_of::<T>(),
         T::DECLARED_SIZE
     );
@@ -334,6 +336,8 @@ impl MeteredClone for TrustLineEntry {}
 impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
 impl MeteredClone for Asset {}
+
+impl MeteredClone for Memo {}
 // endregion: xdr types with no substructure
 
 // region: Rust standard composite types

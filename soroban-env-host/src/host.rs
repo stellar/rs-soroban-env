@@ -14,7 +14,7 @@ use crate::{
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration, Hash,
-        LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
+        LedgerEntryData, Memo, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
         ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
@@ -111,6 +111,7 @@ struct HostImpl {
     // `with_debug_mode` callback that switches to the shadow budget.
     diagnostic_level: RefCell<DiagnosticLevel>,
     base_prng: RefCell<Option<Prng>>,
+    tx_memo: RefCell<Option<Memo>>,
     // Auth-recording mode generates pseudorandom nonces to populate its output.
     // We'd like these to be deterministic from one run to the next, but also
     // completely isolated from any use of the user-accessible PRNGs (either
@@ -218,6 +219,12 @@ impl_checked_borrow_helpers!(
     Option<LedgerInfo>,
     try_borrow_ledger,
     try_borrow_ledger_mut
+);
+impl_checked_borrow_helpers!(
+    tx_memo,
+    Option<Memo>,
+    try_borrow_tx_memo,
+    try_borrow_tx_memo_mut
 );
 impl_checked_borrow_helpers!(
     objects,
@@ -348,6 +355,7 @@ impl Host {
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
+            tx_memo: RefCell::new(Some(Memo::None)),
             #[cfg(any(test, feature = "recording_mode"))]
             recording_auth_nonce_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
@@ -532,6 +540,19 @@ impl Host {
     pub fn set_ledger_info(&self, info: LedgerInfo) -> Result<(), HostError> {
         *self.try_borrow_ledger_mut()? = Some(info);
         self.check_ledger_protocol_supported()
+    }
+
+    pub fn get_tx_memo(&self) -> Result<Memo, HostError> {
+        if let Some(memo) = self.try_borrow_tx_memo()?.as_ref() {
+            memo.metered_clone(self)
+        } else {
+            Ok(Memo::None)
+        }
+    }
+
+    pub fn set_tx_memo(&self, memo: Memo) -> Result<(), HostError> {
+        *self.try_borrow_tx_memo_mut()? = Some(memo);
+        Ok(())
     }
 
     pub(crate) fn check_ledger_protocol_supported(&self) -> Result<(), HostError> {
