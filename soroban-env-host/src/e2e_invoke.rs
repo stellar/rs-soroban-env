@@ -536,14 +536,6 @@ fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
 }
 
 #[cfg(any(test, feature = "recording_mode"))]
-#[cfg(not(feature = "unstable-next-api"))]
-/// Defines the authorization mode for the `invoke_host_function_in_recording_mode`.
-///
-/// When `None`, recording authorization with disabled non-root authorization will be used.
-/// When `Some()`, enforcing auth will be used with the provided entries.
-pub type RecordingInvocationAuthMode = Option<Vec<SorobanAuthorizationEntry>>;
-
-#[cfg(all(any(test, feature = "recording_mode"), feature = "unstable-next-api"))]
 /// Defines the authorization mode for the `invoke_host_function_in_recording_mode`.
 pub enum RecordingInvocationAuthMode {
     /// Use enforcing auth and pass the signed authorization entries to be used.
@@ -601,9 +593,6 @@ pub fn invoke_host_function_in_recording_mode(
 ) -> Result<InvokeHostFunctionRecordingModeResult, HostError> {
     let storage = Storage::with_recording_footprint(ledger_snapshot.clone());
     let host = Host::with_storage_and_budget(storage, budget.clone());
-    #[cfg(not(feature = "unstable-next-api"))]
-    let is_recording_auth = auth_mode.is_none();
-    #[cfg(feature = "unstable-next-api")]
     let is_recording_auth = matches!(auth_mode, RecordingInvocationAuthMode::Recording(_));
     let ledger_seq = ledger_info.sequence_number;
     let host_function = host.xdr_roundtrip(host_fn)?;
@@ -612,13 +601,6 @@ pub fn invoke_host_function_in_recording_mode(
     host.set_ledger_info(ledger_info)?;
     host.set_base_prng_seed(base_prng_seed)?;
 
-    #[cfg(not(feature = "unstable-next-api"))]
-    if let Some(auth_entries) = &auth_mode {
-        host.set_authorization_entries(auth_entries.clone())?;
-    } else {
-        host.switch_to_recording_auth(true)?;
-    }
-    #[cfg(feature = "unstable-next-api")]
     match &auth_mode {
         RecordingInvocationAuthMode::Enforcing(auth_entries) => {
             host.set_authorization_entries(auth_entries.clone())?;
@@ -640,17 +622,6 @@ pub fn invoke_host_function_in_recording_mode(
             .saturating_add(encoded_result_sc_val.len() as u32);
     }
 
-    #[cfg(not(feature = "unstable-next-api"))]
-    let mut output_auth = if let Some(auth_entries) = auth_mode {
-        auth_entries
-    } else {
-        let recorded_auth = host.get_recorded_auth_payloads()?;
-        recorded_auth
-            .into_iter()
-            .map(|a| a.into_auth_entry_with_emulated_signature())
-            .collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>()?
-    };
-    #[cfg(feature = "unstable-next-api")]
     let mut output_auth = if let RecordingInvocationAuthMode::Enforcing(auth_entries) = auth_mode {
         auth_entries
     } else {
