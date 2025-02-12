@@ -38,10 +38,6 @@ impl EnvBase for Guest {
         core::arch::wasm32::unreachable()
     }
 
-    fn check_same_env(&self, _other: &Self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
     fn bytes_copy_from_slice(
         &self,
         b: BytesObject,
