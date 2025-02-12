@@ -742,6 +742,19 @@ impl Host {
         };
         self.create_contract_internal(Some(deployer), args, constructor_args_vec)
     }
+
+    pub fn check_same_env(&self, other: &Self) -> Result<(), HostError> {
+        if Rc::ptr_eq(&self.0, &other.0) {
+            Ok(())
+        } else {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "check_same_env on different Hosts",
+                &[],
+            ))
+        }
+    }
 }
 
 macro_rules! call_trace_env_call {
@@ -880,19 +893,6 @@ impl EnvBase for Host {
         res: &Result<&dyn Debug, &HostError>,
     ) -> Result<(), HostError> {
         self.call_any_lifecycle_hook(TraceEvent::EnvRet(fname, res))
-    }
-
-    fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
-        if Rc::ptr_eq(&self.0, &other.0) {
-            Ok(())
-        } else {
-            Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "check_same_env on different Hosts",
-                &[],
-            ))
-        }
     }
 
     fn bytes_copy_from_slice(
