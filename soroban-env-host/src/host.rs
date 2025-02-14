@@ -3322,7 +3322,7 @@ impl VmCallerEnv for Host {
                         .try_get_full_with_host(&storage_key, self, None)?;
                     if let Some((instance_entry, _ttl)) = maybe_instance_entry {
                         let instance =
-                            self.extract_contract_instance_from_ledger_entry(&*instance_entry)?;
+                            self.extract_contract_instance_from_ledger_entry(&instance_entry)?;
                         Some(AddressExecutable::from_contract_executable_xdr(
                             &self,
                             &instance.executable,
