@@ -306,7 +306,7 @@ impl StellarAssetContract {
         )?;
 
         spend_balance_no_authorization_check(e, from.metered_clone(e)?, amount)?;
-        event::clawback(e, admin, from, amount)?;
+        event::clawback(e, from, amount)?;
         Ok(())
     }
 
@@ -345,7 +345,7 @@ impl StellarAssetContract {
         )?;
 
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::mint(e, admin, to, amount)?;
+        event::mint(e, to, amount)?;
         Ok(())
     }
 

@@ -41,28 +41,16 @@ pub(crate) fn transfer(
     Ok(())
 }
 
-pub(crate) fn mint(e: &Host, admin: Address, to: Address, amount: i128) -> Result<(), HostError> {
-    let topics = host_vec![
-        e,
-        Symbol::try_from_val(e, &"mint")?,
-        admin,
-        to,
-        read_name(e)?
-    ]?;
+pub(crate) fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
+    let topics = host_vec![e, Symbol::try_from_val(e, &"mint")?, to, read_name(e)?]?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }
 
-pub(crate) fn clawback(
-    e: &Host,
-    admin: Address,
-    from: Address,
-    amount: i128,
-) -> Result<(), HostError> {
+pub(crate) fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
     let topics = host_vec![
         e,
         Symbol::try_from_val(e, &"clawback")?,
-        admin,
         from,
         read_name(e)?
     ]?;

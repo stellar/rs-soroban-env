@@ -1039,11 +1039,11 @@ fn test_simulate_successful_sac_call() {
                         .try_into()
                         .unwrap()
                 },
-                instructions: 3302139,
+                instructions: 3258545,
                 read_bytes: 532,
                 write_bytes: 116,
             },
-            resource_fee: 28345,
+            resource_fee: 28298,
         })
     );
 }
