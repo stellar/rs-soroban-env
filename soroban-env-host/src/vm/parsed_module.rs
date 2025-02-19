@@ -1,11 +1,11 @@
 use crate::{
-    budget::AsBudget,
+    budget::{AsBudget, Budget},
     err,
     host::metered_clone::MeteredContainer,
     meta,
     xdr::{
-        ContractCostType, Limited, ReadXdr, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion,
-        ScErrorCode, ScErrorType,
+        ContractCodeEntry, ContractCodeEntryExt, ContractCostType, Limited, ReadXdr,
+        ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion, ScErrorCode, ScErrorType,
     },
     ErrorHandler, Host, HostError, Val, DEFAULT_XDR_RW_LIMITS,
 };
@@ -26,6 +26,7 @@ impl VersionedContractCodeCostInputs {
             Self::V1(_) => false,
         }
     }
+
     pub fn charge_for_parsing(&self, budget: &impl AsBudget) -> Result<(), HostError> {
         let budget = budget.as_budget();
         match self {
@@ -77,6 +78,7 @@ impl VersionedContractCodeCostInputs {
         }
         Ok(())
     }
+
     pub fn charge_for_instantiation(&self, _host: &Host) -> Result<(), HostError> {
         match self {
             Self::V0 { wasm_bytes } => {
@@ -149,6 +151,63 @@ pub struct ParsedModule {
     pub wasmi_module: wasmi::Module,
     pub proto_version: u32,
     pub cost_inputs: VersionedContractCodeCostInputs,
+}
+
+pub fn wasm_module_memory_cost(
+    budget: &Budget,
+    contract_code_entry: &ContractCodeEntry,
+) -> Result<u64, HostError> {
+    match &contract_code_entry.ext {
+        ContractCodeEntryExt::V0 => budget.get_memory_cost(
+            ContractCostType::VmInstantiation,
+            Some(contract_code_entry.code.len() as u64),
+        ),
+        ContractCodeEntryExt::V1(contract_code_entry_v1) => {
+            let cost_inputs = &contract_code_entry_v1.cost_inputs;
+            let mut res = 0_u64;
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmInstructions,
+                Some(cost_inputs.n_instructions as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmFunctions,
+                Some(cost_inputs.n_functions as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmGlobals,
+                Some(cost_inputs.n_globals as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmTableEntries,
+                Some(cost_inputs.n_table_entries as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmTypes,
+                Some(cost_inputs.n_types as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmDataSegments,
+                Some(cost_inputs.n_data_segments as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmElemSegments,
+                Some(cost_inputs.n_elem_segments as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmImports,
+                Some(cost_inputs.n_imports as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmExports,
+                Some(cost_inputs.n_exports as u64),
+            )?);
+            res = res.saturating_add(budget.get_memory_cost(
+                ContractCostType::ParseWasmDataSegmentBytes,
+                Some(cost_inputs.n_data_segment_bytes as u64),
+            )?);
+            Ok(res)
+        }
+    }
 }
 
 impl ParsedModule {

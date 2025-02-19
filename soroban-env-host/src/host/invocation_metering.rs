@@ -3,11 +3,11 @@ use std::cell::RefMut;
 use soroban_env_common::Env;
 
 use crate::{
-    e2e_invoke::encode_contract_events,
+    e2e_invoke::{encode_contract_events, entry_size_for_rent},
     fees::{FeeConfiguration, DATA_SIZE_1KB_INCREMENT, INSTRUCTIONS_INCREMENT, TTL_ENTRY_SIZE},
     ledger_info::get_key_durability,
     storage::{AccessType, Storage},
-    xdr::{ContractDataDurability, ScErrorCode, ScErrorType},
+    xdr::{ContractDataDurability, LedgerKey, ScErrorCode, ScErrorType},
 };
 
 use super::{metered_xdr::metered_write_xdr, Host, HostError};
@@ -22,18 +22,38 @@ pub struct InvocationResources {
     /// Number of modelled CPU instructions.
     pub instructions: i64,
     /// Size of modelled memory in bytes.
+    ///
+    /// Note, that the used memory does not affect the fees. It only has an
+    /// upper bound.
     pub mem_bytes: i64,
-    /// Number of entries that need to be read from the ledger (without
-    /// modification, i.e. excluding the entries that need to be written).
-    pub read_entries: u32,
+    /// Number of entries that need to be read from the disk.
+    ///
+    /// This is the total number of restored Soroban ledger entries and
+    /// non-Soroban entries (such as 'classic' account balances).
+    ///
+    /// Live Soroban state is stored in-memory and most of the time this
+    /// is going to be 0 or almost 0.
+    pub disk_read_entries: u32,
+    /// Number of in-memory ledger entries accessed by the invocation.
+    ///
+    /// This includes all the live Soroban entries, i.e. most of the entries
+    /// that a contract interacts with.
+    ///
+    /// Note, that this value does not affect the fees. It only has an upper
+    /// bound.
+    pub memory_read_entries: u32,
     /// Number of entries that need to be written to the ledger due to
     /// modification.
     pub write_entries: u32,
-    /// Total number of bytes that need to be read from the ledger. This is
-    /// the total size of the 'initial' states all the storage entries accessed.
-    pub read_bytes: u32,
-    /// Total number of bytes that need to be written to the ledger. This is
-    /// the total size of all the entries accounted in `write_entries`.
+    /// Total number of bytes that need to be read from disk.
+    ///
+    /// This is the total size of restored Soroban ledger entries and
+    /// non-Soroban entries (such as 'classic' account balances).
+    ///
+    /// Live Soroban state is stored in-memory and most of the time this
+    /// is going to be 0 or almost 0.
+    pub disk_read_bytes: u32,
+    /// Total number of bytes that need to be written to the ledger.
     pub write_bytes: u32,
     /// Total size of the contract events emitted.
     pub contract_events_size_bytes: u32,
@@ -63,11 +83,11 @@ pub struct FeeEstimate {
     /// Fee for instructions.
     pub instructions: i64,
     /// Fee for ledger entry reads.
-    pub read_entries: i64,
+    pub disk_read_entries: i64,
     /// Fee for ledger entry writes.
     pub write_entries: i64,
-    /// Fee for the overall size of ledger reads.
-    pub read_bytes: i64,
+    /// Fee for the overall size of ledger disk reads.
+    pub disk_read_bytes: i64,
     /// Fee for the overall size of ledger writes.
     pub write_bytes: i64,
     /// Fee for the contract events emitted.
@@ -79,7 +99,7 @@ pub struct FeeEstimate {
 }
 
 impl InvocationResources {
-    /// Estimates the fees necesary for the current resources based on the
+    /// Estimates the fees necessary for the current resources based on the
     /// provided fee configuration.
     ///
     /// This is only an estimate and it can't be used for the actual transaction
@@ -90,6 +110,7 @@ impl InvocationResources {
     pub fn estimate_fees(
         &self,
         fee_config: &FeeConfiguration,
+        fee_per_rent_1kb: i64,
         persistent_rent_rate_denominator: i64,
         temporary_rent_rate_denominator: i64,
     ) -> FeeEstimate {
@@ -98,15 +119,17 @@ impl InvocationResources {
             fee_config.fee_per_instruction_increment,
             INSTRUCTIONS_INCREMENT,
         );
-        let read_entries = fee_config
-            .fee_per_read_entry
-            .saturating_mul(self.read_entries.saturating_add(self.write_entries).into());
+        let disk_read_entries = fee_config.fee_per_disk_read_entry.saturating_mul(
+            self.disk_read_entries
+                .saturating_add(self.write_entries)
+                .into(),
+        );
         let write_entries = fee_config
             .fee_per_write_entry
             .saturating_mul(self.write_entries.into());
-        let read_bytes = compute_fee_per_increment(
-            self.read_bytes.into(),
-            fee_config.fee_per_read_1kb,
+        let disk_read_bytes = compute_fee_per_increment(
+            self.disk_read_bytes.into(),
+            fee_config.fee_per_disk_read_1kb,
             DATA_SIZE_1KB_INCREMENT,
         );
         let write_bytes = compute_fee_per_increment(
@@ -141,20 +164,20 @@ impl InvocationResources {
 
         let persistent_entry_rent = compute_fee_per_increment(
             self.persistent_rent_ledger_bytes,
-            fee_config.fee_per_write_1kb,
+            fee_per_rent_1kb,
             DATA_SIZE_1KB_INCREMENT.saturating_mul(persistent_rent_rate_denominator),
         )
         .saturating_add(persistent_entry_ttl_entry_writes);
         let temporary_entry_rent = compute_fee_per_increment(
             self.temporary_rent_ledger_bytes,
-            fee_config.fee_per_write_1kb,
+            fee_per_rent_1kb,
             DATA_SIZE_1KB_INCREMENT.saturating_mul(temporary_rent_rate_denominator),
         )
         .saturating_add(temp_entry_ttl_entry_writes);
         let total = instructions
-            .saturating_add(read_entries)
+            .saturating_add(disk_read_entries)
             .saturating_add(write_entries)
-            .saturating_add(read_bytes)
+            .saturating_add(disk_read_bytes)
             .saturating_add(write_bytes)
             .saturating_add(contract_events)
             .saturating_add(persistent_entry_rent)
@@ -162,9 +185,9 @@ impl InvocationResources {
         FeeEstimate {
             total,
             instructions,
-            read_entries,
+            disk_read_entries,
             write_entries,
-            read_bytes,
+            disk_read_bytes,
             write_bytes,
             contract_events,
             persistent_entry_rent,
@@ -269,45 +292,57 @@ impl InvocationMeter {
         let curr_ledger_seq: u32 = host.get_ledger_sequence()?.into();
         for (key, access_type) in footprint.0.iter(host.budget_ref())? {
             let maybe_init_entry = prev_storage.try_get_full_with_host(key, host, None)?;
-            let mut init_entry_size = 0;
+            let mut init_entry_size_for_rent = 0;
             let mut init_live_until_ledger = curr_ledger_seq;
+            let is_disk_read = match key.as_ref() {
+                LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => false,
+                _ => true,
+            };
             if let Some((init_entry, init_entry_live_until)) = maybe_init_entry {
                 let mut buf = Vec::<u8>::new();
                 metered_write_xdr(host.budget_ref(), init_entry.as_ref(), &mut buf)?;
-                init_entry_size = buf.len() as u32;
-                invocation_resources.read_bytes += init_entry_size;
+                if is_disk_read {
+                    invocation_resources.disk_read_bytes += buf.len() as u32;
+                }
+                init_entry_size_for_rent =
+                    entry_size_for_rent(host.budget_ref(), &init_entry, buf.len() as u32)?;
+
                 if let Some(live_until) = init_entry_live_until {
                     init_live_until_ledger = live_until;
                 }
             }
             let mut entry_size = 0;
+            let mut new_entry_size_for_rent = 0;
             let mut entry_live_until_ledger = None;
             let maybe_entry = curr_storage.try_get_full_with_host(key, host, None)?;
             if let Some((entry, entry_live_until)) = maybe_entry {
                 let mut buf = Vec::<u8>::new();
                 metered_write_xdr(host.budget_ref(), entry.as_ref(), &mut buf)?;
                 entry_size = buf.len() as u32;
+                new_entry_size_for_rent =
+                    entry_size_for_rent(host.budget_ref(), &entry, entry_size)?;
                 entry_live_until_ledger = entry_live_until;
             }
-            match access_type {
-                AccessType::ReadOnly => {
-                    invocation_resources.read_entries += 1;
-                }
-                AccessType::ReadWrite => {
-                    invocation_resources.write_entries += 1;
-                    invocation_resources.write_bytes += entry_size;
-                }
+            if is_disk_read {
+                invocation_resources.disk_read_entries += 1;
+            } else {
+                invocation_resources.memory_read_entries += 1;
             }
+            if matches!(access_type, AccessType::ReadWrite) {
+                invocation_resources.write_entries += 1;
+                invocation_resources.write_bytes += entry_size;
+            }
+
             if let Some(new_live_until) = entry_live_until_ledger {
                 let extension_ledgers = (new_live_until - init_live_until_ledger) as i64;
-                let size_delta = if entry_size > init_entry_size {
-                    (entry_size - init_entry_size) as i64
+                let rent_size_delta = if new_entry_size_for_rent > init_entry_size_for_rent {
+                    (new_entry_size_for_rent - init_entry_size_for_rent) as i64
                 } else {
                     0
                 };
                 let existing_ledgers = (init_live_until_ledger - curr_ledger_seq) as i64;
-                let rent_ledger_bytes =
-                    existing_ledgers * size_delta + extension_ledgers * (entry_size as i64);
+                let rent_ledger_bytes = existing_ledgers * rent_size_delta
+                    + extension_ledgers * (new_entry_size_for_rent as i64);
                 if rent_ledger_bytes > 0 {
                     match get_key_durability(key.as_ref()) {
                         Some(ContractDataDurability::Temporary) => {
@@ -383,7 +418,7 @@ mod test {
     }
 
     // run `UPDATE_EXPECT=true cargo test` to update this test.
-    // The exact values of don't matter too much here (unless the diffs are
+    // The exact values don't matter too much here (unless the diffs are
     // produced without a protocol upgrade), but the presence/absence of certain
     // resources is important (comments clarify which ones).
     #[test]
@@ -406,12 +441,13 @@ mod test {
             InvocationResources {
                 instructions: 4196752,
                 mem_bytes: 2863204,
-                read_entries: 0,
+                disk_read_entries: 0,
+                memory_read_entries: 2,
                 write_entries: 2,
-                read_bytes: 0,
+                disk_read_bytes: 0,
                 write_bytes: 3132,
                 contract_events_size_bytes: 0,
-                persistent_rent_ledger_bytes: 3128868,
+                persistent_rent_ledger_bytes: 77506416,
                 persistent_entry_rent_bumps: 2,
                 temporary_rent_ledger_bytes: 0,
                 temporary_entry_rent_bumps: 0,
@@ -433,9 +469,10 @@ mod test {
             InvocationResources {
                 instructions: 314943,
                 mem_bytes: 1134859,
-                read_entries: 3,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 0,
-                read_bytes: 3132,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
@@ -458,9 +495,10 @@ mod test {
             InvocationResources {
                 instructions: 318247,
                 mem_bytes: 1135322,
-                read_entries: 2,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 1,
-                read_bytes: 3132,
+                disk_read_bytes: 0,
                 write_bytes: 84,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 83916,
@@ -483,9 +521,10 @@ mod test {
             InvocationResources {
                 instructions: 314242,
                 mem_bytes: 1134707,
-                read_entries: 3,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 0,
-                read_bytes: 3216,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
@@ -508,9 +547,10 @@ mod test {
             InvocationResources {
                 instructions: 319864,
                 mem_bytes: 1135678,
-                read_entries: 2,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 1,
-                read_bytes: 3132,
+                disk_read_bytes: 0,
                 write_bytes: 84,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
@@ -533,9 +573,10 @@ mod test {
             InvocationResources {
                 instructions: 314608,
                 mem_bytes: 1134775,
-                read_entries: 3,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 0,
-                read_bytes: 3216,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
@@ -558,9 +599,10 @@ mod test {
             InvocationResources {
                 instructions: 315657,
                 mem_bytes: 1135127,
-                read_entries: 3,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 0,
-                read_bytes: 3216,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 336084,
@@ -583,9 +625,10 @@ mod test {
             InvocationResources {
                 instructions: 315783,
                 mem_bytes: 1135127,
-                read_entries: 3,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 0,
-                read_bytes: 3216,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
@@ -608,9 +651,10 @@ mod test {
             InvocationResources {
                 instructions: 315638,
                 mem_bytes: 1135195,
-                read_entries: 3,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 0,
-                read_bytes: 3132,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
@@ -629,36 +673,38 @@ mod test {
             InvocationResources {
                 instructions: 0,
                 mem_bytes: 100_000,
-                read_entries: 0,
+                disk_read_entries: 0,
+                memory_read_entries: 100,
                 write_entries: 0,
-                read_bytes: 0,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
                 persistent_entry_rent_bumps: 0,
                 temporary_rent_ledger_bytes: 0,
-                temporary_entry_rent_bumps: 0
+                temporary_entry_rent_bumps: 0,
             }
             .estimate_fees(
                 &FeeConfiguration {
                     fee_per_instruction_increment: 100,
-                    fee_per_read_entry: 100,
+                    fee_per_disk_read_entry: 100,
                     fee_per_write_entry: 100,
-                    fee_per_read_1kb: 100,
+                    fee_per_disk_read_1kb: 100,
                     fee_per_write_1kb: 100,
                     fee_per_historical_1kb: 100,
                     fee_per_contract_event_1kb: 100,
                     fee_per_transaction_size_1kb: 100,
                 },
+                100,
                 1,
                 1
             ),
             FeeEstimate {
                 total: 0,
                 instructions: 0,
-                read_entries: 0,
+                disk_read_entries: 0,
                 write_entries: 0,
-                read_bytes: 0,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events: 0,
                 persistent_entry_rent: 0,
@@ -671,9 +717,10 @@ mod test {
             InvocationResources {
                 instructions: 1,
                 mem_bytes: 100_000,
-                read_entries: 1,
+                disk_read_entries: 1,
+                memory_read_entries: 100,
                 write_entries: 1,
-                read_bytes: 1,
+                disk_read_bytes: 1,
                 write_bytes: 1,
                 contract_events_size_bytes: 1,
                 persistent_rent_ledger_bytes: 1,
@@ -684,23 +731,24 @@ mod test {
             .estimate_fees(
                 &FeeConfiguration {
                     fee_per_instruction_increment: 100,
-                    fee_per_read_entry: 100,
+                    fee_per_disk_read_entry: 100,
                     fee_per_write_entry: 100,
-                    fee_per_read_1kb: 100,
+                    fee_per_disk_read_1kb: 100,
                     fee_per_write_1kb: 100,
                     fee_per_historical_1kb: 100,
                     fee_per_contract_event_1kb: 100,
                     fee_per_transaction_size_1kb: 100,
                 },
+                100,
                 1,
                 1
             ),
             FeeEstimate {
                 total: 516,
                 instructions: 1,
-                read_entries: 200,
+                disk_read_entries: 200,
                 write_entries: 100,
-                read_bytes: 1,
+                disk_read_bytes: 1,
                 write_bytes: 1,
                 contract_events: 1,
                 persistent_entry_rent: 106,
@@ -714,9 +762,10 @@ mod test {
             InvocationResources {
                 instructions: 10_123_456,
                 mem_bytes: 100_000,
-                read_entries: 30,
+                disk_read_entries: 30,
+                memory_read_entries: 100,
                 write_entries: 10,
-                read_bytes: 25_600,
+                disk_read_bytes: 25_600,
                 write_bytes: 10_340,
                 contract_events_size_bytes: 321_654,
                 persistent_rent_ledger_bytes: 1_000_000_000,
@@ -727,28 +776,29 @@ mod test {
             .estimate_fees(
                 &FeeConfiguration {
                     fee_per_instruction_increment: 1000,
-                    fee_per_read_entry: 2000,
-                    fee_per_write_entry: 4000,
-                    fee_per_read_1kb: 1500,
+                    fee_per_disk_read_entry: 2000,
                     fee_per_write_1kb: 3000,
+                    fee_per_write_entry: 4000,
+                    fee_per_disk_read_1kb: 1500,
                     fee_per_historical_1kb: 300,
                     fee_per_contract_event_1kb: 200,
                     fee_per_transaction_size_1kb: 900,
                 },
+                6000,
                 1000,
                 2000
             ),
             FeeEstimate {
                 // 1_200_139 + event fees + rent fees
-                total: 10_089_292,
+                total: 18_878_354,
                 instructions: 1_012_346,
-                read_entries: 80000,
+                disk_read_entries: 80000,
                 write_entries: 40000,
-                read_bytes: 37500,
+                disk_read_bytes: 37500,
                 write_bytes: 30293,
                 contract_events: 62824,
-                persistent_entry_rent: 2942110,
-                temporary_entry_rent: 5884219
+                persistent_entry_rent: 5871797,
+                temporary_entry_rent: 11743594
             }
         );
 
@@ -757,9 +807,10 @@ mod test {
             InvocationResources {
                 instructions: i64::MAX,
                 mem_bytes: i64::MAX,
-                read_entries: u32::MAX,
+                disk_read_entries: u32::MAX,
+                memory_read_entries: 100,
                 write_entries: u32::MAX,
-                read_bytes: u32::MAX,
+                disk_read_bytes: u32::MAX,
                 write_bytes: u32::MAX,
                 contract_events_size_bytes: u32::MAX,
                 persistent_rent_ledger_bytes: i64::MAX,
@@ -770,23 +821,24 @@ mod test {
             .estimate_fees(
                 &FeeConfiguration {
                     fee_per_instruction_increment: i64::MAX,
-                    fee_per_read_entry: i64::MAX,
+                    fee_per_disk_read_entry: i64::MAX,
                     fee_per_write_entry: i64::MAX,
-                    fee_per_read_1kb: i64::MAX,
+                    fee_per_disk_read_1kb: i64::MAX,
                     fee_per_write_1kb: i64::MAX,
                     fee_per_historical_1kb: i64::MAX,
                     fee_per_contract_event_1kb: i64::MAX,
                     fee_per_transaction_size_1kb: i64::MAX,
                 },
                 i64::MAX,
+                i64::MAX,
                 i64::MAX
             ),
             FeeEstimate {
                 total: i64::MAX,
                 instructions: 922337203685478,
-                read_entries: i64::MAX,
+                disk_read_entries: i64::MAX,
                 write_entries: i64::MAX,
-                read_bytes: 9007199254740992,
+                disk_read_bytes: 9007199254740992,
                 write_bytes: 9007199254740992,
                 contract_events: 9007199254740992,
                 persistent_entry_rent: i64::MAX,
