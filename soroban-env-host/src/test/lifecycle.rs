@@ -2398,3 +2398,132 @@ mod cap_58_constructor {
         }
     }
 }
+
+mod cap_68_executable_getter {
+    use soroban_env_common::TryFromVal;
+
+    use super::*;
+    use crate::builtin_contracts::common_types::AddressExecutable;
+    use crate::builtin_contracts::stellar_asset_contract::test_stellar_asset_contract::TestStellarAssetContract;
+    use crate::builtin_contracts::testutils::create_account;
+    use crate::xdr::{Asset, PublicKey};
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn get_non_existent_executable() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        let contract_address = host
+            .add_host_object(ScAddress::Contract([0; 32].into()))
+            .unwrap();
+        let account_address = host
+            .add_host_object(ScAddress::Account(AccountId(
+                PublicKey::PublicKeyTypeEd25519([0; 32].into()),
+            )))
+            .unwrap();
+
+        assert!(host
+            .get_address_executable(contract_address)
+            .unwrap()
+            .is_void());
+        assert!(host
+            .get_address_executable(account_address)
+            .unwrap()
+            .is_void());
+    }
+
+    #[test]
+    fn get_account_executable() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        let account_id = AccountId(PublicKey::PublicKeyTypeEd25519([0; 32].into()));
+        create_account(&host, &account_id, vec![], 0, 0, [0; 4], None, None, 0);
+        let account_address = host
+            .add_host_object(ScAddress::Account(account_id))
+            .unwrap();
+        let executable = AddressExecutable::try_from_val(
+            &*host,
+            &host.get_address_executable(account_address).unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(executable, AddressExecutable::Account));
+    }
+
+    #[test]
+    fn get_stellar_asset_contract_executable() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        let contract = TestStellarAssetContract::new_from_asset(&host, Asset::Native).unwrap();
+        let executable = AddressExecutable::try_from_val(
+            &*host,
+            &host
+                .get_address_executable(contract.address.as_object())
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(executable, AddressExecutable::StellarAsset));
+    }
+
+    #[test]
+    fn get_wasm_executable_with_wasm_update() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+
+        let old_wasm_hash_obj: Val = host
+            .invoke_function(HostFunction::UploadContractWasm(
+                UPDATEABLE_CONTRACT.to_vec().try_into().unwrap(),
+            ))
+            .unwrap()
+            .try_into_val(&*host)
+            .unwrap();
+
+        let contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
+
+        let old_executable = AddressExecutable::try_from_val(
+            &*host,
+            &host.get_address_executable(contract_addr_obj).unwrap(),
+        )
+        .unwrap();
+        let AddressExecutable::Wasm(executable_old_hash) = old_executable else {
+            panic!("unexpected executable type");
+        };
+        let old_wasm_hash = host
+            .hash_from_bytesobj_input("old_hash", old_wasm_hash_obj.try_into_val(&*host).unwrap())
+            .unwrap();
+        assert_eq!(
+            executable_old_hash.to_array().unwrap().as_slice(),
+            old_wasm_hash.0.as_slice()
+        );
+
+        let updated_wasm = ADD_I32;
+        let updated_wasm_hash_obj: Val = host
+            .invoke_function(HostFunction::UploadContractWasm(
+                updated_wasm.to_vec().try_into().unwrap(),
+            ))
+            .unwrap()
+            .try_into_val(&*host)
+            .unwrap();
+        let _ = host
+            .call(
+                contract_addr_obj,
+                Symbol::try_from_small_str("update").unwrap(),
+                test_vec![&*host, &updated_wasm_hash_obj, &false].into(),
+            )
+            .unwrap();
+
+        let new_executable = AddressExecutable::try_from_val(
+            &*host,
+            &host.get_address_executable(contract_addr_obj).unwrap(),
+        )
+        .unwrap();
+        let AddressExecutable::Wasm(executable_new_hash) = new_executable else {
+            panic!("unexpected executable type");
+        };
+        let new_wasm_hash = host
+            .hash_from_bytesobj_input(
+                "updated_hash",
+                updated_wasm_hash_obj.try_into_val(&*host).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            executable_new_hash.to_array().unwrap().as_slice(),
+            new_wasm_hash.0.as_slice()
+        );
+    }
+}
