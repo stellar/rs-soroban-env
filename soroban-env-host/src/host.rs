@@ -4,6 +4,7 @@ use std::rc::Rc;
 use crate::{
     auth::AuthorizationManager,
     budget::{AsBudget, Budget},
+    builtin_contracts::common_types::AddressExecutable,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     host_object::{HostMap, HostObject, HostVec},
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns,
@@ -3295,6 +3296,48 @@ impl VmCallerEnv for Host {
         self.add_host_object(sc_addr)
     }
 
+    fn get_address_executable(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        address: AddressObject,
+    ) -> Result<Val, Self::Error> {
+        let sc_address = self.scaddress_from_address(address)?;
+        let maybe_executable =
+            match sc_address {
+                ScAddress::Account(account_id) => {
+                    let key = self.to_account_key(account_id)?;
+                    if self
+                        .try_borrow_storage_mut()?
+                        .has_with_host(&key, &self, None)?
+                    {
+                        Some(AddressExecutable::Account)
+                    } else {
+                        None
+                    }
+                }
+                ScAddress::Contract(id) => {
+                    let storage_key = self.contract_instance_ledger_key(&id)?;
+                    let maybe_instance_entry = self
+                        .try_borrow_storage_mut()?
+                        .try_get_full_with_host(&storage_key, self, None)?;
+                    if let Some((instance_entry, _ttl)) = maybe_instance_entry {
+                        let instance =
+                            self.extract_contract_instance_from_ledger_entry(&instance_entry)?;
+                        Some(AddressExecutable::from_contract_executable_xdr(
+                            &self,
+                            &instance.executable,
+                        )?)
+                    } else {
+                        None
+                    }
+                }
+            };
+        if let Some(exec) = maybe_executable {
+            Val::try_from_val(self, &exec)
+        } else {
+            Ok(Val::VOID.into())
+        }
+    }
     // endregion: "address" module functions
     // region: "prng" module functions
 
