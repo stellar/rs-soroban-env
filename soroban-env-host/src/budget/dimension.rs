@@ -187,6 +187,15 @@ impl BudgetDimension {
         Ok(amount)
     }
 
+    pub(crate) fn get_cost(
+        &self,
+        ty: ContractCostType,
+        iterations: u64,
+        input: Option<u64>,
+    ) -> Result<u64, HostError> {
+        self.get_cost_model(ty)?.evaluate(iterations, input)
+    }
+
     // Resets all model parameters to zero (so that we can override and test individual ones later).
     #[cfg(any(test, feature = "testutils", feature = "bench"))]
     pub(crate) fn reset_models(&mut self) {

@@ -3,8 +3,9 @@ use crate::network_config::NetworkConfig;
 use crate::simulation::{SimulationAdjustmentConfig, SimulationAdjustmentFactor};
 use anyhow::{anyhow, ensure, Context, Result};
 
+use soroban_env_host::e2e_invoke::entry_size_for_rent;
+use soroban_env_host::xdr::SorobanTransactionDataExt;
 use soroban_env_host::{
-    e2e_invoke::{extract_rent_changes, LedgerEntryChange},
     fees::{
         compute_rent_fee, compute_transaction_resource_fee, LedgerEntryRentChange,
         TransactionResources,
@@ -12,12 +13,12 @@ use soroban_env_host::{
     ledger_info::get_key_durability,
     storage::SnapshotSource,
     xdr::{
-        BytesM, ContractDataDurability, DecoratedSignature, Duration, ExtensionPoint, Hash,
-        LedgerBounds, LedgerFootprint, LedgerKey, Limits, Memo, MuxedAccount, MuxedAccountMed25519,
-        Operation, OperationBody, Preconditions, PreconditionsV2, ReadXdr, SequenceNumber,
-        Signature, SignatureHint, SignerKey, SignerKeyEd25519SignedPayload, SorobanResources,
-        SorobanTransactionData, TimeBounds, TimePoint, Transaction, TransactionExt,
-        TransactionV1Envelope, Uint256, WriteXdr,
+        BytesM, ContractDataDurability, DecoratedSignature, Duration, Hash, LedgerBounds,
+        LedgerFootprint, LedgerKey, Memo, MuxedAccount, MuxedAccountMed25519, Operation,
+        OperationBody, Preconditions, PreconditionsV2, SequenceNumber, Signature, SignatureHint,
+        SignerKey, SignerKeyEd25519SignedPayload, SorobanResources, SorobanTransactionData,
+        TimeBounds, TimePoint, Transaction, TransactionExt, TransactionV1Envelope, Uint256,
+        WriteXdr,
     },
     LedgerInfo, DEFAULT_XDR_RW_LIMITS,
 };
@@ -89,13 +90,28 @@ pub(crate) fn compute_adjusted_transaction_resources(
     contract_events_and_return_value_size: u32,
 ) -> Result<TransactionResources> {
     adjustment_config.adjust_resources(simulated_operation_resources);
+    let mut disk_read_entries = 0;
+    for k in simulated_operation_resources.footprint.read_only.iter() {
+        match k {
+            LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => (),
+            _ => {
+                disk_read_entries += 1;
+            }
+        }
+    }
+    for k in simulated_operation_resources.footprint.read_write.iter() {
+        match k {
+            LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => (),
+            _ => {
+                disk_read_entries += 1;
+            }
+        }
+    }
     Ok(TransactionResources {
         instructions: simulated_operation_resources.instructions,
-        read_entries: (simulated_operation_resources.footprint.read_only.len()
-            + simulated_operation_resources.footprint.read_write.len())
-            as u32,
+        disk_read_entries,
         write_entries: simulated_operation_resources.footprint.read_write.len() as u32,
-        read_bytes: simulated_operation_resources.read_bytes,
+        disk_read_bytes: simulated_operation_resources.read_bytes,
         write_bytes: simulated_operation_resources.write_bytes,
         transaction_size_bytes: adjustment_config.tx_size.adjust_u32(
             estimate_max_transaction_size_for_operation(operation, &simulated_operation_resources)
@@ -105,53 +121,16 @@ pub(crate) fn compute_adjusted_transaction_resources(
     })
 }
 
-pub(crate) fn simulate_invoke_host_function_op_resources(
-    ledger_changes: &[LedgerEntryChange],
-    simulated_instructions: u32,
-) -> Result<(SorobanResources, Vec<LedgerEntryRentChange>)> {
-    let mut read_bytes = 0;
-    let mut write_bytes = 0;
-    let mut read_only_footprint = vec![];
-    let mut read_write_footprint = vec![];
-    for ledger_change in ledger_changes {
-        read_bytes += ledger_change.old_entry_size_bytes;
-        // It should be safe to decode values returned encoded by host without limits.
-        let key = LedgerKey::from_xdr(&ledger_change.encoded_key, Limits::none())?;
-        if ledger_change.read_only {
-            read_only_footprint.push(key);
-        } else {
-            read_write_footprint.push(key);
-            if let Some(new_value) = &ledger_change.encoded_new_value {
-                write_bytes += new_value.len() as u32;
-            }
-        }
-    }
-    read_only_footprint.sort();
-    read_write_footprint.sort();
-    let footprint = LedgerFootprint {
-        read_only: read_only_footprint.try_into()?,
-        read_write: read_write_footprint.try_into()?,
-    };
-    let resources = SorobanResources {
-        footprint,
-        instructions: simulated_instructions,
-        read_bytes,
-        write_bytes,
-    };
-    let rent_changes = extract_rent_changes(ledger_changes);
-    Ok((resources, rent_changes))
-}
-
 pub(crate) fn simulate_extend_ttl_op_resources(
     keys_to_extend: &[LedgerKey],
     snapshot: &impl SnapshotSource,
+    network_config: &NetworkConfig,
     current_ledger_seq: u32,
     extend_to: u32,
 ) -> Result<(SorobanResources, Vec<LedgerEntryRentChange>)> {
-    let mut read_bytes = 0;
     let mut rent_changes = Vec::<LedgerEntryRentChange>::with_capacity(keys_to_extend.len());
     let mut extended_keys = Vec::<LedgerKey>::with_capacity(keys_to_extend.len());
-
+    let budget = network_config.create_budget()?;
     let new_live_until_ledger = current_ledger_seq + extend_to;
     for key in keys_to_extend {
         let durability = get_key_durability(key).ok_or_else(|| anyhow!("Can't extend TTL for ledger entry with key `{:?}`. Only entries with TTL (contract data or code entries) can have it extended", key))?;
@@ -159,7 +138,6 @@ pub(crate) fn simulate_extend_ttl_op_resources(
         let Some((entry, live_until)) = entry_with_live_until else {
             continue;
         };
-        let entry_size: u32 = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
         let current_live_until_ledger = live_until.ok_or_else(|| {
             anyhow!("Internal error: missing TTL for ledger key that must have TTL: `{key:?}`")
         })?;
@@ -167,7 +145,8 @@ pub(crate) fn simulate_extend_ttl_op_resources(
             continue;
         }
         extended_keys.push(key.clone());
-        read_bytes += entry_size;
+        let entry_xdr_size = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
+        let entry_size: u32 = entry_size_for_rent(&budget, &entry, entry_xdr_size)?;
         rent_changes.push(LedgerEntryRentChange {
             is_persistent: durability == ContractDataDurability::Persistent,
             old_size_bytes: entry_size,
@@ -183,7 +162,7 @@ pub(crate) fn simulate_extend_ttl_op_resources(
             read_write: Default::default(),
         },
         instructions: 0,
-        read_bytes,
+        read_bytes: 0,
         write_bytes: 0,
     };
     Ok((resources, rent_changes))
@@ -192,6 +171,7 @@ pub(crate) fn simulate_extend_ttl_op_resources(
 pub(crate) fn simulate_restore_op_resources(
     keys_to_restore: &[LedgerKey],
     snapshot_source: &impl SnapshotSourceWithArchive,
+    network_config: &NetworkConfig,
     ledger_info: &LedgerInfo,
 ) -> Result<(SorobanResources, Vec<LedgerEntryRentChange>)> {
     let restored_live_until_ledger = ledger_info
@@ -202,6 +182,7 @@ pub(crate) fn simulate_restore_op_resources(
     let mut restored_bytes = 0_u32;
     let mut rent_changes: Vec<LedgerEntryRentChange> = Vec::with_capacity(keys_to_restore.len());
     let mut restored_keys = Vec::<LedgerKey>::with_capacity(keys_to_restore.len());
+    let budget = network_config.create_budget()?;
 
     for key in keys_to_restore {
         let durability = get_key_durability(key);
@@ -223,12 +204,13 @@ pub(crate) fn simulate_restore_op_resources(
         }
         restored_keys.push(key.clone());
 
-        let entry_size: u32 = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
-        restored_bytes = restored_bytes.saturating_add(entry_size);
+        let entry_xdr_size: u32 = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
+        let entry_rent_size: u32 = entry_size_for_rent(&budget, &entry, entry_xdr_size)?;
+        restored_bytes = restored_bytes.saturating_add(entry_xdr_size);
         rent_changes.push(LedgerEntryRentChange {
             is_persistent: true,
             old_size_bytes: 0,
-            new_size_bytes: entry_size,
+            new_size_bytes: entry_rent_size,
             old_live_until_ledger: 0,
             new_live_until_ledger: restored_live_until_ledger,
         });
@@ -299,7 +281,7 @@ fn estimate_max_transaction_size_for_operation(
                     write_bytes: 0,
                 },
                 resource_fee: 0,
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
             }),
         },
         signatures: signatures.try_into()?,

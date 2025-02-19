@@ -67,10 +67,10 @@ pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
     wasm_entry_with_refined_contract_cost_inputs(wasm, true)
 }
 
-pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
+pub(crate) fn contract_code_entry_with_refined_contract_cost_inputs(
     wasm: &[u8],
     add_refined_cost_inputs: bool,
-) -> LedgerEntry {
+) -> ContractCodeEntry {
     let ext = if !add_refined_cost_inputs {
         ContractCodeEntryExt::V0
     } else {
@@ -82,11 +82,20 @@ pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
             ext: ExtensionPoint::V0,
         })
     };
-    ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
+    ContractCodeEntry {
         ext,
         hash: get_wasm_hash(wasm).try_into().unwrap(),
         code: wasm.try_into().unwrap(),
-    }))
+    }
+}
+
+pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
+    wasm: &[u8],
+    add_refined_cost_inputs: bool,
+) -> LedgerEntry {
+    ledger_entry(LedgerEntryData::ContractCode(
+        contract_code_entry_with_refined_contract_cost_inputs(wasm, add_refined_cost_inputs),
+    ))
 }
 
 pub fn e2e_test_protocol_version() -> u32 {
