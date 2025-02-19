@@ -1,9 +1,9 @@
 use soroban_env_common::xdr::{Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, WriteXdr};
 use soroban_env_host::{
     fees::{
-        compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
-        FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
-        WriteFeeConfiguration, MINIMUM_WRITE_FEE_PER_1KB, TTL_ENTRY_SIZE,
+        compute_rent_fee, compute_rent_write_fee_per_1kb, compute_transaction_resource_fee,
+        FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, RentWriteFeeConfiguration,
+        TransactionResources, MINIMUM_RENT_WRITE_FEE_PER_1KB, TTL_ENTRY_SIZE,
     },
     xdr::TtlEntry,
     DEFAULT_XDR_RW_LIMITS,
@@ -34,9 +34,9 @@ where
 {
     let mut resources = TransactionResources {
         instructions: 0,
-        read_entries: 0,
+        disk_read_entries: 0,
         write_entries: 0,
-        read_bytes: 0,
+        disk_read_bytes: 0,
         write_bytes: 0,
         contract_events_size_bytes: 0,
         transaction_size_bytes: 0,
@@ -52,9 +52,9 @@ fn resource_fee_computation_with_single_resource() {
     const BASE_HISTORICAL_FEE: i64 = 1758;
     let fee_config = FeeConfiguration {
         fee_per_instruction_increment: 1000,
-        fee_per_read_entry: 2000,
+        fee_per_disk_read_entry: 2000,
         fee_per_write_entry: 3000,
-        fee_per_read_1kb: 4000,
+        fee_per_disk_read_1kb: 4000,
         fee_per_write_1kb: 5000,
         fee_per_historical_1kb: 6000,
         fee_per_contract_event_1kb: 7000,
@@ -103,7 +103,7 @@ fn resource_fee_computation_with_single_resource() {
     assert_eq!(
         compute_transaction_resource_fee(
             &change_resource(|res: &mut TransactionResources| {
-                res.read_entries = 1;
+                res.disk_read_entries = 1;
             }),
             &fee_config,
         ),
@@ -112,7 +112,7 @@ fn resource_fee_computation_with_single_resource() {
     assert_eq!(
         compute_transaction_resource_fee(
             &change_resource(|res: &mut TransactionResources| {
-                res.read_entries = 5;
+                res.disk_read_entries = 5;
             }),
             &fee_config,
         ),
@@ -121,7 +121,7 @@ fn resource_fee_computation_with_single_resource() {
     assert_eq!(
         compute_transaction_resource_fee(
             &change_resource(|res: &mut TransactionResources| {
-                res.read_entries = u32::MAX;
+                res.disk_read_entries = u32::MAX;
             }),
             &fee_config,
         ),
@@ -165,7 +165,7 @@ fn resource_fee_computation_with_single_resource() {
     assert_eq!(
         compute_transaction_resource_fee(
             &change_resource(|res: &mut TransactionResources| {
-                res.read_bytes = 1;
+                res.disk_read_bytes = 1;
             }),
             &fee_config,
         ),
@@ -175,7 +175,7 @@ fn resource_fee_computation_with_single_resource() {
     assert_eq!(
         compute_transaction_resource_fee(
             &change_resource(|res: &mut TransactionResources| {
-                res.read_bytes = 5 * 1024;
+                res.disk_read_bytes = 5 * 1024;
             }),
             &fee_config,
         ),
@@ -184,7 +184,7 @@ fn resource_fee_computation_with_single_resource() {
     assert_eq!(
         compute_transaction_resource_fee(
             &change_resource(|res: &mut TransactionResources| {
-                res.read_bytes = 5 * 1024 + 1;
+                res.disk_read_bytes = 5 * 1024 + 1;
             }),
             &fee_config,
         ),
@@ -193,7 +193,7 @@ fn resource_fee_computation_with_single_resource() {
     assert_eq!(
         compute_transaction_resource_fee(
             &change_resource(|res: &mut TransactionResources| {
-                res.read_bytes = u32::MAX;
+                res.disk_read_bytes = u32::MAX;
             }),
             &fee_config,
         ),
@@ -331,18 +331,18 @@ fn resource_fee_computation() {
         compute_transaction_resource_fee(
             &TransactionResources {
                 instructions: 0,
-                read_entries: 0,
+                disk_read_entries: 0,
                 write_entries: 0,
-                read_bytes: 0,
+                disk_read_bytes: 0,
                 write_bytes: 0,
                 contract_events_size_bytes: 0,
                 transaction_size_bytes: 0,
             },
             &FeeConfiguration {
                 fee_per_instruction_increment: 100,
-                fee_per_read_entry: 100,
+                fee_per_disk_read_entry: 100,
                 fee_per_write_entry: 100,
-                fee_per_read_1kb: 100,
+                fee_per_disk_read_1kb: 100,
                 fee_per_write_1kb: 100,
                 fee_per_historical_1kb: 100,
                 fee_per_contract_event_1kb: 100,
@@ -358,18 +358,18 @@ fn resource_fee_computation() {
         compute_transaction_resource_fee(
             &TransactionResources {
                 instructions: 1,
-                read_entries: 1,
+                disk_read_entries: 1,
                 write_entries: 1,
-                read_bytes: 1,
+                disk_read_bytes: 1,
                 write_bytes: 1,
                 contract_events_size_bytes: 1,
                 transaction_size_bytes: 1,
             },
             &FeeConfiguration {
                 fee_per_instruction_increment: 100,
-                fee_per_read_entry: 100,
+                fee_per_disk_read_entry: 100,
                 fee_per_write_entry: 100,
-                fee_per_read_1kb: 100,
+                fee_per_disk_read_1kb: 100,
                 fee_per_write_1kb: 100,
                 fee_per_historical_1kb: 100,
                 fee_per_contract_event_1kb: 100,
@@ -386,18 +386,18 @@ fn resource_fee_computation() {
         compute_transaction_resource_fee(
             &TransactionResources {
                 instructions: 10_123_456,
-                read_entries: 30,
+                disk_read_entries: 30,
                 write_entries: 10,
-                read_bytes: 25_600,
+                disk_read_bytes: 25_600,
                 write_bytes: 10_340,
                 contract_events_size_bytes: 321_654,
                 transaction_size_bytes: 35_721,
             },
             &FeeConfiguration {
                 fee_per_instruction_increment: 1000,
-                fee_per_read_entry: 2000,
+                fee_per_disk_read_entry: 2000,
                 fee_per_write_entry: 4000,
-                fee_per_read_1kb: 1500,
+                fee_per_disk_read_1kb: 1500,
                 fee_per_write_1kb: 3000,
                 fee_per_historical_1kb: 300,
                 fee_per_contract_event_1kb: 200,
@@ -412,18 +412,18 @@ fn resource_fee_computation() {
         compute_transaction_resource_fee(
             &TransactionResources {
                 instructions: u32::MAX,
-                read_entries: u32::MAX,
+                disk_read_entries: u32::MAX,
                 write_entries: u32::MAX,
-                read_bytes: u32::MAX,
+                disk_read_bytes: u32::MAX,
                 write_bytes: u32::MAX,
                 contract_events_size_bytes: u32::MAX,
                 transaction_size_bytes: u32::MAX,
             },
             &FeeConfiguration {
                 fee_per_instruction_increment: i64::MAX,
-                fee_per_read_entry: i64::MAX,
+                fee_per_disk_read_entry: i64::MAX,
                 fee_per_write_entry: i64::MAX,
-                fee_per_read_1kb: i64::MAX,
+                fee_per_disk_read_1kb: i64::MAX,
                 fee_per_write_1kb: i64::MAX,
                 fee_per_historical_1kb: i64::MAX,
                 fee_per_contract_event_1kb: i64::MAX,
@@ -442,7 +442,8 @@ fn resource_fee_computation() {
 fn test_rent_extend_fees_with_only_extend() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_entry: 10,
-        fee_per_write_1kb: 1000,
+        fee_per_rent_1kb: 1000,
+        fee_per_write_1kb: 500,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
     };
@@ -461,9 +462,9 @@ fn test_rent_extend_fees_with_only_extend() {
             50_000,
         ),
         // Rent: ceil(1 * 1000 * 200_000 / (10_000 * 1024)) (=20) +
-        // Expiration entry write bytes: ceil(1000 * 48 / 1024) (=47) +
-        // Expiration entry write: 10
-        20 + 47 + 10
+        // TTL entry write bytes: ceil(500 * 48 / 1024) (=24) +
+        // TTL entry write: 10
+        20 + 24 + 10
     );
 
     // Minimal ledgers
@@ -480,8 +481,8 @@ fn test_rent_extend_fees_with_only_extend() {
             50_000,
         ),
         // Rent: ceil(10 * 1024 * 1000 * 1 / (10_000 * 1024)) (=1) +
-        // Expiration entry write entry/bytes: 57
-        1 + 57
+        // Expiration entry write entry/bytes: 34
+        1 + 34
     );
 
     // Minimal ledgers & size
@@ -498,8 +499,8 @@ fn test_rent_extend_fees_with_only_extend() {
             50_000,
         ),
         // Rent: ceil(1 * 1000 * 1 / (10_000 * 1024))
-        // Expiration entry write entry/bytes: 57
-        1 + 57
+        // Expiration entry write entry/bytes: 34
+        1 + 34
     );
 
     // No size change
@@ -516,8 +517,8 @@ fn test_rent_extend_fees_with_only_extend() {
             50_000,
         ),
         // Rent: ceil(10 * 1024 * 1000 * 200_000 / (10_000 * 1024)) (=200_000)
-        // Expiration entry write entry/bytes: 57
-        200_000 + 57
+        // Expiration entry write entry/bytes: 34
+        200_000 + 34
     );
 
     // Size decrease
@@ -534,8 +535,8 @@ fn test_rent_extend_fees_with_only_extend() {
             50_000,
         ),
         // Rent: ceil(5 * 1024 * 1000 * 200_000 / (10_000 * 1024)) (=100_000) +
-        // Expiration entry write entry/bytes: 57
-        100_000 + 57
+        // Expiration entry write entry/bytes: 34
+        100_000 + 34
     );
 
     // Temp storage rate
@@ -552,8 +553,8 @@ fn test_rent_extend_fees_with_only_extend() {
             50_000,
         ),
         // Rent: ceil(10 * 1024 * 1000 * 200_000 / (100_000 * 1024)) (=20_000) +
-        // Expiration entry write entry/bytes: 57
-        20_000 + 57
+        // Expiration entry write entry/bytes: 34
+        20_000 + 34
     );
 
     // Multiple entries
@@ -607,9 +608,9 @@ fn test_rent_extend_fees_with_only_extend() {
             50_000,
         ),
         // Rent: 20_000 + 200_000 + 1 + 20 + 200_000 + 20_000 (=440_021) +
-        // Expiration entry write bytes: ceil(6 * 1000 * 48 / 1024) (=282) +
+        // Expiration entry write bytes: ceil(6 * 500 * 48 / 1024) (=141) +
         // Expiration entry write: 10 * 6
-        440_021 + 282 + 60
+        440_021 + 141 + 60
     );
 }
 
@@ -617,7 +618,8 @@ fn test_rent_extend_fees_with_only_extend() {
 fn test_rent_extend_fees_with_only_size_change() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_entry: 100,
-        fee_per_write_1kb: 1000,
+        fee_per_rent_1kb: 1000,
+        fee_per_write_1kb: 500,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
     };
@@ -721,7 +723,8 @@ fn test_rent_extend_fees_with_only_size_change() {
 fn test_rent_extend_with_size_change_and_extend() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_entry: 10,
-        fee_per_write_1kb: 1000,
+        fee_per_rent_1kb: 1000,
+        fee_per_write_1kb: 500,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
     };
@@ -741,8 +744,8 @@ fn test_rent_extend_with_size_change_and_extend() {
         ),
         // Rent: 100_000 * 1000 * 200_000 / (10_000 * 1024) +
         // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024)
-        // Expiration entry write entry/bytes: 57
-        2_685_550 + 57
+        // Expiration entry write entry/bytes: 34
+        2_685_550 + 34
     );
 
     // Temp entry
@@ -760,8 +763,8 @@ fn test_rent_extend_with_size_change_and_extend() {
         ),
         // Rent: 100_000 * 1000 * 200_000 / (10_000 * 1024) +
         // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024)
-        // Expiration entry write entry/bytes: 57
-        268_556 + 57
+        // Expiration entry write entry/bytes: 34
+        268_556 + 34
     );
 
     // Multiple entries
@@ -787,9 +790,9 @@ fn test_rent_extend_with_size_change_and_extend() {
             25_000,
         ),
         // Rent: 2_685_550 + 268_556
-        // Expiration entry write bytes: ceil(2 * 1000 * 48 / 1024) (=94) +
+        // Expiration entry write bytes: ceil(2 * 500 * 48 / 1024) (=47) +
         // Expiration entry write: 10 * 2
-        2_954_106 + 94 + 20
+        2_954_106 + 47 + 20
     );
 
     // Small increments
@@ -807,8 +810,8 @@ fn test_rent_extend_with_size_change_and_extend() {
         ),
         // Rent: ceil(2 * 1000 * 1 / (10_000 * 1024)) +
         //       ceil(1 * 1000 * (100_000 - 99_999 + 1) / (10_000 * 1024)) (=2)
-        // Expiration entry write entry/bytes: 57
-        2 + 57
+        // Expiration entry write entry/bytes: 34
+        2 + 34
     );
 }
 
@@ -816,7 +819,8 @@ fn test_rent_extend_with_size_change_and_extend() {
 fn test_rent_extend_without_old_entry() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_entry: 10,
-        fee_per_write_1kb: 1000,
+        fee_per_rent_1kb: 1000,
+        fee_per_write_1kb: 500,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
     };
@@ -835,8 +839,8 @@ fn test_rent_extend_without_old_entry() {
             25_000,
         ),
         // Rent: 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
-        // Expiration entry write entry/bytes: 57
-        732_432 + 57
+        // Expiration entry write entry/bytes: 34
+        732_432 + 34
     );
 
     // Temp storage
@@ -853,101 +857,101 @@ fn test_rent_extend_without_old_entry() {
             25_000,
         ),
         // Rent: 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
-        // Expiration entry write entry/bytes: 57
-        73_244 + 57
+        // Expiration entry write entry/bytes: 34
+        73_244 + 34
     );
 }
 
 #[test]
-fn test_compute_write_fee() {
-    let fee_config = WriteFeeConfiguration {
-        bucket_list_target_size_bytes: 100_000,
-        write_fee_1kb_bucket_list_low: 100,
-        write_fee_1kb_bucket_list_high: 10_000,
-        bucket_list_write_fee_growth_factor: 50,
+fn test_compute_rent_write_fee() {
+    let fee_config = RentWriteFeeConfiguration {
+        state_target_size_bytes: 100_000,
+        rent_fee_1kb_state_size_low: 100,
+        rent_fee_1kb_state_size_high: 10_000,
+        state_size_rent_fee_growth_factor: 50,
     };
-    // Empty bucket list
+    // Empty state
     assert_eq!(
-        compute_write_fee_per_1kb(0, &fee_config),
-        MINIMUM_WRITE_FEE_PER_1KB
+        compute_rent_write_fee_per_1kb(0, &fee_config),
+        MINIMUM_RENT_WRITE_FEE_PER_1KB
     );
-    // Partially filled bucket list
+    // Non-empty state below target
     assert_eq!(
-        compute_write_fee_per_1kb(50_000, &fee_config),
+        compute_rent_write_fee_per_1kb(50_000, &fee_config),
         100 + (10_000 - 100) / 2
     );
-    assert_eq!(compute_write_fee_per_1kb(56_789, &fee_config), 5723);
-    // Full bucket list
-    assert_eq!(compute_write_fee_per_1kb(100_000, &fee_config), 10_000);
-    // Bucket list bigger than target
+    assert_eq!(compute_rent_write_fee_per_1kb(56_789, &fee_config), 5723);
+    // State size is at target
+    assert_eq!(compute_rent_write_fee_per_1kb(100_000, &fee_config), 10_000);
+    // State size is bigger than target
     assert_eq!(
-        compute_write_fee_per_1kb(150_000, &fee_config),
+        compute_rent_write_fee_per_1kb(150_000, &fee_config),
         10_000 + 50 * (10_000 - 100) / 2
     );
-    // Bucket list several times bigger than target
+    // State size is several times bigger than target
     assert_eq!(
-        compute_write_fee_per_1kb(580_000, &fee_config),
+        compute_rent_write_fee_per_1kb(580_000, &fee_config),
         10_000 + 2_376_000
     );
 
-    let large_fee_config = WriteFeeConfiguration {
-        bucket_list_target_size_bytes: 100_000_000_000_000,
-        write_fee_1kb_bucket_list_low: 1_000_000,
-        write_fee_1kb_bucket_list_high: 1_000_000_000,
-        bucket_list_write_fee_growth_factor: 50,
+    let large_fee_config = RentWriteFeeConfiguration {
+        state_target_size_bytes: 100_000_000_000_000,
+        rent_fee_1kb_state_size_low: 1_000_000,
+        rent_fee_1kb_state_size_high: 1_000_000_000,
+        state_size_rent_fee_growth_factor: 50,
     };
     // Large bucket list size and fees, half-filled bucket list
     assert_eq!(
-        compute_write_fee_per_1kb(50_000_000_000_000, &large_fee_config),
+        compute_rent_write_fee_per_1kb(50_000_000_000_000, &large_fee_config),
         1_000_000 + (1_000_000_000 - 1_000_000) / 2
     );
     // Large bucket list size and fees, over target bucket list
     assert_eq!(
-        compute_write_fee_per_1kb(150_000_000_000_000, &large_fee_config),
+        compute_rent_write_fee_per_1kb(150_000_000_000_000, &large_fee_config),
         1_000_000_000 + 50 * (1_000_000_000 - 1_000_000) / 2
     );
 }
 
 #[test]
 fn test_compute_write_fee_with_negative_low() {
-    let fee_config = WriteFeeConfiguration {
-        bucket_list_target_size_bytes: 100_000,
-        write_fee_1kb_bucket_list_low: -1_000,
-        write_fee_1kb_bucket_list_high: 10_000,
-        bucket_list_write_fee_growth_factor: 50,
+    let fee_config = RentWriteFeeConfiguration {
+        state_target_size_bytes: 100_000,
+        rent_fee_1kb_state_size_low: -1_000,
+        rent_fee_1kb_state_size_high: 10_000,
+        state_size_rent_fee_growth_factor: 50,
     };
 
     // clamping before target
     assert_eq!(
-        compute_write_fee_per_1kb(18_181, &fee_config),
-        MINIMUM_WRITE_FEE_PER_1KB
+        compute_rent_write_fee_per_1kb(18_181, &fee_config),
+        MINIMUM_RENT_WRITE_FEE_PER_1KB
     );
 
     //ceil(11_000 * 18_182 / 100_000) - 1000 = 1001
     assert_eq!(
-        compute_write_fee_per_1kb(18_182, &fee_config),
-        MINIMUM_WRITE_FEE_PER_1KB + 1
+        compute_rent_write_fee_per_1kb(18_182, &fee_config),
+        MINIMUM_RENT_WRITE_FEE_PER_1KB + 1
     );
 
     // Bucket list bigger than target.
     assert_eq!(
-        compute_write_fee_per_1kb(150_000, &fee_config),
+        compute_rent_write_fee_per_1kb(150_000, &fee_config),
         10_000 + 50 * (10_000 + 1_000) / 2
     );
 }
 
 #[test]
 fn test_compute_write_fee_clamp_after_target() {
-    let fee_config = WriteFeeConfiguration {
-        bucket_list_target_size_bytes: 100_000,
-        write_fee_1kb_bucket_list_low: 10,
-        write_fee_1kb_bucket_list_high: 20,
-        bucket_list_write_fee_growth_factor: 50,
+    let fee_config = RentWriteFeeConfiguration {
+        state_target_size_bytes: 100_000,
+        rent_fee_1kb_state_size_low: 10,
+        rent_fee_1kb_state_size_high: 20,
+        state_size_rent_fee_growth_factor: 50,
     };
 
     // Bucket list bigger than target.
     assert_eq!(
-        compute_write_fee_per_1kb(100_001, &fee_config),
-        MINIMUM_WRITE_FEE_PER_1KB
+        compute_rent_write_fee_per_1kb(100_001, &fee_config),
+        MINIMUM_RENT_WRITE_FEE_PER_1KB
     );
 }

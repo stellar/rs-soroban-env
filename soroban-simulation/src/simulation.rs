@@ -1,12 +1,13 @@
 use crate::network_config::NetworkConfig;
 use crate::resources::{
     compute_adjusted_transaction_resources, compute_resource_fee, simulate_extend_ttl_op_resources,
-    simulate_invoke_host_function_op_resources, simulate_restore_op_resources,
+    simulate_restore_op_resources,
 };
 use crate::snapshot_source::{
     SimulationSnapshotSource, SimulationSnapshotSourceWithArchive, SnapshotSourceWithArchive,
 };
 use anyhow::Result;
+use soroban_env_host::e2e_invoke::extract_rent_changes;
 use soroban_env_host::{
     e2e_invoke::invoke_host_function_in_recording_mode,
     e2e_invoke::{LedgerEntryChange, RecordingInvocationAuthMode},
@@ -173,11 +174,8 @@ pub fn simulate_invoke_host_function_op(
     simulation_result.contract_events = recording_result.contract_events;
     simulation_result.modified_entries =
         extract_modified_entries(&*snapshot_source, &recording_result.ledger_changes)?;
-
-    let (mut resources, rent_changes) = simulate_invoke_host_function_op_resources(
-        &recording_result.ledger_changes,
-        simulation_result.simulated_instructions,
-    )?;
+    let mut resources = recording_result.resources;
+    let rent_changes = extract_rent_changes(&recording_result.ledger_changes);
     let operation = OperationBody::InvokeHostFunction(InvokeHostFunctionOp {
         host_function: host_fn,
         auth: simulation_result.auth.clone().try_into()?,
@@ -227,6 +225,7 @@ pub fn simulate_extend_ttl_op(
     let (mut resources, rent_changes) = simulate_extend_ttl_op_resources(
         keys_to_extend,
         &snapshot_source,
+        network_config,
         ledger_info.sequence_number,
         extend_to,
     )?;
@@ -272,8 +271,12 @@ pub fn simulate_restore_op(
     keys_to_restore: &[LedgerKey],
 ) -> Result<RestoreOpSimulationResult> {
     let snapshot_source = SimulationSnapshotSourceWithArchive::new(snapshot_source);
-    let (mut resources, rent_changes) =
-        simulate_restore_op_resources(keys_to_restore, &snapshot_source, ledger_info)?;
+    let (mut resources, rent_changes) = simulate_restore_op_resources(
+        keys_to_restore,
+        &snapshot_source,
+        network_config,
+        ledger_info,
+    )?;
     let operation = OperationBody::RestoreFootprint(RestoreFootprintOp {
         ext: ExtensionPoint::V0,
     });
@@ -338,7 +341,7 @@ fn create_transaction_data(
     SorobanTransactionData {
         resources,
         resource_fee,
-        ext: ExtensionPoint::V0,
+        ext: soroban_env_host::xdr::SorobanTransactionDataExt::V0,
     }
 }
 
