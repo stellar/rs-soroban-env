@@ -23,8 +23,8 @@
   "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8096117, mem:1641865, objs:-/10@785a3415",
   "  22 push VM:7dbe7097:loadmem2(U32(0), U32(65024), U32(32))": "cpu:8734525, mem:1920712, objs:-/11@1ae7932a, vm:65536@b1cd98b9/4@70bfd778, stk:1@654c074d, auth:1@d114d61d/-",
   "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8737006, mem:1920790, vm:-/-",
-  "  24 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:8748716, mem:1921334",
+  "  24 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:8747340, mem:1921334",
   "  25 pop VM:7dbe7097:loadmem2 -> Err(Error(Value, InvalidInput))": " vm:65536@6d331be9/4@70bfd778",
   "  26 ret call -> Err(Error(Value, InvalidInput))": " vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8748716, mem:1921334, prngs:-/9b4a753, objs:-/11@1ae7932a, vm:-/-, evt:-, store:-/2@eadf7a3c, foot:2@fa72fa80, stk:-, auth:-/-"
+  "  27 end": "cpu:8747340, mem:1921334, prngs:-/9b4a753, objs:-/11@1ae7932a, vm:-/-, evt:-, store:-/2@eadf7a3c, foot:2@fa72fa80, stk:-, auth:-/-"
 }

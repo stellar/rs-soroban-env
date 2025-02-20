@@ -37,12 +37,14 @@
   "  35 call contract_event(Vec(obj#29), Bytes(obj#21))": "cpu:2983547, mem:4021076, objs:6@e37e9bd8/15@42aa2aeb, stk:1@a1d9300d",
   "  36 ret contract_event -> Ok(Void)": "cpu:2985529, mem:4021269, objs:6@e37e9bd8/16@8c92b752, evt:1@4403228c",
   "  37 call map_new_from_linear_memory(U32(1048600), U32(1048544), U32(4))": "",
-  "  38 call obj_cmp(Symbol(obj#33), Symbol(seq))": "cpu:2988853, mem:4021583, objs:6@e37e9bd8/17@82f590b9",
-  "  39 ret obj_cmp -> Ok(-1)": "cpu:2989019",
-  "  40 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:2989461, mem:4021663, objs:6@e37e9bd8/18@bcb9b937",
-  "  41 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:2989957, mem:4021687, objs:7@929806d2/18@bcb9b937, stk:1@8b608bf2",
-  "  42 ret put_contract_data -> Ok(Void)": "cpu:2997638, mem:4023319, store:-/3@87a693d7, foot:3@2f0e11c9",
-  "  43 pop VM:2c0dcac5:go -> Ok(Void)": " vm:1114112@afb7d9b2/5@8d05851",
-  "  44 ret call -> Ok(Void)": " objs:-/18@bcb9b937, vm:-/-, stk:-, auth:-/-",
-  "  45 end": "cpu:2997638, mem:4023319, prngs:-/9b4a753, objs:-/18@bcb9b937, vm:-/-, evt:1@4403228c, store:-/3@87a693d7, foot:3@2f0e11c9, stk:-, auth:-/-"
+  "  38 call symbol_new_from_slice(10)": "cpu:2986438, mem:4021317",
+  "  39 ret symbol_new_from_slice -> Ok(Symbol(obj#33))": "cpu:2987448, mem:4021423, objs:6@e37e9bd8/17@82f590b9",
+  "  40 call obj_cmp(Symbol(obj#33), Symbol(seq))": "cpu:2988729, mem:4021583",
+  "  41 ret obj_cmp -> Ok(-1)": "cpu:2988895",
+  "  42 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:2989337, mem:4021663, objs:6@e37e9bd8/18@bcb9b937",
+  "  43 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:2989833, mem:4021687, objs:7@929806d2/18@bcb9b937, stk:1@8b608bf2",
+  "  44 ret put_contract_data -> Ok(Void)": "cpu:2997514, mem:4023319, store:-/3@87a693d7, foot:3@2f0e11c9",
+  "  45 pop VM:2c0dcac5:go -> Ok(Void)": " vm:1114112@afb7d9b2/5@8d05851",
+  "  46 ret call -> Ok(Void)": " objs:-/18@bcb9b937, vm:-/-, stk:-, auth:-/-",
+  "  47 end": "cpu:2997514, mem:4023319, prngs:-/9b4a753, objs:-/18@bcb9b937, vm:-/-, evt:1@4403228c, store:-/3@87a693d7, foot:3@2f0e11c9, stk:-, auth:-/-"
 }

@@ -1708,12 +1708,7 @@ impl VmCallerEnv for Host {
             keys_pos,
             len as usize,
             |_n, slice| {
-                // Optimization note: this does an unnecessary `ScVal` roundtrip.
-                // We should just use `Symbol::try_from_val` on the slice instead.
-                self.charge_budget(ContractCostType::MemCpy, Some(slice.len() as u64))?;
-                let scsym = ScSymbol(slice.try_into()?);
-                let sym = Symbol::try_from(self.to_valid_host_val(&ScVal::Symbol(scsym))?)?;
-                key_syms.push(sym);
+                key_syms.push(Symbol::try_from_val(self, &slice)?);
                 Ok(())
             },
         )?;
