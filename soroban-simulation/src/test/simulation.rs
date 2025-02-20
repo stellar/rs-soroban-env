@@ -464,7 +464,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 40293491;
+    let expected_instructions = 40221095;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -493,11 +493,11 @@ fn test_simulate_invoke_contract_with_auth() {
                 read_bytes: 7540,
                 write_bytes: 76,
             },
-            resource_fee: 78557,
+            resource_fee: 78485,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 20146607);
+    assert_eq!(res.simulated_memory, 20110409);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
