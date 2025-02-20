@@ -8,7 +8,10 @@ use crate::storage::EntryWithLiveUntil;
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
     auth::RecordedAuthPayload,
-    xdr::{ContractEvent, ReadXdr, ScVal, SorobanAddressCredentials, SorobanCredentials, WriteXdr},
+    xdr::{
+        ContractEvent, ExtensionPoint, ReadXdr, ScVal, SorobanAddressCredentials,
+        SorobanAddressCredentialsV2, SorobanCredentials, WriteXdr,
+    },
     DEFAULT_XDR_RW_LIMITS,
 };
 use crate::{
@@ -25,8 +28,8 @@ use crate::{
     xdr::{
         AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
         LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
-        SorobanAuthorizationEntry, SorobanResources, TtlEntry,
+        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, Memo, ScErrorCode,
+        ScErrorType, SorobanAuthorizationEntry, SorobanResources, TtlEntry,
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
@@ -302,6 +305,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     encoded_ledger_entries: I,
     encoded_ttl_entries: I,
     base_prng_seed: T,
+    tx_memo: Memo,
     diagnostic_events: &mut Vec<DiagnosticEvent>,
 ) -> Result<InvokeHostFunctionResult, HostError> {
     invoke_host_function_with_trace_hook(
@@ -315,6 +319,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
         encoded_ledger_entries,
         encoded_ttl_entries,
         base_prng_seed,
+        tx_memo,
         diagnostic_events,
         None,
     )
@@ -334,6 +339,7 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     encoded_ledger_entries: I,
     encoded_ttl_entries: I,
     base_prng_seed: T,
+    tx_memo: Memo,
     diagnostic_events: &mut Vec<DiagnosticEvent>,
     trace_hook: Option<TraceHook>,
 ) -> Result<InvokeHostFunctionResult, HostError> {
@@ -348,6 +354,7 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
         encoded_ledger_entries,
         encoded_ttl_entries,
         base_prng_seed,
+        tx_memo,
         diagnostic_events,
         trace_hook,
         None,
@@ -371,6 +378,7 @@ pub fn invoke_host_function_with_trace_hook_and_module_cache<
     encoded_ledger_entries: I,
     encoded_ttl_entries: I,
     base_prng_seed: T,
+    tx_memo: Memo,
     diagnostic_events: &mut Vec<DiagnosticEvent>,
     trace_hook: Option<TraceHook>,
     module_cache: Option<ModuleCache>,
@@ -401,6 +409,7 @@ pub fn invoke_host_function_with_trace_hook_and_module_cache<
     let source_account: AccountId = host.metered_from_xdr(encoded_source_account.as_ref())?;
     host.set_source_account(source_account)?;
     host.set_ledger_info(ledger_info)?;
+    host.set_tx_memo(tx_memo)?;
     host.set_authorization_entries(auth_entries)?;
     let seed32: [u8; 32] = base_prng_seed.as_ref().try_into().map_err(|_| {
         host.err(
@@ -501,21 +510,38 @@ fn storage_footprint_to_ledger_footprint(
 impl RecordedAuthPayload {
     fn into_auth_entry_with_emulated_signature(
         self,
+        tx_memo: &Memo,
     ) -> Result<SorobanAuthorizationEntry, HostError> {
         const EMULATED_SIGNATURE_SIZE: usize = 512;
 
         match (self.address, self.nonce) {
-            (Some(address), Some(nonce)) => Ok(SorobanAuthorizationEntry {
-                credentials: SorobanCredentials::Address(SorobanAddressCredentials {
-                    address,
-                    nonce,
-                    signature_expiration_ledger: 0,
-                    signature: ScVal::Bytes(
-                        vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
-                    ),
-                }),
-                root_invocation: self.invocation,
-            }),
+            (Some(address), Some(nonce)) => {
+                let credentials = if matches!(tx_memo, Memo::None) {
+                    SorobanCredentials::Address(SorobanAddressCredentials {
+                        address,
+                        nonce,
+                        signature_expiration_ledger: 0,
+                        signature: ScVal::Bytes(
+                            vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
+                        ),
+                    })
+                } else {
+                    SorobanCredentials::AddressV2(SorobanAddressCredentialsV2 {
+                        address,
+                        nonce,
+                        signature_expiration_ledger: 0,
+                        signature: ScVal::Bytes(
+                            vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
+                        ),
+                        tx_memo: tx_memo.clone(),
+                        ext: ExtensionPoint::V0,
+                    })
+                };
+                Ok(SorobanAuthorizationEntry {
+                    credentials,
+                    root_invocation: self.invocation,
+                })
+            }
             (None, None) => Ok(SorobanAuthorizationEntry {
                 credentials: SorobanCredentials::SourceAccount,
                 root_invocation: self.invocation,
@@ -529,6 +555,9 @@ impl RecordedAuthPayload {
 fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
     match &mut auth_entry.credentials {
         SorobanCredentials::Address(address_creds) => {
+            address_creds.signature = ScVal::Void;
+        }
+        SorobanCredentials::AddressV2(address_creds) => {
             address_creds.signature = ScVal::Void;
         }
         SorobanCredentials::SourceAccount => {}
@@ -585,6 +614,7 @@ pub fn invoke_host_function_in_recording_mode(
     enable_diagnostics: bool,
     host_fn: &HostFunction,
     source_account: &AccountId,
+    tx_memo: Memo,
     auth_mode: RecordingInvocationAuthMode,
     ledger_info: LedgerInfo,
     ledger_snapshot: Rc<dyn SnapshotSource>,
@@ -600,6 +630,7 @@ pub fn invoke_host_function_in_recording_mode(
     host.set_source_account(source_account)?;
     host.set_ledger_info(ledger_info)?;
     host.set_base_prng_seed(base_prng_seed)?;
+    host.set_tx_memo(tx_memo.metered_clone(&host)?)?;
 
     match &auth_mode {
         RecordingInvocationAuthMode::Enforcing(auth_entries) => {
@@ -628,7 +659,7 @@ pub fn invoke_host_function_in_recording_mode(
         let recorded_auth = host.get_recorded_auth_payloads()?;
         recorded_auth
             .into_iter()
-            .map(|a| a.into_auth_entry_with_emulated_signature())
+            .map(|a| a.into_auth_entry_with_emulated_signature(&tx_memo))
             .collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>()?
     };
 

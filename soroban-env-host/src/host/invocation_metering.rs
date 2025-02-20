@@ -404,7 +404,7 @@ mod test {
         // contract), so 2 writes/bumps are expected.
         expect![[r#"
             InvocationResources {
-                instructions: 4196698,
+                instructions: 4196745,
                 mem_bytes: 2863076,
                 read_entries: 0,
                 write_entries: 2,

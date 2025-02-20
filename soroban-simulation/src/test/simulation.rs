@@ -18,11 +18,12 @@ use soroban_env_host::xdr::{
     AccountId, AlphaNum4, AssetCode4, ContractCostParamEntry, ContractCostParams, ContractCostType,
     ContractDataDurability, ContractDataEntry, ContractExecutable, ExtensionPoint, Hash,
     HostFunction, Int128Parts, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint,
-    LedgerKey, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
+    LedgerKey, LedgerKeyContractData, LedgerKeyTrustLine, Memo, PublicKey, ScAddress, ScBytes,
     ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScSymbol, ScVal,
     SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, SorobanTransactionData,
-    TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256, VecM,
+    SorobanTransactionDataExt, TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags,
+    Uint256, VecM,
 };
 use soroban_env_host::HostError;
 use soroban_test_wasms::{ADD_I32, AUTH_TEST_CONTRACT, TRY_CALL_SAC};
@@ -118,6 +119,7 @@ fn test_simulate_upload_wasm() {
         RecordingInvocationAuthMode::Recording(true),
         &source_account,
         [1; 32],
+        Memo::None,
         true,
     )
     .unwrap();
@@ -130,12 +132,12 @@ fn test_simulate_upload_wasm() {
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
 
-    let expected_instructions = 1644789;
+    let expected_instructions = 1647869;
     let expected_write_bytes = 684;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: Default::default(),
@@ -145,11 +147,11 @@ fn test_simulate_upload_wasm() {
                 read_bytes: 0,
                 write_bytes: expected_write_bytes,
             },
-            resource_fee: 35548,
+            resource_fee: 35551,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 822393);
+    assert_eq!(res.simulated_memory, 823933);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -167,6 +169,7 @@ fn test_simulate_upload_wasm() {
         RecordingInvocationAuthMode::Recording(true),
         &source_account,
         [1; 32],
+        Memo::None,
         true,
     )
     .unwrap();
@@ -189,7 +192,7 @@ fn test_simulate_upload_wasm() {
     assert_eq!(
         res_with_adjustments.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: Default::default(),
@@ -199,7 +202,7 @@ fn test_simulate_upload_wasm() {
                 read_bytes: 0,
                 write_bytes: expected_write_bytes + 300,
             },
-            resource_fee: 135867,
+            resource_fee: 135870,
         })
     );
 }
@@ -222,6 +225,7 @@ fn test_simulation_returns_insufficient_budget_error() {
         RecordingInvocationAuthMode::Recording(true),
         &source_account,
         [1; 32],
+        Memo::None,
         true,
     )
     .unwrap();
@@ -234,8 +238,8 @@ fn test_simulation_returns_insufficient_budget_error() {
     assert!(res.diagnostic_events.is_empty());
 
     assert_eq!(res.transaction_data, None);
-    assert_eq!(res.simulated_instructions, 111516);
-    assert_eq!(res.simulated_memory, 45006);
+    assert_eq!(res.simulated_instructions, 114596);
+    assert_eq!(res.simulated_memory, 46546);
     assert_eq!(res.modified_entries, vec![]);
 }
 
@@ -257,6 +261,7 @@ fn test_simulation_returns_logic_error() {
         RecordingInvocationAuthMode::Recording(true),
         &source_account,
         [1; 32],
+        Memo::None,
         true,
     )
     .unwrap();
@@ -269,8 +274,8 @@ fn test_simulation_returns_logic_error() {
     assert!(!res.diagnostic_events.is_empty());
 
     assert_eq!(res.transaction_data, None);
-    assert_eq!(res.simulated_instructions, 154568);
-    assert_eq!(res.simulated_memory, 77284);
+    assert_eq!(res.simulated_instructions, 157648);
+    assert_eq!(res.simulated_memory, 78824);
     assert_eq!(res.modified_entries, vec![]);
 }
 
@@ -301,6 +306,7 @@ fn test_simulate_create_contract() {
         RecordingInvocationAuthMode::Recording(true),
         &source_account,
         [1; 32],
+        Memo::None,
         true,
     )
     .unwrap();
@@ -318,11 +324,11 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    let expected_instructions = 2586867;
+    let expected_instructions = 2593267;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: vec![contract.wasm_key.clone()].try_into().unwrap(),
@@ -332,11 +338,11 @@ fn test_simulate_create_contract() {
                 read_bytes: 684,
                 write_bytes: 104,
             },
-            resource_fee: 8149,
+            resource_fee: 8156,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 1293424);
+    assert_eq!(res.simulated_memory, 1296624);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -434,6 +440,7 @@ fn test_simulate_invoke_contract_with_auth() {
         RecordingInvocationAuthMode::Recording(true),
         &source_account,
         [1; 32],
+        Memo::None,
         true,
     )
     .unwrap();
@@ -464,11 +471,11 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 40293491;
+    let expected_instructions = 40310411;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: vec![
@@ -493,11 +500,11 @@ fn test_simulate_invoke_contract_with_auth() {
                 read_bytes: 7540,
                 write_bytes: 76,
             },
-            resource_fee: 78557,
+            resource_fee: 78574,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 20146607);
+    assert_eq!(res.simulated_memory, 20155067);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -556,7 +563,7 @@ fn test_simulate_extend_ttl_op() {
         no_op_extension,
         ExtendTtlOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -585,7 +592,7 @@ fn test_simulate_extend_ttl_op() {
         extension_for_some_entries,
         ExtendTtlOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: vec![
@@ -622,7 +629,7 @@ fn test_simulate_extend_ttl_op() {
         extension_for_all_entries,
         ExtendTtlOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: keys.clone().tap_mut(|v| v.sort()).try_into().unwrap(),
@@ -667,7 +674,7 @@ fn test_simulate_extend_ttl_op() {
         extension_for_all_entries_with_adjustment,
         ExtendTtlOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: extension_for_all_entries
                         .transaction_data
@@ -723,7 +730,7 @@ fn test_simulate_restore_op() {
         no_op_restoration,
         RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -753,7 +760,7 @@ fn test_simulate_restore_op() {
         restoration_for_some_entries,
         RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -785,7 +792,7 @@ fn test_simulate_restore_op() {
         extension_for_all_entries,
         RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -813,7 +820,7 @@ fn test_simulate_restore_op() {
         extension_for_all_entries_with_adjustment,
         RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -1007,6 +1014,7 @@ fn test_simulate_successful_sac_call() {
         RecordingInvocationAuthMode::Recording(true),
         &source_account,
         [1; 32],
+        Memo::None,
         true,
     )
     .unwrap();
@@ -1029,7 +1037,7 @@ fn test_simulate_successful_sac_call() {
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: vec![ledger_entry_to_ledger_key(&contract_instance_le).unwrap(),]
@@ -1039,11 +1047,11 @@ fn test_simulate_successful_sac_call() {
                         .try_into()
                         .unwrap()
                 },
-                instructions: 3302139,
+                instructions: 3308539,
                 read_bytes: 532,
                 write_bytes: 116,
             },
-            resource_fee: 28345,
+            resource_fee: 28351,
         })
     );
 }
@@ -1107,6 +1115,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
         RecordingInvocationAuthMode::Recording(true),
         &source_account,
         [1; 32],
+        Memo::None,
         true,
     )
     .unwrap();
@@ -1125,7 +1134,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
-            ext: ExtensionPoint::V0,
+            ext: SorobanTransactionDataExt::V0,
             resources: SorobanResources {
                 footprint: LedgerFootprint {
                     read_only: vec![
@@ -1142,11 +1151,11 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
                     // No entries should be actually modified.
                     read_write: Default::default(),
                 },
-                instructions: 5352005,
+                instructions: 5355085,
                 read_bytes: 1196,
                 write_bytes: 0,
             },
-            resource_fee: 5808,
+            resource_fee: 5811,
         })
     );
 }

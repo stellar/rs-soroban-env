@@ -23,7 +23,7 @@ use crate::{
         ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
         DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
         HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
-        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
+        LedgerKeyContractCode, LedgerKeyContractData, Limits, Memo, ReadXdr, ScAddress,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
         SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
         WriteXdr,
@@ -36,6 +36,7 @@ use pretty_assertions::assert_eq;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sha2::{Digest, Sha256};
+use soroban_env_common::xdr::HashIdPreimageSorobanAuthorizationV2;
 use soroban_env_common::TryIntoVal;
 use soroban_test_wasms::{
     ADD_F32, ADD_I32, AUTH_TEST_CONTRACT, CONTRACT_STORAGE, DEPLOYER_TEST_CONTRACT, LINEAR_MEMORY,
@@ -123,6 +124,28 @@ fn sign_auth_entry(
                     signature_expiration_ledger: ledger_info.sequence_number
                         + ledger_info.max_entry_ttl
                         - 1,
+                });
+            let signature_payload: [u8; 32] =
+                Sha256::digest(&signature_payload_preimage.to_xdr(Limits::none()).unwrap()).into();
+            let signer = signers
+                .iter()
+                .find(|s| s.sc_address() == creds.address)
+                .unwrap();
+            creds.signature = signer.sign(&dummy_host, &signature_payload);
+            creds.signature_expiration_ledger =
+                ledger_info.sequence_number + ledger_info.max_entry_ttl - 1;
+        }
+        SorobanCredentials::AddressV2(creds) => {
+            let signature_payload_preimage =
+                HashIdPreimage::SorobanAuthorizationV2(HashIdPreimageSorobanAuthorizationV2 {
+                    network_id: ledger_info.network_id.try_into().unwrap(),
+                    invocation: out.root_invocation.clone(),
+                    nonce: creds.nonce,
+                    signature_expiration_ledger: ledger_info.sequence_number
+                        + ledger_info.max_entry_ttl
+                        - 1,
+                    ext: ExtensionPoint::V0,
+                    tx_memo: creds.tx_memo.clone(),
                 });
             let signature_payload: [u8; 32] =
                 Sha256::digest(&signature_payload_preimage.to_xdr(Limits::none()).unwrap()).into();
@@ -258,6 +281,7 @@ fn invoke_host_function_helper(
     ledger_info: &LedgerInfo,
     ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
     prng_seed: &[u8; 32],
+    tx_memo: Memo,
 ) -> Result<InvokeHostFunctionHelperResult, HostError> {
     let limits = Limits::none();
     let encoded_host_fn = host_fn.to_xdr(limits.clone()).unwrap();
@@ -316,6 +340,7 @@ fn invoke_host_function_helper(
         encoded_ledger_entries.into_iter(),
         encoded_ttl_entries.into_iter(),
         prng_seed.to_vec(),
+        tx_memo,
         &mut diagnostic_events,
         None,
         Some(module_cache),
@@ -372,6 +397,7 @@ fn invoke_host_function_recording_helper(
     ledger_info: &LedgerInfo,
     ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
     prng_seed: &[u8; 32],
+    tx_memo: Memo,
     max_instructions_override: Option<u64>,
 ) -> Result<InvokeHostFunctionRecordingHelperResult, HostError> {
     let budget = Budget::default();
@@ -385,6 +411,7 @@ fn invoke_host_function_recording_helper(
         enable_diagnostics,
         host_fn,
         source_account,
+        tx_memo,
         auth_mode,
         ledger_info.clone(),
         snapshot,
@@ -409,6 +436,7 @@ fn invoke_host_function_using_simulation_with_signers(
     ledger_info: &LedgerInfo,
     ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
     prng_seed: &[u8; 32],
+    tx_memo: Memo,
     dummy_host: &Host,
     signers: &Vec<TestSigner>,
 ) -> Result<InvokeHostFunctionHelperResult, HostError> {
@@ -420,6 +448,7 @@ fn invoke_host_function_using_simulation_with_signers(
         ledger_info,
         ledger_entries_with_ttl.clone(),
         prng_seed,
+        tx_memo.clone(),
         None,
     )
     .unwrap();
@@ -438,6 +467,7 @@ fn invoke_host_function_using_simulation_with_signers(
         ledger_info,
         ledger_entries_with_ttl.clone(),
         prng_seed,
+        tx_memo.clone(),
         None,
     )
     .unwrap();
@@ -515,6 +545,7 @@ fn invoke_host_function_using_simulation_with_signers(
         ledger_info,
         ledger_entries_with_ttl,
         prng_seed,
+        tx_memo,
     )?;
 
     assert_eq!(
@@ -560,6 +591,7 @@ fn invoke_host_function_using_simulation(
     ledger_info: &LedgerInfo,
     ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
     prng_seed: &[u8; 32],
+    tx_memo: Memo,
 ) -> Result<InvokeHostFunctionHelperResult, HostError> {
     invoke_host_function_using_simulation_with_signers(
         enable_diagnostics,
@@ -568,6 +600,7 @@ fn invoke_host_function_using_simulation(
         ledger_info,
         ledger_entries_with_ttl,
         prng_seed,
+        tx_memo,
         &Host::test_host(),
         &vec![],
     )
@@ -619,6 +652,7 @@ fn test_run_out_of_budget_before_calling_host() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
     );
     assert!(HostError::result_matches_err(
         res,
@@ -636,6 +670,7 @@ fn test_run_out_of_budget_before_calling_host_in_recording_mode() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
         Some(1000),
     );
     assert!(HostError::result_matches_err(
@@ -658,6 +693,7 @@ fn test_wasm_upload_success() {
         &ledger_info,
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(res.contract_events.is_empty());
@@ -700,6 +736,7 @@ fn test_wasm_upload_failure_due_to_unsupported_wasm_features() {
         &ledger_info,
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(res.budget.get_cpu_insns_consumed().unwrap() > 0);
@@ -725,6 +762,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         &ledger_info,
         vec![],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -751,7 +789,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    let (expected_insns, expected_write_bytes) = (1767136, 684);
+    let (expected_insns, expected_write_bytes) = (1767183, 684);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -778,6 +816,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
         &ledger_info,
         vec![],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -789,7 +828,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    let expected_instructions = 1093647;
+    let expected_instructions = 1093694;
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -816,6 +855,7 @@ fn test_unsupported_wasm_upload_failure_in_recording_mode() {
         &ledger_info,
         vec![],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -836,6 +876,7 @@ fn test_wasm_upload_success_using_simulation() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
         &Host::test_host(),
         &vec![],
     );
@@ -851,6 +892,7 @@ fn test_wasm_upload_failure_using_simulation() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -873,6 +915,7 @@ fn test_wasm_upload_budget_exceeded() {
         &ledger_info,
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -896,6 +939,7 @@ fn test_wasm_upload_with_incorrect_footprint_fails() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -922,6 +966,7 @@ fn test_wasm_upload_without_footprint_fails() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -947,6 +992,7 @@ fn test_wasm_reupload_is_no_op() {
         &ledger_info,
         vec![(wasm_entry(ADD_I32), Some(ledger_info.sequence_number))],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(
@@ -992,6 +1038,7 @@ fn test_wasm_upload_success_with_extra_footprint_entries() {
             Some(ledger_info.sequence_number + 1000),
         )],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(
@@ -1065,6 +1112,7 @@ fn test_create_contract_success() {
             Some(ledger_info.sequence_number + 100),
         )],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(
@@ -1133,6 +1181,7 @@ fn test_create_contract_with_no_argument_constructor_success() {
             Some(ledger_info.sequence_number + 100),
         )],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(
@@ -1231,6 +1280,7 @@ fn test_create_contract_success_in_recording_mode() {
             Some(ledger_info.sequence_number + 100),
         )],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -1270,7 +1320,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 661402,
+            instructions: 661516,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1327,6 +1377,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
             ),
         ],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -1411,7 +1462,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1066372,
+            instructions: 1066486,
             read_bytes: 3816,
             write_bytes: 176,
         }
@@ -1433,6 +1484,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
             Some(ledger_info.sequence_number + 100),
         )],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -1472,7 +1524,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 662847,
+            instructions: 662914,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1493,6 +1545,7 @@ fn test_create_contract_success_using_simulation() {
             Some(ledger_info.sequence_number + 100),
         )],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(
@@ -1528,6 +1581,7 @@ fn test_create_contract_success_with_extra_footprint_entries() {
             ),
         ],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(
@@ -1590,6 +1644,7 @@ fn test_create_contract_without_footprint_fails() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -1616,6 +1671,7 @@ fn test_create_contract_without_auth_fails() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -1643,6 +1699,7 @@ fn test_create_contract_without_wasm_entry_fails() {
         &default_ledger_info(),
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -1673,6 +1730,7 @@ fn test_create_contract_with_incorrect_auth_fails() {
             Some(default_ledger_info().sequence_number + 100),
         )],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -1722,6 +1780,7 @@ fn test_invoke_contract_with_storage_ops_success() {
             ),
         ],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(res.invoke_result.unwrap(), ScVal::Void);
@@ -1795,6 +1854,7 @@ fn test_invoke_contract_with_storage_ops_success() {
             (new_entry.clone(), Some(ledger_info.sequence_number + 500)),
         ],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(extend_res.invoke_result.unwrap(), ScVal::Void);
@@ -1855,6 +1915,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             ),
         ],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -1902,7 +1963,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 896256,
+            instructions: 896303,
             read_bytes: 3132,
             write_bytes: 80,
         }
@@ -1931,6 +1992,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             (new_entry.clone(), Some(ledger_info.sequence_number + 500)),
         ],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -1968,7 +2030,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 1008294,
+            instructions: 1008341,
             read_bytes: 3212,
             write_bytes: 0,
         }
@@ -2002,6 +2064,7 @@ fn test_invoke_contract_with_storage_ops_success_using_simulation() {
             ),
         ],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert_eq!(res.invoke_result.unwrap(), ScVal::Void);
@@ -2034,6 +2097,7 @@ fn test_invoke_contract_with_storage_ops_success_using_simulation() {
             (new_entry, Some(ledger_info.sequence_number + 500)),
         ],
         &prng_seed(),
+        Memo::None,
         None,
     )
     .unwrap();
@@ -2058,6 +2122,7 @@ fn test_invoke_contract_without_footprint_fails() {
         &ledger_info,
         vec![],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(HostError::result_matches_err(
@@ -2155,6 +2220,7 @@ fn test_classic_account_auth_using_simulation() {
             (account_entry(&signers[1].account_id()), None),
         ],
         &prng_seed(),
+        Memo::None,
         &Host::test_host(),
         &signers,
     )
@@ -2223,6 +2289,7 @@ fn test_cap_54_55_56_module_cache_recording_fidelity() {
             &ledger_info,
             ledger_entries_with_ttl,
             &prng_seed(),
+            Memo::None,
         )
         .unwrap();
         assert_eq!(res.invoke_result.unwrap(), ScVal::I32(15));
@@ -2260,6 +2327,7 @@ fn test_deployer_operations_using_simulation() {
             ),
         ],
         &prng_seed(),
+        Memo::None,
     )
     .unwrap();
     assert!(res.invoke_result.is_ok());
@@ -2331,9 +2399,230 @@ fn test_create_contract_authorized_by_custom_account() {
             (account_key_entry, Some(ledger_info.sequence_number + 100)),
         ],
         &prng_seed(),
+        Memo::None,
         &dummy_host,
         &signers,
     )
     .unwrap();
     assert!(res.invoke_result.is_ok());
+}
+
+#[test]
+fn test_memo_auth_success_with_source_account() {
+    let cd = CreateContractData::new([111; 32], ADD_I32);
+    let ledger_info = default_ledger_info();
+    let res = invoke_host_function_helper(
+        true,
+        &cd.host_fn,
+        &resources(
+            10_000_000,
+            vec![cd.wasm_key.clone()],
+            vec![cd.contract_key.clone()],
+        ),
+        &cd.deployer,
+        vec![cd.auth_entry],
+        &ledger_info,
+        vec![(
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100),
+        )],
+        &prng_seed(),
+        Memo::Text("memo text".try_into().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(
+        res.invoke_result.unwrap(),
+        ScVal::Address(cd.contract_address.clone())
+    );
+}
+
+#[test]
+fn test_memo_auth_with_non_source_signer() {
+    let ledger_info = default_ledger_info();
+    let tx_memo = Memo::Id(789);
+    let mut prng = StdRng::from_seed([123; 32]);
+    let key = SigningKey::generate(&mut prng);
+    let signers = vec![TestSigner::account(&key)];
+    let signer = &signers[0];
+
+    let contract = CreateContractData::new([1; 32], AUTH_TEST_CONTRACT);
+
+    let tree = AuthContractInvocationNode {
+        address: contract.contract_address.clone(),
+        children: vec![].try_into().unwrap(),
+    };
+    let source_account = get_account_id([123; 32]);
+    let host_fn = auth_contract_invocation(vec![signer.sc_address()], tree);
+
+    let ledger_entries = vec![
+        (
+            contract.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100),
+        ),
+        (
+            contract.contract_entry.clone(),
+            Some(ledger_info.sequence_number + 1000),
+        ),
+        (account_entry(&signer.account_id()), None),
+    ];
+
+    // Successful call with simulation and memo.
+    let simulation_result = invoke_host_function_using_simulation_with_signers(
+        true,
+        &host_fn,
+        &source_account,
+        &ledger_info,
+        ledger_entries.clone(),
+        &prng_seed(),
+        tx_memo.clone(),
+        &Host::test_host(),
+        &signers,
+    )
+    .unwrap();
+    assert!(simulation_result.invoke_result.is_ok());
+
+    // Successful recording-only call: verify that memo is recorded as expected.
+    let recording_result = invoke_host_function_recording_helper(
+        true,
+        &host_fn,
+        &source_account,
+        RecordingInvocationAuthMode::Recording(true),
+        &ledger_info,
+        ledger_entries.clone(),
+        &prng_seed(),
+        tx_memo.clone(),
+        None,
+    )
+    .unwrap();
+    assert!(recording_result.invoke_result.is_ok());
+    assert_eq!(recording_result.auth.len(), 1);
+    let mut recorded_auth_entry = recording_result.auth.first().cloned().unwrap();
+    let mut signed_auth = vec![sign_auth_entry(
+        &Host::test_host(),
+        &ledger_info,
+        &signers,
+        recorded_auth_entry.clone(),
+    )];
+    let SorobanCredentials::AddressV2(recorded_credentials) = &mut recorded_auth_entry.credentials
+    else {
+        panic!("unexpected recorded credentials version");
+    };
+    assert_eq!(recorded_credentials.tx_memo, tx_memo);
+
+    // Successful call in recording mode with enforced auth (using the recorded
+    // signed auth entry from above)
+    let mut recording_result_with_enforcing_auth = invoke_host_function_recording_helper(
+        true,
+        &host_fn,
+        &source_account,
+        RecordingInvocationAuthMode::Enforcing(signed_auth.clone()),
+        &ledger_info,
+        ledger_entries.clone(),
+        &prng_seed(),
+        tx_memo.clone(),
+        None,
+    )
+    .unwrap();
+    assert!(recording_result_with_enforcing_auth.invoke_result.is_ok());
+
+    recording_result_with_enforcing_auth.resources.instructions =
+        (recording_result_with_enforcing_auth.resources.instructions as f64
+            * (1.0 + RECORDING_MODE_INSTRUCTIONS_RANGE)) as u32;
+
+    // Successful call in enforcing mode (using the signed recorded auth entry
+    // from above)
+    let enforcing_result = invoke_host_function_helper(
+        true,
+        &host_fn,
+        &recording_result_with_enforcing_auth.resources,
+        &source_account,
+        signed_auth.clone(),
+        &ledger_info,
+        ledger_entries.clone(),
+        &prng_seed(),
+        tx_memo.clone(),
+    )
+    .unwrap();
+    assert!(enforcing_result.invoke_result.is_ok());
+
+    // Failure scenario: sign an auth entry with no memo
+    recorded_credentials.tx_memo = Memo::None;
+    let signed_auth_no_memo = vec![sign_auth_entry(
+        &Host::test_host(),
+        &ledger_info,
+        &signers,
+        recorded_auth_entry.clone(),
+    )];
+
+    let enforcing_result_no_memo = invoke_host_function_helper(
+        true,
+        &host_fn,
+        &recording_result_with_enforcing_auth.resources,
+        &source_account,
+        signed_auth_no_memo,
+        &ledger_info,
+        ledger_entries.clone(),
+        &prng_seed(),
+        tx_memo.clone(),
+    )
+    .unwrap();
+    assert!(HostError::result_matches_err(
+        enforcing_result_no_memo.invoke_result,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction)
+    ));
+
+    // Failure scenario: sign an auth entry with a non-matching memo
+    let mut recorded_auth_entry_memo_mismatch = recorded_auth_entry.clone();
+    let SorobanCredentials::AddressV2(recorded_credentials_memo_mismatch) =
+        &mut recorded_auth_entry_memo_mismatch.credentials
+    else {
+        unreachable!()
+    };
+    recorded_credentials_memo_mismatch.tx_memo = Memo::Id(777);
+    let signed_auth_memo_mismatch = vec![sign_auth_entry(
+        &Host::test_host(),
+        &ledger_info,
+        &signers,
+        recorded_auth_entry_memo_mismatch.clone(),
+    )];
+
+    let enforcing_result_memo_mismatch = invoke_host_function_helper(
+        true,
+        &host_fn,
+        &recording_result_with_enforcing_auth.resources,
+        &source_account,
+        signed_auth_memo_mismatch,
+        &ledger_info,
+        ledger_entries.clone(),
+        &prng_seed(),
+        tx_memo.clone(),
+    )
+    .unwrap();
+    assert!(HostError::result_matches_err(
+        enforcing_result_memo_mismatch.invoke_result,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction)
+    ));
+
+    // Failure scenario: sign an auth payload with correct memo, but set
+    // incorrect memo in the auth entry itself.
+    let SorobanCredentials::AddressV2(signed_credentials) = &mut signed_auth[0].credentials else {
+        unreachable!()
+    };
+    signed_credentials.tx_memo = Memo::Id(777);
+    let enforcing_result_memo_signature_mismatch = invoke_host_function_helper(
+        true,
+        &host_fn,
+        &recording_result_with_enforcing_auth.resources,
+        &source_account,
+        signed_auth,
+        &ledger_info,
+        ledger_entries.clone(),
+        &prng_seed(),
+        tx_memo.clone(),
+    )
+    .unwrap();
+    assert!(HostError::result_matches_err(
+        enforcing_result_memo_signature_mismatch.invoke_result,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction)
+    ));
 }
