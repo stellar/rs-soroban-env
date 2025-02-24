@@ -140,7 +140,7 @@ fn test_simulate_upload_wasm() {
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
 
-    let expected_instructions = 1644789;
+    let expected_instructions = 1644805;
     let expected_write_bytes = 684;
     assert_eq!(
         res.transaction_data,
@@ -159,7 +159,7 @@ fn test_simulate_upload_wasm() {
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 822393);
+    assert_eq!(res.simulated_memory, 822401);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -328,7 +328,7 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    let expected_instructions = 2979643;
+    let expected_instructions = 2980768;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -342,11 +342,11 @@ fn test_simulate_create_contract() {
                 read_bytes: 684,
                 write_bytes: 104,
             },
-            resource_fee: 8542,
+            resource_fee: 8543,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 1489810);
+    assert_eq!(res.simulated_memory, 1490380);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -474,7 +474,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 41269703;
+    let expected_instructions = 41283442;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -503,11 +503,11 @@ fn test_simulate_invoke_contract_with_auth() {
                 read_bytes: 7540,
                 write_bytes: 76,
             },
-            resource_fee: 79533,
+            resource_fee: 79547,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 20634711);
+    assert_eq!(res.simulated_memory, 20641694);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -1049,11 +1049,11 @@ fn test_simulate_successful_sac_call() {
                         .try_into()
                         .unwrap()
                 },
-                instructions: 3258545,
+                instructions: 3260072,
                 read_bytes: 532,
                 write_bytes: 116,
             },
-            resource_fee: 28298,
+            resource_fee: 28300,
         })
     );
 }
@@ -1152,11 +1152,11 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
                     // No entries should be actually modified.
                     read_write: Default::default(),
                 },
-                instructions: 5768570,
+                instructions: 5771276,
                 read_bytes: 1196,
                 write_bytes: 0,
             },
-            resource_fee: 6224,
+            resource_fee: 6227,
         })
     );
 }

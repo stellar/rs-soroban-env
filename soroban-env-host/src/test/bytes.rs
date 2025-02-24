@@ -3,8 +3,9 @@ use crate::{
     budget::AsBudget,
     testutils::wasm,
     xdr::{
-        AccountId, ContractCostType, Hash, PublicKey, ScAddress, ScBytes, ScError, ScErrorCode,
-        ScErrorType, ScMap, ScMapEntry, ScVal, ScVec, Uint256, WriteXdr,
+        AccountId, ClaimableBalanceId, ContractCostType, Hash, MuxedEd25519Account, PoolId,
+        PublicKey, ScAddress, ScBytes, ScError, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,
+        ScVec, Uint256, WriteXdr,
     },
     BytesObject, Compare, Env, EnvBase, Error, Host, HostError, TryFromVal, U32Val, Val,
     DEFAULT_XDR_RW_LIMITS,
@@ -256,6 +257,23 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     ))))?;
     // Contract address
     roundtrip(ScVal::Address(ScAddress::Contract(Hash([255; 32]))))?;
+    // Muxed account
+    roundtrip(ScVal::Address(ScAddress::MuxedAccount(
+        MuxedEd25519Account {
+            id: 123_456_789_012_u64,
+            ed25519: Uint256([12; 32]),
+        },
+    )))?;
+    // Unsupported address types:
+    // Liquidity pool
+    deser_fails_scv(ScVal::Address(ScAddress::LiquidityPool(PoolId(Hash(
+        [1; 32],
+    )))))?;
+    // Claimable balance
+    deser_fails_scv(ScVal::Address(ScAddress::ClaimableBalance(
+        ClaimableBalanceId::ClaimableBalanceIdTypeV0(Hash([3; 32])),
+    )))?;
+
     // non-representable fails
     deser_fails_scv(ScVal::LedgerKeyContractInstance)?;
 
