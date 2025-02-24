@@ -2,15 +2,17 @@ use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
 
 use crate::{
     budget::AsBudget,
-    host_object::{HostMap, HostVec},
+    host_object::{HostMap, HostVec, MuxedScAddress},
     xdr::{
-        Duration, Hash, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString, ScSymbol, TimePoint,
+        Duration, Hash, MuxedAccount, MuxedAccountMed25519, ScAddress, ScBytes, ScErrorCode,
+        ScErrorType, ScString, ScSymbol, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Env, Error, Host,
     HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object,
-    I64Small, MapObject, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall,
-    TimepointObject, TimepointSmall, TimepointVal, U128Object, U128Small, U128Val, U256Object,
-    U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val, VecObject, Void, I256, U256,
+    I64Small, MapObject, MuxedAddressObject, StorageType, StringObject, Symbol, SymbolObject,
+    SymbolSmall, TimepointObject, TimepointSmall, TimepointVal, U128Object, U128Small, U128Val,
+    U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val, VecObject, Void,
+    I256, U256,
 };
 
 use soroban_env_macros::generate_synth_dispatch_host_fn_tests;
@@ -179,6 +181,12 @@ impl TestVal for AddressObject {
     }
 }
 
+impl TestVal for MuxedAddressObject {
+    fn test_val() -> Val {
+        unsafe { MuxedAddressObject::from_handle(123).to_val() }
+    }
+}
+
 impl TestVal for Symbol {
     fn test_val() -> Val {
         SymbolSmall::test_val()
@@ -316,6 +324,16 @@ impl TestObject for AddressObject {
     fn test_object(host: &Host) -> Self {
         host.add_host_object(ScAddress::Contract(Hash([0; 32])))
             .unwrap()
+    }
+}
+
+impl TestObject for MuxedAddressObject {
+    fn test_object(host: &Host) -> Self {
+        let addr = ScAddress::MuxedAccount(MuxedAccount::MuxedEd25519(MuxedAccountMed25519 {
+            id: 0,
+            ed25519: Uint256([0; 32]),
+        }));
+        host.add_host_object(MuxedScAddress(addr)).unwrap()
     }
 }
 

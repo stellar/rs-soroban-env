@@ -8,8 +8,8 @@ pub(crate) use internal::{
 use crate::{
     num::{i256_from_pieces, u256_from_pieces},
     xdr::{
-        ContractEventBody, ContractEventType, ContractExecutable, PublicKey::PublicKeyTypeEd25519,
-        ScAddress, ScContractInstance, ScVal,
+        ContractEventBody, ContractEventType, ContractExecutable, MuxedAccount,
+        PublicKey::PublicKeyTypeEd25519, ScAddress, ScContractInstance, ScVal,
     },
     Error, Host, HostError, Val, VecObject,
 };
@@ -35,6 +35,19 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
             let strkey = stellar_strkey::Contract(hash.0);
             write!(f, "{}", strkey)
         }
+        ScAddress::MuxedAccount(muxed_account) => match muxed_account {
+            MuxedAccount::Ed25519(uint256) => {
+                let strkey = stellar_strkey::ed25519::PublicKey(uint256.0);
+                write!(f, "{}", strkey)
+            }
+            MuxedAccount::MuxedEd25519(m) => {
+                let strkey = stellar_strkey::ed25519::MuxedAccount {
+                    ed25519: m.ed25519.0.clone(),
+                    id: m.id.clone(),
+                };
+                write!(f, "{}", strkey)
+            }
+        },
     }
 }
 

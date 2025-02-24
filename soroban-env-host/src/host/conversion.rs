@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::host_object::MemHostObjectType;
+use crate::host_object::{MemHostObjectType, MuxedScAddress};
 use crate::{
     budget::{AsBudget, DepthLimiter},
     err,
@@ -421,6 +421,7 @@ impl Host {
                     HostObject::String(s) => ScVal::String(s.metered_clone(self)?),
                     HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self)?),
                     HostObject::Address(addr) => ScVal::Address(addr.metered_clone(self)?),
+                    HostObject::MuxedAddress(addr) => ScVal::Address(addr.0.metered_clone(self)?),
                 };
                 Ok(ScValObject::unchecked_from_val(val))
             })
@@ -506,7 +507,17 @@ impl Host {
                 )?)?
                 .into()),
 
-            ScVal::Address(addr) => Ok(self.add_host_object(addr.metered_clone(self)?)?.into()),
+            ScVal::Address(addr) => {
+                match addr {
+                    ScAddress::Account(_) | ScAddress::Contract(_) => {
+                        Ok(self.add_host_object(addr.metered_clone(self)?)?.into())
+                    }
+                    ScAddress::MuxedAccount(_) => Ok(self
+                        .add_host_object(MuxedScAddress(addr.metered_clone(self)?))?
+                        .into()),
+                }
+                // ,
+            }
 
             // None of the following cases should have made it into this function, they
             // are excluded by the ScValObjRef::classify function.
