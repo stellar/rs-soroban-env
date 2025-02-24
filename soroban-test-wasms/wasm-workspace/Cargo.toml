@@ -50,7 +50,8 @@ members = [
     "constructor_with_return_value",
     "constructor_with_result",
     "custom_account_context",
-    "try_call_sac"
+    "try_call_sac",
+    "contract_data_val"
 ]
 [profile.release]
 opt-level = "z"

@@ -1,6 +1,9 @@
-use crate::Host;
+use crate::{host_object::MuxedScAddress, Host, HostError};
 use soroban_env_common::{
-    xdr::{AccountId, Hash, PublicKey, ScAddress, ScBytes, ScString, Uint256},
+    xdr::{
+        AccountId, ClaimableBalanceId, Hash, MuxedEd25519Account, PoolId, PublicKey, ScAddress,
+        ScBytes, ScErrorCode, ScErrorType, ScString, ScVal, Uint256,
+    },
     Compare, Env, StringObject, Val,
 };
 
@@ -19,6 +22,87 @@ fn string_to_bytes_object(host: &Host, s: &str) -> Val {
     host.add_host_object(ScBytes(s.try_into().unwrap()))
         .unwrap()
         .to_val()
+}
+
+#[test]
+fn test_muxed_address_to_address_conversion() {
+    let host = observe_host!(Host::test_host());
+    let muxed_address_obj = host
+        .add_host_object(MuxedScAddress(ScAddress::MuxedAccount(
+            MuxedEd25519Account {
+                id: 123,
+                ed25519: Uint256([10; 32]),
+            },
+        )))
+        .unwrap();
+    let components_vec = host
+        .muxed_address_to_address_and_id(muxed_address_obj)
+        .unwrap();
+    let components_vec = host.vecobject_to_scval_vec(components_vec).unwrap();
+    assert_eq!(
+        components_vec.as_slice(),
+        &[
+            ScVal::Address(ScAddress::Account(AccountId(
+                PublicKey::PublicKeyTypeEd25519(Uint256([10; 32])),
+            ))),
+            ScVal::U64(123)
+        ]
+    );
+}
+
+#[test]
+fn test_invalid_muxed_address_object_conversions() {
+    let host = observe_host!(Host::test_host());
+    assert!(HostError::result_matches_err(
+        host.add_host_object(MuxedScAddress(ScAddress::Account(AccountId(
+            PublicKey::PublicKeyTypeEd25519(Uint256([0; 32])),
+        )))),
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+
+    assert!(HostError::result_matches_err(
+        host.add_host_object(MuxedScAddress(ScAddress::Contract(Hash([100; 32])))),
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+
+    assert!(HostError::result_matches_err(
+        host.add_host_object(MuxedScAddress(ScAddress::LiquidityPool(PoolId(Hash(
+            [66; 32],
+        ))))),
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+
+    assert!(HostError::result_matches_err(
+        host.add_host_object(MuxedScAddress(ScAddress::ClaimableBalance(
+            ClaimableBalanceId::ClaimableBalanceIdTypeV0(Hash([5; 32]))
+        ))),
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+}
+
+#[test]
+fn test_invalid_address_object_conversions() {
+    let host = observe_host!(Host::test_host());
+
+    assert!(HostError::result_matches_err(
+        host.add_host_object(ScAddress::MuxedAccount(MuxedEd25519Account {
+            id: 123,
+            ed25519: Uint256([10; 32]),
+        },)),
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+
+    assert!(HostError::result_matches_err(
+        host.add_host_object(ScAddress::LiquidityPool(PoolId(Hash([66; 32],)))),
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+
+    assert!(HostError::result_matches_err(
+        host.add_host_object(ScAddress::ClaimableBalance(
+            ClaimableBalanceId::ClaimableBalanceIdTypeV0(Hash([5; 32]))
+        )),
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
 }
 
 // Example values are taken from
@@ -165,6 +249,20 @@ fn invalid_strkey_to_address_conversion() {
         .strkey_to_address(string_to_object(
             &host,
             "PA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAQACAQDAQCQMBYIBEFAWDANBYHRAEISCMKBKFQXDAMRUGY4DUPB6IBZGM"
+        ))
+        .is_err());
+    // Valid liquidity pool
+    assert!(host
+        .strkey_to_address(string_to_object(
+            &host,
+            "LA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGZ5J"
+        ))
+        .is_err());
+    // Valid claimable balance
+    assert!(host
+        .strkey_to_address(string_to_object(
+            &host,
+            "BAADMPVKHBTYIH522D2O3CGHPHSP4ZXFNISHBXEYYDWJYBZ5AXD3CA3GDE"
         ))
         .is_err());
 }

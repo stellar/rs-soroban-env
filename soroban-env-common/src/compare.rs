@@ -194,10 +194,10 @@ impl<E: Env> Compare<Val> for E {
                 | Tag::SymbolObject
                 | Tag::VecObject
                 | Tag::MapObject
-                | Tag::AddressObject => Err(self.error_from_error_val(Error::from_type_and_code(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                ))),
+                | Tag::AddressObject
+                | Tag::MuxedAddressObject => Err(self.error_from_error_val(
+                    Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError),
+                )),
 
                 Tag::ObjectCodeUpperBound => Ok(Ordering::Equal),
                 Tag::Bad => Ok(Ordering::Equal),

@@ -21,6 +21,7 @@ use std::{cell::RefCell, mem, rc::Rc};
 use crate::{
     budget::{AsBudget, DepthLimiter},
     builtin_contracts::base_types::Address,
+    host_object::MuxedScAddress,
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
@@ -57,7 +58,8 @@ pub(crate) fn charge_shallow_copy<T: DeclaredSizeForMetering>(
     // means an underestimation of the cost.
     debug_assert!(
         mem::size_of::<T>() as u64 <= T::DECLARED_SIZE,
-        "mem size: {}, declared: {}",
+        "{}: mem size: {}, declared: {}",
+        std::any::type_name::<T>(),
         std::mem::size_of::<T>(),
         T::DECLARED_SIZE
     );
@@ -77,7 +79,8 @@ pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
     // budget charging.
     debug_assert!(
         mem::size_of::<T>() as u64 <= T::DECLARED_SIZE,
-        "mem size: {}, declared: {}",
+        "{}: mem size: {}, declared: {}",
+        std::any::type_name::<T>(),
         std::mem::size_of::<T>(),
         T::DECLARED_SIZE
     );
@@ -320,6 +323,7 @@ impl MeteredClone for ContractCodeEntryV1 {}
 impl MeteredClone for ContractExecutable {}
 impl MeteredClone for AccountId {}
 impl MeteredClone for ScAddress {}
+impl MeteredClone for MuxedScAddress {}
 impl MeteredClone for ScNonceKey {}
 impl MeteredClone for PublicKey {}
 impl MeteredClone for TrustLineAsset {}
