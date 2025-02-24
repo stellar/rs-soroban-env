@@ -2,7 +2,7 @@ use core::cmp::{min, Ordering};
 
 use crate::{
     budget::{AsBudget, Budget, DepthLimiter},
-    host_object::HostObject,
+    host_object::{HostObject, MuxedScAddress},
     storage::Storage,
     xdr::{
         AccountId, ContractCostType, ContractDataDurability, ContractExecutable,
@@ -39,6 +39,7 @@ fn host_obj_discriminant(ho: &HostObject) -> usize {
         HostObject::Vec(_) => 11,
         HostObject::Map(_) => 12,
         HostObject::Address(_) => 13,
+        HostObject::MuxedAddress(_) => 14,
     }
 }
 
@@ -65,6 +66,7 @@ impl Compare<HostObject> for Host {
                 (String(a), String(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
                 (Symbol(a), Symbol(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
                 (Address(a), Address(b)) => self.as_budget().compare(a, b),
+                (MuxedAddress(a), MuxedAddress(b)) => self.as_budget().compare(a, b),
 
                 // List out at least one side of all the remaining cases here so
                 // we don't accidentally forget to update this when/if a new
@@ -82,7 +84,8 @@ impl Compare<HostObject> for Host {
                 | (Bytes(_), _)
                 | (String(_), _)
                 | (Symbol(_), _)
-                | (Address(_), _) => {
+                | (Address(_), _)
+                | (MuxedAddress(_), _) => {
                     let a = host_obj_discriminant(a);
                     let b = host_obj_discriminant(b);
                     Ok(a.cmp(&b))
@@ -131,7 +134,8 @@ impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budg
         // size for budget charging.
         debug_assert!(
             std::mem::size_of::<T>() as u64 <= <T as DeclaredSizeForMetering>::DECLARED_SIZE,
-            "mem size: {}, declared: {}",
+            "{}: mem size: {}, declared: {}",
+            std::any::type_name::<T>(),
             std::mem::size_of::<T>(),
             <T as DeclaredSizeForMetering>::DECLARED_SIZE
         );
@@ -182,6 +186,7 @@ impl_compare_fixed_size_ord_type!(ContractExecutable);
 impl_compare_fixed_size_ord_type!(AccountId);
 impl_compare_fixed_size_ord_type!(ScError);
 impl_compare_fixed_size_ord_type!(ScAddress);
+impl_compare_fixed_size_ord_type!(MuxedScAddress);
 impl_compare_fixed_size_ord_type!(ScNonceKey);
 impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
@@ -603,9 +608,15 @@ mod tests {
         let pair_pairs = val_pairs.zip(scval_pairs);
 
         for ((val1, val2), (scval1, scval2)) in pair_pairs {
-            let val_cmp = host.compare(val1, val2).expect("compare");
+            let val_cmp = host.compare(val1, val2);
+            if !val_cmp.is_ok() {
+                dbg!(scval1);
+                dbg!(scval2);
+                let _ = host.compare(val1, val2);
+                panic!();
+            }
             let scval_cmp = scval1.cmp(scval2);
-            assert_eq!(val_cmp, scval_cmp);
+            assert_eq!(val_cmp.unwrap(), scval_cmp);
         }
     }
 
@@ -717,6 +728,16 @@ mod tests {
             Tag::AddressObject => Val::try_from_val(
                 host,
                 &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
+            )
+            .unwrap(),
+            Tag::MuxedAddressObject => Val::try_from_val(
+                host,
+                &ScVal::Address(xdr::ScAddress::MuxedAccount(xdr::MuxedAccount::MuxedEd25519(
+                    xdr::MuxedAccountMed25519 {
+                        id: 0,
+                        ed25519: xdr::Uint256([0; 32]),
+                    },
+                ))),
             )
             .unwrap(),
             Tag::ObjectCodeUpperBound => panic!(),

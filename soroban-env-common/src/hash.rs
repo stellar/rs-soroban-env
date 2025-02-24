@@ -4,8 +4,8 @@
 
 use crate::{
     AddressObject, BytesObject, DurationObject, I128Object, I256Object, I64Object, MapObject,
-    Object, StringObject, Symbol, SymbolObject, TimepointObject, U128Object, U256Object, U64Object,
-    Val, VecObject,
+    MuxedAddressObject, Object, StringObject, Symbol, SymbolObject, TimepointObject, U128Object,
+    U256Object, U64Object, Val, VecObject,
 };
 
 impl core::hash::Hash for Val {
@@ -40,3 +40,4 @@ impl_hash_for_wrapper!(Symbol);
 impl_hash_for_wrapper!(VecObject);
 impl_hash_for_wrapper!(MapObject);
 impl_hash_for_wrapper!(AddressObject);
+impl_hash_for_wrapper!(MuxedAddressObject);

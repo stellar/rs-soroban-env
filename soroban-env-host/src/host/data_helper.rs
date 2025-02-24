@@ -451,7 +451,7 @@ impl Host {
 
     pub(crate) fn contract_id_from_scaddress(&self, address: ScAddress) -> Result<Hash, HostError> {
         match address {
-            ScAddress::Account(_) => Err(self.err(
+            ScAddress::Account(_) | ScAddress::MuxedAccount(_) => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::InvalidInput,
                 "not a contract address",

@@ -6,15 +6,16 @@ use crate::{
     },
     testutils::AsScVal,
     xdr::{
-        ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-        ExtensionPoint, Hash, ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,
+        AccountId, ContractCostType, ContractEvent, ContractEventBody, ContractEventType,
+        ContractEventV0, ExtensionPoint, Hash, MuxedAccount, MuxedAccountMed25519, PublicKey,
+        ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal, Uint256,
     },
     Compare, ContractFunctionSet, Env, Error, ErrorHandler, Host, HostError, Symbol, SymbolSmall,
     Val, VecObject,
 };
 use expect_test::expect;
 use more_asserts::assert_le;
-use soroban_env_common::EnvBase;
+use soroban_env_common::{EnvBase, MuxedAddressObject, TryFromVal, TryIntoVal};
 use std::rc::Rc;
 
 pub struct ContractWithSingleEvent;
@@ -297,6 +298,63 @@ fn nonexistent_topic_obj_handle() -> Result<(), HostError> {
         (ScErrorType::Value, ScErrorCode::InvalidInput)
     ));
     Ok(())
+}
+
+#[test]
+fn muxed_address_event() {
+    let host = Host::test_host_with_prng();
+    let addr_sc_val = ScVal::Address(ScAddress::MuxedAccount(MuxedAccount::MuxedEd25519(
+        MuxedAccountMed25519 {
+            id: 123,
+            ed25519: Uint256([111; 32]),
+        },
+    )));
+    let addr_val = Val::try_from_val(&host, &addr_sc_val).unwrap();
+    host.contract_event(
+        test_vec![&host, addr_val].as_object(),
+        Val::from_u32(789).to_val(),
+    )
+    .unwrap();
+
+    let events = host.get_events().unwrap();
+    assert!(events.0.len() == 1);
+    assert_eq!(
+        events.0[0].event,
+        ContractEvent {
+            ext: ExtensionPoint::V0,
+            contract_id: None,
+            type_: ContractEventType::Contract,
+            body: ContractEventBody::V0(ContractEventV0 {
+                topics: vec![addr_sc_val].try_into().unwrap(),
+                data: ScVal::U32(789),
+            })
+        }
+    );
+    let mux_obj = MuxedAddressObject::try_from_val(&host, &addr_val).unwrap();
+    let addr_obj = host.muxed_address_to_address(mux_obj).unwrap();
+    host.contract_event(
+        test_vec![&host, addr_obj].as_object(),
+        Val::from_u32(789).to_val(),
+    )
+    .unwrap();
+    let events = host.get_events().unwrap();
+    assert!(events.0.len() == 2);
+    assert_eq!(
+        events.0[1].event,
+        ContractEvent {
+            ext: ExtensionPoint::V0,
+            contract_id: None,
+            type_: ContractEventType::Contract,
+            body: ContractEventBody::V0(ContractEventV0 {
+                topics: vec![ScVal::Address(ScAddress::Account(AccountId(
+                    PublicKey::PublicKeyTypeEd25519(Uint256([111; 32]))
+                ),))]
+                .try_into()
+                .unwrap(),
+                data: ScVal::U32(789),
+            })
+        }
+    );
 }
 
 #[test]

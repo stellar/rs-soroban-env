@@ -104,7 +104,7 @@ pub use storage_type::StorageType;
 
 // Re-export the XDR definitions of a specific version -- curr or next -- of the xdr crate.
 #[cfg(not(feature = "next"))]
-pub use stellar_xdr::curr as xdr;
+pub use stellar_xdr::next as xdr;
 #[cfg(feature = "next")]
 pub use stellar_xdr::next as xdr;
 
@@ -113,7 +113,7 @@ pub use val::{ConversionError, Tag, Val};
 
 #[cfg(feature = "wasmi")]
 pub use val::WasmiMarshal;
-pub use val::{AddressObject, MapObject, VecObject};
+pub use val::{AddressObject, MapObject, MuxedAddressObject, VecObject};
 pub use val::{Bool, Void};
 
 pub use compare::Compare;

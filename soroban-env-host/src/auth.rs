@@ -2030,6 +2030,7 @@ impl AccountAuthorizationTracker {
                     &self.invocation_tracker.root_authorized_invocation,
                 )?;
             }
+            ScAddress::MuxedAccount(_) => unreachable!(),
         }
         Ok(())
     }
@@ -2072,8 +2073,6 @@ impl AccountAuthorizationTracker {
                 // - Return budget error in case if it was suppressed above.
                 let _ = acc.metered_clone(host.as_budget())?;
             }
-            // We only know for sure that the contract instance and Wasm will be
-            // loaded.
             ScAddress::Contract(contract_id) => {
                 let instance_key = host.contract_instance_ledger_key(&contract_id)?;
                 let entry = host
@@ -2110,6 +2109,7 @@ impl AccountAuthorizationTracker {
                     ContractExecutable::StellarAsset => (),
                 }
             }
+            ScAddress::MuxedAccount(_) => unreachable!(),
         }
         Ok(())
     }
