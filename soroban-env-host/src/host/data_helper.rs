@@ -444,13 +444,13 @@ impl Host {
 
     pub(crate) fn contract_id_from_scaddress(&self, address: ScAddress) -> Result<Hash, HostError> {
         match address {
-            ScAddress::Account(_) => Err(self.err(
+            ScAddress::Contract(contract_id) => Ok(contract_id),
+            _ => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::InvalidInput,
                 "not a contract address",
                 &[],
             )),
-            ScAddress::Contract(contract_id) => Ok(contract_id),
         }
     }
 

@@ -5,7 +5,7 @@ use crate::{
     auth::AuthorizationManager,
     budget::{AsBudget, Budget},
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
-    host_object::{HostMap, HostObject, HostVec},
+    host_object::{HostMap, HostObject, HostVec, MuxedScAddress},
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns,
     impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
@@ -46,6 +46,7 @@ mod validity;
 pub use error::HostError;
 use frame::CallParams;
 pub use prng::{Seed, SEED_BYTES};
+use soroban_env_common::MuxedAddressObject;
 pub use trace::{TraceEvent, TraceHook, TraceRecord, TraceState};
 
 use self::{
@@ -112,6 +113,7 @@ struct HostImpl {
     // `with_debug_mode` callback that switches to the shadow budget.
     diagnostic_level: RefCell<DiagnosticLevel>,
     base_prng: RefCell<Option<Prng>>,
+    storage_key_conversion_active: RefCell<bool>,
     // Auth-recording mode generates pseudorandom nonces to populate its output.
     // We'd like these to be deterministic from one run to the next, but also
     // completely isolated from any use of the user-accessible PRNGs (either
@@ -306,6 +308,13 @@ impl_checked_borrow_helpers!(
     try_borrow_trace_hook_mut
 );
 
+impl_checked_borrow_helpers!(
+    storage_key_conversion_active,
+    bool,
+    try_borrow_storage_key_conversion_active,
+    try_borrow_storage_key_conversion_active_mut
+);
+
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
     top_contract_invocation_hook,
@@ -372,6 +381,7 @@ impl Host {
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
+            storage_key_conversion_active: RefCell::new(false),
             #[cfg(any(test, feature = "recording_mode"))]
             recording_auth_nonce_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
@@ -782,7 +792,8 @@ impl EnvBase for Host {
             | (HostObject::Bytes(_), Tag::BytesObject)
             | (HostObject::String(_), Tag::StringObject)
             | (HostObject::Symbol(_), Tag::SymbolObject)
-            | (HostObject::Address(_), Tag::AddressObject) => Ok(()),
+            | (HostObject::Address(_), Tag::AddressObject)
+            | (HostObject::MuxedAddress(_), Tag::MuxedAddressObject) => Ok(()),
             _ => Err(self.err(
                 xdr::ScErrorType::Value,
                 xdr::ScErrorCode::InvalidInput,
@@ -3223,6 +3234,14 @@ impl VmCallerEnv for Host {
                 ScAddress::Contract(Hash(h)) => stellar_strkey::Strkey::Contract(
                     stellar_strkey::Contract(h.metered_clone(self)?),
                 ),
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::InternalError,
+                        "Unexpected ScAddress type",
+                        &[address.into()],
+                    ))
+                }
             };
             Ok(strkey.to_string())
         })?;
@@ -3298,6 +3317,44 @@ impl VmCallerEnv for Host {
         self.add_host_object(sc_addr)
     }
 
+    fn get_address_from_muxed_address(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        muxed_address: MuxedAddressObject,
+    ) -> Result<AddressObject, Self::Error> {
+        let sc_address = self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
+            ScAddress::MuxedAccount(muxed_account) => {
+                let address = ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(
+                    muxed_account.ed25519.metered_clone(self)?,
+                )));
+                Ok(address)
+            }
+            _ => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::InternalError,
+                "MuxedAddressObject is used to represent a regular address",
+                &[muxed_address.into()],
+            )),
+        })?;
+        self.add_host_object(sc_address)
+    }
+
+    fn get_id_from_muxed_address(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        muxed_address: MuxedAddressObject,
+    ) -> Result<U64Val, Self::Error> {
+        let mux_id = self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
+            ScAddress::MuxedAccount(muxed_account) => Ok(muxed_account.id),
+            _ => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::InternalError,
+                "MuxedAddressObject is used to represent a regular address",
+                &[muxed_address.into()],
+            )),
+        })?;
+        Ok(U64Val::try_from_val(self, &mux_id)?)
+    }
     // endregion: "address" module functions
     // region: "prng" module functions
 

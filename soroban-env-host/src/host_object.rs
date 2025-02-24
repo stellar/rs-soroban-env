@@ -10,9 +10,10 @@ use crate::{
     num::{I256, U256},
     xdr::{self, ContractCostType, ScErrorCode, ScErrorType, SCSYMBOL_LIMIT},
     AddressObject, BytesObject, Compare, DurationObject, DurationSmall, Host, HostError,
-    I128Object, I128Small, I256Object, I256Small, I64Object, I64Small, MapObject, Object,
-    StringObject, SymbolObject, SymbolSmall, SymbolStr, TimepointObject, TimepointSmall,
-    TryFromVal, U128Object, U128Small, U256Object, U256Small, U64Object, U64Small, Val, VecObject,
+    I128Object, I128Small, I256Object, I256Small, I64Object, I64Small, MapObject,
+    MuxedAddressObject, Object, StringObject, SymbolObject, SymbolSmall, SymbolStr,
+    TimepointObject, TimepointSmall, TryFromVal, U128Object, U128Small, U256Object, U256Small,
+    U64Object, U64Small, Val, VecObject,
 };
 
 pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
@@ -34,6 +35,7 @@ pub(crate) enum HostObject {
     String(xdr::ScString),
     Symbol(xdr::ScSymbol),
     Address(xdr::ScAddress),
+    MuxedAddress(MuxedScAddress),
 }
 
 impl std::fmt::Debug for HostObject {
@@ -53,6 +55,7 @@ impl std::fmt::Debug for HostObject {
             Self::String(arg0) => f.debug_tuple("String").field(arg0).finish(),
             Self::Symbol(arg0) => f.debug_tuple("Symbol").field(arg0).finish(),
             Self::Address(arg0) => f.debug_tuple("Address").field(arg0).finish(),
+            Self::MuxedAddress(arg0) => f.debug_tuple("MuxedAddress").field(arg0).finish(),
         }
     }
 }
@@ -136,7 +139,8 @@ impl HostObject {
             | HostObject::Map(_)
             | HostObject::Bytes(_)
             | HostObject::String(_)
-            | HostObject::Address(_) => None,
+            | HostObject::Address(_)
+            | HostObject::MuxedAddress(_) => None,
         };
         Ok(res)
     }
@@ -145,7 +149,7 @@ impl HostObject {
 pub(crate) trait HostObjectType: MeteredClone {
     type Wrapper: Into<Object>;
     fn new_from_handle(handle: u32) -> Self::Wrapper;
-    fn inject(self) -> HostObject;
+    fn inject(self, host: &Host) -> Result<HostObject, HostError>;
     fn try_extract(obj: &HostObject) -> Option<&Self>;
 }
 
@@ -165,8 +169,8 @@ macro_rules! declare_host_object_type {
             fn new_from_handle(handle: u32) -> Self::Wrapper {
                 unsafe { $TAG::from_handle(handle) }
             }
-            fn inject(self) -> HostObject {
-                HostObject::$CASE(self)
+            fn inject(self, _host: &Host) -> Result<HostObject, HostError> {
+                Ok(HostObject::$CASE(self))
             }
 
             fn try_extract(obj: &HostObject) -> Option<&Self> {
@@ -208,7 +212,71 @@ declare_host_object_type!(I256, I256Object, I256);
 declare_mem_host_object_type!(xdr::ScBytes, BytesObject, Bytes);
 declare_mem_host_object_type!(xdr::ScString, StringObject, String);
 declare_host_object_type!(xdr::ScSymbol, SymbolObject, Symbol);
-declare_host_object_type!(xdr::ScAddress, AddressObject, Address);
+
+impl HostObjectType for xdr::ScAddress {
+    type Wrapper = AddressObject;
+    fn new_from_handle(handle: u32) -> Self::Wrapper {
+        unsafe { AddressObject::from_handle(handle) }
+    }
+
+    fn inject(self, host: &Host) -> Result<HostObject, HostError> {
+        match &self {
+            xdr::ScAddress::Account(_) | xdr::ScAddress::Contract(_) => {
+                Ok(HostObject::Address(self))
+            }
+            _ => Err(host.err(
+                ScErrorType::Object,
+                ScErrorCode::InvalidInput,
+                format!(
+                    "encountered ScAddress variant not supported by AddressObject: {}",
+                    self.discriminant()
+                )
+                .as_str(),
+                &[],
+            )),
+        }
+    }
+
+    fn try_extract(obj: &HostObject) -> Option<&Self> {
+        match obj {
+            HostObject::Address(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Hash, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) struct MuxedScAddress(pub(crate) xdr::ScAddress);
+
+impl HostObjectType for MuxedScAddress {
+    type Wrapper = MuxedAddressObject;
+    fn new_from_handle(handle: u32) -> Self::Wrapper {
+        unsafe { MuxedAddressObject::from_handle(handle) }
+    }
+
+    fn inject(self, host: &Host) -> Result<HostObject, HostError> {
+        match &self.0 {
+            xdr::ScAddress::MuxedAccount(_) => Ok(HostObject::MuxedAddress(self)),
+            _ => Err(host.err(
+                ScErrorType::Object,
+                ScErrorCode::InvalidInput,
+                format!(
+                    "encountered ScAddress variant not supported by AddressObject: {}",
+                    self.0.discriminant()
+                )
+                .as_str(),
+                &[],
+            )),
+        }
+    }
+
+    fn try_extract(obj: &HostObject) -> Option<&Self> {
+        match obj {
+            HostObject::MuxedAddress(v) => Some(v),
+            _ => None,
+        }
+    }
+}
 
 impl MemHostObjectType for xdr::ScSymbol {
     fn try_from_bytes(host: &Host, bytes: Vec<u8>) -> Result<Self, HostError> {
@@ -385,7 +453,7 @@ impl Host {
         // charge for the new host object, which is just the amortized cost of a
         // single `HostObject` allocation
         metered_clone::charge_heap_alloc::<HostObject>(1, self)?;
-        self.try_borrow_objects_mut()?.push(HOT::inject(hot));
+        self.try_borrow_objects_mut()?.push(HOT::inject(hot, self)?);
         Ok(HOT::new_from_handle(handle))
     }
 

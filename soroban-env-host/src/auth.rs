@@ -2019,19 +2019,22 @@ impl AccountAuthorizationTracker {
         let payload = self.get_signature_payload(host)?;
         match sc_addr {
             ScAddress::Account(acc) => {
-                check_account_authentication(host, acc, &payload, self.signature)?;
+                check_account_authentication(host, acc, &payload, self.signature)
             }
-            ScAddress::Contract(acc_contract) => {
-                check_account_contract_auth(
-                    host,
-                    &acc_contract,
-                    &payload,
-                    self.signature,
-                    &self.invocation_tracker.root_authorized_invocation,
-                )?;
-            }
+            ScAddress::Contract(acc_contract) => check_account_contract_auth(
+                host,
+                &acc_contract,
+                &payload,
+                self.signature,
+                &self.invocation_tracker.root_authorized_invocation,
+            ),
+            _ => Err(host.err(
+                ScErrorType::Object,
+                ScErrorCode::InternalError,
+                "unexpected address type in auth",
+                &[self.address.into()],
+            )),
         }
-        Ok(())
     }
 
     // Emulates authentication for the recording mode.
@@ -2072,8 +2075,6 @@ impl AccountAuthorizationTracker {
                 // - Return budget error in case if it was suppressed above.
                 let _ = acc.metered_clone(host.as_budget())?;
             }
-            // We only know for sure that the contract instance and Wasm will be
-            // loaded.
             ScAddress::Contract(contract_id) => {
                 let instance_key = host.contract_instance_ledger_key(&contract_id)?;
                 let entry = host
@@ -2109,6 +2110,14 @@ impl AccountAuthorizationTracker {
                     }
                     ContractExecutable::StellarAsset => (),
                 }
+            }
+            _ => {
+                return Err(host.err(
+                    ScErrorType::Object,
+                    ScErrorCode::InternalError,
+                    "encountered unexpected ScAddress type",
+                    &[],
+                ));
             }
         }
         Ok(())
