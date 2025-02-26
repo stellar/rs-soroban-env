@@ -149,8 +149,10 @@ pub enum Tag {
     /// Tag for a [Val] that refers to a host-side contract address.
     AddressObject = 77,
 
+    MuxedAddressObject = 78,
+
     /// Code delimiting the upper boundary of "object" types.
-    ObjectCodeUpperBound = 78,
+    ObjectCodeUpperBound = 79,
 
     /// Code reserved to indicate mis-tagged [`Val`]s.
     Bad = 0x7f,
@@ -238,6 +240,7 @@ impl Tag {
             Tag::VecObject => Some(ScValType::Vec),
             Tag::MapObject => Some(ScValType::Map),
             Tag::AddressObject => Some(ScValType::Address),
+            Tag::MuxedAddressObject => Some(ScValType::Address),
             Tag::ObjectCodeUpperBound => None,
             Tag::Bad => None,
         }
@@ -337,6 +340,7 @@ impl<E: Env> Compare<Bool> for E {
 declare_tag_based_object_wrapper!(VecObject);
 declare_tag_based_object_wrapper!(MapObject);
 declare_tag_based_object_wrapper!(AddressObject);
+declare_tag_based_object_wrapper!(MuxedAddressObject);
 
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
@@ -685,7 +689,8 @@ impl Val {
             | Tag::SymbolObject
             | Tag::VecObject
             | Tag::MapObject
-            | Tag::AddressObject => self.has_minor(0),
+            | Tag::AddressObject
+            | Tag::MuxedAddressObject => self.has_minor(0),
         }
     }
 
@@ -866,6 +871,7 @@ impl Debug for Val {
             Tag::VecObject => fmt_obj("Vec", self, f),
             Tag::MapObject => fmt_obj("Map", self, f),
             Tag::AddressObject => fmt_obj("Address", self, f),
+            Tag::MuxedAddressObject => fmt_obj("MuxedAddress", self, f),
 
             Tag::Bad
             | Tag::SmallCodeUpperBound

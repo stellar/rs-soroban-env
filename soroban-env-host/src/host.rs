@@ -6,7 +6,7 @@ use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::common_types::AddressExecutable,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
-    host_object::{HostMap, HostObject, HostVec},
+    host_object::{HostMap, HostObject, HostVec, MuxedScAddress},
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns,
     impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
@@ -15,8 +15,8 @@ use crate::{
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration, Hash,
-        LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
-        ScSymbol, ScVal, TimePoint, Uint256,
+        LedgerEntryData, MuxedAccount, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType,
+        ScString, ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
     MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal,
@@ -47,6 +47,7 @@ mod validity;
 pub use error::{ErrorHandler, HostError};
 use frame::CallParams;
 pub use prng::{Seed, SEED_BYTES};
+use soroban_env_common::MuxedAddressObject;
 pub use trace::{TraceEvent, TraceHook, TraceRecord, TraceState};
 
 use self::{
@@ -112,6 +113,7 @@ struct HostImpl {
     // `with_debug_mode` callback that switches to the shadow budget.
     diagnostic_level: RefCell<DiagnosticLevel>,
     base_prng: RefCell<Option<Prng>>,
+    storage_key_conversion_active: RefCell<bool>,
     // Auth-recording mode generates pseudorandom nonces to populate its output.
     // We'd like these to be deterministic from one run to the next, but also
     // completely isolated from any use of the user-accessible PRNGs (either
@@ -292,6 +294,13 @@ impl_checked_borrow_helpers!(
     try_borrow_trace_hook_mut
 );
 
+impl_checked_borrow_helpers!(
+    storage_key_conversion_active,
+    bool,
+    try_borrow_storage_key_conversion_active,
+    try_borrow_storage_key_conversion_active_mut
+);
+
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
     top_contract_invocation_hook,
@@ -349,6 +358,7 @@ impl Host {
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
+            storage_key_conversion_active: RefCell::new(false),
             #[cfg(any(test, feature = "recording_mode"))]
             recording_auth_nonce_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
@@ -793,7 +803,8 @@ impl EnvBase for Host {
             | (HostObject::Bytes(_), Tag::BytesObject)
             | (HostObject::String(_), Tag::StringObject)
             | (HostObject::Symbol(_), Tag::SymbolObject)
-            | (HostObject::Address(_), Tag::AddressObject) => Ok(()),
+            | (HostObject::Address(_), Tag::AddressObject)
+            | (HostObject::MuxedAddress(_), Tag::MuxedAddressObject) => Ok(()),
             _ => Err(self.err(
                 xdr::ScErrorType::Value,
                 xdr::ScErrorCode::InvalidInput,
@@ -3221,6 +3232,7 @@ impl VmCallerEnv for Host {
                 ScAddress::Contract(Hash(h)) => stellar_strkey::Strkey::Contract(
                     stellar_strkey::Contract(h.metered_clone(self)?),
                 ),
+                ScAddress::MuxedAccount(_) => unreachable!(),
             };
             Ok(strkey.to_string())
         })?;
@@ -3331,12 +3343,32 @@ impl VmCallerEnv for Host {
                         None
                     }
                 }
+                ScAddress::MuxedAccount(_) => unreachable!(),
             };
         if let Some(exec) = maybe_executable {
             Val::try_from_val(self, &exec)
         } else {
             Ok(Val::VOID.into())
         }
+    }
+
+    fn muxed_address_to_address(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        muxed_address: MuxedAddressObject,
+    ) -> Result<AddressObject, Self::Error> {
+        let sc_address = self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
+            ScAddress::Account(_) | ScAddress::Contract(_) => unreachable!(),
+            ScAddress::MuxedAccount(muxed_account) => match muxed_account {
+                MuxedAccount::Ed25519(k) => Ok(ScAddress::Account(AccountId(
+                    PublicKey::PublicKeyTypeEd25519(k.metered_clone(self)?),
+                ))),
+                MuxedAccount::MuxedEd25519(m) => Ok(ScAddress::Account(AccountId(
+                    PublicKey::PublicKeyTypeEd25519(m.ed25519.metered_clone(self)?),
+                ))),
+            },
+        })?;
+        self.add_host_object(sc_address)
     }
     // endregion: "address" module functions
     // region: "prng" module functions

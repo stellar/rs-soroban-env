@@ -1106,7 +1106,7 @@ impl Host {
                 if !storage.is_modified {
                     return Ok(None);
                 }
-                Ok(Some(self.host_map_to_scmap(&storage.map)?))
+                Ok(Some(self.instance_storage_map_to_scmap(&storage.map)?))
             } else {
                 Ok(None)
             }

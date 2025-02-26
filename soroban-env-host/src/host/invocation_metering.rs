@@ -404,8 +404,8 @@ mod test {
         // contract), so 2 writes/bumps are expected.
         expect![[r#"
             InvocationResources {
-                instructions: 4196698,
-                mem_bytes: 2863076,
+                instructions: 4196752,
+                mem_bytes: 2863204,
                 read_entries: 0,
                 write_entries: 2,
                 read_bytes: 0,
@@ -431,8 +431,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 314913,
-                mem_bytes: 1134843,
+                instructions: 314943,
+                mem_bytes: 1134859,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3132,
@@ -456,8 +456,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 318203,
-                mem_bytes: 1135306,
+                instructions: 318247,
+                mem_bytes: 1135322,
                 read_entries: 2,
                 write_entries: 1,
                 read_bytes: 3132,
@@ -481,8 +481,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 314214,
-                mem_bytes: 1134691,
+                instructions: 314242,
+                mem_bytes: 1134707,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3216,
@@ -506,8 +506,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 319806,
-                mem_bytes: 1135662,
+                instructions: 319864,
+                mem_bytes: 1135678,
                 read_entries: 2,
                 write_entries: 1,
                 read_bytes: 3132,
@@ -531,8 +531,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 314576,
-                mem_bytes: 1134759,
+                instructions: 314608,
+                mem_bytes: 1134775,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3216,
@@ -556,8 +556,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 315621,
-                mem_bytes: 1135111,
+                instructions: 315657,
+                mem_bytes: 1135127,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3216,
@@ -581,8 +581,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 315741,
-                mem_bytes: 1135111,
+                instructions: 315783,
+                mem_bytes: 1135127,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3216,
@@ -606,8 +606,8 @@ mod test {
         assert!(res.is_err());
         expect![[r#"
             InvocationResources {
-                instructions: 315602,
-                mem_bytes: 1135179,
+                instructions: 315638,
+                mem_bytes: 1135195,
                 read_entries: 3,
                 write_entries: 0,
                 read_bytes: 3132,

@@ -54,6 +54,7 @@ pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
                 Ok(0)
             }
         }
+        ScAddress::MuxedAccount(_) => unreachable!(),
     }
 }
 
@@ -130,6 +131,7 @@ pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(
             balance.amount = new_balance;
             write_contract_balance(e, addr, balance, &id)
         }
+        ScAddress::MuxedAccount(_) => unreachable!(),
     }
 }
 
@@ -188,6 +190,7 @@ pub(crate) fn spend_balance_no_authorization_check(
             }
             Ok(())
         }
+        ScAddress::MuxedAccount(_) => unreachable!(),
     }
 }
 
@@ -219,6 +222,7 @@ pub(crate) fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> 
                 Ok(!is_asset_auth_required(e)?)
             }
         }
+        ScAddress::MuxedAccount(_) => unreachable!(),
     }
 }
 
@@ -257,6 +261,7 @@ pub(crate) fn write_authorization(
                 write_contract_balance(e, addr, balance, &id)
             }
         }
+        ScAddress::MuxedAccount(_) => unreachable!(),
     }
 }
 
@@ -326,6 +331,7 @@ pub(crate) fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostErro
 
             Ok(())
         }
+        ScAddress::MuxedAccount(_) => unreachable!(),
     }
 }
 
