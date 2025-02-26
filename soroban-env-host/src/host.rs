@@ -113,6 +113,7 @@ struct HostImpl {
     // `with_debug_mode` callback that switches to the shadow budget.
     diagnostic_level: RefCell<DiagnosticLevel>,
     base_prng: RefCell<Option<Prng>>,
+    storage_key_conversion_active: RefCell<bool>,
     // Auth-recording mode generates pseudorandom nonces to populate its output.
     // We'd like these to be deterministic from one run to the next, but also
     // completely isolated from any use of the user-accessible PRNGs (either
@@ -293,6 +294,13 @@ impl_checked_borrow_helpers!(
     try_borrow_trace_hook_mut
 );
 
+impl_checked_borrow_helpers!(
+    storage_key_conversion_active,
+    bool,
+    try_borrow_storage_key_conversion_active,
+    try_borrow_storage_key_conversion_active_mut
+);
+
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
     top_contract_invocation_hook,
@@ -350,6 +358,7 @@ impl Host {
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
+            storage_key_conversion_active: RefCell::new(false),
             #[cfg(any(test, feature = "recording_mode"))]
             recording_auth_nonce_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
