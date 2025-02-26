@@ -108,12 +108,15 @@ impl<E: Env> TryFromVal<E, &[u8]> for Symbol {
     type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &&[u8]) -> Result<Self, Self::Error> {
-        if v.len() > MAX_SMALL_CHARS {
+        // Optimization note: this should only ever call one conversion
+        // function based on the input slice length, currently slices
+        // with invalid characters get re-validated.
+        if let Ok(s) = SymbolSmall::try_from_bytes(v) {
+            Ok(s.into())
+        } else {
             env.symbol_new_from_slice(v)
                 .map(Into::into)
                 .map_err(Into::into)
-        } else {
-            Ok(SymbolSmall::try_from_bytes(v)?.into())
         }
     }
 }
