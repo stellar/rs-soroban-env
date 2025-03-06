@@ -1,10 +1,10 @@
-use crate::SnapshotSourceWithArchive;
 use anyhow::{anyhow, bail, Context, Result};
 use soroban_env_host::budget::Budget;
 use soroban_env_host::fees::{
     compute_rent_write_fee_per_1kb, FeeConfiguration, RentFeeConfiguration,
     RentWriteFeeConfiguration,
 };
+use soroban_env_host::storage::SnapshotSource;
 use soroban_env_host::xdr::{
     ConfigSettingEntry, ConfigSettingId, ContractCostParams, LedgerEntry, LedgerEntryData,
     LedgerKey, LedgerKeyConfigSetting,
@@ -30,14 +30,14 @@ pub struct NetworkConfig {
 }
 
 fn load_configuration_setting(
-    snapshot: &impl SnapshotSourceWithArchive,
+    snapshot: &impl SnapshotSource,
     setting_id: ConfigSettingId,
 ) -> Result<ConfigSettingEntry> {
     let key = Rc::new(LedgerKey::ConfigSetting(LedgerKeyConfigSetting {
         config_setting_id: setting_id,
     }));
     let (entry, _) = snapshot
-        .get_including_archived(&key)?
+        .get(&key)?
         .ok_or_else(|| anyhow!("setting {setting_id:?} is not present in the snapshot"))?;
     if let LedgerEntry {
         data: LedgerEntryData::ConfigSetting(cs),
@@ -68,7 +68,7 @@ impl NetworkConfig {
     /// This may only fail in case when provided snapshot doesn't contain
     /// all the necessary entries or when these entries are mis-configured.
     pub fn load_from_snapshot(
-        snapshot: &impl SnapshotSourceWithArchive,
+        snapshot: &impl SnapshotSource,
         bucket_list_size: u64,
     ) -> Result<Self> {
         let compute = load_setting!(snapshot, ContractComputeV0);
