@@ -3,11 +3,10 @@ use crate::resources::{
     compute_adjusted_transaction_resources, compute_resource_fee, simulate_extend_ttl_op_resources,
     simulate_restore_op_resources,
 };
-use crate::snapshot_source::{
-    SimulationSnapshotSource, SimulationSnapshotSourceWithArchive, SnapshotSourceWithArchive,
-};
+use crate::snapshot_source::SimulationSnapshotSource;
 use anyhow::Result;
 use soroban_env_host::e2e_invoke::extract_rent_changes;
+use soroban_env_host::xdr::SorobanResourcesExtV0;
 use soroban_env_host::{
     e2e_invoke::invoke_host_function_in_recording_mode,
     e2e_invoke::{LedgerEntryChange, RecordingInvocationAuthMode},
@@ -15,6 +14,7 @@ use soroban_env_host::{
     xdr::{
         AccountId, ContractEvent, DiagnosticEvent, HostFunction, InvokeHostFunctionOp, LedgerKey,
         OperationBody, ScVal, SorobanAuthorizationEntry, SorobanResources, SorobanTransactionData,
+        SorobanTransactionDataExt,
     },
     xdr::{ExtendFootprintTtlOp, ExtensionPoint, LedgerEntry, ReadXdr, RestoreFootprintOp},
     HostError, LedgerInfo, DEFAULT_XDR_RW_LIMITS,
@@ -172,8 +172,11 @@ pub fn simulate_invoke_host_function_op(
     // Fill the remaining fields only for successful invocations.
     simulation_result.auth = recording_result.auth;
     simulation_result.contract_events = recording_result.contract_events;
-    simulation_result.modified_entries =
-        extract_modified_entries(&*snapshot_source, &recording_result.ledger_changes)?;
+    simulation_result.modified_entries = extract_modified_entries(
+        &*snapshot_source,
+        &recording_result.ledger_changes,
+        &ledger_info,
+    )?;
     let mut resources = recording_result.resources;
     let rent_changes = extract_rent_changes(&recording_result.ledger_changes);
     let operation = OperationBody::InvokeHostFunction(InvokeHostFunctionOp {
@@ -183,6 +186,7 @@ pub fn simulate_invoke_host_function_op(
     let transaction_resources = compute_adjusted_transaction_resources(
         operation,
         &mut resources,
+        &recording_result.restored_rw_entry_ids,
         adjustment_config,
         recording_result.contract_events_and_return_value_size,
     )?;
@@ -193,7 +197,11 @@ pub fn simulate_invoke_host_function_op(
         &rent_changes,
         adjustment_config,
     );
-    simulation_result.transaction_data = Some(create_transaction_data(resources, resource_fee));
+    simulation_result.transaction_data = Some(create_transaction_data(
+        resources,
+        &recording_result.restored_rw_entry_ids,
+        resource_fee,
+    )?);
 
     Ok(simulation_result)
 }
@@ -233,8 +241,13 @@ pub fn simulate_extend_ttl_op(
         ext: ExtensionPoint::V0,
         extend_to,
     });
-    let transaction_resources =
-        compute_adjusted_transaction_resources(operation, &mut resources, adjustment_config, 0)?;
+    let transaction_resources = compute_adjusted_transaction_resources(
+        operation,
+        &mut resources,
+        &vec![],
+        adjustment_config,
+        0,
+    )?;
     let resource_fee = compute_resource_fee(
         network_config,
         &ledger_info,
@@ -243,7 +256,7 @@ pub fn simulate_extend_ttl_op(
         adjustment_config,
     );
     Ok(ExtendTtlOpSimulationResult {
-        transaction_data: create_transaction_data(resources, resource_fee),
+        transaction_data: create_transaction_data(resources, &vec![], resource_fee)?,
     })
 }
 
@@ -264,13 +277,13 @@ pub fn simulate_extend_ttl_op(
 /// incorrect type/durability (e.g. a temp entry), if a key is missing from
 /// `snapshot_source`, or in case of ledger mis-configuration.
 pub fn simulate_restore_op(
-    snapshot_source: &impl SnapshotSourceWithArchive,
+    snapshot_source: &impl SnapshotSource,
     network_config: &NetworkConfig,
     adjustment_config: &SimulationAdjustmentConfig,
     ledger_info: &LedgerInfo,
     keys_to_restore: &[LedgerKey],
 ) -> Result<RestoreOpSimulationResult> {
-    let snapshot_source = SimulationSnapshotSourceWithArchive::new(snapshot_source);
+    let snapshot_source = SimulationSnapshotSource::new(snapshot_source);
     let (mut resources, rent_changes) = simulate_restore_op_resources(
         keys_to_restore,
         &snapshot_source,
@@ -280,8 +293,13 @@ pub fn simulate_restore_op(
     let operation = OperationBody::RestoreFootprint(RestoreFootprintOp {
         ext: ExtensionPoint::V0,
     });
-    let transaction_resources =
-        compute_adjusted_transaction_resources(operation, &mut resources, adjustment_config, 0)?;
+    let transaction_resources = compute_adjusted_transaction_resources(
+        operation,
+        &mut resources,
+        &vec![],
+        adjustment_config,
+        0,
+    )?;
     let resource_fee = compute_resource_fee(
         network_config,
         &ledger_info,
@@ -290,7 +308,7 @@ pub fn simulate_restore_op(
         adjustment_config,
     );
     Ok(RestoreOpSimulationResult {
-        transaction_data: create_transaction_data(resources, resource_fee),
+        transaction_data: create_transaction_data(resources, &vec![], resource_fee)?,
     })
 }
 
@@ -336,18 +354,26 @@ impl SimulationAdjustmentConfig {
 
 fn create_transaction_data(
     resources: SorobanResources,
+    restored_rw_entry_ids: &Vec<u32>,
     resource_fee: i64,
-) -> SorobanTransactionData {
-    SorobanTransactionData {
+) -> Result<SorobanTransactionData> {
+    Ok(SorobanTransactionData {
         resources,
         resource_fee,
-        ext: soroban_env_host::xdr::SorobanTransactionDataExt::V0,
-    }
+        ext: if restored_rw_entry_ids.is_empty() {
+            SorobanTransactionDataExt::V0
+        } else {
+            SorobanTransactionDataExt::V1(SorobanResourcesExtV0 {
+                archived_soroban_entries: restored_rw_entry_ids.try_into()?,
+            })
+        },
+    })
 }
 
 fn extract_modified_entries(
     snapshot: &(impl SnapshotSource + ?Sized),
     ledger_changes: &[LedgerEntryChange],
+    ledger_info: &LedgerInfo,
 ) -> Result<Vec<LedgerEntryDiff>> {
     let mut diffs = vec![];
     for c in ledger_changes {
@@ -355,7 +381,19 @@ fn extract_modified_entries(
             continue;
         }
         let key = LedgerKey::from_xdr(c.encoded_key.clone(), DEFAULT_XDR_RW_LIMITS)?;
-        let state_before = snapshot.get(&Rc::new(key))?.map(|v| v.0.as_ref().clone());
+        let state_before =
+            if let Some((entry_before, live_until_before)) = snapshot.get(&Rc::new(key))? {
+                let mut state_before = Some(entry_before.as_ref().clone());
+                if let Some(live_until_before) = live_until_before {
+                    if live_until_before < ledger_info.sequence_number {
+                        state_before = None;
+                    }
+                }
+                state_before
+            } else {
+                None
+            };
+
         let state_after = match &c.encoded_new_value {
             Some(v) => Some(LedgerEntry::from_xdr(v.clone(), DEFAULT_XDR_RW_LIMITS)?),
             None => None,

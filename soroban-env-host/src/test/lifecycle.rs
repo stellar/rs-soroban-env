@@ -917,7 +917,7 @@ mod cap_54_55_56 {
             }),
             ..(*entry).clone()
         });
-        storage.put(&code_key, &new_entry, live_until_ledger, host.as_budget())?;
+        storage.put_with_host(&code_key, &new_entry, live_until_ledger, &host, None)?;
         Ok(())
     }
 

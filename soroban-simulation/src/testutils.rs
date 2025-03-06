@@ -1,4 +1,3 @@
-use crate::snapshot_source::SnapshotSourceWithArchive;
 use anyhow::{bail, Result};
 use soroban_env_host::{
     e2e_testutils::ledger_entry,
@@ -7,7 +6,7 @@ use soroban_env_host::{
         ContractDataDurability, ContractDataEntry, ContractId, ExtensionPoint, Hash, LedgerEntry,
         LedgerEntryData, LedgerKey, LedgerKeyAccount, LedgerKeyConfigSetting,
         LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScAddress, ScBytes,
-        ScErrorCode, ScErrorType, ScVal,
+        ScVal,
     },
     HostError,
 };
@@ -16,23 +15,16 @@ use std::rc::Rc;
 
 pub struct MockSnapshotSource {
     map: BTreeMap<Rc<LedgerKey>, EntryWithLiveUntil>,
-    current_ledger_seq: u32,
 }
 
 impl MockSnapshotSource {
-    pub fn from_entries(
-        entries: Vec<(LedgerEntry, Option<u32>)>,
-        current_ledger_seq: u32,
-    ) -> Result<Self> {
+    pub fn from_entries(entries: Vec<(LedgerEntry, Option<u32>)>) -> Result<Self> {
         let mut map = BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new();
         for (e, maybe_ttl) in entries {
             let key = Rc::new(ledger_entry_to_ledger_key(&e)?);
             map.insert(key, (Rc::new(e), maybe_ttl));
         }
-        Ok(Self {
-            map,
-            current_ledger_seq,
-        })
+        Ok(Self { map })
     }
 }
 
@@ -62,31 +54,12 @@ pub fn ledger_entry_to_ledger_key(entry: &LedgerEntry) -> Result<LedgerKey> {
     }
 }
 
-impl SnapshotSourceWithArchive for MockSnapshotSource {
-    fn get_including_archived(
-        &self,
-        key: &Rc<LedgerKey>,
-    ) -> std::result::Result<Option<EntryWithLiveUntil>, HostError> {
-        if let Some((entry, live_until)) = self.map.get(key) {
-            Ok(Some((entry.clone(), *live_until)))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
 impl SnapshotSource for MockSnapshotSource {
     fn get(
         &self,
         key: &Rc<LedgerKey>,
     ) -> std::result::Result<Option<EntryWithLiveUntil>, HostError> {
         if let Some((entry, live_until)) = self.map.get(key) {
-            if let Some(live_until) = live_until {
-                if *live_until < self.current_ledger_seq {
-                    return Err((ScErrorType::Storage, ScErrorCode::InternalError).into());
-                }
-            }
-
             Ok(Some((entry.clone(), *live_until)))
         } else {
             Ok(None)

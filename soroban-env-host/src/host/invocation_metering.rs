@@ -6,7 +6,7 @@ use crate::{
     e2e_invoke::{encode_contract_events, entry_size_for_rent},
     fees::{FeeConfiguration, DATA_SIZE_1KB_INCREMENT, INSTRUCTIONS_INCREMENT, TTL_ENTRY_SIZE},
     ledger_info::get_key_durability,
-    storage::{AccessType, Storage},
+    storage::{is_persistent_key, AccessType, Storage},
     xdr::{ContractDataDurability, LedgerKey, ScErrorCode, ScErrorType},
 };
 
@@ -291,14 +291,27 @@ impl InvocationMeter {
         let footprint = curr_storage.footprint.clone();
         let curr_ledger_seq: u32 = host.get_ledger_sequence()?.into();
         for (key, access_type) in footprint.0.iter(host.budget_ref())? {
-            let maybe_init_entry = prev_storage.try_get_full_with_host(key, host, None)?;
+            let maybe_init_entry = prev_storage.get_from_map(key, host)?;
             let mut init_entry_size_for_rent = 0;
             let mut init_live_until_ledger = curr_ledger_seq;
-            let is_disk_read = match key.as_ref() {
+            let mut is_disk_read = match key.as_ref() {
                 LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => false,
                 _ => true,
             };
             if let Some((init_entry, init_entry_live_until)) = maybe_init_entry {
+                if let Some(live_until) = init_entry_live_until {
+                    if live_until >= curr_ledger_seq {
+                        // Only bump `init_live_until_ledger` to a value higher than the current
+                        // ledger in order to get the appropriate rent bump amount.
+                        init_live_until_ledger = live_until;
+                    } else {
+                        // If the entry is persistent and it has expired, then
+                        // we deal with the autorestore and thus need to mark
+                        // the entry as disk read.
+                        is_disk_read = is_persistent_key(key.as_ref());
+                    }
+                }
+
                 let mut buf = Vec::<u8>::new();
                 metered_write_xdr(host.budget_ref(), init_entry.as_ref(), &mut buf)?;
                 if is_disk_read {
@@ -306,10 +319,6 @@ impl InvocationMeter {
                 }
                 init_entry_size_for_rent =
                     entry_size_for_rent(host.budget_ref(), &init_entry, buf.len() as u32)?;
-
-                if let Some(live_until) = init_entry_live_until {
-                    init_live_until_ledger = live_until;
-                }
             }
             let mut entry_size = 0;
             let mut new_entry_size_for_rent = 0;
@@ -439,7 +448,7 @@ mod test {
         // contract), so 2 writes/bumps are expected.
         expect![[r#"
             InvocationResources {
-                instructions: 4196752,
+                instructions: 4199640,
                 mem_bytes: 2863204,
                 disk_read_entries: 0,
                 memory_read_entries: 2,
@@ -467,7 +476,7 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 314943,
+                instructions: 316637,
                 mem_bytes: 1134859,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
@@ -493,7 +502,7 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 318247,
+                instructions: 320246,
                 mem_bytes: 1135322,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
@@ -519,7 +528,7 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 314242,
+                instructions: 315936,
                 mem_bytes: 1134707,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
@@ -545,7 +554,7 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 319864,
+                instructions: 322157,
                 mem_bytes: 1135678,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
@@ -571,7 +580,7 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 314608,
+                instructions: 316476,
                 mem_bytes: 1134775,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
@@ -597,7 +606,7 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 315657,
+                instructions: 317701,
                 mem_bytes: 1135127,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
@@ -623,7 +632,7 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 315783,
+                instructions: 318103,
                 mem_bytes: 1135127,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
@@ -649,7 +658,7 @@ mod test {
         assert!(res.is_err());
         expect![[r#"
             InvocationResources {
-                instructions: 315638,
+                instructions: 317540,
                 mem_bytes: 1135195,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
@@ -659,6 +668,71 @@ mod test {
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
                 persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
+
+        // Advance the ledger sequence to get the contract instance and Wasm
+        // to expire.
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number += li.min_persistent_entry_ttl;
+        })
+        .unwrap();
+        // `has_persistent`` check has to trigger auto-restore for 2 entries (
+        // the contract instance/code).
+        let _ = &host
+            .call(
+                contract_id,
+                Symbol::try_from_val(&host, &"has_persistent").unwrap(),
+                test_vec![&host, key].into(),
+            )
+            .unwrap();
+        expect![[r#"
+            InvocationResources {
+                instructions: 320711,
+                mem_bytes: 1135662,
+                disk_read_entries: 2,
+                memory_read_entries: 1,
+                write_entries: 2,
+                disk_read_bytes: 3132,
+                write_bytes: 3132,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 77506416,
+                persistent_entry_rent_bumps: 2,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        assert_resources_equal_to_budget(&host);
+
+        // Advance the ledger further to make the persistent key to expire as
+        // well.
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number += 5000 - li.min_persistent_entry_ttl + 1;
+        })
+        .unwrap();
+        // 3 entries will be autorestored now.
+        let _ = &host
+            .call(
+                contract_id,
+                Symbol::try_from_val(&host, &"has_persistent").unwrap(),
+                test_vec![&host, key].into(),
+            )
+            .unwrap();
+        expect![[r#"
+            InvocationResources {
+                instructions: 323248,
+                mem_bytes: 1136109,
+                disk_read_entries: 3,
+                memory_read_entries: 0,
+                write_entries: 3,
+                disk_read_bytes: 3216,
+                write_bytes: 3216,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 77590332,
+                persistent_entry_rent_bumps: 3,
                 temporary_rent_ledger_bytes: 0,
                 temporary_entry_rent_bumps: 0,
             }"#]]
