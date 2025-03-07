@@ -36,7 +36,7 @@ wasmparser = "=0.116.1"
 [workspace.dependencies.stellar-xdr]
 version = "=22.1.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "28391e81229ad20a3d9ec56e1e1f382205335085"
+rev = "c356a8cdcf59e91bd2224edda45eff337335ccfb"
 default-features = false
 
 [workspace.dependencies.wasmi]
