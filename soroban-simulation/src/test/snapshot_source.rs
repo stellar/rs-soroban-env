@@ -12,8 +12,8 @@ use soroban_env_host::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountEntryExtensionV3, ExtensionPoint,
     LedgerEntryData, LedgerFootprint, Liabilities, SequenceNumber, Signer, SignerKey,
-    SorobanResources, SorobanTransactionData, SponsorshipDescriptor, Thresholds, TimePoint,
-    Uint256,
+    SorobanResources, SorobanTransactionData, SorobanTransactionDataExt, SponsorshipDescriptor,
+    Thresholds, TimePoint, Uint256,
 };
 use soroban_env_host::LedgerInfo;
 use std::rc::Rc;
@@ -22,18 +22,15 @@ use std::rc::Rc;
 fn test_automatic_restoration() {
     let ledger_seq = 300;
     let snapshot = Rc::new(
-        MockSnapshotSource::from_entries(
-            vec![
-                (wasm_entry_non_validated(b"1"), Some(100)), // persistent, expired
-                (wasm_entry_non_validated(b"2"), Some(299)), // persistent, expired
-                (wasm_entry_non_validated(b"3"), Some(300)), // persistent, live
-                (wasm_entry_non_validated(b"4"), Some(400)), // persistent, live
-                (temp_entry(b"5"), Some(299)),               // temp, removed
-                (temp_entry(b"6"), Some(300)),               // temp, live
-                (temp_entry(b"7"), Some(400)),               // temp, live
-            ],
-            ledger_seq,
-        )
+        MockSnapshotSource::from_entries(vec![
+            (wasm_entry_non_validated(b"1"), Some(100)), // persistent, expired
+            (wasm_entry_non_validated(b"2"), Some(299)), // persistent, expired
+            (wasm_entry_non_validated(b"3"), Some(300)), // persistent, live
+            (wasm_entry_non_validated(b"4"), Some(400)), // persistent, live
+            (temp_entry(b"5"), Some(299)),               // temp, removed
+            (temp_entry(b"6"), Some(300)),               // temp, live
+            (temp_entry(b"7"), Some(400)),               // temp, live
+        ])
         .unwrap(),
     );
     let ledger_info = LedgerInfo {
@@ -44,16 +41,17 @@ fn test_automatic_restoration() {
     let network_config = NetworkConfig {
         fee_configuration: FeeConfiguration {
             fee_per_instruction_increment: 8000,
-            fee_per_read_entry: 500,
+            fee_per_disk_read_entry: 500,
             fee_per_write_entry: 1000,
-            fee_per_read_1kb: 30,
+            fee_per_disk_read_1kb: 30,
             fee_per_write_1kb: 60,
             fee_per_historical_1kb: 200,
             fee_per_contract_event_1kb: 500,
             fee_per_transaction_size_1kb: 300,
         },
         rent_fee_configuration: RentFeeConfiguration {
-            fee_per_write_1kb: 5000,
+            fee_per_rent_1kb: 5000,
+            fee_per_write_1kb: 60,
             fee_per_write_entry: 1000,
             persistent_rent_rate_denominator: 10,
             temporary_rent_rate_denominator: 100,
@@ -156,7 +154,7 @@ fn test_automatic_restoration() {
             .unwrap(),
         Some(RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
-                ext: ExtensionPoint::V0,
+                ext: SorobanTransactionDataExt::V0,
                 resources: SorobanResources {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
@@ -171,7 +169,7 @@ fn test_automatic_restoration() {
                     read_bytes: 112,
                     write_bytes: 112,
                 },
-                resource_fee: 62192,
+                resource_fee: 6044,
             }
         })
     );
@@ -258,14 +256,11 @@ fn test_simulation_snapshot_source_creates_account_extensions() {
         }
         _ => (),
     };
-    let inner_snapshot = MockSnapshotSource::from_entries(
-        vec![
-            (account_without_extensions.clone(), None),
-            (account_with_ext_v2.clone(), None),
-            (account_with_ext_v3.clone(), None),
-        ],
-        300,
-    )
+    let inner_snapshot = MockSnapshotSource::from_entries(vec![
+        (account_without_extensions.clone(), None),
+        (account_with_ext_v2.clone(), None),
+        (account_with_ext_v3.clone(), None),
+    ])
     .unwrap();
     let snapshot = SimulationSnapshotSource::new(&inner_snapshot);
     assert_eq!(

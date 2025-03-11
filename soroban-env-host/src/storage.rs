@@ -53,10 +53,11 @@ pub enum AccessType {
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is _allowed_ to be written (and also allowed to be read).
     ReadWrite,
 }
-
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
-/// The snapshot is expected to only return live ledger entries.
+/// The snapshot is expected to have access to all the persistent entries,
+/// including the archived entries. It also is allowed (but doesn't have to) to
+/// return expired temporary entries.
 pub trait SnapshotSource {
     /// Returns the ledger entry for the key and its live_until ledger if entry
     /// exists, or `None` otherwise.
@@ -76,6 +77,7 @@ pub trait SnapshotSource {
 pub struct Footprint(pub FootprintMap);
 
 impl Footprint {
+    #[cfg(any(test, feature = "recording_mode"))]
     pub fn record_access(
         &mut self,
         key: &Rc<LedgerKey>,
@@ -128,7 +130,8 @@ impl Footprint {
 }
 
 #[derive(Clone, Default)]
-pub enum FootprintMode {
+pub(crate) enum FootprintMode {
+    #[cfg(any(test, feature = "recording_mode"))]
     Recording(Rc<dyn SnapshotSource>),
     #[default]
     Enforcing,
@@ -150,7 +153,7 @@ pub enum FootprintMode {
 #[derive(Clone, Default)]
 pub struct Storage {
     pub footprint: Footprint,
-    pub mode: FootprintMode,
+    pub(crate) mode: FootprintMode,
     pub map: StorageMap,
 }
 
@@ -198,24 +201,25 @@ impl Storage {
 
     /// Constructs a new [Storage] in [FootprintMode::Recording] using a
     /// given [SnapshotSource].
-    pub fn with_recording_footprint(src: Rc<dyn SnapshotSource>) -> Self {
-        Self {
+    #[cfg(any(test, feature = "recording_mode"))]
+    pub fn with_recording_footprint(src: Rc<dyn SnapshotSource>) -> Result<Self, HostError> {
+        Ok(Self {
             mode: FootprintMode::Recording(src),
             footprint: Footprint::default(),
             map: Default::default(),
-        }
+        })
     }
 
     // Helper function the next 3 `get`-variants funnel into.
     fn try_get_full(
         &mut self,
         key: &Rc<LedgerKey>,
-        budget: &Budget,
+        host: &Host,
     ) -> Result<Option<EntryWithLiveUntil>, HostError> {
         let _span = tracy_span!("storage get");
         Self::check_supported_ledger_key_type(key)?;
-        self.prepare_read_only_access(key, budget)?;
-        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
+        self.prepare_read_only_access(key, host)?;
+        match self.map.get::<Rc<LedgerKey>>(key, host.budget_ref())? {
             // Key has to be in the storage map at this point due to
             // `prepare_read_only_access`.
             None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
@@ -230,37 +234,11 @@ impl Storage {
         key_val: Option<Val>,
     ) -> Result<Option<EntryWithLiveUntil>, HostError> {
         let res = self
-            .try_get_full(key, host.as_budget())
+            .try_get_full(key, host)
             .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))?;
-
-        #[cfg(any(test, feature = "testutils"))]
-        if !host.check_if_entry_is_live(key.as_ref(), &res, key_val)? {
-            return Ok(None);
-        }
-
         Ok(res)
     }
 
-    /// Attempts to retrieve the [LedgerEntry] associated with a given
-    /// [LedgerKey] in the [Storage], returning an error if the key is not
-    /// found.
-    ///
-    /// In [FootprintMode::Recording] mode, records the read [LedgerKey] in the
-    /// [Footprint] as [AccessType::ReadOnly] (unless already recorded as
-    /// [AccessType::ReadWrite]) and reads through to the underlying
-    /// [SnapshotSource], if the [LedgerKey] has not yet been loaded.
-    ///
-    /// In [FootprintMode::Enforcing] mode, succeeds only if the read
-    /// [LedgerKey] has been declared in the [Footprint].
-    pub fn get(
-        &mut self,
-        key: &Rc<LedgerKey>,
-        budget: &Budget,
-    ) -> Result<Rc<LedgerEntry>, HostError> {
-        self.try_get_full(key, budget)?
-            .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
-            .map(|e| e.0)
-    }
     pub(crate) fn get_with_host(
         &mut self,
         key: &Rc<LedgerKey>,
@@ -317,22 +295,26 @@ impl Storage {
         &mut self,
         key: &Rc<LedgerKey>,
         val: Option<EntryWithLiveUntil>,
-        budget: &Budget,
+        host: &Host,
     ) -> Result<(), HostError> {
         Self::check_supported_ledger_key_type(key)?;
         if let Some(le) = &val {
             Self::check_supported_ledger_entry_type(&le.0)?;
         }
+        #[cfg(any(test, feature = "recording_mode"))]
+        self.handle_maybe_expired_entry(&key, host)?;
+
         let ty = AccessType::ReadWrite;
-        match self.mode {
+        match &self.mode {
+            #[cfg(any(test, feature = "recording_mode"))]
             FootprintMode::Recording(_) => {
-                self.footprint.record_access(key, ty, budget)?;
+                self.footprint.record_access(key, ty, host.budget_ref())?;
             }
             FootprintMode::Enforcing => {
-                self.footprint.enforce_access(key, ty, budget)?;
+                self.footprint.enforce_access(key, ty, host.budget_ref())?;
             }
         };
-        self.map = self.map.insert(Rc::clone(key), val, budget)?;
+        self.map = self.map.insert(Rc::clone(key), val, host.budget_ref())?;
         Ok(())
     }
 
@@ -343,20 +325,7 @@ impl Storage {
         host: &Host,
         key_val: Option<Val>,
     ) -> Result<(), HostError> {
-        let prev = host.as_budget().get_cpu_insns_consumed().unwrap();
-        #[cfg(any(test, feature = "testutils"))]
-        let _ = host.as_budget().with_observable_shadow_mode(|| {
-            let Ok(Some(entry_with_live_until)) =
-                self.map.get::<Rc<LedgerKey>>(key, host.as_budget())
-            else {
-                return Ok(());
-            };
-            let _ = host.check_if_entry_is_live(key.as_ref(), &entry_with_live_until, key_val)?;
-            Ok(())
-        })?;
-        let curr = host.as_budget().get_cpu_insns_consumed().unwrap();
-        assert_eq!(prev, curr);
-        self.put_opt(key, val, host.as_budget())
+        self.put_opt(key, val, host)
             .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
@@ -369,17 +338,6 @@ impl Storage {
     /// In [FootprintMode::Enforcing] mode, succeeds only if the written
     /// [LedgerKey] has been declared in the [Footprint] as
     /// [AccessType::ReadWrite].
-    pub fn put(
-        &mut self,
-        key: &Rc<LedgerKey>,
-        val: &Rc<LedgerEntry>,
-        live_until_ledger: Option<u32>,
-        budget: &Budget,
-    ) -> Result<(), HostError> {
-        let _span = tracy_span!("storage put");
-        self.put_opt(key, Some((val.clone(), live_until_ledger)), budget)
-    }
-
     pub(crate) fn put_with_host(
         &mut self,
         key: &Rc<LedgerKey>,
@@ -401,11 +359,6 @@ impl Storage {
     /// In [FootprintMode::Enforcing] mode, succeeds only if the deleted
     /// [LedgerKey] has been declared in the [Footprint] as
     /// [AccessType::ReadWrite].
-    pub fn del(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<(), HostError> {
-        let _span = tracy_span!("storage del");
-        self.put_opt(key, None, budget)
-    }
-
     pub(crate) fn del_with_host(
         &mut self,
         key: &Rc<LedgerKey>,
@@ -426,19 +379,6 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
     /// declared in the [Footprint].
-    pub fn has(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<bool, HostError> {
-        let _span = tracy_span!("storage has");
-        Self::check_supported_ledger_key_type(key)?;
-        self.prepare_read_only_access(key, budget)?;
-        Ok(self
-            .map
-            .get::<Rc<LedgerKey>>(key, budget)?
-            // Key has to be present in storage at this point, so not having it
-            // would be an internal error.
-            .ok_or_else(|| HostError::from((ScErrorType::Storage, ScErrorCode::InternalError)))?
-            .is_some())
-    }
-
     pub(crate) fn has_with_host(
         &mut self,
         key: &Rc<LedgerKey>,
@@ -482,6 +422,8 @@ impl Storage {
                 &[threshold.into(), extend_to.into()],
             ));
         }
+        #[cfg(any(test, feature = "recording_mode"))]
+        self.handle_maybe_expired_entry(&key, host)?;
 
         // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
@@ -573,27 +515,99 @@ impl Storage {
         }
     }
 
+    // Test-only helper for getting the value directly from the storage map,
+    // without the footprint management and autorestoration.
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) fn get_from_map(
+        &self,
+        key: &Rc<LedgerKey>,
+        host: &Host,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        match self.map.get::<Rc<LedgerKey>>(key, host.budget_ref())? {
+            Some(pair_option) => Ok(pair_option.clone()),
+            None => Ok(None),
+        }
+    }
+
     fn prepare_read_only_access(
         &mut self,
         key: &Rc<LedgerKey>,
-        budget: &Budget,
+        host: &Host,
     ) -> Result<(), HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
+            #[cfg(any(test, feature = "recording_mode"))]
             FootprintMode::Recording(ref src) => {
-                self.footprint.record_access(key, ty, budget)?;
+                self.footprint.record_access(key, ty, host.budget_ref())?;
                 // In recording mode we treat the map as a cache
                 // that misses read-through to the underlying src.
-                if !self.map.contains_key::<Rc<LedgerKey>>(key, budget)? {
+                if !self
+                    .map
+                    .contains_key::<Rc<LedgerKey>>(key, host.budget_ref())?
+                {
                     let value = src.get(&key)?;
-                    self.map = self.map.insert(key.clone(), value, budget)?;
+                    self.map = self.map.insert(key.clone(), value, host.budget_ref())?;
                 }
+                self.footprint.record_access(key, ty, host.budget_ref())?;
+                self.handle_maybe_expired_entry(key, host)?;
             }
             FootprintMode::Enforcing => {
-                self.footprint.enforce_access(key, ty, budget)?;
+                self.footprint.enforce_access(key, ty, host.budget_ref())?;
             }
         };
         Ok(())
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
+    fn handle_maybe_expired_entry(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        host: &Host,
+    ) -> Result<(), HostError> {
+        host.with_ledger_info(|li| {
+            let budget = host.budget_ref();
+            if let Some(Some((entry, live_until))) =
+                self.map.get::<Rc<LedgerKey>>(key, host.budget_ref())?
+            {
+                if let Some(durability) = get_key_durability(key.as_ref()) {
+                    let live_until = live_until.ok_or_else(|| {
+                        host.err(
+                            ScErrorType::Storage,
+                            ScErrorCode::InternalError,
+                            "unexpected contract entry without TTL",
+                            &[],
+                        )
+                    })?;
+                    if live_until < li.sequence_number {
+                        match durability {
+                            ContractDataDurability::Temporary => {
+                                self.map = self.map.insert(key.clone(), None, budget)?;
+                            }
+                            ContractDataDurability::Persistent => {
+                                self.footprint
+                                    .record_access(key, AccessType::ReadWrite, budget)?;
+                                let new_live_until = li
+                                    .min_live_until_ledger_checked(
+                                        ContractDataDurability::Persistent,
+                                    )
+                                    .ok_or_else(|| {
+                                        host.err(ScErrorType::Storage,
+                                        ScErrorCode::InternalError,
+                                        "persistent entry TTL overflow, ledger is mis-configured",
+                                        &[],)
+                                    })?;
+                                self.map = self.map.insert(
+                                    key.clone(),
+                                    Some((entry.clone(), Some(new_live_until))),
+                                    budget,
+                                )?;
+                            }
+                        };
+                    }
+                }
+            }
+            Ok(())
+        })
     }
 
     #[cfg(any(test, feature = "testutils"))]
@@ -718,40 +732,14 @@ impl Host {
         };
         Ok(res)
     }
+}
 
-    #[cfg(any(test, feature = "testutils"))]
-    fn check_if_entry_is_live(
-        &self,
-        key: &LedgerKey,
-        entry_with_live_until: &Option<EntryWithLiveUntil>,
-        key_val: Option<Val>,
-    ) -> Result<bool, HostError> {
-        let Some((_, Some(live_until_ledger))) = &entry_with_live_until else {
-            return Ok(true);
-        };
-        let ledger_seq = self
-            .with_ledger_info(|li| Ok(li.sequence_number))
-            .unwrap_or_default();
-        if *live_until_ledger >= ledger_seq {
-            return Ok(true);
+pub(crate) fn is_persistent_key(key: &LedgerKey) -> bool {
+    match key {
+        LedgerKey::ContractData(k) => {
+            matches!(k.durability, ContractDataDurability::Persistent)
         }
-        match get_key_durability(key) {
-            Some(ContractDataDurability::Temporary) => Ok(false),
-            Some(ContractDataDurability::Persistent) => {
-                let key_type_str = get_key_type_string_for_error(key);
-                let args = self
-                    .as_budget()
-                    .with_observable_shadow_mode(|| self.get_args_for_error(key, key_val, true))
-                    .unwrap_or_else(|_| vec![]);
-                let msg = format!("[testing-only] Accessed {} key that has been archived. Important: this error may only appear in tests; in the real network contracts aren't called at all if any archived entry is accessed.", key_type_str);
-                Err(self.err(
-                    ScErrorType::Storage,
-                    ScErrorCode::InternalError,
-                    msg.as_str(),
-                    args.as_slice(),
-                ))
-            }
-            None => Ok(true),
-        }
+        LedgerKey::ContractCode(_) => true,
+        _ => false,
     }
 }

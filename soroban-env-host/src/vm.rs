@@ -36,7 +36,9 @@ use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 
 pub use module_cache::ModuleCache;
-pub use parsed_module::{CompilationContext, ParsedModule, VersionedContractCodeCostInputs};
+pub use parsed_module::{
+    wasm_module_memory_cost, CompilationContext, ParsedModule, VersionedContractCodeCostInputs,
+};
 
 use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
