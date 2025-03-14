@@ -13,17 +13,7 @@ const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCod
 
 pub struct MeteredOrdMap<K, V, Ctx> {
     pub(crate) map: Vec<(K, V)>,
-    // This is PhantomData<fn(Ctx)> instead of PhantomData<Ctx> because we just
-    // want MeteredOrdMap<Budget> to require Budget when doing operations, not
-    // pretend it's carrying one. If we used PhantomData<Ctx> then we'd make
-    // MeteredOrdMap non-Send/Sync, which would prevent its use in the
-    // ModuleCache.
-    //
-    // See
-    // https://doc.rust-lang.org/nomicon/phantom-data.html#table-of-phantomdata-patterns
-    // for discussion of the ways you can use PhantomData to precisely model
-    // various sorts of constraints.
-    ctx: PhantomData<fn(Ctx)>,
+    ctx: PhantomData<Ctx>,
 }
 
 /// `Clone` should not be used directly, used `MeteredClone` instead if

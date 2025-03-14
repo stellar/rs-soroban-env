@@ -4,6 +4,7 @@
 /// host functions.
 use std::{cmp::max, rc::Rc};
 
+use crate::ledger_info::get_key_durability;
 use crate::storage::EntryWithLiveUntil;
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
@@ -30,7 +31,6 @@ use crate::{
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
-use crate::{ledger_info::get_key_durability, ModuleCache};
 #[cfg(any(test, feature = "recording_mode"))]
 use sha2::{Digest, Sha256};
 
@@ -337,44 +337,6 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     diagnostic_events: &mut Vec<DiagnosticEvent>,
     trace_hook: Option<TraceHook>,
 ) -> Result<InvokeHostFunctionResult, HostError> {
-    invoke_host_function_with_trace_hook_and_module_cache(
-        budget,
-        enable_diagnostics,
-        encoded_host_fn,
-        encoded_resources,
-        encoded_source_account,
-        encoded_auth_entries,
-        ledger_info,
-        encoded_ledger_entries,
-        encoded_ttl_entries,
-        base_prng_seed,
-        diagnostic_events,
-        trace_hook,
-        None,
-    )
-}
-
-/// Same as `invoke_host_function_with_trace_hook` but allows to pass a `ModuleCache`
-/// which should be pre-loaded with all contracts in this invocation.
-#[allow(clippy::too_many_arguments)]
-pub fn invoke_host_function_with_trace_hook_and_module_cache<
-    T: AsRef<[u8]>,
-    I: ExactSizeIterator<Item = T>,
->(
-    budget: &Budget,
-    enable_diagnostics: bool,
-    encoded_host_fn: T,
-    encoded_resources: T,
-    encoded_source_account: T,
-    encoded_auth_entries: I,
-    ledger_info: LedgerInfo,
-    encoded_ledger_entries: I,
-    encoded_ttl_entries: I,
-    base_prng_seed: T,
-    diagnostic_events: &mut Vec<DiagnosticEvent>,
-    trace_hook: Option<TraceHook>,
-    module_cache: Option<ModuleCache>,
-) -> Result<InvokeHostFunctionResult, HostError> {
     let _span0 = tracy_span!("invoke_host_function");
 
     let resources: SorobanResources =
@@ -413,9 +375,6 @@ pub fn invoke_host_function_with_trace_hook_and_module_cache<
     host.set_base_prng_seed(seed32)?;
     if enable_diagnostics {
         host.set_diagnostic_level(DiagnosticLevel::Debug)?;
-    }
-    if let Some(module_cache) = module_cache {
-        host.set_module_cache(module_cache)?;
     }
     let result = {
         let _span1 = tracy_span!("Host::invoke_function");
@@ -536,6 +495,14 @@ fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
 }
 
 #[cfg(any(test, feature = "recording_mode"))]
+#[cfg(not(feature = "unstable-next-api"))]
+/// Defines the authorization mode for the `invoke_host_function_in_recording_mode`.
+///
+/// When `None`, recording authorization with disabled non-root authorization will be used.
+/// When `Some()`, enforcing auth will be used with the provided entries.
+pub type RecordingInvocationAuthMode = Option<Vec<SorobanAuthorizationEntry>>;
+
+#[cfg(all(any(test, feature = "recording_mode"), feature = "unstable-next-api"))]
 /// Defines the authorization mode for the `invoke_host_function_in_recording_mode`.
 pub enum RecordingInvocationAuthMode {
     /// Use enforcing auth and pass the signed authorization entries to be used.
@@ -593,6 +560,9 @@ pub fn invoke_host_function_in_recording_mode(
 ) -> Result<InvokeHostFunctionRecordingModeResult, HostError> {
     let storage = Storage::with_recording_footprint(ledger_snapshot.clone());
     let host = Host::with_storage_and_budget(storage, budget.clone());
+    #[cfg(not(feature = "unstable-next-api"))]
+    let is_recording_auth = auth_mode.is_none();
+    #[cfg(feature = "unstable-next-api")]
     let is_recording_auth = matches!(auth_mode, RecordingInvocationAuthMode::Recording(_));
     let ledger_seq = ledger_info.sequence_number;
     let host_function = host.xdr_roundtrip(host_fn)?;
@@ -601,6 +571,13 @@ pub fn invoke_host_function_in_recording_mode(
     host.set_ledger_info(ledger_info)?;
     host.set_base_prng_seed(base_prng_seed)?;
 
+    #[cfg(not(feature = "unstable-next-api"))]
+    if let Some(auth_entries) = &auth_mode {
+        host.set_authorization_entries(auth_entries.clone())?;
+    } else {
+        host.switch_to_recording_auth(true)?;
+    }
+    #[cfg(feature = "unstable-next-api")]
     match &auth_mode {
         RecordingInvocationAuthMode::Enforcing(auth_entries) => {
             host.set_authorization_entries(auth_entries.clone())?;
@@ -622,6 +599,17 @@ pub fn invoke_host_function_in_recording_mode(
             .saturating_add(encoded_result_sc_val.len() as u32);
     }
 
+    #[cfg(not(feature = "unstable-next-api"))]
+    let mut output_auth = if let Some(auth_entries) = auth_mode {
+        auth_entries
+    } else {
+        let recorded_auth = host.get_recorded_auth_payloads()?;
+        recorded_auth
+            .into_iter()
+            .map(|a| a.into_auth_entry_with_emulated_signature())
+            .collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>()?
+    };
+    #[cfg(feature = "unstable-next-api")]
     let mut output_auth = if let RecordingInvocationAuthMode::Enforcing(auth_entries) = auth_mode {
         auth_entries
     } else {

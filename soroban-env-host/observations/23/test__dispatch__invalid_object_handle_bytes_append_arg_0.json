@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1500948",
   "  19 pop VM:236361fd:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1501449, mem:742918, objs:-/9@b668f4be, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#21))": "cpu:1502329, mem:743046, objs:-/11@7fb11f64",
-  "  22 push VM:236361fd:test(Bytes(obj#123), Bytes(obj#19))": "cpu:1712580, mem:909481, objs:-/12@505cfe8c, vm:65536@b1cd98b9/2@2f94d90d, stk:1@b1ac130b, auth:1@2eefa960/-",
-  "  23 call bytes_append(Bytes(obj#123), Bytes(obj#19))": "cpu:1715927, mem:909591, objs:2@8ea461ac/12@505cfe8c, vm:-/-, stk:1@1a74b8a",
-  "  24 pop VM:236361fd:test -> Err(Error(Value, InvalidInput))": "cpu:1716590, vm:65536@b1cd98b9/2@2f94d90d",
-  "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/12@505cfe8c, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1716590, mem:909591, prngs:-/9b4a753, objs:-/12@505cfe8c, vm:-/-, evt:-, store:-/2@823ad682, foot:2@f95ceedc, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1502071, mem:742934, objs:-/9@b668f4be, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#21))": "cpu:1502951, mem:743062, objs:-/11@7fb11f64",
+  "  22 push VM:236361fd:test(Bytes(obj#123), Bytes(obj#19))": "cpu:1714170, mem:909633, objs:-/12@505cfe8c, vm:65536@b1cd98b9/2@2f94d90d, stk:1@b1ac130b, auth:1@2eefa960/-",
+  "  23 call bytes_append(Bytes(obj#123), Bytes(obj#19))": "cpu:1717517, mem:909743, objs:2@8ea461ac/12@505cfe8c, vm:-/-, stk:1@1a74b8a",
+  "  24 pop VM:236361fd:test -> Err(Error(Value, InvalidInput))": "cpu:1718180, vm:65536@b1cd98b9/2@2f94d90d",
+  "  25 ret call -> Err(Error(Value, InvalidInput))": "cpu:1718802, mem:909759, objs:-/12@505cfe8c, vm:-/-, stk:-, auth:-/-",
+  "  26 end": "cpu:1718802, mem:909759, prngs:-/9b4a753, objs:-/12@505cfe8c, vm:-/-, evt:-, store:-/2@823ad682, foot:2@f95ceedc, stk:-, auth:-/-"
 }
