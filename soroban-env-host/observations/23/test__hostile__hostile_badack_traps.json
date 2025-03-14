@@ -15,6 +15,6 @@
   "  13 call call(Address(obj#13), Symbol(badack), Vec(obj#15))": "cpu:3315727, mem:2884645, objs:-/8@2a540d72, auth:-/-",
   "  14 push VM:cd475327:badack()": "cpu:3960272, mem:4139862, objs:-/9@430dbbfd, vm:1114112@415819ab/16@b860c029, stk:1@4ced7bec, auth:1@d4d6b392/-",
   "  15 pop VM:cd475327:badack -> Err(Error(Budget, ExceededLimit))": "cpu:99999833, mem:4139892",
-  "  16 ret call -> Err(Error(Budget, ExceededLimit))": " vm:-/-, stk:-, auth:-/-",
-  "  17 end": "cpu:99999833, mem:4139892, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@4b95aafd, foot:2@9ddf4d04, stk:-, auth:-/-"
+  "  16 ret call -> Err(Error(Budget, ExceededLimit))": "cpu:100000413, vm:-/-, stk:-",
+  "  17 end": "cpu:100000413, mem:4139892, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@4b95aafd, foot:2@9ddf4d04, stk:-, auth:1@d4d6b392/-"
 }

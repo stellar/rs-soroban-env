@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8088523",
   "  19 pop VM:698dc832:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8089024, mem:1640672, objs:-/9@9353ee6f, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem3), Vec(obj#19))": "cpu:8089464, mem:1640736, objs:-/10@91e9eb03",
-  "  22 push VM:698dc832:loadmem3(U32(65280), U32(32))": "cpu:8727255, mem:1919392, objs:-/11@6aea1170, vm:65536@b1cd98b9/4@70bfd778, stk:1@59c7477d, auth:1@f4a75d5f/-",
-  "  23 call string_new_from_linear_memory(U32(65280), U32(32))": "cpu:8729732, mem:1919454, vm:-/-",
-  "  24 ret string_new_from_linear_memory -> Ok(String(obj#23))": "cpu:8735410, mem:1919566, objs:-/12@34e44817",
-  "  25 pop VM:698dc832:loadmem3 -> Ok(String(obj#23))": "cpu:8735906, mem:1919590, objs:1@70a7c1d6/12@34e44817, vm:65536@72ee363d/4@70bfd778, stk:1@c55690e4",
-  "  26 ret call -> Ok(String(obj#23))": "cpu:8735967, objs:-/12@34e44817, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8735967, mem:1919590, prngs:-/9b4a753, objs:-/12@34e44817, vm:-/-, evt:-, store:-/2@129c97c3, foot:2@ea7c3042, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8089646, mem:1640688, objs:-/9@9353ee6f, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem3), Vec(obj#19))": "cpu:8090086, mem:1640752, objs:-/10@91e9eb03",
+  "  22 push VM:698dc832:loadmem3(U32(65280), U32(32))": "cpu:8728845, mem:1919544, objs:-/11@6aea1170, vm:65536@b1cd98b9/4@70bfd778, stk:1@59c7477d, auth:1@f4a75d5f/-",
+  "  23 call string_new_from_linear_memory(U32(65280), U32(32))": "cpu:8731322, mem:1919606, vm:-/-",
+  "  24 ret string_new_from_linear_memory -> Ok(String(obj#23))": "cpu:8737000, mem:1919718, objs:-/12@34e44817",
+  "  25 pop VM:698dc832:loadmem3 -> Ok(String(obj#23))": "cpu:8737496, mem:1919742, objs:1@70a7c1d6/12@34e44817, vm:65536@72ee363d/4@70bfd778, stk:1@c55690e4",
+  "  26 ret call -> Ok(String(obj#23))": "cpu:8738179, mem:1919758, objs:-/12@34e44817, vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8738179, mem:1919758, prngs:-/9b4a753, objs:-/12@34e44817, vm:-/-, evt:-, store:-/2@129c97c3, foot:2@ea7c3042, stk:-, auth:-/-"
 }

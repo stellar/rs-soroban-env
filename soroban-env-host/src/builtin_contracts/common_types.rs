@@ -19,24 +19,3 @@ impl ContractExecutable {
         }
     }
 }
-
-#[contracttype]
-pub(crate) enum AddressExecutable {
-    Wasm(BytesN<32>),
-    StellarAsset,
-    Account,
-}
-
-impl AddressExecutable {
-    pub(crate) fn from_contract_executable_xdr(
-        host: &Host,
-        xdr: &xdr::ContractExecutable,
-    ) -> Result<Self, HostError> {
-        match xdr {
-            xdr::ContractExecutable::Wasm(wasm_hash) => Ok(AddressExecutable::Wasm(
-                BytesN::<32>::from_slice(host, &wasm_hash.0)?,
-            )),
-            xdr::ContractExecutable::StellarAsset => Ok(AddressExecutable::StellarAsset),
-        }
-    }
-}

@@ -101,6 +101,16 @@ fn nonce_entry(address: ScAddress, nonce: i64) -> LedgerEntry {
     }))
 }
 
+// NB: this is a temporary helper function that we should remove and embed
+// RecordingInvocationAuthMode into code during the `unstable-next-api` cleanup
+// when switching to v23.
+fn recording_auth_mode() -> RecordingInvocationAuthMode {
+    #[cfg(not(feature = "unstable-next-api"))]
+    return None;
+    #[cfg(feature = "unstable-next-api")]
+    return RecordingInvocationAuthMode::Recording(true);
+}
+
 #[test]
 fn test_simulate_upload_wasm() {
     let source_account = get_account_id([123; 32]);
@@ -115,7 +125,7 @@ fn test_simulate_upload_wasm() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         upload_wasm_host_fn(ADD_I32),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -164,7 +174,7 @@ fn test_simulate_upload_wasm() {
         &test_adjustment_config(),
         &ledger_info,
         upload_wasm_host_fn(ADD_I32),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -219,7 +229,7 @@ fn test_simulation_returns_insufficient_budget_error() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         upload_wasm_host_fn(ADD_I32),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -254,7 +264,7 @@ fn test_simulation_returns_logic_error() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         upload_wasm_host_fn(&bad_wasm),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -298,7 +308,7 @@ fn test_simulate_create_contract() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         contract.host_fn.clone(),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -318,7 +328,7 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    let expected_instructions = 2586867;
+    let expected_instructions = 2979643;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -332,11 +342,11 @@ fn test_simulate_create_contract() {
                 read_bytes: 684,
                 write_bytes: 104,
             },
-            resource_fee: 8149,
+            resource_fee: 8542,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 1293424);
+    assert_eq!(res.simulated_memory, 1489810);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -431,7 +441,7 @@ fn test_simulate_invoke_contract_with_auth() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         host_fn,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -464,7 +474,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 40293491;
+    let expected_instructions = 41269703;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -493,11 +503,11 @@ fn test_simulate_invoke_contract_with_auth() {
                 read_bytes: 7540,
                 write_bytes: 76,
             },
-            resource_fee: 78557,
+            resource_fee: 79533,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 20146607);
+    assert_eq!(res.simulated_memory, 20634711);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -1004,7 +1014,7 @@ fn test_simulate_successful_sac_call() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         host_fn,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -1104,7 +1114,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
         &SimulationAdjustmentConfig::no_adjustments(),
         &ledger_info,
         host_fn,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &source_account,
         [1; 32],
         true,
@@ -1142,11 +1152,11 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
                     // No entries should be actually modified.
                     read_write: Default::default(),
                 },
-                instructions: 5352005,
+                instructions: 5768570,
                 read_bytes: 1196,
                 write_bytes: 0,
             },
-            resource_fee: 5808,
+            resource_fee: 6224,
         })
     );
 }

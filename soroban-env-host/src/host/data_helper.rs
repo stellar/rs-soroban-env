@@ -15,7 +15,7 @@ use crate::{
         LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
         ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
     },
-    AddressObject, Env, ErrorHandler, Host, HostError, StorageType, U32Val, Val,
+    AddressObject, Env, Host, HostError, StorageType, U32Val, Val,
 };
 
 impl Host {
@@ -87,10 +87,14 @@ impl Host {
         )
     }
 
-    pub(crate) fn extract_contract_instance_from_ledger_entry(
+    // Notes on metering: retrieving from storage covered. Rest are free.
+    pub(crate) fn retrieve_contract_instance_from_storage(
         &self,
-        entry: &LedgerEntry,
+        key: &Rc<LedgerKey>,
     ) -> Result<ScContractInstance, HostError> {
+        let entry = self
+            .try_borrow_storage_mut()?
+            .get_with_host(key, self, None)?;
         match &entry.data {
             LedgerEntryData::ContractData(e) => match &e.val {
                 ScVal::ContractInstance(instance) => instance.metered_clone(self),
@@ -108,17 +112,6 @@ impl Host {
                 &[],
             )),
         }
-    }
-
-    // Notes on metering: retrieving from storage covered. Rest are free.
-    pub(crate) fn retrieve_contract_instance_from_storage(
-        &self,
-        key: &Rc<LedgerKey>,
-    ) -> Result<ScContractInstance, HostError> {
-        let entry = self
-            .try_borrow_storage_mut()?
-            .get_with_host(key, self, None)?;
-        self.extract_contract_instance_from_ledger_entry(&entry)
     }
 
     pub(crate) fn contract_code_ledger_key(

@@ -6,7 +6,7 @@ use crate::{
     },
     err,
     host::{metered_clone::MeteredClone, Host},
-    Env, ErrorHandler, HostError, StorageType, TryIntoVal,
+    Env, HostError, StorageType, TryIntoVal,
 };
 
 use super::storage_types::AllowanceValue;

@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8095104",
   "  19 pop VM:7dbe7097:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8095605, mem:1641625, objs:-/9@3e23d58b, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8096045, mem:1641689, objs:-/10@785a3415",
-  "  22 push VM:7dbe7097:loadmem1(U32(0), U32(65024), U32(32))": "cpu:8734437, mem:1920520, objs:-/11@1ae7932a, vm:65536@b1cd98b9/4@70bfd778, stk:1@d289e364, auth:1@27279bf3/-",
-  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8736918, mem:1920598, vm:-/-",
-  "  24 ret map_new_from_linear_memory -> Ok(Map(obj#23))": "cpu:8749559, mem:1921990, objs:-/12@f76a3bbb",
-  "  25 pop VM:7dbe7097:loadmem1 -> Ok(Map(obj#23))": "cpu:8750055, mem:1922014, objs:1@7b601b67/12@f76a3bbb, vm:65536@1ef083fd/4@70bfd778, stk:1@5a10d849",
-  "  26 ret call -> Ok(Map(obj#23))": "cpu:8750116, objs:-/12@f76a3bbb, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8750116, mem:1922014, prngs:-/9b4a753, objs:-/12@f76a3bbb, vm:-/-, evt:-, store:-/2@eadf7a3c, foot:2@fa72fa80, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8096227, mem:1641641, objs:-/9@3e23d58b, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8096667, mem:1641705, objs:-/10@785a3415",
+  "  22 push VM:7dbe7097:loadmem1(U32(0), U32(65024), U32(32))": "cpu:8736027, mem:1920672, objs:-/11@1ae7932a, vm:65536@b1cd98b9/4@70bfd778, stk:1@d289e364, auth:1@27279bf3/-",
+  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8738508, mem:1920750, vm:-/-",
+  "  24 ret map_new_from_linear_memory -> Ok(Map(obj#23))": "cpu:8751149, mem:1922142, objs:-/12@f76a3bbb",
+  "  25 pop VM:7dbe7097:loadmem1 -> Ok(Map(obj#23))": "cpu:8751645, mem:1922166, objs:1@7b601b67/12@f76a3bbb, vm:65536@1ef083fd/4@70bfd778, stk:1@5a10d849",
+  "  26 ret call -> Ok(Map(obj#23))": "cpu:8752328, mem:1922182, objs:-/12@f76a3bbb, vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8752328, mem:1922182, prngs:-/9b4a753, objs:-/12@f76a3bbb, vm:-/-, evt:-, store:-/2@eadf7a3c, foot:2@fa72fa80, stk:-, auth:-/-"
 }
