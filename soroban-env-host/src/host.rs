@@ -3370,7 +3370,7 @@ impl Host {
     // Testing interface to create values directly for later use via Env functions.
     // It needs to be a `pub` method because benches are considered a separate crate.
     pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
-        self.to_host_val(v).map(Into::into)
+        self.to_host_val(v)
     }
 }
 
