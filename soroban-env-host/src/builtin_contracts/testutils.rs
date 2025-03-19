@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use crate::host_object::MuxedScAddress;
 use crate::{Host, LedgerInfo};
 use ed25519_dalek::{Signer, SigningKey};
 use rand::Rng;
@@ -9,9 +10,10 @@ use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, Hash, HashIdPreimage,
     HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry, LedgerEntryData,
-    LedgerEntryExt, LedgerKey, Liabilities, PublicKey, ScAddress, ScSymbol, ScVal, SequenceNumber,
-    SignerKey, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-    SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
+    LedgerEntryExt, LedgerKey, Liabilities, MuxedEd25519Account, PublicKey, ScAddress, ScSymbol,
+    ScVal, SequenceNumber, SignerKey, SorobanAddressCredentials, SorobanAuthorizationEntry,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Thresholds,
+    Uint256,
 };
 use soroban_env_common::{EnvBase, TryFromVal, Val};
 
@@ -20,7 +22,7 @@ use crate::builtin_contracts::base_types::BytesN;
 pub(crate) use crate::builtin_contracts::base_types::Vec as ContractTypeVec;
 
 use super::account_contract::AccountEd25519Signature;
-use super::base_types::Address;
+use super::base_types::{Address, MuxedAddress};
 
 pub(crate) fn generate_signing_key(host: &Host) -> SigningKey {
     host.with_test_prng(|chacha| Ok(SigningKey::generate(chacha)))
@@ -130,6 +132,29 @@ impl<'a> TestSigner<'a> {
 
     pub(crate) fn address(&self, host: &Host) -> Address {
         Address::try_from_val(host, &host.add_host_object(self.sc_address()).unwrap()).unwrap()
+    }
+
+    pub(crate) fn muxed_address(&self, host: &Host, mux_id: Option<u64>) -> MuxedAddress {
+        match self {
+            TestSigner::Account(account_signer) => {
+                if let Some(mux_id) = mux_id {
+                    let PublicKey::PublicKeyTypeEd25519(account_key) =
+                        account_signer.account_id.0.clone();
+                    let sc_address = ScAddress::MuxedAccount(MuxedEd25519Account {
+                        id: mux_id,
+                        ed25519: account_key,
+                    });
+                    MuxedAddress::try_from_val(
+                        host,
+                        &host.add_host_object(MuxedScAddress(sc_address)).unwrap(),
+                    )
+                    .unwrap()
+                } else {
+                    self.address(host).into()
+                }
+            }
+            _ => panic!("signer does not support muxed address"),
+        }
     }
 }
 

@@ -2,7 +2,7 @@ use core::cmp::Ordering;
 
 use crate::{
     builtin_contracts::{
-        base_types::{Address, BytesN, String},
+        base_types::{Address, BytesN, MuxedAddress, String},
         contract_error::ContractError,
         stellar_asset_contract::{
             admin::{read_administrator, write_administrator},
@@ -203,12 +203,14 @@ impl StellarAssetContract {
     // Metering: covered by components
     pub(crate) fn transfer(
         e: &Host,
-        from: Address,
-        to: Address,
+        from_mux: MuxedAddress,
+        to_mux: MuxedAddress,
         amount: i128,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("SAC transfer");
         check_nonnegative_amount(e, amount)?;
+        let from = from_mux.address()?;
+        let to = to_mux.address()?;
         from.require_auth()?;
 
         e.extend_current_contract_instance_and_code_ttl(
@@ -218,8 +220,7 @@ impl StellarAssetContract {
 
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
-
-        event::transfer_maybe_with_issuer(e, from, to, amount)?;
+        event::transfer_maybe_with_issuer(e, from, from_mux.id()?, to, to_mux.id()?, amount)?;
         Ok(())
     }
 
@@ -243,8 +244,7 @@ impl StellarAssetContract {
         spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
-
-        event::transfer_maybe_with_issuer(e, from, to, amount)?;
+        event::transfer_maybe_with_issuer(e, from, None, to, None, amount)?;
         Ok(())
     }
 
