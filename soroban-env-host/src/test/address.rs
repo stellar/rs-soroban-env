@@ -25,7 +25,7 @@ fn string_to_bytes_object(host: &Host, s: &str) -> Val {
 }
 
 #[test]
-fn test_muxed_address_to_address_conversion() {
+fn test_muxed_address_to_components_conversion() {
     let host = observe_host!(Host::test_host());
     let muxed_address_obj = host
         .add_host_object(MuxedScAddress(ScAddress::MuxedAccount(
@@ -35,19 +35,21 @@ fn test_muxed_address_to_address_conversion() {
             },
         )))
         .unwrap();
-    let components_vec = host
-        .muxed_address_to_address_and_id(muxed_address_obj)
+    let address = host
+        .get_address_from_muxed_address(muxed_address_obj)
         .unwrap();
-    let components_vec = host.vecobject_to_scval_vec(components_vec).unwrap();
+    let mux_id = host
+        .get_mux_id_from_muxed_address(muxed_address_obj)
+        .unwrap();
+    let address_val = host.from_host_val(address.into()).unwrap();
+    let mux_id_val = host.from_host_val(mux_id.into()).unwrap();
     assert_eq!(
-        components_vec.as_slice(),
-        &[
-            ScVal::Address(ScAddress::Account(AccountId(
-                PublicKey::PublicKeyTypeEd25519(Uint256([10; 32])),
-            ))),
-            ScVal::U64(123)
-        ]
+        address_val,
+        ScVal::Address(ScAddress::Account(AccountId(
+            PublicKey::PublicKeyTypeEd25519(Uint256([10; 32])),
+        )))
     );
+    assert_eq!(mux_id_val, ScVal::U64(123));
 }
 
 #[test]

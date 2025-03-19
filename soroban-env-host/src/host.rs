@@ -3317,29 +3317,43 @@ impl VmCallerEnv for Host {
         self.add_host_object(sc_addr)
     }
 
-    fn muxed_address_to_address_and_id(
+    fn get_address_from_muxed_address(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         muxed_address: MuxedAddressObject,
-    ) -> Result<VecObject, Self::Error> {
-        let (sc_address, mux_id) =
-            self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
-                ScAddress::MuxedAccount(muxed_account) => {
-                    let address = ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(
-                        muxed_account.ed25519.metered_clone(self)?,
-                    )));
-                    Ok((address, muxed_account.id))
-                }
-                _ => Err(self.err(
-                    ScErrorType::Object,
-                    ScErrorCode::InternalError,
-                    "MuxedAddressObject is used to represent a regular address",
-                    &[muxed_address.into()],
-                )),
-            })?;
-        let address = self.add_host_object(sc_address)?;
-        let mux_id_val = U64Val::try_from_val(self, &mux_id)?;
-        self.vec_new_from_slice(&[address.into(), mux_id_val.into()])
+    ) -> Result<AddressObject, Self::Error> {
+        let sc_address = self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
+            ScAddress::MuxedAccount(muxed_account) => {
+                let address = ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(
+                    muxed_account.ed25519.metered_clone(self)?,
+                )));
+                Ok(address)
+            }
+            _ => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::InternalError,
+                "MuxedAddressObject is used to represent a regular address",
+                &[muxed_address.into()],
+            )),
+        })?;
+        self.add_host_object(sc_address)
+    }
+
+    fn get_mux_id_from_muxed_address(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        muxed_address: MuxedAddressObject,
+    ) -> Result<U64Val, Self::Error> {
+        let mux_id = self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
+            ScAddress::MuxedAccount(muxed_account) => Ok(muxed_account.id),
+            _ => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::InternalError,
+                "MuxedAddressObject is used to represent a regular address",
+                &[muxed_address.into()],
+            )),
+        })?;
+        Ok(U64Val::try_from_val(self, &mux_id)?)
     }
     // endregion: "address" module functions
     // region: "prng" module functions
