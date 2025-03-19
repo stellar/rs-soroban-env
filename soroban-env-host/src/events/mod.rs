@@ -38,7 +38,7 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
         ScAddress::MuxedAccount(muxed_account) => {
             let strkey = stellar_strkey::ed25519::MuxedAccount {
                 ed25519: muxed_account.ed25519.0,
-                id: muxed_account.id.clone(),
+                id: muxed_account.id,
             };
             write!(f, "{}", strkey)
         }
