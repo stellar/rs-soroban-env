@@ -97,16 +97,10 @@ pub(crate) fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), Host
     Ok(())
 }
 
-pub(crate) fn set_authorized(
-    e: &Host,
-    admin: Address,
-    id: Address,
-    authorize: bool,
-) -> Result<(), HostError> {
+pub(crate) fn set_authorized(e: &Host, id: Address, authorize: bool) -> Result<(), HostError> {
     let topics = host_vec![
         e,
         Symbol::try_from_val(e, &"set_authorized")?,
-        admin,
         id,
         read_name(e)?
     ]?;

@@ -328,7 +328,7 @@ impl StellarAssetContract {
         )?;
 
         write_authorization(e, addr.metered_clone(e)?, authorize)?;
-        event::set_authorized(e, admin, addr, authorize)?;
+        event::set_authorized(e, addr, authorize)?;
         Ok(())
     }
 
