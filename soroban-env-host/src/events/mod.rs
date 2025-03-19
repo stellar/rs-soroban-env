@@ -37,7 +37,7 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
         }
         ScAddress::MuxedAccount(muxed_account) => {
             let strkey = stellar_strkey::ed25519::MuxedAccount {
-                ed25519: muxed_account.ed25519.0.clone(),
+                ed25519: muxed_account.ed25519.0,
                 id: muxed_account.id.clone(),
             };
             write!(f, "{}", strkey)
@@ -46,11 +46,11 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
         // appear in host, so we have the proper rendering for these here just
         // for consistency (similar to e.g. non-representable ScVal types).
         ScAddress::ClaimableBalance(ClaimableBalanceId::ClaimableBalanceIdTypeV0(Hash(cb_id))) => {
-            let strkey = stellar_strkey::ClaimableBalance::V0(cb_id.clone());
+            let strkey = stellar_strkey::ClaimableBalance::V0(*cb_id);
             write!(f, "{}", strkey)
         }
         ScAddress::LiquidityPool(PoolId(Hash(pool_id))) => {
-            let strkey = stellar_strkey::LiquidityPool(pool_id.clone());
+            let strkey = stellar_strkey::LiquidityPool(*pool_id);
             write!(f, "{}", strkey)
         }
     }
