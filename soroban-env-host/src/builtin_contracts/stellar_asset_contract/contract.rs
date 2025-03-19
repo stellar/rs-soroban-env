@@ -218,7 +218,8 @@ impl StellarAssetContract {
 
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::transfer(e, from, to, amount)?;
+
+        event::transfer_maybe_with_issuer(e, from, to, amount)?;
         Ok(())
     }
 
@@ -242,7 +243,8 @@ impl StellarAssetContract {
         spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::transfer(e, from, to, amount)?;
+
+        event::transfer_maybe_with_issuer(e, from, to, amount)?;
         Ok(())
     }
 

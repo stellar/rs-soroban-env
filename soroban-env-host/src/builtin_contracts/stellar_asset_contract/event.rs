@@ -1,9 +1,29 @@
+use std::cmp::Ordering;
+
+use soroban_env_common::Compare;
+
 use crate::{
-    builtin_contracts::base_types::Address, host::Host, Env, HostError, Symbol, TryFromVal,
-    TryIntoVal,
+    builtin_contracts::base_types::{Address, BytesN},
+    host::Host,
+    Env, HostError, Symbol, TryFromVal, TryIntoVal,
 };
 
-use super::metadata::read_name;
+use super::{asset_info::read_asset_info, metadata::read_name, public_types::AssetInfo};
+
+fn is_issuer(e: &Host, addr: &Address) -> Result<bool, HostError> {
+    let issuer_check = |issuer: BytesN<32>, address: &Address| -> Result<bool, HostError> {
+        let issuer_account_id = e.account_id_from_bytesobj(issuer.into())?;
+        let issuer_address = Address::from_account(e, &issuer_account_id)?;
+
+        Ok(e.compare(&issuer_address, &address)? == Ordering::Equal)
+    };
+
+    match read_asset_info(e)? {
+        AssetInfo::Native => Ok(false),
+        AssetInfo::AlphaNum4(asset) => issuer_check(asset.issuer, addr),
+        AssetInfo::AlphaNum12(asset) => issuer_check(asset.issuer, addr),
+    }
+}
 
 pub(crate) fn approve(
     e: &Host,
@@ -21,6 +41,25 @@ pub(crate) fn approve(
     ]?;
     let data = host_vec![e, amount, live_until_ledger]?;
     e.contract_event(topics.into(), data.into())?;
+    Ok(())
+}
+
+pub(crate) fn transfer_maybe_with_issuer(
+    e: &Host,
+    from: Address,
+    to: Address,
+    amount: i128,
+) -> Result<(), HostError> {
+    if e.compare(&from, &to)? == Ordering::Equal {
+        transfer(e, from, to, amount)?;
+    } else if is_issuer(e, &from)? {
+        mint(e, to, amount)?;
+    } else if is_issuer(e, &to)? {
+        burn(e, from, amount)?;
+    } else {
+        transfer(e, from, to, amount)?;
+    }
+
     Ok(())
 }
 

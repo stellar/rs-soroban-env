@@ -1,6 +1,7 @@
 use std::{convert::TryInto, rc::Rc};
 
 use crate::builtin_contracts::base_types::BytesN;
+use crate::events::HostEvent;
 use crate::testutils::simple_account_sign_fn;
 use crate::{
     auth::RecordedAuthPayload,
@@ -322,6 +323,30 @@ impl StellarAssetContractTest {
     }
 }
 
+fn check_event_name(test: &StellarAssetContractTest, e: HostEvent, contract: &Address, name: &str) {
+    assert!(e.event.type_ == ContractEventType::Contract && e.event.contract_id.is_some());
+
+    let address = ScAddress::Contract(e.event.contract_id.clone().unwrap());
+    let id = test.host.add_host_object(address).unwrap();
+    assert!(
+        test.host
+            .obj_cmp(contract.as_object().to_val(), id.to_val())
+            .unwrap()
+            == 0
+    );
+
+    match e.event.body {
+        xdr::ContractEventBody::V0(contract_event_v0) => {
+            match contract_event_v0.topics[0].clone() {
+                ScVal::Symbol(sc_symbol) => {
+                    assert_eq!(sc_symbol.0.to_utf8_string().unwrap(), name);
+                }
+                _ => panic!("incorrect type"),
+            }
+        }
+    }
+}
+
 fn to_contract_err(e: HostError) -> ContractError {
     assert!(e.error.is_type(ScErrorType::Contract));
     num_traits::FromPrimitive::from_u32(e.error.get_code()).unwrap()
@@ -604,6 +629,53 @@ fn test_direct_transfer() {
         contract.balance(user_2.address(&test.host)).unwrap(),
         9_000_000
     );
+}
+
+#[test]
+fn test_transfer_with_issuer() {
+    let test: StellarAssetContractTest = StellarAssetContractTest::setup(function_name!());
+    let issuer = TestSigner::account(&test.issuer_key);
+    let contract = test.default_stellar_asset_contract();
+
+    let user = TestSigner::account(&test.user_key);
+    let user_2 = TestSigner::account(&test.user_key_2);
+    test.create_default_account(&user);
+    test.create_default_account(&user_2);
+    test.create_default_trustline(&user);
+    test.create_default_trustline(&user_2);
+
+    // Mint with issuer
+    contract
+        .transfer(&issuer, user.address(&test.host), 100)
+        .unwrap();
+
+    assert_eq!(contract.balance(user.address(&test.host)).unwrap(), 100);
+    assert_eq!(
+        contract.balance(issuer.address(&test.host)).unwrap(),
+        i128::from(i64::MAX)
+    );
+
+    // Transfer between two trustlines
+    contract
+        .transfer(&user, user_2.address(&test.host), 50)
+        .unwrap();
+
+    // Burn by sending to issuer
+    contract
+        .transfer(&user, issuer.address(&test.host), 50)
+        .unwrap();
+
+    assert_eq!(contract.balance(user.address(&test.host)).unwrap(), 0);
+    assert_eq!(contract.balance(user_2.address(&test.host)).unwrap(), 50);
+    assert_eq!(
+        contract.balance(issuer.address(&test.host)).unwrap(),
+        i128::from(i64::MAX)
+    );
+
+    let events = test.host.get_events().unwrap().0;
+    check_event_name(&test, events[0].clone(), &contract.address, "mint");
+    check_event_name(&test, events[1].clone(), &contract.address, "transfer");
+    check_event_name(&test, events[2].clone(), &contract.address, "burn");
 }
 
 #[test]
