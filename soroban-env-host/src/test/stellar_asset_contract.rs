@@ -607,6 +607,139 @@ fn test_direct_transfer() {
 }
 
 #[test]
+fn test_cap_67_transfer_with_muxed_accounts() {
+    let test = StellarAssetContractTest::setup(function_name!());
+    // Enable invocation metering to get the events to reset automatically on
+    // every contract call.
+    test.host.enable_invocation_metering();
+    let admin = TestSigner::account(&test.issuer_key);
+    let contract = test.default_stellar_asset_contract();
+
+    let user = TestSigner::account(&test.user_key);
+    let user_2 = TestSigner::account(&test.user_key_2);
+    test.create_default_account(&user);
+    test.create_default_account(&user_2);
+    test.create_default_trustline(&user);
+    test.create_default_trustline(&user_2);
+
+    contract
+        .mint(&admin, user.address(&test.host), 100_000_000)
+        .unwrap();
+
+    let transfer_symbol = Symbol::try_from_small_str("transfer").unwrap().to_val();
+    let token_name = contract.name().unwrap();
+
+    // Transfer some balance from user 1 to user 2, both source and destination
+    // are muxed.
+    contract
+        .transfer_muxed(
+            &user,
+            Some(1234),
+            user_2.muxed_address(&test.host, Some(567_890)),
+            9_999_999,
+        )
+        .unwrap();
+
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                transfer_symbol,
+                user.address(&test.host),
+                user_2.address(&test.host),
+                &token_name,
+            ],
+            test_map![
+                &test.host,
+                ("amount", 9_999_999_i128),
+                ("from_muxed_id", 1234_u64),
+                ("to_muxed_id", 567_890_u64)
+            ]
+            .into()
+        )]
+    );
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        90_000_001
+    );
+    assert_eq!(
+        contract.balance(user_2.address(&test.host)).unwrap(),
+        9_999_999
+    );
+
+    // Transfer some balance from user 1 (non-muxed) to user 2, different
+    // muxed destination.
+    contract
+        .transfer_muxed(
+            &user,
+            None,
+            user_2.muxed_address(&test.host, Some(u64::MAX)),
+            1,
+        )
+        .unwrap();
+
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                transfer_symbol,
+                user.address(&test.host),
+                user_2.address(&test.host),
+                &token_name,
+            ],
+            test_map![&test.host, ("amount", 1_i128), ("to_muxed_id", u64::MAX)].into()
+        )]
+    );
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        90_000_000
+    );
+    assert_eq!(
+        contract.balance(user_2.address(&test.host)).unwrap(),
+        10_000_000
+    );
+
+    // Transfer from user 2 (muxed) to user 1 (non-muxed).
+    contract
+        .transfer_muxed(
+            &user_2,
+            Some(0),
+            user.muxed_address(&test.host, None),
+            5_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                transfer_symbol,
+                user_2.address(&test.host),
+                user.address(&test.host),
+                &token_name,
+            ],
+            test_map![
+                &test.host,
+                ("amount", 5_000_000_i128),
+                ("from_muxed_id", 0_u64),
+            ]
+            .into()
+        )]
+    );
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        95_000_000
+    );
+    assert_eq!(
+        contract.balance(user_2.address(&test.host)).unwrap(),
+        5_000_000
+    );
+}
+
+#[test]
 fn test_transfer_with_allowance() {
     let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);

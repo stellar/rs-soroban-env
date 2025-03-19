@@ -27,7 +27,9 @@ pub(crate) fn approve(
 pub(crate) fn transfer(
     e: &Host,
     from: Address,
+    from_mux_id: Option<u64>,
     to: Address,
+    to_mux_id: Option<u64>,
     amount: i128,
 ) -> Result<(), HostError> {
     let topics = host_vec![
@@ -37,7 +39,32 @@ pub(crate) fn transfer(
         to,
         read_name(e)?
     ]?;
-    e.contract_event(topics.into(), amount.try_into_val(e)?)?;
+    let data = if from_mux_id.is_none() && to_mux_id.is_none() {
+        amount.try_into_val(e)?
+    } else {
+        let mut map = e.map_new()?;
+        map = e.map_put(
+            map,
+            Symbol::try_from_small_str("amount")?.into(),
+            amount.try_into_val(e)?,
+        )?;
+        if let Some(from_mux_id) = from_mux_id {
+            map = e.map_put(
+                map,
+                Symbol::try_from_val(e, &"from_muxed_id")?.into(),
+                from_mux_id.try_into_val(e)?,
+            )?;
+        }
+        if let Some(to_mux_id) = to_mux_id {
+            map = e.map_put(
+                map,
+                Symbol::try_from_val(e, &"to_muxed_id")?.into(),
+                to_mux_id.try_into_val(e)?,
+            )?;
+        }
+        map.into()
+    };
+    e.contract_event(topics.into(), data)?;
     Ok(())
 }
 
