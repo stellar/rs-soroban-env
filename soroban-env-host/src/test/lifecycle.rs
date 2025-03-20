@@ -885,7 +885,6 @@ mod cap_54_55_56 {
             storage,
             Budget::default(),
         )?;
-        host.ensure_module_cache_contains_host_storage_contracts()?;
         Ok((host, contract_id))
     }
 
@@ -1090,11 +1089,11 @@ mod cap_54_55_56 {
             OldContractWithNoCostInputs,
         )?;
         // force a module-cache build (this normally happens on first VM call)
-        host.ensure_module_cache_contains_host_storage_contracts()?;
+        host.build_module_cache_if_needed()?;
         let wasm = get_contract_wasm_ref(&host, contract_id);
         let module_cache = host.try_borrow_module_cache()?;
         if let Some(module_cache) = &*module_cache {
-            assert!(module_cache.get_module(&wasm).is_ok());
+            assert!(module_cache.get_module(&host, &wasm).is_ok());
         } else {
             panic!("expected module cache");
         }
@@ -1380,7 +1379,6 @@ mod cap_54_55_56 {
         })?;
 
         host.switch_to_enforcing_storage()?;
-        host.ensure_module_cache_contains_host_storage_contracts()?;
 
         let wasm_bytes = host.bytes_new_from_slice(&wasm_to_upload)?;
         let upload_args = host.vec_new_from_slice(&[wasm_bytes.to_val()])?;
@@ -1411,7 +1409,7 @@ mod cap_54_55_56 {
 
         // Check that the module cache did not get populated with the new wasm.
         if let Some(module_cache) = &*host.try_borrow_module_cache()? {
-            assert!(module_cache.get_module(&wasm_hash)?.is_none());
+            assert!(module_cache.get_module(&host, &wasm_hash)?.is_none());
         } else {
             panic!("expected module cache");
         }

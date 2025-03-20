@@ -1,12 +1,12 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/9b4a753, objs:-/9@653743c, vm:-/-, evt:-, store:-/2@5331020e, foot:2@2002dc59, stk:-, auth:-/-",
   "   1 call call(Address(obj#17), Symbol(test), Vec(obj#19))": " mem:48, objs:-/10@4dbe226a",
-  "   2 push VM:671be290:test()": " mem:66797, objs:-/11@b36a374d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@9d3fbfb8, auth:1@b1b428e/-",
+  "   2 push VM:671be290:test()": " mem:66917, objs:-/11@b36a374d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@9d3fbfb8, auth:1@b1b428e/-",
   "   3 pop VM:671be290:test -> Err(Error(Budget, ExceededLimit))": "",
   "   4 ret call -> Err(Error(Budget, ExceededLimit))": " vm:-/-, stk:-, auth:-/-",
   "   5 call call(Address(obj#17), Symbol(test), Vec(obj#23))": " mem:48, objs:-/12@e3e4468c",
-  "   6 push VM:671be290:test()": " mem:66797, objs:-/13@8d2f55db, vm:65536@b1cd98b9/2@2f94d90d, stk:1@9d3fbfb8, auth:1@73b1caf7/-",
-  "   7 pop VM:671be290:test -> Ok(Symbol(pass))": " mem:2163949, vm:2162688@d306bee7/2@2f94d90d",
+  "   6 push VM:671be290:test()": " mem:66917, objs:-/13@8d2f55db, vm:65536@b1cd98b9/2@2f94d90d, stk:1@9d3fbfb8, auth:1@73b1caf7/-",
+  "   7 pop VM:671be290:test -> Ok(Symbol(pass))": " mem:2164069, vm:2162688@d306bee7/2@2f94d90d",
   "   8 ret call -> Ok(Symbol(pass))": " vm:-/-, stk:-, auth:-/-",
-  "   9 end": "cpu:0, mem:2163949, prngs:-/9b4a753, objs:-/13@8d2f55db, vm:-/-, evt:-, store:-/2@5331020e, foot:2@2002dc59, stk:-, auth:-/-"
+  "   9 end": "cpu:0, mem:2164069, prngs:-/9b4a753, objs:-/13@8d2f55db, vm:-/-, evt:-, store:-/2@5331020e, foot:2@2002dc59, stk:-, auth:-/-"
 }

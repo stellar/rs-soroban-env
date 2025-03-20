@@ -429,8 +429,8 @@ pub fn is_small_i256_parts(i: &Int256Parts) -> bool {
 }
 
 pub fn u256_from_pieces(hi_hi: u64, hi_lo: u64, lo_hi: u64, lo_lo: u64) -> U256 {
-    let high = (u128::from(hi_hi)) << 64 | u128::from(hi_lo);
-    let low = (u128::from(lo_hi)) << 64 | u128::from(lo_lo);
+    let high = (u128::from(hi_hi) << 64) | u128::from(hi_lo);
+    let low = (u128::from(lo_hi) << 64) | u128::from(lo_lo);
     U256::from_words(high, low)
 }
 

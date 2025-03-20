@@ -1,15 +1,12 @@
 use crate::builtin_contracts::testutils::AccountContractSigner;
-use crate::crypto::sha256_hash_from_bytes_raw;
 use crate::e2e_invoke::RecordingInvocationAuthMode;
 use crate::e2e_testutils::{account_entry, bytes_sc_val, upload_wasm_host_fn};
 use crate::testutils::simple_account_sign_fn;
-use crate::vm::VersionedContractCodeCostInputs;
 use crate::{
-    budget::{AsBudget, Budget},
+    budget::Budget,
     builtin_contracts::testutils::TestSigner,
     e2e_invoke::{
-        invoke_host_function_in_recording_mode,
-        invoke_host_function_with_trace_hook_and_module_cache, ledger_entry_to_ledger_key,
+        invoke_host_function, invoke_host_function_in_recording_mode, ledger_entry_to_ledger_key,
         LedgerEntryChange, LedgerEntryLiveUntilChange,
     },
     e2e_testutils::{
@@ -19,10 +16,10 @@ use crate::{
     },
     testutils::MockSnapshotSource,
     xdr::{
-        AccountId, ContractCodeEntryExt, ContractDataDurability, ContractDataEntry, ContractEvent,
-        ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
-        DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
+        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable,
+        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, DiagnosticEvent,
+        ExtensionPoint, HashIdPreimage, HashIdPreimageSorobanAuthorization, HostFunction,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
         LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
         SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
@@ -30,7 +27,6 @@ use crate::{
     },
     Host, HostError, LedgerInfo,
 };
-use crate::{ErrorHandler, ModuleCache};
 use ed25519_dalek::SigningKey;
 use pretty_assertions::assert_eq;
 use rand::rngs::StdRng;
@@ -196,6 +192,28 @@ impl LedgerEntryChangeHelper {
     }
 }
 
+// NB: this is a temporary helper function that we should remove and embed
+// RecordingInvocationAuthMode into code during the `unstable-next-api` cleanup
+// when switching to v23.
+fn recording_auth_mode() -> RecordingInvocationAuthMode {
+    #[cfg(not(feature = "unstable-next-api"))]
+    return None;
+    #[cfg(feature = "unstable-next-api")]
+    return RecordingInvocationAuthMode::Recording(true);
+}
+
+// NB: this is a temporary helper function that we should remove and embed
+// RecordingInvocationAuthMode into code during the `unstable-next-api` cleanup
+// when switching to v23.
+fn enforcing_auth_mode(
+    auth_entries: Vec<SorobanAuthorizationEntry>,
+) -> RecordingInvocationAuthMode {
+    #[cfg(not(feature = "unstable-next-api"))]
+    return Some(auth_entries);
+    #[cfg(feature = "unstable-next-api")]
+    return RecordingInvocationAuthMode::Enforcing(auth_entries);
+}
+
 struct InvokeHostFunctionHelperResult {
     invoke_result: Result<ScVal, HostError>,
     ledger_changes: Vec<LedgerEntryChangeHelper>,
@@ -213,41 +231,6 @@ struct InvokeHostFunctionRecordingHelperResult {
     diagnostic_events: Vec<DiagnosticEvent>,
     contract_events_and_return_value_size: u32,
 }
-
-#[derive(Clone)]
-struct E2eTestCompilationContext(Budget);
-impl E2eTestCompilationContext {
-    fn new() -> Result<Self, HostError> {
-        // Compilation happens ouside the host, in an unlimited budget.
-        let budget = Budget::default();
-        budget.reset_unlimited()?;
-        Ok(Self(budget))
-    }
-}
-impl ErrorHandler for E2eTestCompilationContext {
-    fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
-    where
-        soroban_env_common::Error: From<E>,
-        E: std::fmt::Debug,
-    {
-        res.map_err(|e| HostError::from(e))
-    }
-
-    fn error(
-        &self,
-        error: soroban_env_common::Error,
-        _msg: &str,
-        _args: &[soroban_env_common::Val],
-    ) -> HostError {
-        HostError::from(error)
-    }
-}
-impl AsBudget for E2eTestCompilationContext {
-    fn as_budget(&self) -> &Budget {
-        &self.0
-    }
-}
-impl crate::CompilationContext for E2eTestCompilationContext {}
 
 fn invoke_host_function_helper(
     enable_diagnostics: bool,
@@ -297,15 +280,12 @@ fn invoke_host_function_helper(
                 .unwrap()
         })
         .collect();
-
-    let module_cache = build_module_cache_for_entries(ledger_info, ledger_entries_with_ttl)?;
-
     let budget = Budget::default();
     budget
         .reset_cpu_limit(resources.instructions as u64)
         .unwrap();
     let mut diagnostic_events = Vec::<DiagnosticEvent>::new();
-    let res = invoke_host_function_with_trace_hook_and_module_cache(
+    let res = invoke_host_function(
         &budget,
         enable_diagnostics,
         encoded_host_fn,
@@ -317,8 +297,6 @@ fn invoke_host_function_helper(
         encoded_ttl_entries.into_iter(),
         prng_seed.to_vec(),
         &mut diagnostic_events,
-        None,
-        Some(module_cache),
     )?;
     Ok(InvokeHostFunctionHelperResult {
         invoke_result: res
@@ -333,35 +311,6 @@ fn invoke_host_function_helper(
         diagnostic_events,
         budget,
     })
-}
-
-fn build_module_cache_for_entries(
-    ledger_info: &LedgerInfo,
-    ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
-) -> Result<ModuleCache, HostError> {
-    let ctx = E2eTestCompilationContext::new()?;
-    let cache = ModuleCache::new(&ctx)?;
-    for (e, _) in ledger_entries_with_ttl.iter() {
-        if let LedgerEntryData::ContractCode(cd) = &e.data {
-            let contract_id = Hash(sha256_hash_from_bytes_raw(&cd.code, ctx.as_budget())?);
-            let code_cost_inputs = match &cd.ext {
-                ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
-                    wasm_bytes: cd.code.len(),
-                },
-                ContractCodeEntryExt::V1(v1) => {
-                    VersionedContractCodeCostInputs::V1(v1.cost_inputs.clone())
-                }
-            };
-            cache.parse_and_cache_module(
-                &ctx,
-                ledger_info.protocol_version,
-                &contract_id,
-                &cd.code,
-                code_cost_inputs,
-            )?;
-        }
-    }
-    Ok(cache)
 }
 
 fn invoke_host_function_recording_helper(
@@ -416,7 +365,7 @@ fn invoke_host_function_using_simulation_with_signers(
         enable_diagnostics,
         host_fn,
         source_account,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         ledger_info,
         ledger_entries_with_ttl.clone(),
         prng_seed,
@@ -434,7 +383,7 @@ fn invoke_host_function_using_simulation_with_signers(
         enable_diagnostics,
         host_fn,
         source_account,
-        RecordingInvocationAuthMode::Enforcing(signed_auth.clone()),
+        enforcing_auth_mode(signed_auth.clone()),
         ledger_info,
         ledger_entries_with_ttl.clone(),
         prng_seed,
@@ -547,7 +496,6 @@ fn invoke_host_function_using_simulation_with_signers(
     }
     let max_instructions = (enforcing_result.budget.get_cpu_insns_consumed().unwrap() as f64
         * (1.0 + RECORDING_MODE_INSTRUCTIONS_RANGE)) as u32;
-    dbg!(initial_recording_result_instructions, max_instructions);
     assert!(initial_recording_result_instructions <= max_instructions);
 
     Ok(enforcing_result)
@@ -632,7 +580,7 @@ fn test_run_out_of_budget_before_calling_host_in_recording_mode() {
         true,
         &upload_wasm_host_fn(ADD_I32),
         &get_account_id([0; 32]),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &default_ledger_info(),
         vec![],
         &prng_seed(),
@@ -721,7 +669,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         false,
         &upload_wasm_host_fn(ADD_I32),
         &get_account_id([123; 32]),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -774,7 +722,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
         true,
         &upload_wasm_host_fn(&[0_u8; 1000]),
         &get_account_id([123; 32]),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -812,7 +760,7 @@ fn test_unsupported_wasm_upload_failure_in_recording_mode() {
         true,
         &upload_wasm_host_fn(ADD_F32),
         &get_account_id([123; 32]),
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -1224,7 +1172,7 @@ fn test_create_contract_success_in_recording_mode() {
         true,
         &cd.host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &ledger_info,
         vec![(
             cd.wasm_entry.clone(),
@@ -1270,7 +1218,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 661402,
+            instructions: 831711,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1310,7 +1258,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         true,
         &cd.host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &ledger_info,
         vec![
             (
@@ -1411,7 +1359,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1066372,
+            instructions: 1767122,
             read_bytes: 3816,
             write_bytes: 176,
         }
@@ -1426,7 +1374,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
         true,
         &cd.host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Enforcing(vec![cd.auth_entry.clone()]),
+        enforcing_auth_mode(vec![cd.auth_entry.clone()]),
         &ledger_info,
         vec![(
             cd.wasm_entry.clone(),
@@ -1472,7 +1420,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 662847,
+            instructions: 833156,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1842,7 +1790,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         true,
         &host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &ledger_info,
         vec![
             (
@@ -1902,7 +1850,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 896256,
+            instructions: 1431216,
             read_bytes: 3132,
             write_bytes: 80,
         }
@@ -1917,7 +1865,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         true,
         &extend_host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &ledger_info,
         vec![
             (
@@ -1968,7 +1916,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 1008294,
+            instructions: 1543254,
             read_bytes: 3212,
             write_bytes: 0,
         }
@@ -2020,7 +1968,7 @@ fn test_invoke_contract_with_storage_ops_success_using_simulation() {
         true,
         &extend_host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        recording_auth_mode(),
         &ledger_info,
         vec![
             (

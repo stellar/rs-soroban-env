@@ -41,12 +41,10 @@ macro_rules! impl_measurement_for_instantiation_cost_type {
                 let module =
                     ParsedModule::new_with_isolated_engine(_host, &wasm, cost_inputs.clone())
                         .unwrap();
-                let linker = module.make_wasmi_linker(_host).unwrap();
                 VmInstantiationSample {
                     id: Some(id),
                     wasm,
                     module,
-                    linker,
                 }
             }
         }

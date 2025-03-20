@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8101689",
   "  19 pop VM:31974679:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8102190, mem:1642575, objs:-/9@aabc5ad6, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#21))": "cpu:8103115, mem:1642703, objs:-/11@f01a1454",
-  "  22 push VM:31974679:loadmem1(Map(obj#19), U32(256), U32(65024), U32(1))": "cpu:8742109, mem:1921708, objs:-/12@8bbbb80a, vm:65536@b1cd98b9/4@70bfd778, stk:1@a532dea5, auth:1@87d4a23e/-",
-  "  23 call map_unpack_to_linear_memory(Map(obj#19), U32(256), U32(65024), U32(1))": "cpu:8745029, mem:1921826, objs:1@2cbe5bc9/12@8bbbb80a, vm:-/-, stk:1@ade49c9b",
-  "  24 ret map_unpack_to_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8753780",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8102812, mem:1642591, objs:-/9@aabc5ad6, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#21))": "cpu:8103737, mem:1642719, objs:-/11@f01a1454",
+  "  22 push VM:31974679:loadmem1(Map(obj#19), U32(256), U32(65024), U32(1))": "cpu:8743699, mem:1921860, objs:-/12@8bbbb80a, vm:65536@b1cd98b9/4@70bfd778, stk:1@a532dea5, auth:1@87d4a23e/-",
+  "  23 call map_unpack_to_linear_memory(Map(obj#19), U32(256), U32(65024), U32(1))": "cpu:8746619, mem:1921978, objs:1@2cbe5bc9/12@8bbbb80a, vm:-/-, stk:1@ade49c9b",
+  "  24 ret map_unpack_to_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8755370",
   "  25 pop VM:31974679:loadmem1 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@1ef083fd/4@70bfd778",
-  "  26 ret call -> Err(Error(WasmVm, IndexBounds))": " objs:-/12@8bbbb80a, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8753780, mem:1921826, prngs:-/9b4a753, objs:-/12@8bbbb80a, vm:-/-, evt:-, store:-/2@7bdcd244, foot:2@36b60894, stk:-, auth:-/-"
+  "  26 ret call -> Err(Error(WasmVm, IndexBounds))": "cpu:8755992, mem:1921994, objs:-/12@8bbbb80a, vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8755992, mem:1921994, prngs:-/9b4a753, objs:-/12@8bbbb80a, vm:-/-, evt:-, store:-/2@7bdcd244, foot:2@36b60894, stk:-, auth:-/-"
 }

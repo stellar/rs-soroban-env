@@ -1,11 +1,9 @@
 use crate::{
     budget::{AsBudget, Budget},
-    host::{
-        metered_clone::{MeteredClone, MeteredIterator},
-        metered_xdr::metered_write_xdr,
-    },
+    host::metered_clone::{MeteredClone, MeteredIterator},
+    host::metered_xdr::metered_write_xdr,
     xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
-    Env, ErrorHandler, Host, HostError, Symbol, Val,
+    Env, Host, HostError, Symbol, Val,
 };
 use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
@@ -119,7 +117,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     })?;
     assert_eq!(
         (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
-        (4005, 24030, 65536, 73718)
+        (4005, 24030, 65536, 73838)
     );
 
     // giving it the exact required amount will succeed

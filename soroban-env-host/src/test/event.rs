@@ -9,8 +9,7 @@ use crate::{
         ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
         ExtensionPoint, Hash, ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,
     },
-    Compare, ContractFunctionSet, Env, Error, ErrorHandler, Host, HostError, Symbol, SymbolSmall,
-    Val, VecObject,
+    Compare, ContractFunctionSet, Env, Error, Host, HostError, Symbol, SymbolSmall, Val, VecObject,
 };
 use expect_test::expect;
 use more_asserts::assert_le;
