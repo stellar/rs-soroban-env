@@ -499,6 +499,7 @@ where
             | Tag::VecObject
             | Tag::MapObject
             | Tag::AddressObject
+            | Tag::MuxedAddressObject
             | Tag::SmallCodeUpperBound
             | Tag::ObjectCodeLowerBound
             | Tag::ObjectCodeUpperBound

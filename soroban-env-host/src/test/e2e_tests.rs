@@ -699,7 +699,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    let (expected_insns, expected_write_bytes) = (1767136, 684);
+    let (expected_insns, expected_write_bytes) = (1767138, 684);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1218,7 +1218,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 831711,
+            instructions: 831779,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1359,7 +1359,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1767122,
+            instructions: 1767346,
             read_bytes: 3816,
             write_bytes: 176,
         }
@@ -1420,7 +1420,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 833156,
+            instructions: 833226,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1850,7 +1850,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 1431216,
+            instructions: 1431292,
             read_bytes: 3132,
             write_bytes: 80,
         }
@@ -1916,7 +1916,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 1543254,
+            instructions: 1543334,
             read_bytes: 3212,
             write_bytes: 0,
         }

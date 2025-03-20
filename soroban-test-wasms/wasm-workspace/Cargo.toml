@@ -50,7 +50,8 @@ members = [
     "constructor_with_return_value",
     "constructor_with_result",
     "custom_account_context",
-    "try_call_sac"
+    "try_call_sac",
+    "contract_data_val"
 ]
 [profile.release]
 opt-level = "z"
@@ -63,7 +64,7 @@ codegen-units = 1
 lto = true
 
 [workspace.package]
-rust-version = "1.79.0"
+rust-version = "1.81.0"
 
 [workspace.dependencies.soroban-sdk]
 version = "=21.4.0"

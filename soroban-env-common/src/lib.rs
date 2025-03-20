@@ -113,7 +113,7 @@ pub use val::{ConversionError, Tag, Val};
 
 #[cfg(feature = "wasmi")]
 pub use val::WasmiMarshal;
-pub use val::{AddressObject, MapObject, VecObject};
+pub use val::{AddressObject, MapObject, MuxedAddressObject, VecObject};
 pub use val::{Bool, Void};
 
 pub use compare::Compare;

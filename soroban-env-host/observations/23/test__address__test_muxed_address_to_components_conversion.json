@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call get_address_from_muxed_address(MuxedAddress(obj#1))": "cpu:442, mem:80, objs:-/1@e2bfdac0",
+  "   2 ret get_address_from_muxed_address -> Ok(Address(obj#3))": "cpu:1113, mem:160, objs:-/2@fa84ac09",
+  "   3 call get_id_from_muxed_address(MuxedAddress(obj#1))": "",
+  "   4 ret get_id_from_muxed_address -> Ok(U64(123))": "cpu:1235",
+  "   5 end": "cpu:1344, mem:160, prngs:-/-, objs:-/2@fa84ac09, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

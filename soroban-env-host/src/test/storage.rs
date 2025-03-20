@@ -1,14 +1,15 @@
 use std::rc::Rc;
 
 use crate::budget::{AsBudget, Budget};
+use crate::host_object::MuxedScAddress;
 use crate::storage::{AccessType, Footprint, Storage};
 use crate::xdr::{
-    ContractDataDurability, LedgerKey, LedgerKeyContractData, ScAddress, ScErrorCode, ScErrorType,
-    ScVal,
+    ContractDataDurability, LedgerKey, LedgerKeyContractData, MuxedEd25519Account, ScAddress,
+    ScErrorCode, ScErrorType, ScVal, Uint256,
 };
 use crate::{Host, HostError, MeteredOrdMap};
-use soroban_env_common::{AddressObject, Env, Symbol, TryFromVal, TryIntoVal};
-use soroban_test_wasms::{CONTRACT_STORAGE, INVOKE_CONTRACT};
+use soroban_env_common::{AddressObject, Env, MuxedAddressObject, Symbol, TryFromVal, TryIntoVal};
+use soroban_test_wasms::{CONTRACT_STORAGE, CONTRACT_STORAGE_WITH_VALS, INVOKE_CONTRACT};
 
 #[test]
 fn footprint_record_access() -> Result<(), HostError> {
@@ -395,6 +396,68 @@ fn test_nested_bump() {
         Ok(())
     })
     .unwrap()
+}
+
+#[test]
+fn test_muxed_account_is_not_allowed_as_storage_key() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_WITH_VALS);
+    let muxed_address = MuxedScAddress(ScAddress::MuxedAccount(MuxedEd25519Account {
+        id: 123,
+        ed25519: Uint256([10; 32]),
+    }));
+    let muxed_address_val = host.add_host_object(muxed_address.clone()).unwrap();
+
+    let run_test = |storage: &str| {
+        // Muxed address can't be used as a storage key.
+        if storage != "instance" {
+            // For instance storage we allow checking for presence of
+            // MuxedAddress as ledger key, so there won't be a storage error
+            // in a test.
+            // We still don't allow storing the MuxedAddresses, so there is no
+            // real risk for the users.
+            assert!(HostError::result_matches_err(
+                host.call(
+                    contract_id,
+                    storage_fn_name(&host, "get", storage),
+                    test_vec![&host, muxed_address_val].into(),
+                ),
+                (ScErrorType::Storage, ScErrorCode::InvalidInput)
+            ));
+        }
+
+        assert!(HostError::result_matches_err(
+            host.call(
+                contract_id,
+                storage_fn_name(&host, "put", storage),
+                test_vec![&host, muxed_address_val, 1234_u64].into(),
+            ),
+            (ScErrorType::Storage, ScErrorCode::InvalidInput)
+        ));
+        // But it can be used as a value
+        assert!(host
+            .call(
+                contract_id,
+                storage_fn_name(&host, "put", storage),
+                test_vec![&host, 1234_u64, muxed_address_val].into(),
+            )
+            .is_ok());
+        let v = host
+            .call(
+                contract_id,
+                storage_fn_name(&host, "get", storage),
+                test_vec![&host, 1234_u64].into(),
+            )
+            .unwrap();
+        let addr_obj = MuxedAddressObject::try_from_val(&host, &v).unwrap();
+        let addr = host
+            .visit_obj(addr_obj, |addr: &MuxedScAddress| Ok(addr.clone()))
+            .unwrap();
+        assert_eq!(addr, muxed_address);
+    };
+    run_test("persistent");
+    run_test("temporary");
+    run_test("instance");
 }
 
 #[test]
