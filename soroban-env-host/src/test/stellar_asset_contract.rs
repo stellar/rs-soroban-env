@@ -323,27 +323,19 @@ impl StellarAssetContractTest {
     }
 }
 
-fn check_event_name(test: &StellarAssetContractTest, e: HostEvent, contract: &Address, name: &str) {
+fn check_event_name(e: HostEvent, contract: &Address, name: &str) {
     assert!(e.event.type_ == ContractEventType::Contract && e.event.contract_id.is_some());
 
     let address = ScAddress::Contract(e.event.contract_id.clone().unwrap());
-    let id = test.host.add_host_object(address).unwrap();
-    assert!(
-        test.host
-            .obj_cmp(contract.as_object().to_val(), id.to_val())
-            .unwrap()
-            == 0
-    );
+    assert_eq!(contract.to_sc_address().unwrap(), address);
 
-    match e.event.body {
-        xdr::ContractEventBody::V0(contract_event_v0) => {
-            match contract_event_v0.topics[0].clone() {
-                ScVal::Symbol(sc_symbol) => {
-                    assert_eq!(sc_symbol.0.to_utf8_string().unwrap(), name);
-                }
-                _ => panic!("incorrect type"),
-            }
+    let xdr::ContractEventBody::V0(contract_event_v0) = e.event.body;
+
+    match contract_event_v0.topics[0].clone() {
+        ScVal::Symbol(sc_symbol) => {
+            assert_eq!(sc_symbol.0.to_utf8_string().unwrap(), name);
         }
+        _ => panic!("incorrect type"),
     }
 }
 
@@ -672,10 +664,15 @@ fn test_transfer_with_issuer() {
         i128::from(i64::MAX)
     );
 
+    contract
+        .transfer(&issuer, issuer.address(&test.host), 100)
+        .unwrap();
+
     let events = test.host.get_events().unwrap().0;
-    check_event_name(&test, events[0].clone(), &contract.address, "mint");
-    check_event_name(&test, events[1].clone(), &contract.address, "transfer");
-    check_event_name(&test, events[2].clone(), &contract.address, "burn");
+    check_event_name(events[0].clone(), &contract.address, "mint");
+    check_event_name(events[1].clone(), &contract.address, "transfer");
+    check_event_name(events[2].clone(), &contract.address, "burn");
+    check_event_name(events[3].clone(), &contract.address, "transfer");
 }
 
 #[test]
