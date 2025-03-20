@@ -400,7 +400,6 @@ fn test_nested_bump() {
 
 #[test]
 fn test_muxed_account_is_not_allowed_as_storage_key() {
-    // let host = observe_host!(Host::test_host_with_recording_footprint());
     let host = Host::test_host_with_recording_footprint();
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_WITH_VALS);
     let muxed_address = MuxedScAddress(ScAddress::MuxedAccount(MuxedEd25519Account {

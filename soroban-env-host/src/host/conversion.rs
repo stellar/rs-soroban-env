@@ -270,9 +270,14 @@ impl Host {
         Ok(ScMap(self.map_err(mv.try_into())?))
     }
 
+    // This function is almost identical to `host_map_to_scmap`, and should only
+    // be used for creating the instance storage map.
     pub(crate) fn instance_storage_map_to_scmap(&self, map: &HostMap) -> Result<ScMap, HostError> {
         let mut mv = Vec::<ScMapEntry>::with_metered_capacity(map.len(), self)?;
         for (k, v) in map.iter(self)? {
+            // This is the only difference point compared to `host_map_to_scmap`:
+            // we convert the key according to the storage key conversion rules
+            // instead of the general value conversion rules.
             let key = self.from_host_val_for_storage(*k)?;
             let val = self.from_host_val(*v)?;
             mv.push(ScMapEntry { key, val });
