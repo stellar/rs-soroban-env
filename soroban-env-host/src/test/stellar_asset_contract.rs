@@ -664,6 +664,7 @@ fn test_transfer_with_issuer() {
         i128::from(i64::MAX)
     );
 
+    // Issuer transfers to self
     contract
         .transfer(&issuer, issuer.address(&test.host), 100)
         .unwrap();
