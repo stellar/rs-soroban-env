@@ -496,11 +496,11 @@
   " 494 ret get_contract_data -> Ok(Map(obj#339))": "cpu:1126903, store:3@3032299b/5@f70e92b3, stk:1@483c3fb8",
   " 495 call map_unpack_to_slice(Map(obj#339), 3)": "",
   " 496 ret map_unpack_to_slice -> Ok(Void)": "cpu:1127243",
-  " 497 call vec_new_from_slice(4)": "",
-  " 498 ret vec_new_from_slice -> Ok(Vec(obj#367))": "cpu:1128395, mem:95203, objs:-/184@d27b2167",
+  " 497 call vec_new_from_slice(3)": "",
+  " 498 ret vec_new_from_slice -> Ok(Vec(obj#367))": "cpu:1128332, mem:95195, objs:-/184@bfcff025",
   " 499 call contract_event(Vec(obj#367), I128(100))": "",
-  " 500 ret contract_event -> Ok(Void)": "cpu:1130004, mem:95380, objs:-/185@e61e2d62, evt:1@33f8540",
+  " 500 ret contract_event -> Ok(Void)": "cpu:1129941, mem:95372, objs:-/185@5fff22, evt:1@33f8540",
   " 501 pop SAC:2e378f80:mint -> Ok(Void)": "",
   " 502 ret call -> Ok(Void)": " store:-/5@f70e92b3, stk:-, auth:-/-",
-  " 503 end": "cpu:1130004, mem:95380, prngs:-/9b4a753, objs:-/185@e61e2d62, vm:-/-, evt:1@33f8540, store:-/5@f70e92b3, foot:5@91bb9a6e, stk:-, auth:-/-"
+  " 503 end": "cpu:1129941, mem:95372, prngs:-/9b4a753, objs:-/185@5fff22, vm:-/-, evt:1@33f8540, store:-/5@f70e92b3, foot:5@91bb9a6e, stk:-, auth:-/-"
 }

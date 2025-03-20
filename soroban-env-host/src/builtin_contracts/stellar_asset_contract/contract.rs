@@ -218,7 +218,8 @@ impl StellarAssetContract {
 
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::transfer(e, from, to, amount)?;
+
+        event::transfer_maybe_with_issuer(e, from, to, amount)?;
         Ok(())
     }
 
@@ -242,7 +243,8 @@ impl StellarAssetContract {
         spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::transfer(e, from, to, amount)?;
+
+        event::transfer_maybe_with_issuer(e, from, to, amount)?;
         Ok(())
     }
 
@@ -306,7 +308,7 @@ impl StellarAssetContract {
         )?;
 
         spend_balance_no_authorization_check(e, from.metered_clone(e)?, amount)?;
-        event::clawback(e, admin, from, amount)?;
+        event::clawback(e, from, amount)?;
         Ok(())
     }
 
@@ -326,7 +328,7 @@ impl StellarAssetContract {
         )?;
 
         write_authorization(e, addr.metered_clone(e)?, authorize)?;
-        event::set_authorized(e, admin, addr, authorize)?;
+        event::set_authorized(e, addr, authorize)?;
         Ok(())
     }
 
@@ -345,7 +347,7 @@ impl StellarAssetContract {
         )?;
 
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::mint(e, admin, to, amount)?;
+        event::mint(e, to, amount)?;
         Ok(())
     }
 
