@@ -79,3 +79,22 @@ macro_rules! test_vec {
         $crate::builtin_contracts::base_types::Vec::from_slice($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
     };
 }
+
+// This is somewhat different from `test_vec`: it generates the `MapObject` and
+// only allows for string keys that are then converted into Symbol.
+#[cfg(test)]
+macro_rules! test_map {
+    ($host:expr $(,)?) => {
+        $host.map_new().unwrap()
+    };
+
+    ($host:expr, $(($key:expr, $val:expr)),+ $(,)?) => {{
+        let mut temp_vec: Vec<(&str, Val)> = vec![$(($key, $val.try_into_val($host).unwrap())),+];
+        temp_vec.sort_by(|a, b| a.0.cmp(b.0));
+
+        let keys: Vec<&str> = temp_vec.iter().map(|(k, _)| *k).collect();
+        let vals: Vec<Val> = temp_vec.iter().map(|(_, v)| *v).collect();
+
+        $host.map_new_from_slices(&keys, &vals).unwrap()
+    }};
+}
