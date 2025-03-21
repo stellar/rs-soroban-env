@@ -837,12 +837,12 @@ impl EnvBase for Host {
         let _ = self.with_current_frame_opt(|f| {
             if let Some(Frame::TestContract(frame)) = f {
                 if let Ok(mut panic) = frame.panic.try_borrow_mut() {
-                    *panic = Some(e.error);
+                    *panic = Some(e.clone());
                 }
             }
             Ok(())
         });
-        let escalation = self.error(e.error, "escalating error to panic", &[]);
+        let escalation = self.secondary_error(e, "escalating error to panic", &[]);
         panic!("{:?}", escalation)
     }
 
