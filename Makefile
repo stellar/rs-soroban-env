@@ -21,9 +21,15 @@ test-all-protocols:
 		TEST_PROTOCOL=$$i cargo hack test -p soroban-simulation --locked --features testutils,next; \
 	done
 
+# Note: we use wasm32-unknown-unknown here for the workspace build, not
+# wasm32v1-none, because we are testing the ability to build the soroban host
+# for use in a browser, which requires a target with a stdlib. wasm32v1-none
+# does not have a stdlib and is the target used for building _contracts that run
+# in soroban_, not the host itself. So we only check the guest package with it.
 build:
 	cargo hack --locked --each-feature clippy
-	cargo hack --locked clippy --target wasm32-unknown-unknown
+	cargo --locked clippy --target wasm32-unknown-unknown
+	cargo --locked clippy --package soroban-env-guest --target wasm32v1-none
 
 # We use "run" to run the soroban-env-host/src/bin/main.rs
 # entrypoint, which both excludes dev-deps (noisy) and

@@ -1,4 +1,7 @@
 [toolchain]
 channel = "stable"
-targets = ["wasm32-unknown-unknown"]
+# Note: we want toolchains for _both_ wasm32-unknown-unknown here _and_
+# wasm32v1-none. We use the former for building the host in a mode that lets it
+# run in a web browser, and the latter for building the contracts.
+targets = ["wasm32-unknown-unknown", "wasm32v1-none"]
 components = ["rustc", "cargo", "rustfmt", "clippy", "rust-src"]

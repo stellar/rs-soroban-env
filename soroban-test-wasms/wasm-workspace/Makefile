@@ -18,12 +18,12 @@ endif
 regenerate-test-wasms:
 	for i in $(wildcard */Cargo.toml); do \
 		(cd $$(dirname $$i) && cargo rustc \
-			--target wasm32-unknown-unknown \
+			--target wasm32v1-none \
 			--release \
 			--crate-type=cdylib); \
 	done
 	mkdir -p opt/$(PROTOCOL_VERSION)
-	for i in target/wasm32-unknown-unknown/release/*.wasm ; do \
+	for i in target/wasm32v1-none/release/*.wasm ; do \
 		wasm-opt -Oz "$$i" -o "opt/$(PROTOCOL_VERSION)/$$(basename $$i)"; \
 		ls -l "opt/$(PROTOCOL_VERSION)/$$(basename $$i)"; \
 	done
