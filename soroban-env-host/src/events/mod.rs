@@ -8,8 +8,8 @@ pub(crate) use internal::{
 use crate::{
     num::{i256_from_pieces, u256_from_pieces},
     xdr::{
-        ContractEventBody, ContractEventType, ContractExecutable, PublicKey::PublicKeyTypeEd25519,
-        ScAddress, ScContractInstance, ScVal,
+        ClaimableBalanceId, ContractEventBody, ContractEventType, ContractExecutable, Hash, PoolId,
+        PublicKey::PublicKeyTypeEd25519, ScAddress, ScContractInstance, ScVal,
     },
     Error, Host, HostError, Val, VecObject,
 };
@@ -33,6 +33,24 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
         },
         ScAddress::Contract(hash) => {
             let strkey = stellar_strkey::Contract(hash.0);
+            write!(f, "{}", strkey)
+        }
+        ScAddress::MuxedAccount(muxed_account) => {
+            let strkey = stellar_strkey::ed25519::MuxedAccount {
+                ed25519: muxed_account.ed25519.0,
+                id: muxed_account.id,
+            };
+            write!(f, "{}", strkey)
+        }
+        // Note, that claimable balance and liquidity pool types can't normally
+        // appear in host, so we have the proper rendering for these here just
+        // for consistency (similar to e.g. non-representable ScVal types).
+        ScAddress::ClaimableBalance(ClaimableBalanceId::ClaimableBalanceIdTypeV0(Hash(cb_id))) => {
+            let strkey = stellar_strkey::ClaimableBalance::V0(*cb_id);
+            write!(f, "{}", strkey)
+        }
+        ScAddress::LiquidityPool(PoolId(Hash(pool_id))) => {
+            let strkey = stellar_strkey::LiquidityPool(*pool_id);
             write!(f, "{}", strkey)
         }
     }

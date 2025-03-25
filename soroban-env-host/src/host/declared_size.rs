@@ -9,7 +9,7 @@ use crate::{
         InternalDiagnosticEvent, InternalEvent,
     },
     host::{frame::Context, Events},
-    host_object::HostObject,
+    host_object::{HostObject, MuxedScAddress},
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
@@ -110,7 +110,7 @@ impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT);
 impl_declared_size_type!(SymbolSmallIter, 8);
 impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
-impl_declared_size_type!(HostObject, 48);
+impl_declared_size_type!(HostObject, 64);
 impl_declared_size_type!(HostError, 16);
 impl_declared_size_type!(Context, 512);
 impl_declared_size_type!(Address, 16);
@@ -123,11 +123,11 @@ impl_declared_size_type!(InternalEvent, 40);
 impl_declared_size_type!(EventError, 1);
 
 impl_declared_size_type!(ContractInvocation, 16);
-impl_declared_size_type!(AuthorizedInvocation, 160);
+impl_declared_size_type!(AuthorizedInvocation, 176);
 impl_declared_size_type!(AuthorizedInvocationSnapshot, 32);
-impl_declared_size_type!(AccountAuthorizationTracker, 256);
+impl_declared_size_type!(AccountAuthorizationTracker, 280);
 impl_declared_size_type!(AccountAuthorizationTrackerSnapshot, 40);
-impl_declared_size_type!(InvokerContractAuthorizationTracker, 216);
+impl_declared_size_type!(InvokerContractAuthorizationTracker, 232);
 impl_declared_size_type!(InternalDiagnosticArg, 64);
 impl_declared_size_type!(InternalDiagnosticEvent, 88);
 
@@ -147,7 +147,8 @@ impl_declared_size_type!(Int256Parts, 32);
 impl_declared_size_type!(UInt256Parts, 32);
 impl_declared_size_type!(ContractExecutable, 33);
 impl_declared_size_type!(AccountId, 32);
-impl_declared_size_type!(ScAddress, 33);
+impl_declared_size_type!(ScAddress, 48);
+impl_declared_size_type!(MuxedScAddress, 48);
 impl_declared_size_type!(ScNonceKey, 33);
 impl_declared_size_type!(PublicKey, 32);
 impl_declared_size_type!(Asset, 45);
@@ -172,10 +173,10 @@ impl_declared_size_type!(ScBytes, 24);
 impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
 impl_declared_size_type!(ScError, 8);
-impl_declared_size_type!(CreateContractArgs, 98);
-impl_declared_size_type!(CreateContractArgsV2, 128);
-impl_declared_size_type!(InvokeContractArgs, 88);
-impl_declared_size_type!(ContractIdPreimage, 65);
+impl_declared_size_type!(CreateContractArgs, 120);
+impl_declared_size_type!(CreateContractArgsV2, 144);
+impl_declared_size_type!(InvokeContractArgs, 96);
+impl_declared_size_type!(ContractIdPreimage, 80);
 impl_declared_size_type!(ContractDataDurability, 4);
 
 // NB: ExtensionPoint is a 1-variant enum with no payload, which Rust optimizes
@@ -252,9 +253,9 @@ impl_declared_size_type!(ContractDataDurability, 4);
 impl_declared_size_type!(ExtensionPoint, 0);
 
 impl_declared_size_type!(ScContractInstance, 64);
-impl_declared_size_type!(SorobanAuthorizationEntry, 264);
-impl_declared_size_type!(SorobanAuthorizedInvocation, 152);
-impl_declared_size_type!(SorobanAuthorizedFunction, 128);
+impl_declared_size_type!(SorobanAuthorizationEntry, 296);
+impl_declared_size_type!(SorobanAuthorizedInvocation, 168);
+impl_declared_size_type!(SorobanAuthorizedFunction, 144);
 
 // composite types
 
@@ -400,7 +401,7 @@ mod test {
         #[rustversion::since(1.77)]
         #[cfg(target_arch = "x86_64")]
         fn check_x64_host_object_size_that_changed_at_rust_1_77() {
-            expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
+            expect!["64"].assert_eq(size_of::<HostObject>().to_string().as_str());
         }
 
         #[cfg(target_arch = "x86_64")]
@@ -435,13 +436,13 @@ mod test {
         expect!["1"].assert_eq(size_of::<EventError>().to_string().as_str());
 
         expect!["16"].assert_eq(size_of::<ContractInvocation>().to_string().as_str());
-        expect!["160"].assert_eq(size_of::<AuthorizedInvocation>().to_string().as_str());
+        expect!["176"].assert_eq(size_of::<AuthorizedInvocation>().to_string().as_str());
         expect!["32"].assert_eq(
             size_of::<AuthorizedInvocationSnapshot>()
                 .to_string()
                 .as_str(),
         );
-        expect!["256"].assert_eq(
+        expect!["272"].assert_eq(
             size_of::<AccountAuthorizationTracker>()
                 .to_string()
                 .as_str(),
@@ -451,7 +452,7 @@ mod test {
                 .to_string()
                 .as_str(),
         );
-        expect!["216"].assert_eq(
+        expect!["232"].assert_eq(
             size_of::<InvokerContractAuthorizationTracker>()
                 .to_string()
                 .as_str(),
@@ -475,7 +476,7 @@ mod test {
         expect!["32"].assert_eq(size_of::<UInt256Parts>().to_string().as_str());
         expect!["33"].assert_eq(size_of::<ContractExecutable>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<AccountId>().to_string().as_str());
-        expect!["33"].assert_eq(size_of::<ScAddress>().to_string().as_str());
+        expect!["48"].assert_eq(size_of::<ScAddress>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<ScNonceKey>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<PublicKey>().to_string().as_str());
         expect!["45"].assert_eq(size_of::<Asset>().to_string().as_str());
@@ -504,7 +505,7 @@ mod test {
         #[rustversion::since(1.76)]
         fn check_sizes_that_changed_at_rust_1_76() {
             expect!["64"].assert_eq(size_of::<Signer>().to_string().as_str());
-            expect!["104"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
+            expect!["120"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
         }
 
         check_sizes_that_changed_at_rust_1_76();
@@ -515,20 +516,20 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScString>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<ScError>().to_string().as_str());
-        expect!["98"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
-        expect!["128"].assert_eq(size_of::<CreateContractArgsV2>().to_string().as_str());
-        expect!["88"].assert_eq(size_of::<InvokeContractArgs>().to_string().as_str());
-        expect!["65"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
+        expect!["120"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
+        expect!["144"].assert_eq(size_of::<CreateContractArgsV2>().to_string().as_str());
+        expect!["96"].assert_eq(size_of::<InvokeContractArgs>().to_string().as_str());
+        expect!["80"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<ContractDataDurability>().to_string().as_str());
         expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ScContractInstance>().to_string().as_str());
-        expect!["264"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
-        expect!["152"].assert_eq(
+        expect!["296"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
+        expect!["168"].assert_eq(
             size_of::<SorobanAuthorizedInvocation>()
                 .to_string()
                 .as_str(),
         );
-        expect!["128"].assert_eq(size_of::<SorobanAuthorizedFunction>().to_string().as_str());
+        expect!["144"].assert_eq(size_of::<SorobanAuthorizedFunction>().to_string().as_str());
 
         // composite types
         expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());

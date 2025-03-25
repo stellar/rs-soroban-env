@@ -15,8 +15,8 @@ use crate::{
     storage::Storage,
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountFlags, AccountId, Asset,
-        LedgerEntry, LedgerEntryData, LedgerKey, ScAddress, TrustLineAsset, TrustLineEntry,
-        TrustLineEntryExt, TrustLineFlags,
+        LedgerEntry, LedgerEntryData, LedgerKey, ScAddress, ScErrorCode, ScErrorType,
+        TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags,
     },
     Env, Host, HostError, StorageType, TryIntoVal,
 };
@@ -54,6 +54,12 @@ pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
                 Ok(0)
             }
         }
+        _ => Err(e.err(
+            ScErrorType::Object,
+            ScErrorCode::InternalError,
+            "Unexpected ScAddress type",
+            &[addr.as_object().into()],
+        )),
     }
 }
 
@@ -130,6 +136,12 @@ pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(
             balance.amount = new_balance;
             write_contract_balance(e, addr, balance, &id)
         }
+        _ => Err(e.err(
+            ScErrorType::Object,
+            ScErrorCode::InternalError,
+            "Unexpected ScAddress type",
+            &[addr.as_object().into()],
+        )),
     }
 }
 
@@ -188,6 +200,12 @@ pub(crate) fn spend_balance_no_authorization_check(
             }
             Ok(())
         }
+        _ => Err(e.err(
+            ScErrorType::Object,
+            ScErrorCode::InternalError,
+            "Unexpected ScAddress type",
+            &[addr.as_object().into()],
+        )),
     }
 }
 
@@ -219,6 +237,12 @@ pub(crate) fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> 
                 Ok(!is_asset_auth_required(e)?)
             }
         }
+        _ => Err(e.err(
+            ScErrorType::Object,
+            ScErrorCode::InternalError,
+            "Unexpected ScAddress type",
+            &[addr.as_object().into()],
+        )),
     }
 }
 
@@ -257,6 +281,12 @@ pub(crate) fn write_authorization(
                 write_contract_balance(e, addr, balance, &id)
             }
         }
+        _ => Err(e.err(
+            ScErrorType::Object,
+            ScErrorCode::InternalError,
+            "Unexpected ScAddress type",
+            &[addr.as_object().into()],
+        )),
     }
 }
 
@@ -326,6 +356,12 @@ pub(crate) fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostErro
 
             Ok(())
         }
+        _ => Err(e.err(
+            ScErrorType::Object,
+            ScErrorCode::InternalError,
+            "Unexpected ScAddress type",
+            &[addr.as_object().into()],
+        )),
     }
 }
 

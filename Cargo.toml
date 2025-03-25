@@ -21,7 +21,7 @@ exclude = ["soroban-test-wasms/wasm-workspace"]
 # code guarded by `unstable-*` features to make it enabled
 # unconditionally.
 version = "23.0.0"
-rust-version = "1.79.0"
+rust-version = "1.81.0"
 
 [workspace.dependencies]
 soroban-env-common = { version = "=23.0.0", path = "soroban-env-common", default-features = false }
@@ -36,7 +36,7 @@ wasmparser = "=0.116.1"
 [workspace.dependencies.stellar-xdr]
 version = "=22.1.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "28391e81229ad20a3d9ec56e1e1f382205335085"
+rev = "4413ebb265fedd4e194487846289c804bae4c574"
 default-features = false
 
 [workspace.dependencies.wasmi]

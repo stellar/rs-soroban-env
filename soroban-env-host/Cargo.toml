@@ -8,7 +8,7 @@ license = "Apache-2.0"
 version.workspace = true
 readme = "../README.md"
 edition = "2021"
-rust-version = "1.79.0"
+rust-version = "1.81.0"
 build = "build.rs"
 
 exclude = ["observations/"]
@@ -18,7 +18,7 @@ soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi", "shallow-val-hash"] }
 wasmi = { workspace = true }
 wasmparser = { workspace = true }
-stellar-strkey = "0.0.9"
+stellar-strkey = "0.0.13"
 static_assertions = "1.1.0"
 sha2 = "0.10.8"
 hex-literal = "0.4.1"
@@ -85,7 +85,7 @@ p256 = {version = "0.13.2", default-features = false, features = ["alloc"]}
 [dev-dependencies.stellar-xdr]
 version = "=22.1.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "28391e81229ad20a3d9ec56e1e1f382205335085"
+rev = "4413ebb265fedd4e194487846289c804bae4c574"
 default-features = false
 features = ["arbitrary"]
 

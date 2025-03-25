@@ -5,8 +5,9 @@ use crate::{
 };
 use crate::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
-    I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
-    U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
+    I64Object, MapObject, MuxedAddressObject, StorageType, StringObject, Symbol, SymbolObject,
+    TimepointObject, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject,
+    Void,
 };
 use core::fmt::Debug;
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
@@ -95,6 +96,7 @@ impl_relative_object_conversion!(Val);
 impl_relative_object_conversion!(Symbol);
 
 impl_relative_object_conversion!(AddressObject);
+impl_relative_object_conversion!(MuxedAddressObject);
 impl_relative_object_conversion!(BytesObject);
 impl_relative_object_conversion!(DurationObject);
 
