@@ -1,7 +1,6 @@
 use std::{convert::TryInto, rc::Rc};
 
 use crate::builtin_contracts::base_types::BytesN;
-use crate::events::HostEvent;
 use crate::testutils::simple_account_sign_fn;
 use crate::{
     auth::RecordedAuthPayload,
@@ -323,22 +322,6 @@ impl StellarAssetContractTest {
     }
 }
 
-fn check_event_name(e: HostEvent, contract: &Address, name: &str) {
-    assert!(e.event.type_ == ContractEventType::Contract && e.event.contract_id.is_some());
-
-    let address = ScAddress::Contract(e.event.contract_id.clone().unwrap());
-    assert_eq!(contract.to_sc_address().unwrap(), address);
-
-    let xdr::ContractEventBody::V0(contract_event_v0) = e.event.body;
-
-    match contract_event_v0.topics[0].clone() {
-        ScVal::Symbol(sc_symbol) => {
-            assert_eq!(sc_symbol.0.to_utf8_string().unwrap(), name);
-        }
-        _ => panic!("incorrect type"),
-    }
-}
-
 fn to_contract_err(e: HostError) -> ContractError {
     assert!(e.error.is_type(ScErrorType::Contract));
     num_traits::FromPrimitive::from_u32(e.error.get_code()).unwrap()
@@ -626,6 +609,9 @@ fn test_direct_transfer() {
 #[test]
 fn test_transfer_with_issuer() {
     let test: StellarAssetContractTest = StellarAssetContractTest::setup(function_name!());
+    // Enable invocation metering to get the events to reset automatically on
+    // every contract call.
+    test.host.enable_invocation_metering();
     let issuer = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
@@ -635,11 +621,24 @@ fn test_transfer_with_issuer() {
     test.create_default_account(&user_2);
     test.create_default_trustline(&user);
     test.create_default_trustline(&user_2);
+    let token_name = contract.name().unwrap();
 
     // Mint with issuer
     contract
         .transfer(&issuer, user.address(&test.host), 100)
         .unwrap();
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                Symbol::try_from_small_str("mint").unwrap().to_val(),
+                user.address(&test.host),
+                &token_name,
+            ],
+            100_i128.try_into_val(&test.host).unwrap()
+        )]
+    );
 
     assert_eq!(contract.balance(user.address(&test.host)).unwrap(), 100);
     assert_eq!(
@@ -651,11 +650,36 @@ fn test_transfer_with_issuer() {
     contract
         .transfer(&user, user_2.address(&test.host), 50)
         .unwrap();
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                Symbol::try_from_small_str("transfer").unwrap().to_val(),
+                user.address(&test.host),
+                user_2.address(&test.host),
+                &token_name,
+            ],
+            50_i128.try_into_val(&test.host).unwrap()
+        )]
+    );
 
     // Burn by sending to issuer
     contract
         .transfer(&user, issuer.address(&test.host), 50)
         .unwrap();
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                Symbol::try_from_small_str("burn").unwrap().to_val(),
+                user.address(&test.host),
+                &token_name,
+            ],
+            50_i128.try_into_val(&test.host).unwrap()
+        )]
+    );
 
     assert_eq!(contract.balance(user.address(&test.host)).unwrap(), 0);
     assert_eq!(contract.balance(user_2.address(&test.host)).unwrap(), 50);
@@ -666,14 +690,154 @@ fn test_transfer_with_issuer() {
 
     // Issuer transfers to self
     contract
-        .transfer(&issuer, issuer.address(&test.host), 100)
+        .transfer(&issuer, issuer.address(&test.host), i64::MAX.into())
+        .unwrap();
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                Symbol::try_from_small_str("transfer").unwrap().to_val(),
+                issuer.address(&test.host),
+                issuer.address(&test.host),
+                &token_name,
+            ],
+            (i64::MAX as i128).try_into_val(&test.host).unwrap()
+        )]
+    );
+}
+
+#[test]
+fn test_cap_67_transfer_with_muxed_accounts() {
+    let test = StellarAssetContractTest::setup(function_name!());
+    // Enable invocation metering to get the events to reset automatically on
+    // every contract call.
+    test.host.enable_invocation_metering();
+    let admin = TestSigner::account(&test.issuer_key);
+    let contract = test.default_stellar_asset_contract();
+
+    let user = TestSigner::account(&test.user_key);
+    let user_2 = TestSigner::account(&test.user_key_2);
+    test.create_default_account(&user);
+    test.create_default_account(&user_2);
+    test.create_default_trustline(&user);
+    test.create_default_trustline(&user_2);
+
+    contract
+        .mint(&admin, user.address(&test.host), 100_000_000)
         .unwrap();
 
-    let events = test.host.get_events().unwrap().0;
-    check_event_name(events[0].clone(), &contract.address, "mint");
-    check_event_name(events[1].clone(), &contract.address, "transfer");
-    check_event_name(events[2].clone(), &contract.address, "burn");
-    check_event_name(events[3].clone(), &contract.address, "transfer");
+    let transfer_symbol = Symbol::try_from_small_str("transfer").unwrap().to_val();
+    let token_name = contract.name().unwrap();
+
+    // Transfer some balance from user 1 to user 2, both source and destination
+    // are muxed.
+    contract
+        .transfer_muxed(
+            &user,
+            Some(1234),
+            user_2.muxed_address(&test.host, Some(567_890)),
+            9_999_999,
+        )
+        .unwrap();
+
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                transfer_symbol,
+                user.address(&test.host),
+                user_2.address(&test.host),
+                &token_name,
+            ],
+            test_map![
+                &test.host,
+                ("amount", 9_999_999_i128),
+                ("from_muxed_id", 1234_u64),
+                ("to_muxed_id", 567_890_u64)
+            ]
+            .into()
+        )]
+    );
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        90_000_001
+    );
+    assert_eq!(
+        contract.balance(user_2.address(&test.host)).unwrap(),
+        9_999_999
+    );
+
+    // Transfer some balance from user 1 (non-muxed) to user 2, different
+    // muxed destination.
+    contract
+        .transfer_muxed(
+            &user,
+            None,
+            user_2.muxed_address(&test.host, Some(u64::MAX)),
+            1,
+        )
+        .unwrap();
+
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                transfer_symbol,
+                user.address(&test.host),
+                user_2.address(&test.host),
+                &token_name,
+            ],
+            test_map![&test.host, ("amount", 1_i128), ("to_muxed_id", u64::MAX)].into()
+        )]
+    );
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        90_000_000
+    );
+    assert_eq!(
+        contract.balance(user_2.address(&test.host)).unwrap(),
+        10_000_000
+    );
+
+    // Transfer from user 2 (muxed) to user 1 (non-muxed).
+    contract
+        .transfer_muxed(
+            &user_2,
+            Some(0),
+            user.muxed_address(&test.host, None),
+            5_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                transfer_symbol,
+                user_2.address(&test.host),
+                user.address(&test.host),
+                &token_name,
+            ],
+            test_map![
+                &test.host,
+                ("amount", 5_000_000_i128),
+                ("from_muxed_id", 0_u64),
+            ]
+            .into()
+        )]
+    );
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        95_000_000
+    );
+    assert_eq!(
+        contract.balance(user_2.address(&test.host)).unwrap(),
+        5_000_000
+    );
 }
 
 #[test]

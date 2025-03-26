@@ -16,7 +16,7 @@ use crate::{
 pub(crate) use internal::{InternalContractEvent, InternalEvent};
 
 /// The external representation of a host event.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostEvent {
     pub event: crate::xdr::ContractEvent,
     // failed_call keeps track of if the call this event was emitted in failed

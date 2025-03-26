@@ -1,5 +1,8 @@
+use soroban_env_common::{MuxedAddressObject, Tag, TryIntoVal};
+
 use crate::{
     host::{metered_clone::MeteredClone, Host, HostError},
+    host_object::MuxedScAddress,
     xdr::{AccountId, ScAddress, ScErrorCode, ScErrorType},
     AddressObject, BytesObject, Compare, Env, EnvBase, StringObject, TryFromVal, U32Val, Val,
     VecObject,
@@ -378,5 +381,120 @@ impl Address {
 
     pub(crate) fn as_object(&self) -> AddressObject {
         self.object
+    }
+}
+
+#[derive(Clone)]
+enum MuxedAddressObjectHolder {
+    Address(AddressObject),
+    MuxedAddress(MuxedAddressObject),
+}
+
+#[derive(Clone)]
+pub(crate) struct MuxedAddress {
+    host: Host,
+    object: MuxedAddressObjectHolder,
+}
+
+impl TryFromVal<Host, AddressObject> for MuxedAddress {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, obj: &AddressObject) -> Result<Self, Self::Error> {
+        Ok(MuxedAddress {
+            host: env.clone(),
+            object: MuxedAddressObjectHolder::Address(*obj),
+        })
+    }
+}
+
+impl TryFromVal<Host, MuxedAddressObject> for MuxedAddress {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, obj: &MuxedAddressObject) -> Result<Self, Self::Error> {
+        Ok(MuxedAddress {
+            host: env.clone(),
+            object: MuxedAddressObjectHolder::MuxedAddress(*obj),
+        })
+    }
+}
+
+impl TryFromVal<Host, Val> for MuxedAddress {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, val: &Val) -> Result<Self, Self::Error> {
+        let val = *val;
+        if val.get_tag() == Tag::MuxedAddressObject {
+            let obj: MuxedAddressObject = val.try_into()?;
+            MuxedAddress::try_from_val(env, &obj)
+        } else {
+            let obj: AddressObject = val.try_into()?;
+            MuxedAddress::try_from_val(env, &obj)
+        }
+    }
+}
+
+impl TryFromVal<Host, ScAddress> for MuxedAddress {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, addr: &ScAddress) -> Result<Self, Self::Error> {
+        match addr {
+            ScAddress::MuxedAccount(_) => {
+                let obj = env.add_host_object(MuxedScAddress(addr.clone()))?;
+                MuxedAddress::try_from_val(env, &obj)
+            }
+            _ => {
+                let obj = env.add_host_object(addr.clone())?;
+                MuxedAddress::try_from_val(env, &obj)
+            }
+        }
+    }
+}
+
+impl TryFromVal<Host, MuxedAddress> for Val {
+    type Error = HostError;
+
+    fn try_from_val(_env: &Host, address: &MuxedAddress) -> Result<Val, Self::Error> {
+        match address.object {
+            MuxedAddressObjectHolder::Address(address_object) => Ok(address_object.into()),
+            MuxedAddressObjectHolder::MuxedAddress(muxed_address_object) => {
+                Ok(muxed_address_object.into())
+            }
+        }
+    }
+}
+
+impl From<Address> for MuxedAddress {
+    fn from(address: Address) -> Self {
+        Self {
+            host: address.host,
+            object: MuxedAddressObjectHolder::Address(address.object),
+        }
+    }
+}
+
+impl MuxedAddress {
+    pub(crate) fn address(&self) -> Result<Address, HostError> {
+        match self.object {
+            MuxedAddressObjectHolder::Address(address_object) => {
+                address_object.try_into_val(&self.host)
+            }
+            MuxedAddressObjectHolder::MuxedAddress(muxed_address_object) => {
+                let address_object = self
+                    .host
+                    .get_address_from_muxed_address(muxed_address_object)?;
+                address_object.try_into_val(&self.host)
+            }
+        }
+    }
+
+    pub(crate) fn id(&self) -> Result<Option<u64>, HostError> {
+        match self.object {
+            MuxedAddressObjectHolder::Address(_) => Ok(None),
+            MuxedAddressObjectHolder::MuxedAddress(muxed_address_object) => {
+                let id_val = self.host.get_id_from_muxed_address(muxed_address_object)?;
+                let id: u64 = id_val.try_into_val(&self.host)?;
+                Ok(Some(id))
+            }
+        }
     }
 }

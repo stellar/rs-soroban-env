@@ -1,10 +1,14 @@
 use crate::{
     builtin_contracts::{
-        base_types::{Address, String},
+        base_types::{Address, MuxedAddress, String},
         testutils::{authorize_single_invocation, ContractTypeVec, TestSigner},
     },
-    xdr::{Asset, Limited, WriteXdr},
-    Env, Host, HostError, Symbol, TryFromVal, TryIntoVal, DEFAULT_XDR_RW_LIMITS,
+    events::HostEvent,
+    xdr::{
+        Asset, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
+        ExtensionPoint, Limited, WriteXdr,
+    },
+    Env, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val, DEFAULT_XDR_RW_LIMITS,
 };
 
 pub(crate) struct TestStellarAssetContract<'a> {
@@ -62,6 +66,29 @@ impl<'a> TestStellarAssetContract<'a> {
             .try_into()?)
     }
 
+    pub(crate) fn test_event(&self, topics: ContractTypeVec, data: Val) -> HostEvent {
+        let event = ContractEvent {
+            ext: ExtensionPoint::V0,
+            contract_id: Some(
+                self.host
+                    .contract_id_from_address(self.address.as_object())
+                    .unwrap(),
+            ),
+            type_: ContractEventType::Contract,
+            body: ContractEventBody::V0(ContractEventV0 {
+                topics: self
+                    .host
+                    .vecobject_to_scval_vec(topics.as_object())
+                    .unwrap(),
+                data: self.host.from_host_val(data).unwrap(),
+            }),
+        };
+        HostEvent {
+            event,
+            failed_call: false,
+        }
+    }
+
     pub(crate) fn approve(
         &self,
         from: &TestSigner,
@@ -114,6 +141,25 @@ impl<'a> TestStellarAssetContract<'a> {
             from,
             "transfer",
             test_vec![self.host, from.address(self.host), to, amount],
+        )
+    }
+
+    pub(crate) fn transfer_muxed(
+        &self,
+        from: &TestSigner,
+        from_mux_id: Option<u64>,
+        to: MuxedAddress,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        self.call_with_single_signer(
+            from,
+            "transfer",
+            test_vec![
+                self.host,
+                from.muxed_address(self.host, from_mux_id),
+                to,
+                amount
+            ],
         )
     }
 
