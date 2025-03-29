@@ -1,5 +1,6 @@
 use crate::e2e_invoke::ledger_entry_to_ledger_key;
 use crate::storage::EntryWithLiveUntil;
+use crate::ErrorHandler;
 use crate::{
     budget::Budget,
     builtin_contracts::testutils::create_account,

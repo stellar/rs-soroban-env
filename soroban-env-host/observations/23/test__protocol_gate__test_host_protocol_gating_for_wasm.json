@@ -25,14 +25,14 @@
   "  23 call protocol_gated_dummy()": "cpu:2441347, mem:934250, vm:-/-",
   "  24 ret protocol_gated_dummy -> Ok(Void)": "cpu:2441933",
   "  25 pop VM:a98ace28:test -> Ok(Void)": " vm:-/1@32eec24c",
-  "  26 ret call -> Ok(Void)": "cpu:2442555, mem:934266, vm:-/-, stk:-, auth:-/-",
-  "  27 call bytes_new_from_slice(80)": "cpu:2442602",
-  "  28 ret bytes_new_from_slice -> Ok(Bytes(obj#23))": "cpu:2443585, mem:934442, objs:-/12@fbaeb755",
+  "  26 ret call -> Ok(Void)": " vm:-/-, stk:-, auth:-/-",
+  "  27 call bytes_new_from_slice(80)": "cpu:2441980",
+  "  28 ret bytes_new_from_slice -> Ok(Bytes(obj#23))": "cpu:2442963, mem:934426, objs:-/12@fbaeb755",
   "  29 call upload_wasm(Bytes(obj#23))": "",
-  "  30 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:2975547, mem:1138160",
-  "  31 call bytes_new_from_slice(80)": "cpu:2975594",
-  "  32 ret bytes_new_from_slice -> Ok(Bytes(obj#25))": "cpu:2976577, mem:1138336, objs:-/13@aa6c2723",
+  "  30 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:2974925, mem:1138144",
+  "  31 call bytes_new_from_slice(80)": "cpu:2974972",
+  "  32 ret bytes_new_from_slice -> Ok(Bytes(obj#25))": "cpu:2975955, mem:1138320, objs:-/13@aa6c2723",
   "  33 call upload_wasm(Bytes(obj#25))": "",
-  "  34 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:3508539, mem:1342054",
-  "  35 end": "cpu:3508539, mem:1342054, prngs:-/9b4a753, objs:-/13@aa6c2723, vm:-/-, evt:-, store:-/2@edfa13bc, foot:2@e304da36, stk:-, auth:-/-"
+  "  34 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:3507917, mem:1342038",
+  "  35 end": "cpu:3507917, mem:1342038, prngs:-/9b4a753, objs:-/13@aa6c2723, vm:-/-, evt:-, store:-/2@edfa13bc, foot:2@e304da36, stk:-, auth:-/-"
 }

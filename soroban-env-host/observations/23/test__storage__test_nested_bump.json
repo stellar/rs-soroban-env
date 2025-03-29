@@ -67,6 +67,6 @@
   "  65 pop VM:fc644715:sym#31 -> Ok(Void)": " vm:1048576@2434eedc/20@26ecda6",
   "  66 ret call -> Ok(Void)": " objs:3@16b5c8f7/20@994aa2f0, vm:-/-, stk:1@a4587c23, auth:1@e0db74ce/-",
   "  67 pop VM:3f2c7e4c:sym#29 -> Ok(Void)": " vm:1114112@eaf1f0d3/10@a420633f",
-  "  68 ret call -> Ok(Void)": "cpu:9495372, mem:8292278, objs:-/20@994aa2f0, vm:-/-, stk:-, auth:-/-",
-  "  69 end": "cpu:9495642, mem:8292278, prngs:-/9b4a753, objs:-/20@994aa2f0, vm:-/-, evt:-, store:-/4@4646af20, foot:4@c9687f50, stk:-, auth:-/-"
+  "  68 ret call -> Ok(Void)": " objs:-/20@994aa2f0, vm:-/-, stk:-, auth:-/-",
+  "  69 end": "cpu:9495003, mem:8292262, prngs:-/9b4a753, objs:-/20@994aa2f0, vm:-/-, evt:-, store:-/4@4646af20, foot:4@c9687f50, stk:-, auth:-/-"
 }

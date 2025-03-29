@@ -4,8 +4,8 @@ use crate::{
         AccountId, ContractCostType, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey,
         ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal, ScVec, Uint256, VecM,
     },
-    Env, Error, Host, HostError, MapObject, MeteredOrdMap, Symbol, SymbolSmall, TryFromVal, U32Val,
-    Val,
+    Env, Error, ErrorHandler, Host, HostError, MapObject, MeteredOrdMap, Symbol, SymbolSmall,
+    TryFromVal, U32Val, Val,
 };
 use more_asserts::assert_ge;
 use soroban_test_wasms::LINEAR_MEMORY;

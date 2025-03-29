@@ -17,10 +17,10 @@
   "  15 call call(Address(obj#13), Symbol(spoof), Vec(obj#15))": "",
   "  16 push VM:e921e73a:spoof()": "cpu:3747590, mem:4110155, objs:-/9@838273fa, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@81ee6bc4, auth:1@b714f5c3/-",
   "  17 pop VM:e921e73a:spoof -> Err(Error(Context, InvalidAction))": "cpu:3750071, mem:4110185",
-  "  18 ret call -> Err(Error(Context, InvalidAction))": "cpu:3750693, mem:4110201, vm:-/-, stk:-, auth:-/-",
+  "  18 ret call -> Err(Error(Context, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
   "  19 call try_call(Address(obj#13), Symbol(spoof), Vec(obj#15))": "",
-  "  20 push VM:e921e73a:spoof()": "cpu:4407693, mem:5364381, objs:-/10@4ffb5bf8, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@81ee6bc4, auth:1@bb297f4a/-",
-  "  21 pop VM:e921e73a:spoof -> Err(Error(Context, InvalidAction))": "cpu:4410174, mem:5364411",
-  "  22 ret try_call -> Ok(Error(Context, InvalidAction))": "cpu:4410796, mem:5364427, vm:-/-, stk:-, auth:-/-",
-  "  23 end": "cpu:4410796, mem:5364427, prngs:-/9b4a753, objs:-/10@4ffb5bf8, vm:-/-, evt:-, store:-/2@c749d3ad, foot:2@155c2cfa, stk:-, auth:-/-"
+  "  20 push VM:e921e73a:spoof()": "cpu:4406103, mem:5364229, objs:-/10@4ffb5bf8, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@81ee6bc4, auth:1@bb297f4a/-",
+  "  21 pop VM:e921e73a:spoof -> Err(Error(Context, InvalidAction))": "cpu:4408584, mem:5364259",
+  "  22 ret try_call -> Ok(Error(Context, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
+  "  23 end": "cpu:4408584, mem:5364259, prngs:-/9b4a753, objs:-/10@4ffb5bf8, vm:-/-, evt:-, store:-/2@c749d3ad, foot:2@155c2cfa, stk:-, auth:-/-"
 }

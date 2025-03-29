@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1503719",
   "  19 pop VM:7bd81d77:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1504844, mem:743475, objs:-/9@3db94ac4, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#21))": "cpu:1505728, mem:743635, objs:-/11@5219a236",
-  "  22 push VM:7bd81d77:test(Address(obj#123), Symbol(abc), Vec(obj#19))": "cpu:1717165, mem:910292, objs:-/12@876b8e1d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@7557cda5, auth:1@2eefa960/-",
-  "  23 call call(Address(obj#123), Symbol(abc), Vec(obj#19))": "cpu:1720516, mem:910418, objs:2@11f9dbd4/12@876b8e1d, vm:-/-, stk:1@84fb0741",
-  "  24 pop VM:7bd81d77:test -> Err(Error(Value, InvalidInput))": "cpu:1721183, vm:65536@b1cd98b9/2@2f94d90d",
-  "  25 ret call -> Err(Error(Value, InvalidInput))": "cpu:1721805, mem:910434, objs:-/12@876b8e1d, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1721805, mem:910434, prngs:-/9b4a753, objs:-/12@876b8e1d, vm:-/-, evt:-, store:-/2@d8316dc0, foot:2@12a3f0a3, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1504222, mem:743459, objs:-/9@3db94ac4, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#21))": "cpu:1505106, mem:743619, objs:-/11@5219a236",
+  "  22 push VM:7bd81d77:test(Address(obj#123), Symbol(abc), Vec(obj#19))": "cpu:1715575, mem:910140, objs:-/12@876b8e1d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@7557cda5, auth:1@2eefa960/-",
+  "  23 call call(Address(obj#123), Symbol(abc), Vec(obj#19))": "cpu:1718926, mem:910266, objs:2@11f9dbd4/12@876b8e1d, vm:-/-, stk:1@84fb0741",
+  "  24 pop VM:7bd81d77:test -> Err(Error(Value, InvalidInput))": "cpu:1719593, vm:65536@b1cd98b9/2@2f94d90d",
+  "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/12@876b8e1d, vm:-/-, stk:-, auth:-/-",
+  "  26 end": "cpu:1719593, mem:910266, prngs:-/9b4a753, objs:-/12@876b8e1d, vm:-/-, evt:-, store:-/2@d8316dc0, foot:2@12a3f0a3, stk:-, auth:-/-"
 }

@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1503719",
   "  19 pop VM:3c059e57:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1504844, mem:743475, objs:-/9@13a94a30, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1506170, mem:743715, objs:-/12@ed23d87c",
-  "  22 push VM:3c059e57:test(Bytes(obj#19), Bytes(obj#21), Bytes(obj#123))": "cpu:1717607, mem:910372, objs:-/13@1809a18f, vm:65536@b1cd98b9/2@2f94d90d, stk:1@8e0b6ec3, auth:1@73b1caf7/-",
-  "  23 call verify_sig_ecdsa_secp256r1(Bytes(obj#19), Bytes(obj#21), Bytes(obj#123))": "cpu:1721393, mem:910522, objs:3@955d590c/13@1809a18f, vm:-/-, stk:1@6c5f7a5",
-  "  24 pop VM:3c059e57:test -> Err(Error(Value, InvalidInput))": "cpu:1722182, vm:65536@b1cd98b9/2@2f94d90d",
-  "  25 ret call -> Err(Error(Value, InvalidInput))": "cpu:1722804, mem:910538, objs:-/13@1809a18f, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1722804, mem:910538, prngs:-/9b4a753, objs:-/13@1809a18f, vm:-/-, evt:-, store:-/2@74cd4911, foot:2@83b85471, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1504222, mem:743459, objs:-/9@13a94a30, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1505548, mem:743699, objs:-/12@ed23d87c",
+  "  22 push VM:3c059e57:test(Bytes(obj#19), Bytes(obj#21), Bytes(obj#123))": "cpu:1716017, mem:910220, objs:-/13@1809a18f, vm:65536@b1cd98b9/2@2f94d90d, stk:1@8e0b6ec3, auth:1@73b1caf7/-",
+  "  23 call verify_sig_ecdsa_secp256r1(Bytes(obj#19), Bytes(obj#21), Bytes(obj#123))": "cpu:1719803, mem:910370, objs:3@955d590c/13@1809a18f, vm:-/-, stk:1@6c5f7a5",
+  "  24 pop VM:3c059e57:test -> Err(Error(Value, InvalidInput))": "cpu:1720592, vm:65536@b1cd98b9/2@2f94d90d",
+  "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/13@1809a18f, vm:-/-, stk:-, auth:-/-",
+  "  26 end": "cpu:1720592, mem:910370, prngs:-/9b4a753, objs:-/13@1809a18f, vm:-/-, evt:-, store:-/2@74cd4911, foot:2@83b85471, stk:-, auth:-/-"
 }

@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1503719",
   "  19 pop VM:17f553d5:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1504844, mem:743475, objs:-/9@6c031d8e, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#21))": "cpu:1505728, mem:743635, objs:-/11@135743a7",
-  "  22 push VM:17f553d5:test(Bytes(obj#123), Bytes(obj#19), U32(0))": "cpu:1717165, mem:910292, objs:-/12@9a836c9d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@49ce65e3, auth:1@2eefa960/-",
-  "  23 call recover_key_ecdsa_secp256k1(Bytes(obj#123), Bytes(obj#19), U32(0))": "cpu:1720516, mem:910418, objs:2@8ea461ac/12@9a836c9d, vm:-/-, stk:1@c71ddf50",
-  "  24 pop VM:17f553d5:test -> Err(Error(Value, InvalidInput))": "cpu:1721183, vm:65536@b1cd98b9/2@2f94d90d",
-  "  25 ret call -> Err(Error(Value, InvalidInput))": "cpu:1721805, mem:910434, objs:-/12@9a836c9d, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1721805, mem:910434, prngs:-/9b4a753, objs:-/12@9a836c9d, vm:-/-, evt:-, store:-/2@c6ddea4, foot:2@bcf108e1, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1504222, mem:743459, objs:-/9@6c031d8e, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#21))": "cpu:1505106, mem:743619, objs:-/11@135743a7",
+  "  22 push VM:17f553d5:test(Bytes(obj#123), Bytes(obj#19), U32(0))": "cpu:1715575, mem:910140, objs:-/12@9a836c9d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@49ce65e3, auth:1@2eefa960/-",
+  "  23 call recover_key_ecdsa_secp256k1(Bytes(obj#123), Bytes(obj#19), U32(0))": "cpu:1718926, mem:910266, objs:2@8ea461ac/12@9a836c9d, vm:-/-, stk:1@c71ddf50",
+  "  24 pop VM:17f553d5:test -> Err(Error(Value, InvalidInput))": "cpu:1719593, vm:65536@b1cd98b9/2@2f94d90d",
+  "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/12@9a836c9d, vm:-/-, stk:-, auth:-/-",
+  "  26 end": "cpu:1719593, mem:910266, prngs:-/9b4a753, objs:-/12@9a836c9d, vm:-/-, evt:-, store:-/2@c6ddea4, foot:2@bcf108e1, stk:-, auth:-/-"
 }

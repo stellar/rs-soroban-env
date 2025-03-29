@@ -19,6 +19,6 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1934667",
   "  19 pop VM:104a6011:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1935792, mem:798787, objs:-/9@51e2d4f1, vm:-/-, stk:-, auth:-/-",
-  "  21 end": "cpu:1939496, mem:799195, prngs:-/9b4a753, objs:-/9@51e2d4f1, vm:-/-, evt:-, store:-/2@a9a07b17, foot:2@6d19caf3, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1935170, mem:798771, objs:-/9@51e2d4f1, vm:-/-, stk:-, auth:-/-",
+  "  21 end": "cpu:1938874, mem:799179, prngs:-/9b4a753, objs:-/9@51e2d4f1, vm:-/-, evt:-, store:-/2@a9a07b17, foot:2@6d19caf3, stk:-, auth:-/-"
 }

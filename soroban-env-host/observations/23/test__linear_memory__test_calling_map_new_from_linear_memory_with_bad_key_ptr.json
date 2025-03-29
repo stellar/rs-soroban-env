@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8095172",
   "  19 pop VM:7dbe7097:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8096297, mem:1641801, objs:-/9@3e23d58b, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8096739, mem:1641881, objs:-/10@8f585245",
-  "  22 push VM:7dbe7097:loadmem1(U32(256), U32(65024), U32(1))": "cpu:8736115, mem:1920864, objs:-/11@285eb82d, vm:65536@b1cd98b9/4@70bfd778, stk:1@291b188b, auth:1@27279bf3/-",
-  "  23 call map_new_from_linear_memory(U32(256), U32(65024), U32(1))": "cpu:8738596, mem:1920942, vm:-/-",
-  "  24 ret map_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8747744, mem:1920966",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8095675, mem:1641785, objs:-/9@3e23d58b, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8096117, mem:1641865, objs:-/10@8f585245",
+  "  22 push VM:7dbe7097:loadmem1(U32(256), U32(65024), U32(1))": "cpu:8734525, mem:1920712, objs:-/11@285eb82d, vm:65536@b1cd98b9/4@70bfd778, stk:1@291b188b, auth:1@27279bf3/-",
+  "  23 call map_new_from_linear_memory(U32(256), U32(65024), U32(1))": "cpu:8737006, mem:1920790, vm:-/-",
+  "  24 ret map_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8746154, mem:1920814",
   "  25 pop VM:7dbe7097:loadmem1 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@1ef083fd/4@70bfd778",
-  "  26 ret call -> Err(Error(WasmVm, IndexBounds))": "cpu:8748366, mem:1920982, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8748366, mem:1920982, prngs:-/9b4a753, objs:-/11@285eb82d, vm:-/-, evt:-, store:-/2@eadf7a3c, foot:2@fa72fa80, stk:-, auth:-/-"
+  "  26 ret call -> Err(Error(WasmVm, IndexBounds))": " vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8746154, mem:1920814, prngs:-/9b4a753, objs:-/11@285eb82d, vm:-/-, evt:-, store:-/2@eadf7a3c, foot:2@fa72fa80, stk:-, auth:-/-"
 }

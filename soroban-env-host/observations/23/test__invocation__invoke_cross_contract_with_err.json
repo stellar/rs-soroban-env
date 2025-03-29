@@ -19,14 +19,14 @@
   "  17 call vec_insert(Vec(obj#19), U32(1), U32(1))": "cpu:2210609, mem:3720818, objs:1@60ba53ce/10@6b2f83c8, stk:1@93678105",
   "  18 ret vec_insert -> Err(Error(Object, IndexBounds))": "cpu:2211041",
   "  19 pop VM:1998744d:vec_err -> Err(Error(Object, IndexBounds))": " vm:1048576@2434eedc/5@8b444229",
-  "  20 ret try_call -> Ok(Error(Context, InvalidAction))": "cpu:2211663, mem:3720834, objs:-/10@6b2f83c8, vm:-/-, stk:-, auth:-/-",
+  "  20 ret try_call -> Ok(Error(Context, InvalidAction))": " objs:-/10@6b2f83c8, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#13), Symbol(vec_err), Vec(obj#15))": "",
-  "  22 push VM:1998744d:vec_err(U32(1))": "cpu:2574780, mem:4869011, objs:-/11@b7d5998a, vm:1048576@2434eedc/5@8b444229, stk:1@8d9b7a42, auth:1@e5baeefa/-",
-  "  23 call vec_new()": "cpu:2577253, mem:4869057, vm:-/-",
-  "  24 ret vec_new -> Ok(Vec(obj#23))": "cpu:2578597, mem:4869137, objs:-/12@f323d4ce",
-  "  25 call vec_insert(Vec(obj#23), U32(1), U32(1))": "cpu:2579093, mem:4869161, objs:1@f1b74ac7/12@f323d4ce, stk:1@c88dc75d",
-  "  26 ret vec_insert -> Err(Error(Object, IndexBounds))": "cpu:2579525",
+  "  22 push VM:1998744d:vec_err(U32(1))": "cpu:2573190, mem:4868859, objs:-/11@b7d5998a, vm:1048576@2434eedc/5@8b444229, stk:1@8d9b7a42, auth:1@e5baeefa/-",
+  "  23 call vec_new()": "cpu:2575663, mem:4868905, vm:-/-",
+  "  24 ret vec_new -> Ok(Vec(obj#23))": "cpu:2577007, mem:4868985, objs:-/12@f323d4ce",
+  "  25 call vec_insert(Vec(obj#23), U32(1), U32(1))": "cpu:2577503, mem:4869009, objs:1@f1b74ac7/12@f323d4ce, stk:1@c88dc75d",
+  "  26 ret vec_insert -> Err(Error(Object, IndexBounds))": "cpu:2577935",
   "  27 pop VM:1998744d:vec_err -> Err(Error(Object, IndexBounds))": " vm:1048576@2434eedc/5@8b444229",
-  "  28 ret call -> Err(Error(Object, IndexBounds))": "cpu:2580147, mem:4869177, objs:-/12@f323d4ce, vm:-/-, stk:-, auth:-/-",
-  "  29 end": "cpu:2580147, mem:4869177, prngs:-/9b4a753, objs:-/12@f323d4ce, vm:-/-, evt:-, store:-/2@11805b29, foot:2@c0fdb494, stk:-, auth:-/-"
+  "  28 ret call -> Err(Error(Object, IndexBounds))": " objs:-/12@f323d4ce, vm:-/-, stk:-, auth:-/-",
+  "  29 end": "cpu:2577935, mem:4869009, prngs:-/9b4a753, objs:-/12@f323d4ce, vm:-/-, evt:-, store:-/2@11805b29, foot:2@c0fdb494, stk:-, auth:-/-"
 }

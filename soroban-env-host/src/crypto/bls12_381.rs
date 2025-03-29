@@ -2,8 +2,8 @@ use crate::{
     budget::AsBudget,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    Bool, BytesObject, ConversionError, Env, Host, HostError, TryFromVal, U256Object, U256Small,
-    U256Val, Val, VecObject, U256,
+    Bool, BytesObject, ConversionError, Env, ErrorHandler, Host, HostError, TryFromVal, U256Object,
+    U256Small, U256Val, Val, VecObject, U256,
 };
 use ark_bls12_381::{
     g1::Config as G1Config, g2::Config as G2Config, Bls12_381, Fq, Fq12, Fq2, Fr, G1Affine,

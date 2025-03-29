@@ -6,6 +6,7 @@ use crate::{
     Compare, Host, HostError, Symbol, SymbolObject, SymbolSmall, SymbolStr, U32Val, Vm, VmCaller,
 };
 
+use super::ErrorHandler;
 use std::{cmp::Ordering, rc::Rc};
 
 /// Helper type for host functions that receive a position and length pair and
