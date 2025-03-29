@@ -18,26 +18,26 @@ mod parsed_module;
 pub(crate) use dispatch::dummy0;
 #[cfg(test)]
 pub(crate) use dispatch::protocol_gated_dummy;
+use soroban_env_common::WasmtimeMarshal;
 
 use crate::{
-    budget::{get_wasmi_config, AsBudget, Budget},
+    budget::{get_wasmi_config, get_wasmtime_config, AsBudget, Budget},
     host::{
         error::TryBorrowOrErr,
         metered_clone::MeteredContainer,
         metered_hash::{CountingHasher, MeteredHash},
     },
     xdr::{ContractCostType, Hash, ScErrorCode, ScErrorType},
-    ConversionError, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val, WasmiMarshal,
+    ConversionError, ErrorHandler, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val,
+    WasmiMarshal,
 };
-use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
+use std::{cell::RefCell, collections::BTreeSet, rc::Rc, sync::Arc};
 
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 
 pub use module_cache::ModuleCache;
-pub use parsed_module::{ParsedModule, VersionedContractCodeCostInputs};
-
-use wasmi::{Instance, Linker, Memory, Store, Value};
+pub use parsed_module::{CompilationContext, ParsedModule, VersionedContractCodeCostInputs};
 
 use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
@@ -86,10 +86,14 @@ impl Drop for VmInstantiationTimer {
 pub struct Vm {
     pub(crate) contract_id: Hash,
     #[allow(dead_code)]
-    pub(crate) module: Rc<ParsedModule>,
-    store: RefCell<Store<Host>>,
-    instance: Instance,
-    pub(crate) memory: Option<Memory>,
+    pub(crate) module: Arc<ParsedModule>,
+    wasmi_store: RefCell<wasmi::Store<Host>>,
+    wasmi_instance: wasmi::Instance,
+    pub(crate) wasmi_memory: Option<wasmi::Memory>,
+
+    wasmtime_store: RefCell<wasmtime::Store<Host>>,
+    wasmtime_instance: wasmtime::Instance,
+    pub(crate) wasmtime_memory: Option<wasmtime::Memory>,
 }
 
 impl std::hash::Hash for Vm {
@@ -99,29 +103,61 @@ impl std::hash::Hash for Vm {
 }
 
 impl Host {
-    pub(crate) fn make_linker(
+    // Make a wasmi linker restricted to _only_ importing the symbols
+    // mentioned in `symbols`.
+    pub(crate) fn make_minimal_wasmi_linker_for_symbols<Ctx: ErrorHandler>(
+        context: &Ctx,
         engine: &wasmi::Engine,
         symbols: &BTreeSet<(&str, &str)>,
-    ) -> Result<Linker<Host>, HostError> {
-        let mut linker = Linker::new(&engine);
+    ) -> Result<wasmi::Linker<Host>, HostError> {
+        let mut linker = wasmi::Linker::new(&engine);
         for hf in HOST_FUNCTIONS {
             if symbols.contains(&(hf.mod_str, hf.fn_str)) {
-                (hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le))?;
+                context.map_err((hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le)))?;
             }
         }
         Ok(linker)
     }
-}
 
-// In one very narrow context -- when recording, and with a module cache -- we
-// defer the cost of parsing a module until we pop a control frame.
-// Unfortunately we have to thread this information from the call site to here.
-// See comment below where this type is used.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ModuleParseCostMode {
-    Normal,
-    #[cfg(any(test, feature = "recording_mode"))]
-    PossiblyDeferredIfRecording,
+    // Make a wasmi linker that imports all the symbols.
+    pub(crate) fn make_maximal_wasmi_linker<Ctx: ErrorHandler>(
+        context: &Ctx,
+        engine: &wasmi::Engine,
+    ) -> Result<wasmi::Linker<Host>, HostError> {
+        let mut linker = wasmi::Linker::new(&engine);
+        for hf in HOST_FUNCTIONS {
+            context.map_err((hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le)))?;
+        }
+        Ok(linker)
+    }
+
+    // Make a wasmtime linker restricted to _only_ importing the symbols
+    // mentioned in `symbols`.
+    pub(crate) fn make_minimal_wasmtime_linker_for_symbols<Ctx: ErrorHandler>(
+        context: &Ctx,
+        engine: &wasmtime::Engine,
+        symbols: &BTreeSet<(&str, &str)>,
+    ) -> Result<wasmtime::Linker<Host>, HostError> {
+        let mut linker = wasmtime::Linker::new(engine);
+        for hf in HOST_FUNCTIONS {
+            if symbols.contains(&(hf.mod_str, hf.fn_str)) {
+                context.map_wasmtime_error((hf.wrap_wasmtime)(&mut linker))?;
+            }
+        }
+        Ok(linker)
+    }
+
+    // Make a wasmtime linker that imports all the symbols.
+    pub(crate) fn make_maximal_wasmtime_linker<Ctx: ErrorHandler>(
+        context: &Ctx,
+        engine: &wasmtime::Engine,
+    ) -> Result<wasmtime::Linker<Host>, HostError> {
+        let mut linker = wasmtime::Linker::new(engine);
+        for hf in HOST_FUNCTIONS {
+            context.map_wasmtime_error((hf.wrap_wasmtime)(&mut linker))?;
+        }
+        Ok(linker)
+    }
 }
 
 impl Vm {
@@ -146,81 +182,25 @@ impl Vm {
             .collect()
     }
 
-    /// Instantiates a VM given the arguments provided in [`Self::new`],
-    /// or [`Self::new_from_module_cache`]
-    fn instantiate(
+    /// Instantiate wasmi components specifically (vs. any other future backend).
+    fn instantiate_wasmi(
         host: &Host,
-        contract_id: Hash,
-        parsed_module: Rc<ParsedModule>,
-        linker: &Linker<Host>,
-    ) -> Result<Rc<Self>, HostError> {
-        let _span = tracy_span!("Vm::instantiate");
+        parsed_module: &Arc<ParsedModule>,
+        wasmi_linker: &wasmi::Linker<Host>,
+    ) -> Result<(wasmi::Store<Host>, wasmi::Instance, Option<wasmi::Memory>), HostError> {
+        let _span = tracy_span!("Vm::instantiate_wasmi");
 
-        // The host really never should have made it past construction on an old
-        // protocol version, but it doesn't hurt to double check here before we
-        // instantiate a VM, which is the place old-protocol replay will
-        // diverge.
-        host.check_ledger_protocol_supported()?;
-
-        let engine = parsed_module.module.engine();
-        let mut store = Store::new(engine, host.clone());
-
+        let wasmi_engine = parsed_module.wasmi_module.engine();
+        let mut store = {
+            let _span = tracy_span!("Vm::instantiate_wasmi - store");
+            wasmi::Store::new(wasmi_engine, host.clone())
+        };
         parsed_module.cost_inputs.charge_for_instantiation(host)?;
-
         store.limiter(|host| host);
-
-        {
-            // We perform instantiation-time protocol version gating of
-            // all module-imported symbols here.
-            // Reasons for doing link-time instead of run-time check:
-            // 1. VM instantiation is performed in both contract upload and
-            //    execution, thus any errorous contract will be rejected at
-            //    upload time.
-            // 2. If a contract contains a call to an outdated host function,
-            //    i.e. `contract_protocol > hf.max_supported_protocol`, failing
-            //    early is preferred from resource usage perspective.
-            // 3. If a contract contains a call to an non-existent host
-            //    function, the current (correct) behavior is to return
-            //    `Wasmi::errors::LinkerError::MissingDefinition` error (which gets
-            //    converted to a `(WasmVm, InvalidAction)`). If that host
-            //    function is defined in a later protocol, and we replay that
-            //    contract (in the earlier protocol where it belongs), we need
-            //    to return the same error.
-            let _span0 = tracy_span!("define host functions");
-            let ledger_proto = host.with_ledger_info(|li| Ok(li.protocol_version))?;
-            parsed_module.with_import_symbols(host, |module_symbols| {
-                for hf in HOST_FUNCTIONS {
-                    if !module_symbols.contains(&(hf.mod_str, hf.fn_str)) {
-                        continue;
-                    }
-                    if let Some(min_proto) = hf.min_proto {
-                        if parsed_module.proto_version < min_proto || ledger_proto < min_proto {
-                            return Err(host.err(
-                                ScErrorType::WasmVm,
-                                ScErrorCode::InvalidAction,
-                                "contract calls a host function not yet supported by current protocol",
-                                &[],
-                            ));
-                        }
-                    }
-                    if let Some(max_proto) = hf.max_proto {
-                        if parsed_module.proto_version > max_proto || ledger_proto > max_proto {
-                            return Err(host.err(
-                                ScErrorType::WasmVm,
-                                ScErrorCode::InvalidAction,
-                                "contract calls a host function no longer supported in the current protocol",
-                                &[],
-                            ));
-                        }
-                    }
-                }
-                Ok(())
-            })?;
-        }
-
+        parsed_module.check_contract_imports_match_host_protocol(host)?;
         let not_started_instance = {
-            let _span0 = tracy_span!("instantiate module");
-            host.map_err(linker.instantiate(&mut store, &parsed_module.module))?
+            let _span = tracy_span!("Vm::instantiate_wasmi - instantiate");
+            host.map_err(wasmi_linker.instantiate(&mut store, &parsed_module.wasmi_module))?
         };
 
         let instance = host.map_err(
@@ -234,6 +214,65 @@ impl Vm {
         } else {
             None
         };
+        Ok((store, instance, memory))
+    }
+
+    fn instantiate_wasmtime(
+        host: &Host,
+        parsed_module: &Arc<ParsedModule>,
+        wasmtime_linker: &wasmtime::Linker<Host>,
+    ) -> Result<
+        (
+            wasmtime::Store<Host>,
+            wasmtime::Instance,
+            Option<wasmtime::Memory>,
+        ),
+        HostError,
+    > {
+        let _span = tracy_span!("Vm::instantiate_wasmtime");
+
+        let wasmtime_engine = parsed_module.wasmtime_module.engine();
+        let mut wasmtime_store = {
+            let _span = tracy_span!("Vm::instantiate_wasmtime - store");
+            wasmtime::Store::new(&wasmtime_engine, host.clone())
+        };
+        let wasmtime_instance = {
+            let _span = tracy_span!("Vm::instantiate_wasmtime - instantiate");
+            host.map_wasmtime_error(
+                wasmtime_linker.instantiate(&mut wasmtime_store, &parsed_module.wasmtime_module),
+            )?
+        };
+        let wasmtime_memory =
+            if let Some(ext) = wasmtime_instance.get_export(&mut wasmtime_store, "memory") {
+                ext.into_memory()
+            } else {
+                None
+            };
+        Ok((wasmtime_store, wasmtime_instance, wasmtime_memory))
+    }
+
+    /// Instantiates a VM given the arguments provided in [`Self::new`],
+    /// or [`Self::new_from_module_cache`]
+    fn instantiate(
+        host: &Host,
+        contract_id: Hash,
+        parsed_module: Arc<ParsedModule>,
+        wasmi_linker: &wasmi::Linker<Host>,
+        wasmtime_linker: &wasmtime::Linker<Host>,
+    ) -> Result<Rc<Self>, HostError> {
+        let _span = tracy_span!("Vm::instantiate");
+
+        // The host really never should have made it past construction on an old
+        // protocol version, but it doesn't hurt to double check here before we
+        // instantiate a VM, which is the place old-protocol replay will
+        // diverge.
+        host.check_ledger_protocol_supported()?;
+
+        let (wasmi_store, wasmi_instance, wasmi_memory) =
+            Self::instantiate_wasmi(host, &parsed_module, wasmi_linker)?;
+
+        let (wasmtime_store, wasmtime_instance, wasmtime_memory) =
+            Self::instantiate_wasmtime(host, &parsed_module, wasmtime_linker)?;
 
         // Here we do _not_ supply the store with any fuel. Fuel is supplied
         // right before the VM is being run, i.e., before crossing the host->VM
@@ -241,24 +280,40 @@ impl Vm {
         Ok(Rc::new(Self {
             contract_id,
             module: parsed_module,
-            store: RefCell::new(store),
-            instance,
-            memory,
+            wasmi_store: RefCell::new(wasmi_store),
+            wasmi_instance,
+            wasmi_memory,
+            wasmtime_store: RefCell::new(wasmtime_store),
+            wasmtime_instance,
+            wasmtime_memory,
         }))
     }
 
     pub fn from_parsed_module(
         host: &Host,
         contract_id: Hash,
-        parsed_module: Rc<ParsedModule>,
+        parsed_module: Arc<ParsedModule>,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::from_parsed_module");
         VmInstantiationTimer::new(host.clone());
-        if let Some(linker) = &*host.try_borrow_linker()? {
-            Self::instantiate(host, contract_id, parsed_module, linker)
+        if let Some(cache) = &*host.try_borrow_module_cache()? {
+            Self::instantiate(
+                host,
+                contract_id,
+                parsed_module,
+                &cache.wasmi_linker,
+                &cache.wasmtime_linker,
+            )
         } else {
-            let linker = parsed_module.make_linker(host)?;
-            Self::instantiate(host, contract_id, parsed_module, &linker)
+            let wasmi_linker = parsed_module.make_wasmi_linker(host)?;
+            let wasmtime_linker = parsed_module.make_wasmtime_linker(host)?;
+            Self::instantiate(
+                host,
+                contract_id,
+                parsed_module,
+                &wasmi_linker,
+                &wasmtime_linker,
+            )
         }
     }
 
@@ -285,13 +340,7 @@ impl Vm {
         let cost_inputs = VersionedContractCodeCostInputs::V0 {
             wasm_bytes: wasm.len(),
         };
-        Self::new_with_cost_inputs(
-            host,
-            contract_id,
-            wasm,
-            cost_inputs,
-            ModuleParseCostMode::Normal,
-        )
+        Self::new_with_cost_inputs(host, contract_id, wasm, cost_inputs)
     }
 
     pub(crate) fn new_with_cost_inputs(
@@ -299,79 +348,35 @@ impl Vm {
         contract_id: Hash,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
-        cost_mode: ModuleParseCostMode,
     ) -> Result<Rc<Self>, HostError> {
         let _span = tracy_span!("Vm::new");
         VmInstantiationTimer::new(host.clone());
-        let parsed_module = Self::parse_module(host, wasm, cost_inputs, cost_mode)?;
-        let linker = parsed_module.make_linker(host)?;
-        Self::instantiate(host, contract_id, parsed_module, &linker)
+        let parsed_module = ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)?;
+        let wasmi_linker = parsed_module.make_wasmi_linker(host)?;
+        let wasmtime_linker = parsed_module.make_wasmtime_linker(host)?;
+        Self::instantiate(
+            host,
+            contract_id,
+            parsed_module,
+            &wasmi_linker,
+            &wasmtime_linker,
+        )
     }
 
-    #[cfg(not(any(test, feature = "recording_mode")))]
-    fn parse_module(
-        host: &Host,
-        wasm: &[u8],
-        cost_inputs: VersionedContractCodeCostInputs,
-        _cost_mode: ModuleParseCostMode,
-    ) -> Result<Rc<ParsedModule>, HostError> {
-        ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
-    }
-
-    /// This method exists to support [crate::storage::FootprintMode::Recording]
-    /// when running in protocol versions that feature the [ModuleCache].
-    ///
-    /// There are two ways we can get to here:
-    ///
-    ///   1. When we're running in a protocol that doesn't support the
-    ///   [ModuleCache] at all. In this case, we just parse the module and
-    ///   charge for it as normal.
-    ///
-    ///   2. When we're in a protocol that _does_ support the [ModuleCache] but
-    ///   are _also_ in [crate::storage::FootprintMode::Recording] mode and
-    ///   _also_ being instantiated from [Host::call_contract_fn]. Then the
-    ///   [ModuleCache] _did not get built_ during host setup (because we had
-    ///   no footprint yet to buid the cache from), so our caller
-    ///   [Host::call_contract_fn] sees no module cache, and so each call winds
-    ///   up calling us here, reparsing each module as it's called, and then
-    ///   throwing it away.
-    ///
-    /// When we are in case 2, we don't want to charge for all those reparses:
-    /// we want to charge only for the post-parse instantiations _as if_ we had
-    /// had the cache. The cache will actually be added in [Host::pop_context]
-    /// _after_ a top-level recording-mode invocation completes, by reading the
-    /// storage and parsing all the modules in it, in order to charge for
-    /// parsing each used module _once_ and thereby produce a mostly-correct
-    /// total cost.
-    ///
-    /// We still charge the reparses to the shadow budget, to avoid a DoS risk,
-    /// and we still charge the instantiations to the real budget, to behave the
-    /// same as if we had a cache.
-    ///
-    /// Finally, for those scratching their head about the overall structure:
-    /// all of this happens as a result of the "module cache" not being
-    /// especially cache-like (i.e. not being populated lazily, on-access). It's
-    /// populated all at once, up front, because wasmi does not allow adding
-    /// modules to an engine that's currently running.
-    #[cfg(any(test, feature = "recording_mode"))]
-    fn parse_module(
-        host: &Host,
-        wasm: &[u8],
-        cost_inputs: VersionedContractCodeCostInputs,
-        cost_mode: ModuleParseCostMode,
-    ) -> Result<Rc<ParsedModule>, HostError> {
-        if cost_mode == ModuleParseCostMode::PossiblyDeferredIfRecording {
-            if host.in_storage_recording_mode()? {
-                return host.budget_ref().with_observable_shadow_mode(|| {
-                    ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
-                });
-            }
+    pub(crate) fn get_memory(&self, host: &Host) -> Result<wasmi::Memory, HostError> {
+        match self.wasmi_memory {
+            Some(mem) => Ok(mem),
+            None => Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::MissingValue,
+                "no linear memory named `memory`",
+                &[],
+            )),
         }
-        ParsedModule::new_with_isolated_engine(host, wasm, cost_inputs)
     }
 
-    pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {
-        match self.memory {
+    pub(crate) fn get_wasmtime_memory(&self, host: &Host) -> Result<wasmtime::Memory, HostError> {
+        match self.wasmtime_memory {
             Some(mem) => Ok(mem),
             None => Err(host.err(
                 ScErrorType::WasmVm,
@@ -390,7 +395,7 @@ impl Vm {
         self: &Rc<Self>,
         host: &Host,
         func_sym: &Symbol,
-        inputs: &[Value],
+        inputs: &[wasmi::Value],
         treat_missing_function_as_noop: bool,
     ) -> Result<Val, HostError> {
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
@@ -398,8 +403,8 @@ impl Vm {
         // resolve the function entity to be called
         let func_ss: SymbolStr = func_sym.try_into_val(host)?;
         let ext = match self
-            .instance
-            .get_export(&*self.store.try_borrow_or_err()?, func_ss.as_ref())
+            .wasmi_instance
+            .get_export(&*self.wasmi_store.try_borrow_or_err()?, func_ss.as_ref())
         {
             None => {
                 if treat_missing_function_as_noop {
@@ -437,13 +442,17 @@ impl Vm {
         }
 
         // call the function
-        let mut wasm_ret: [Value; 1] = [Value::I64(0)];
-        self.store.try_borrow_mut_or_err()?.add_fuel_to_vm(host)?;
+        let mut wasm_ret: [wasmi::Value; 1] = [wasmi::Value::I64(0)];
+        let added_fuel = self.wasmi_store
+            .try_borrow_mut_or_err()?
+            .add_fuel_to_vm(host)?;
+        host.set_last_vm_fuel(added_fuel)?;
+
         // Metering: the `func.call` will trigger `wasmi::Call` (or `CallIndirect`) instruction,
         // which is technically covered by wasmi fuel metering. So we are double charging a bit
         // here (by a few 100s cpu insns). It is better to be safe.
         let res = func.call(
-            &mut *self.store.try_borrow_mut_or_err()?,
+            &mut *self.wasmi_store.try_borrow_mut_or_err()?,
             inputs,
             &mut wasm_ret,
         );
@@ -452,9 +461,10 @@ impl Vm {
         // wasmi instruction) remaining when the `OutOfFuel` trap occurs. This is only observable
         // if the contract traps with `OutOfFuel`, which may appear confusing if they look closely
         // at the budget amount consumed. So it should be fine.
-        self.store
+        let last_fuel = host.get_last_vm_fuel()?;
+        self.wasmi_store
             .try_borrow_mut_or_err()?
-            .return_fuel_to_host(host)?;
+            .return_fuel_to_host(host, last_fuel)?;
 
         if let Err(e) = res {
             use std::borrow::Cow;
@@ -502,6 +512,93 @@ impl Vm {
         )
     }
 
+    pub(crate) fn metered_wasmtime_func_call(
+        self: &Rc<Self>,
+        host: &Host,
+        func_sym: &Symbol,
+        inputs: &[wasmtime::Val],
+        treat_missing_function_as_noop: bool,
+    ) -> Result<Val, HostError> {
+        let _span = tracy_span!("Vm::metered_wasmtime_func_call");
+
+        host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
+
+        // resolve the function entity to be called
+        let func_ss: SymbolStr = func_sym.try_into_val(host)?;
+        let ext = match self.wasmtime_instance.get_export(
+            &mut *self.wasmtime_store.try_borrow_mut_or_err()?,
+            func_ss.as_ref(),
+        ) {
+            None => {
+                if treat_missing_function_as_noop {
+                    return Ok(Val::VOID.into());
+                } else {
+                    return Err(host.err(
+                        ScErrorType::WasmVm,
+                        ScErrorCode::MissingValue,
+                        "trying to invoke non-existent contract function",
+                        &[func_sym.to_val()],
+                    ));
+                }
+            }
+            Some(e) => e,
+        };
+        let func = match ext.into_func() {
+            None => {
+                return Err(host.err(
+                    ScErrorType::WasmVm,
+                    ScErrorCode::UnexpectedType,
+                    "trying to invoke Wasm export that is not a function",
+                    &[func_sym.to_val()],
+                ))
+            }
+            Some(e) => e,
+        };
+
+        if inputs.len() > Vm::MAX_VM_ARGS {
+            return Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidInput,
+                "Too many arguments in Wasm invocation",
+                &[func_sym.to_val()],
+            ));
+        }
+
+        // call the function
+        let mut wasm_ret: [wasmtime::Val; 1] = [wasmtime::Val::I64(0)];
+        let added_fuel = self
+            .wasmtime_store
+            .try_borrow_mut_or_err()?
+            .add_fuel_to_vm(host)?;
+        host.set_last_vm_fuel(added_fuel)?;
+
+        let res = {
+            let _span = tracy_span!("Vm::metered_wasmtime_func_call - actual call");
+            func.call(
+                &mut *self.wasmtime_store.try_borrow_mut_or_err()?,
+                inputs,
+                &mut wasm_ret,
+            )
+        };
+
+        let last_fuel = host.get_last_vm_fuel()?;
+        self.wasmtime_store
+            .try_borrow_mut_or_err()?
+            .return_fuel_to_host(host, last_fuel)?;
+
+        if let Err(e) = res {
+            // FIXME: this needs to be fairly careful about correct propagation.
+            // currently we're just doing a crude downcast attempt.
+            return host.map_wasmtime_error(Err(e));
+        }
+        host.relative_to_absolute(
+            Val::try_marshal_from_wasmtime_value(wasm_ret[0]).ok_or(ConversionError)?,
+        )
+    }
+
+    // FIXME: remove when/if we decide to commit to this transition.
+    const FIRST_PROTOCOL_TO_RUN_ON_WASMTIME: u32 = 21;
+
     pub(crate) fn invoke_function_raw(
         self: &Rc<Self>,
         host: &Host,
@@ -510,17 +607,33 @@ impl Vm {
         treat_missing_function_as_noop: bool,
     ) -> Result<Val, HostError> {
         let _span = tracy_span!("Vm::invoke_function_raw");
-        Vec::<Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
-        let wasm_args: Vec<Value> = args
-            .iter()
-            .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
-            .collect::<Result<Vec<Value>, HostError>>()?;
-        self.metered_func_call(
-            host,
-            func_sym,
-            wasm_args.as_slice(),
-            treat_missing_function_as_noop,
-        )
+        Vec::<wasmi::Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
+        if host.get_ledger_protocol_version()? >= Self::FIRST_PROTOCOL_TO_RUN_ON_WASMTIME {
+            let wasmtime_args: Vec<wasmtime::Val> = args
+                .iter()
+                .map(|i| {
+                    host.absolute_to_relative(*i)
+                        .map(|v| v.marshal_wasmtime_from_self())
+                })
+                .collect::<Result<Vec<wasmtime::Val>, HostError>>()?;
+            self.metered_wasmtime_func_call(
+                host,
+                func_sym,
+                wasmtime_args.as_slice(),
+                treat_missing_function_as_noop,
+            )
+        } else {
+            let wasm_args: Vec<wasmi::Value> = args
+                .iter()
+                .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
+                .collect::<Result<Vec<wasmi::Value>, HostError>>()?;
+            self.metered_func_call(
+                host,
+                func_sym,
+                wasm_args.as_slice(),
+                treat_missing_function_as_noop,
+            )
+        }
     }
 
     /// Returns the raw bytes content of a named custom section from the WASM
@@ -536,10 +649,10 @@ impl Vm {
     where
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
     {
-        let store: &mut Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
+        let store: &mut wasmi::Store<Host> = &mut *self.wasmi_store.try_borrow_mut_or_err()?;
         let mut ctx: StoreContextMut<Host> = store.into();
-        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
-        let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
+        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.wasmi_instance));
+        let mut vmcaller: VmCaller<Host> = VmCaller::WasmiCaller(caller);
         f(&mut vmcaller)
     }
 
@@ -548,15 +661,15 @@ impl Vm {
     where
         F: FnOnce(Caller<Host>) -> Result<T, HostError>,
     {
-        let store: &mut Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
+        let store: &mut wasmi::Store<Host> = &mut *self.wasmi_store.try_borrow_mut_or_err()?;
         let mut ctx: StoreContextMut<Host> = store.into();
-        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
+        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.wasmi_instance));
         f(caller)
     }
 
     pub(crate) fn memory_hash_and_size(&self, budget: &Budget) -> Result<(u64, usize), HostError> {
         use std::hash::Hasher;
-        if let Some(mem) = self.memory {
+        if let Some(mem) = self.wasmi_memory {
             self.with_vmcaller(|vmcaller| {
                 let mut state = CountingHasher::default();
                 let data = mem.data(vmcaller.try_ref()?);
@@ -578,7 +691,7 @@ impl Vm {
             let ctx: StoreContext<'_, _> = vmcaller.try_ref()?.into();
             let mut size: usize = 0;
             let mut state = CountingHasher::default();
-            for export in self.instance.exports(vmcaller.try_ref()?) {
+            for export in self.wasmi_instance.exports(vmcaller.try_ref()?) {
                 size = size.saturating_add(1);
                 export.name().metered_hash(&mut state, budget)?;
 

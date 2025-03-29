@@ -19,6 +19,8 @@ use crate::{
     SymbolObject, TryFromVal, TryIntoVal, U32Val, Val, VecObject,
 };
 
+use super::ErrorHandler;
+
 impl Host {
     // Notes on metering: free
     pub(crate) fn usize_to_u32(&self, u: usize) -> Result<u32, HostError> {

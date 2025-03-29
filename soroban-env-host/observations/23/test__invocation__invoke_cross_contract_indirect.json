@@ -47,6 +47,6 @@
   "  45 pop VM:58f13912:add -> Ok(I32(11))": " vm:1048576@a069fefe/5@10e7e476",
   "  46 ret call -> Ok(I32(11))": " objs:4@6df35cf0/25@6f0821ff, vm:-/-, stk:1@7e9163fe, auth:1@647e9c14/-",
   "  47 pop VM:3f2c7e4c:add_with -> Ok(I32(11))": " vm:1114112@e546c58e/10@a420633f",
-  "  48 ret call -> Ok(I32(11))": "cpu:6776584, mem:7954622, objs:-/25@6f0821ff, vm:-/-, stk:-, auth:-/-",
-  "  49 end": "cpu:6776584, mem:7954622, prngs:-/9b4a753, objs:-/25@6f0821ff, vm:-/-, evt:2@d064677b, store:-/4@a68e5fc8, foot:4@7048bcdb, stk:-, auth:-/-"
+  "  48 ret call -> Ok(I32(11))": " objs:-/25@6f0821ff, vm:-/-, stk:-, auth:-/-",
+  "  49 end": "cpu:6775945, mem:7954606, prngs:-/9b4a753, objs:-/25@6f0821ff, vm:-/-, evt:2@d064677b, store:-/4@a68e5fc8, foot:4@7048bcdb, stk:-, auth:-/-"
 }

@@ -33,11 +33,12 @@ pub(crate) mod host_object;
 
 pub mod auth;
 pub mod vm;
-pub use vm::Vm;
+pub use vm::{CompilationContext, ModuleCache, Vm};
 pub mod storage;
 pub use budget::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use host::{
-    metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, Seed, SEED_BYTES,
+    metered_map::MeteredOrdMap, metered_vector::MeteredVector, ErrorHandler, Host, HostError, Seed,
+    SEED_BYTES,
 };
 pub use soroban_env_common::*;
 
@@ -52,6 +53,14 @@ pub mod fees;
 
 #[doc(hidden)]
 pub use host::{TraceEvent, TraceHook, TraceRecord, TraceState};
+
+#[doc(hidden)]
+#[cfg(feature = "wasmi")]
+pub use wasmi;
+
+#[doc(hidden)]
+#[cfg(feature = "wasmtime")]
+pub use wasmtime;
 
 #[cfg(feature = "bench")]
 #[doc(hidden)]

@@ -113,6 +113,8 @@ pub use val::{ConversionError, Tag, Val};
 
 #[cfg(feature = "wasmi")]
 pub use val::WasmiMarshal;
+#[cfg(feature = "wasmtime")]
+pub use val::WasmtimeMarshal;
 pub use val::{AddressObject, MapObject, MuxedAddressObject, VecObject};
 pub use val::{Bool, Void};
 

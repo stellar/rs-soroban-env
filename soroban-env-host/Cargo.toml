@@ -15,8 +15,9 @@ exclude = ["observations/"]
 
 [dependencies]
 soroban-builtin-sdk-macros = { workspace = true }
-soroban-env-common = { workspace = true, features = ["std", "wasmi", "shallow-val-hash"] }
-wasmi = { workspace = true }
+soroban-env-common = { workspace = true, features = ["std", "shallow-val-hash"] }
+wasmi = { workspace = true, optional = true }
+wasmtime = { workspace = true, optional = true }
 wasmparser = { workspace = true }
 stellar-strkey = "0.0.13"
 static_assertions = "1.1.0"
@@ -90,12 +91,15 @@ default-features = false
 features = ["arbitrary"]
 
 [features]
+default = ["wasmi", "wasmtime"]
+wasmi = ["dep:wasmi", "soroban-env-common/wasmi"]
+wasmtime = ["dep:wasmtime", "soroban-env-common/wasmtime"]
 testutils = ["soroban-env-common/testutils", "recording_mode"]
 backtrace = ["dep:backtrace"]
 next = ["soroban-env-common/next", "stellar-xdr/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_mode = []
-bench = []
+bench = ["testutils"]
 # This feature guards the work-in-progress changes in soroban-env-host
 # API. Its main purpose is to be able to make API changes without bumping
 # the crate version.

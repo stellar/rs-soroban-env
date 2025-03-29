@@ -469,6 +469,62 @@ impl WasmiMarshal for i64 {
     }
 }
 
+#[cfg(feature = "wasmtime")]
+pub trait WasmtimeMarshal: Sized {
+    fn try_marshal_from_wasmtime_value(v: wasmtime::Val) -> Option<Self>;
+    fn marshal_wasmtime_from_self(self) -> wasmtime::Val;
+}
+
+#[cfg(feature = "wasmtime")]
+impl WasmtimeMarshal for Val {
+    fn try_marshal_from_wasmtime_value(v: wasmtime::Val) -> Option<Self> {
+        if let wasmtime::Val::I64(i) = v {
+            let v = Val::from_payload(i as u64);
+            if v.is_good() {
+                Some(v)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn marshal_wasmtime_from_self(self) -> wasmtime::Val {
+        wasmtime::Val::I64(self.get_payload() as i64)
+    }
+}
+
+#[cfg(feature = "wasmtime")]
+impl WasmtimeMarshal for u64 {
+    fn try_marshal_from_wasmtime_value(v: wasmtime::Val) -> Option<Self> {
+        if let wasmtime::Val::I64(i) = v {
+            Some(i as u64)
+        } else {
+            None
+        }
+    }
+
+    fn marshal_wasmtime_from_self(self) -> wasmtime::Val {
+        wasmtime::Val::I64(self as i64)
+    }
+}
+
+#[cfg(feature = "wasmtime")]
+impl WasmtimeMarshal for i64 {
+    fn try_marshal_from_wasmtime_value(v: wasmtime::Val) -> Option<Self> {
+        if let wasmtime::Val::I64(i) = v {
+            Some(i)
+        } else {
+            None
+        }
+    }
+
+    fn marshal_wasmtime_from_self(self) -> wasmtime::Val {
+        wasmtime::Val::I64(self)
+    }
+}
+
 // Manually implement all the residual pieces: ValConverts
 // and Froms.
 

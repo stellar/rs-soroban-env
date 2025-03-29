@@ -2,12 +2,20 @@ mod dimension;
 mod limits;
 mod model;
 mod util;
+#[cfg(feature = "wasmi")]
 mod wasmi_helper;
+#[cfg(feature = "wasmtime")]
+mod wasmtime_helper;
 
 pub(crate) use limits::DepthLimiter;
 pub use limits::{DEFAULT_HOST_DEPTH_LIMIT, DEFAULT_XDR_RW_LIMITS};
 pub use model::{MeteredCostComponent, ScaledU64};
+
+#[cfg(feature = "wasmi")]
 pub(crate) use wasmi_helper::{get_wasmi_config, load_calibrated_fuel_costs};
+
+#[cfg(feature = "wasmtime")]
+pub(crate) use wasmtime_helper::get_wasmtime_config;
 
 use std::{
     cell::{RefCell, RefMut},
