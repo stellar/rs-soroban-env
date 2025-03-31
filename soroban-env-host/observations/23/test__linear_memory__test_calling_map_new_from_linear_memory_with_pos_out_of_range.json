@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8095172",
   "  19 pop VM:7dbe7097:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8096297, mem:1641801, objs:-/9@3e23d58b, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8096739, mem:1641881, objs:-/10@32258952",
-  "  22 push VM:7dbe7097:loadmem2(U32(0), U32(65536), U32(32))": "cpu:8736115, mem:1920864, objs:-/11@119700f, vm:65536@b1cd98b9/4@70bfd778, stk:1@d2c91dea, auth:1@d114d61d/-",
-  "  23 call map_new_from_linear_memory(U32(0), U32(65536), U32(32))": "cpu:8738596, mem:1920942, vm:-/-",
-  "  24 ret map_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8750232, mem:1921486",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8095675, mem:1641785, objs:-/9@3e23d58b, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8096117, mem:1641865, objs:-/10@32258952",
+  "  22 push VM:7dbe7097:loadmem2(U32(0), U32(65536), U32(32))": "cpu:8734525, mem:1920712, objs:-/11@119700f, vm:65536@b1cd98b9/4@70bfd778, stk:1@d2c91dea, auth:1@d114d61d/-",
+  "  23 call map_new_from_linear_memory(U32(0), U32(65536), U32(32))": "cpu:8737006, mem:1920790, vm:-/-",
+  "  24 ret map_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8748642, mem:1921334",
   "  25 pop VM:7dbe7097:loadmem2 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@6d331be9/4@70bfd778",
-  "  26 ret call -> Err(Error(WasmVm, IndexBounds))": "cpu:8750854, mem:1921502, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8750854, mem:1921502, prngs:-/9b4a753, objs:-/11@119700f, vm:-/-, evt:-, store:-/2@eadf7a3c, foot:2@fa72fa80, stk:-, auth:-/-"
+  "  26 ret call -> Err(Error(WasmVm, IndexBounds))": " vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8748642, mem:1921334, prngs:-/9b4a753, objs:-/11@119700f, vm:-/-, evt:-, store:-/2@eadf7a3c, foot:2@fa72fa80, stk:-, auth:-/-"
 }

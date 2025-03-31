@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8095172",
   "  19 pop VM:eca7287e:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8096297, mem:1641801, objs:-/9@f96c7d9d, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8096739, mem:1641881, objs:-/10@7ca1541f",
-  "  22 push VM:eca7287e:loadmem1(Symbol(kkkkkkkk), U32(264), U32(1))": "cpu:8736115, mem:1920864, objs:-/11@f1211fdb, vm:65536@b1cd98b9/4@70bfd778, stk:1@8dad2041, auth:1@27279bf3/-",
-  "  23 call symbol_index_in_linear_memory(Symbol(kkkkkkkk), U32(264), U32(1))": "cpu:8738596, mem:1920942, vm:-/-",
-  "  24 ret symbol_index_in_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8747221",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8095675, mem:1641785, objs:-/9@f96c7d9d, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8096117, mem:1641865, objs:-/10@7ca1541f",
+  "  22 push VM:eca7287e:loadmem1(Symbol(kkkkkkkk), U32(264), U32(1))": "cpu:8734525, mem:1920712, objs:-/11@f1211fdb, vm:65536@b1cd98b9/4@70bfd778, stk:1@8dad2041, auth:1@27279bf3/-",
+  "  23 call symbol_index_in_linear_memory(Symbol(kkkkkkkk), U32(264), U32(1))": "cpu:8737006, mem:1920790, vm:-/-",
+  "  24 ret symbol_index_in_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8745631",
   "  25 pop VM:eca7287e:loadmem1 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@1ef083fd/4@70bfd778",
-  "  26 ret call -> Err(Error(WasmVm, IndexBounds))": "cpu:8747843, mem:1920958, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8747843, mem:1920958, prngs:-/9b4a753, objs:-/11@f1211fdb, vm:-/-, evt:-, store:-/2@39ea7c6d, foot:2@6ef547f4, stk:-, auth:-/-"
+  "  26 ret call -> Err(Error(WasmVm, IndexBounds))": " vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8745631, mem:1920790, prngs:-/9b4a753, objs:-/11@f1211fdb, vm:-/-, evt:-, store:-/2@39ea7c6d, foot:2@6ef547f4, stk:-, auth:-/-"
 }

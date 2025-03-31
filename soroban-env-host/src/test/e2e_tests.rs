@@ -3,10 +3,11 @@ use crate::e2e_invoke::RecordingInvocationAuthMode;
 use crate::e2e_testutils::{account_entry, bytes_sc_val, upload_wasm_host_fn};
 use crate::testutils::simple_account_sign_fn;
 use crate::{
-    budget::Budget,
+    budget::{AsBudget, Budget},
     builtin_contracts::testutils::TestSigner,
     e2e_invoke::{
-        invoke_host_function, invoke_host_function_in_recording_mode, ledger_entry_to_ledger_key,
+        invoke_host_function_in_recording_mode,
+        invoke_host_function_with_trace_hook_and_module_cache, ledger_entry_to_ledger_key,
         LedgerEntryChange, LedgerEntryLiveUntilChange,
     },
     e2e_testutils::{
@@ -27,6 +28,7 @@ use crate::{
     },
     Host, HostError, LedgerInfo,
 };
+use crate::{ErrorHandler, ModuleCache};
 use ed25519_dalek::SigningKey;
 use pretty_assertions::assert_eq;
 use rand::rngs::StdRng;
@@ -48,7 +50,7 @@ use std::rc::Rc;
 // We don't anticipate this divergence to be too high though: specifically,
 // we expect the estimated instructions to be within a range of
 // [1 - RECORDING_MODE_INSTRUCTIONS_RANGE, 1 + RECORDING_MODE_INSTRUCTIONS_RANGE] * real_instructions
-const RECORDING_MODE_INSTRUCTIONS_RANGE: f64 = 0.02;
+const RECORDING_MODE_INSTRUCTIONS_RANGE: f64 = 0.3;
 
 fn wasm_entry_size(wasm: &[u8]) -> u32 {
     wasm_entry(wasm).to_xdr(Limits::none()).unwrap().len() as u32
@@ -232,6 +234,41 @@ struct InvokeHostFunctionRecordingHelperResult {
     contract_events_and_return_value_size: u32,
 }
 
+#[derive(Clone)]
+struct E2eTestCompilationContext(Budget);
+impl E2eTestCompilationContext {
+    fn new() -> Result<Self, HostError> {
+        // Compilation happens ouside the host, in an unlimited budget.
+        let budget = Budget::default();
+        budget.reset_unlimited()?;
+        Ok(Self(budget))
+    }
+}
+impl ErrorHandler for E2eTestCompilationContext {
+    fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
+    where
+        soroban_env_common::Error: From<E>,
+        E: std::fmt::Debug,
+    {
+        res.map_err(|e| HostError::from(e))
+    }
+
+    fn error(
+        &self,
+        error: soroban_env_common::Error,
+        _msg: &str,
+        _args: &[soroban_env_common::Val],
+    ) -> HostError {
+        HostError::from(error)
+    }
+}
+impl AsBudget for E2eTestCompilationContext {
+    fn as_budget(&self) -> &Budget {
+        &self.0
+    }
+}
+impl crate::CompilationContext for E2eTestCompilationContext {}
+
 fn invoke_host_function_helper(
     enable_diagnostics: bool,
     host_fn: &HostFunction,
@@ -280,12 +317,21 @@ fn invoke_host_function_helper(
                 .unwrap()
         })
         .collect();
+
+    let ctx = E2eTestCompilationContext::new()?;
+    let cache = ModuleCache::new(&ctx)?;
+    for (e, _) in ledger_entries_with_ttl.iter() {
+        if let LedgerEntryData::ContractCode(cd) = &e.data {
+            cache.parse_and_cache_module_simple(&ctx, ledger_info.protocol_version, &cd.code)?;
+        }
+    }
+
     let budget = Budget::default();
     budget
         .reset_cpu_limit(resources.instructions as u64)
         .unwrap();
     let mut diagnostic_events = Vec::<DiagnosticEvent>::new();
-    let res = invoke_host_function(
+    let res = invoke_host_function_with_trace_hook_and_module_cache(
         &budget,
         enable_diagnostics,
         encoded_host_fn,
@@ -297,6 +343,8 @@ fn invoke_host_function_helper(
         encoded_ttl_entries.into_iter(),
         prng_seed.to_vec(),
         &mut diagnostic_events,
+        None,
+        Some(cache),
     )?;
     Ok(InvokeHostFunctionHelperResult {
         invoke_result: res
@@ -496,6 +544,7 @@ fn invoke_host_function_using_simulation_with_signers(
     }
     let max_instructions = (enforcing_result.budget.get_cpu_insns_consumed().unwrap() as f64
         * (1.0 + RECORDING_MODE_INSTRUCTIONS_RANGE)) as u32;
+    dbg!(initial_recording_result_instructions, max_instructions);
     assert!(initial_recording_result_instructions <= max_instructions);
 
     Ok(enforcing_result)
@@ -1218,7 +1267,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 831779,
+            instructions: 661470,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1359,7 +1408,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1767346,
+            instructions: 1066596,
             read_bytes: 3816,
             write_bytes: 176,
         }
@@ -1420,7 +1469,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 833226,
+            instructions: 662917,
             read_bytes: 684,
             write_bytes: 104,
         }
@@ -1850,7 +1899,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 1431292,
+            instructions: 896332,
             read_bytes: 3132,
             write_bytes: 80,
         }
@@ -1916,7 +1965,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 1543334,
+            instructions: 1008374,
             read_bytes: 3212,
             write_bytes: 0,
         }

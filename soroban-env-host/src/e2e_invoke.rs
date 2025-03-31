@@ -4,7 +4,6 @@
 /// host functions.
 use std::{cmp::max, rc::Rc};
 
-use crate::ledger_info::get_key_durability;
 use crate::storage::EntryWithLiveUntil;
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
@@ -31,6 +30,7 @@ use crate::{
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
+use crate::{ledger_info::get_key_durability, ModuleCache};
 #[cfg(any(test, feature = "recording_mode"))]
 use sha2::{Digest, Sha256};
 
@@ -337,6 +337,44 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     diagnostic_events: &mut Vec<DiagnosticEvent>,
     trace_hook: Option<TraceHook>,
 ) -> Result<InvokeHostFunctionResult, HostError> {
+    invoke_host_function_with_trace_hook_and_module_cache(
+        budget,
+        enable_diagnostics,
+        encoded_host_fn,
+        encoded_resources,
+        encoded_source_account,
+        encoded_auth_entries,
+        ledger_info,
+        encoded_ledger_entries,
+        encoded_ttl_entries,
+        base_prng_seed,
+        diagnostic_events,
+        trace_hook,
+        None,
+    )
+}
+
+/// Same as `invoke_host_function_with_trace_hook` but allows to pass a `ModuleCache`
+/// which should be pre-loaded with all contracts in this invocation.
+#[allow(clippy::too_many_arguments)]
+pub fn invoke_host_function_with_trace_hook_and_module_cache<
+    T: AsRef<[u8]>,
+    I: ExactSizeIterator<Item = T>,
+>(
+    budget: &Budget,
+    enable_diagnostics: bool,
+    encoded_host_fn: T,
+    encoded_resources: T,
+    encoded_source_account: T,
+    encoded_auth_entries: I,
+    ledger_info: LedgerInfo,
+    encoded_ledger_entries: I,
+    encoded_ttl_entries: I,
+    base_prng_seed: T,
+    diagnostic_events: &mut Vec<DiagnosticEvent>,
+    trace_hook: Option<TraceHook>,
+    module_cache: Option<ModuleCache>,
+) -> Result<InvokeHostFunctionResult, HostError> {
     let _span0 = tracy_span!("invoke_host_function");
 
     let resources: SorobanResources =
@@ -375,6 +413,9 @@ pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator
     host.set_base_prng_seed(seed32)?;
     if enable_diagnostics {
         host.set_diagnostic_level(DiagnosticLevel::Debug)?;
+    }
+    if let Some(module_cache) = module_cache {
+        host.set_module_cache(module_cache)?;
     }
     let result = {
         let _span1 = tracy_span!("Host::invoke_function");

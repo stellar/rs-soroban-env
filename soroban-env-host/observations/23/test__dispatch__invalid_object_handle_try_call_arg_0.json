@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1503719",
   "  19 pop VM:c0aa3a98:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1504844, mem:743475, objs:-/9@9d2020ee, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#21))": "cpu:1505728, mem:743635, objs:-/11@569fa77e",
-  "  22 push VM:c0aa3a98:test(Address(obj#123), Symbol(abc), Vec(obj#19))": "cpu:1717165, mem:910292, objs:-/12@84cd8989, vm:65536@b1cd98b9/2@2f94d90d, stk:1@eaaf3ad9, auth:1@2eefa960/-",
-  "  23 call try_call(Address(obj#123), Symbol(abc), Vec(obj#19))": "cpu:1720516, mem:910418, objs:2@11f9dbd4/12@84cd8989, vm:-/-, stk:1@b5942d1a",
-  "  24 pop VM:c0aa3a98:test -> Err(Error(Value, InvalidInput))": "cpu:1721183, vm:65536@b1cd98b9/2@2f94d90d",
-  "  25 ret call -> Err(Error(Value, InvalidInput))": "cpu:1721805, mem:910434, objs:-/12@84cd8989, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1721805, mem:910434, prngs:-/9b4a753, objs:-/12@84cd8989, vm:-/-, evt:-, store:-/2@d40a13eb, foot:2@bebb88c, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1504222, mem:743459, objs:-/9@9d2020ee, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#21))": "cpu:1505106, mem:743619, objs:-/11@569fa77e",
+  "  22 push VM:c0aa3a98:test(Address(obj#123), Symbol(abc), Vec(obj#19))": "cpu:1715575, mem:910140, objs:-/12@84cd8989, vm:65536@b1cd98b9/2@2f94d90d, stk:1@eaaf3ad9, auth:1@2eefa960/-",
+  "  23 call try_call(Address(obj#123), Symbol(abc), Vec(obj#19))": "cpu:1718926, mem:910266, objs:2@11f9dbd4/12@84cd8989, vm:-/-, stk:1@b5942d1a",
+  "  24 pop VM:c0aa3a98:test -> Err(Error(Value, InvalidInput))": "cpu:1719593, vm:65536@b1cd98b9/2@2f94d90d",
+  "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/12@84cd8989, vm:-/-, stk:-, auth:-/-",
+  "  26 end": "cpu:1719593, mem:910266, prngs:-/9b4a753, objs:-/12@84cd8989, vm:-/-, evt:-, store:-/2@d40a13eb, foot:2@bebb88c, stk:-, auth:-/-"
 }
