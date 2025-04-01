@@ -85,7 +85,7 @@ p256 = {version = "0.13.2", default-features = false, features = ["alloc"]}
 [dev-dependencies.stellar-xdr]
 version = "=22.1.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "4413ebb265fedd4e194487846289c804bae4c574"
+rev = "fdd0c4f467ea654c3aaf139e8e914e1c416a39b8"
 default-features = false
 features = ["arbitrary"]
 
