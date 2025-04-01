@@ -4,6 +4,7 @@ use std::rc::Rc;
 use crate::{
     auth::AuthorizationManager,
     budget::{AsBudget, Budget},
+    builtin_contracts::common_types::AddressExecutable,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     host_object::{HostMap, HostObject, HostVec, MuxedScAddress},
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns,
@@ -742,6 +743,19 @@ impl Host {
         };
         self.create_contract_internal(Some(deployer), args, constructor_args_vec)
     }
+
+    pub fn check_same_env(&self, other: &Self) -> Result<(), HostError> {
+        if Rc::ptr_eq(&self.0, &other.0) {
+            Ok(())
+        } else {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "check_same_env on different Hosts",
+                &[],
+            ))
+        }
+    }
 }
 
 macro_rules! call_trace_env_call {
@@ -880,19 +894,6 @@ impl EnvBase for Host {
         res: &Result<&dyn Debug, &HostError>,
     ) -> Result<(), HostError> {
         self.call_any_lifecycle_hook(TraceEvent::EnvRet(fname, res))
-    }
-
-    fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
-        if Rc::ptr_eq(&self.0, &other.0) {
-            Ok(())
-        } else {
-            Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "check_same_env on different Hosts",
-                &[],
-            ))
-        }
     }
 
     fn bytes_copy_from_slice(
@@ -3351,6 +3352,56 @@ impl VmCallerEnv for Host {
             )),
         })?;
         Ok(U64Val::try_from_val(self, &mux_id)?)
+    }
+    fn get_address_executable(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        address: AddressObject,
+    ) -> Result<Val, Self::Error> {
+        let sc_address = self.scaddress_from_address(address)?;
+        let maybe_executable =
+            match sc_address {
+                ScAddress::Account(account_id) => {
+                    let key = self.to_account_key(account_id)?;
+                    if self
+                        .try_borrow_storage_mut()?
+                        .has_with_host(&key, &self, None)?
+                    {
+                        Some(AddressExecutable::Account)
+                    } else {
+                        None
+                    }
+                }
+                ScAddress::Contract(id) => {
+                    let storage_key = self.contract_instance_ledger_key(&id)?;
+                    let maybe_instance_entry = self
+                        .try_borrow_storage_mut()?
+                        .try_get_full_with_host(&storage_key, self, None)?;
+                    if let Some((instance_entry, _ttl)) = maybe_instance_entry {
+                        let instance =
+                            self.extract_contract_instance_from_ledger_entry(&instance_entry)?;
+                        Some(AddressExecutable::from_contract_executable_xdr(
+                            &self,
+                            &instance.executable,
+                        )?)
+                    } else {
+                        None
+                    }
+                }
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::InternalError,
+                        "Unexpected Address variant in get_address_executable",
+                        &[address.into()],
+                    ));
+                }
+            };
+        if let Some(exec) = maybe_executable {
+            Val::try_from_val(self, &exec)
+        } else {
+            Ok(Val::VOID.into())
+        }
     }
     // endregion: "address" module functions
     // region: "prng" module functions
