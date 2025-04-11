@@ -296,7 +296,9 @@ impl ContractFunctionSet for ReturnContractError {
 #[test]
 fn native_invoke_return_err_variants() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let addr = host.add_host_object(xdr::ScAddress::Contract(xdr::Hash([0; 32])))?;
+    let addr = host.add_host_object(xdr::ScAddress::Contract(xdr::ContractId(xdr::Hash(
+        [0; 32],
+    ))))?;
     host.register_test_contract(addr, Rc::new(ReturnContractError))?;
 
     let sym = Symbol::try_from_small_str("go")?;

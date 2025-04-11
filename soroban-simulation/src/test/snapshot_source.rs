@@ -169,7 +169,7 @@ fn test_automatic_restoration() {
                         .unwrap()
                     },
                     instructions: 0,
-                    read_bytes: 112,
+                    disk_read_bytes: 112,
                     write_bytes: 112,
                 },
                 resource_fee: 6041,

@@ -1,7 +1,7 @@
 use crate::vm::ParsedModule;
 use crate::xdr::{
     AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractCodeEntryExt,
-    ContractCodeEntryV1, ContractDataDurability, ContractDataEntry, ContractExecutable,
+    ContractCodeEntryV1, ContractDataDurability, ContractDataEntry, ContractExecutable, ContractId,
     ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, CreateContractArgsV2,
     ExtensionPoint, HashIdPreimage, HashIdPreimageContractId, HostFunction, InvokeContractArgs,
     LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyContractCode,
@@ -162,11 +162,11 @@ impl CreateContractData {
             contract_id_preimage: contract_id_preimage.clone(),
             executable: ContractExecutable::Wasm(get_wasm_hash(wasm).try_into().unwrap()),
         });
-        let contract_address = ScAddress::Contract(
+        let contract_address = ScAddress::Contract(ContractId(
             get_contract_id_hash(&contract_id_preimage)
                 .try_into()
                 .unwrap(),
-        );
+        ));
         let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract: contract_address.clone(),
             key: ScVal::LedgerKeyContractInstance,

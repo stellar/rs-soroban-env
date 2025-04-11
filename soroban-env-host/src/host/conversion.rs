@@ -224,7 +224,7 @@ impl Host {
     ) -> Result<Option<BytesObject>, HostError> {
         if let Some(id) = self.get_current_contract_id_opt_internal()? {
             let obj = self.add_host_object::<ScBytes>(
-                self.metered_slice_to_vec(id.as_slice())?.try_into()?,
+                self.metered_slice_to_vec(id.0.as_slice())?.try_into()?,
             )?;
             Ok(Some(obj))
         } else {

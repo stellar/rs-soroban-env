@@ -4,7 +4,7 @@ use soroban_env_host::{
     e2e_testutils::ledger_entry,
     storage::{EntryWithLiveUntil, SnapshotSource},
     xdr::{
-        ContractDataDurability, ContractDataEntry, ExtensionPoint, Hash, LedgerEntry,
+        ContractDataDurability, ContractDataEntry, ContractId, ExtensionPoint, Hash, LedgerEntry,
         LedgerEntryData, LedgerKey, LedgerKeyAccount, LedgerKeyConfigSetting,
         LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScAddress, ScBytes,
         ScErrorCode, ScErrorType, ScVal,
@@ -97,7 +97,7 @@ impl SnapshotSource for MockSnapshotSource {
 pub fn temp_entry(key: &[u8]) -> LedgerEntry {
     ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
         ext: ExtensionPoint::V0,
-        contract: ScAddress::Contract(Hash([0; 32])),
+        contract: ScAddress::Contract(ContractId(Hash([0; 32]))),
         key: ScVal::Bytes(ScBytes(key.try_into().unwrap())),
         durability: ContractDataDurability::Temporary,
         val: ScVal::Void,

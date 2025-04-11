@@ -23,13 +23,13 @@ use crate::{
     testutils::MockSnapshotSource,
     xdr::{
         AccountId, ContractCodeEntryExt, ContractDataDurability, ContractDataEntry, ContractEvent,
-        ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
-        DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey,
-        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
-        SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
-        WriteXdr,
+        ContractExecutable, ContractId, ContractIdPreimage, ContractIdPreimageFromAddress,
+        CreateContractArgs, DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage,
+        HashIdPreimageSorobanAuthorization, HostFunction, InvokeContractArgs, LedgerEntry,
+        LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData,
+        Limits, ReadXdr, ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
+        ScNonceKey, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
+        TtlEntry, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -73,7 +73,7 @@ fn resources(
     SorobanResources {
         footprint,
         instructions,
-        read_bytes: 0,
+        disk_read_bytes: 0,
         write_bytes: 0,
     }
 }
@@ -463,8 +463,10 @@ fn invoke_host_function_using_simulation_with_signers(
             recording_result_with_enforcing_auth.resources.footprint
         );
         assert_eq!(
-            recording_result.resources.read_bytes,
-            recording_result_with_enforcing_auth.resources.read_bytes
+            recording_result.resources.disk_read_bytes,
+            recording_result_with_enforcing_auth
+                .resources
+                .disk_read_bytes
         );
         assert_eq!(
             recording_result.resources.write_bytes,
@@ -765,7 +767,7 @@ fn test_wasm_upload_success_in_recording_mode() {
                 read_write: vec![ledger_key.clone()].try_into().unwrap()
             },
             instructions: expected_insns,
-            read_bytes: 0,
+            disk_read_bytes: 0,
             write_bytes: expected_write_bytes,
         }
     );
@@ -803,7 +805,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
                 read_write: Default::default(),
             },
             instructions: expected_instructions,
-            read_bytes: 0,
+            disk_read_bytes: 0,
             write_bytes: 0,
         }
     );
@@ -1285,7 +1287,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
             instructions: 661470,
-            read_bytes: 0,
+            disk_read_bytes: 0,
             write_bytes: 104,
         }
     );
@@ -1296,7 +1298,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
     // We don't try to invoke `__check_auth` in recording mode in order to not output confusing
     // side-effects. Thus any Wasm can stand for a custom account.
     let custom_account_wasm = CONTRACT_STORAGE;
-    let custom_account_address = ScAddress::Contract([222; 32].into());
+    let custom_account_address = ScAddress::Contract(ContractId([222; 32].into()));
     let expected_nonce = 801925984706572462_i64;
 
     let cd = CreateContractData::new_with_refined_contract_cost_inputs_and_deployer(
@@ -1426,7 +1428,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
             instructions: 1066596,
-            read_bytes: 0,
+            disk_read_bytes: 0,
             write_bytes: 176,
         }
     );
@@ -1487,7 +1489,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
             instructions: 662917,
-            read_bytes: 0,
+            disk_read_bytes: 0,
             write_bytes: 104,
         }
     );
@@ -1918,7 +1920,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
             instructions: 896332,
-            read_bytes: 0,
+            disk_read_bytes: 0,
             write_bytes: 80,
         }
     );
@@ -1985,7 +1987,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 read_write: Default::default(),
             },
             instructions: 1008374,
-            read_bytes: 0,
+            disk_read_bytes: 0,
             write_bytes: 0,
         }
     );

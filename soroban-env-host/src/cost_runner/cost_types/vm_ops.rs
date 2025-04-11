@@ -1,14 +1,14 @@
 use crate::{
     cost_runner::{CostRunner, CostType},
     vm::ParsedModule,
-    xdr::{ContractCostType::VmInstantiation, Hash},
+    xdr::{ContractCostType::VmInstantiation, ContractId},
     Host, Vm,
 };
 use std::{hint::black_box, rc::Rc, sync::Arc};
 
 #[derive(Clone)]
 pub struct VmInstantiationSample {
-    pub id: Option<Hash>,
+    pub id: Option<ContractId>,
     pub wasm: Vec<u8>,
     pub module: Arc<ParsedModule>,
     pub linker: wasmi::Linker<Host>,

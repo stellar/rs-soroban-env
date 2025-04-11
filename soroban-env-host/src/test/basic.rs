@@ -1,6 +1,10 @@
 use soroban_env_common::{Tag, TryFromVal, TryIntoVal, Val};
 
-use crate::{host::HostError, xdr::ScVal, Host, Object};
+use crate::{
+    host::HostError,
+    xdr::{ContractId, ScVal},
+    Host, Object,
+};
 
 /// numbers test
 #[test]
@@ -79,7 +83,7 @@ fn f32_does_not_work() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host());
     let hash = Hash::from([0; 32]);
     assert!(HostError::result_matches_err(
-        crate::vm::Vm::new(&host, hash, soroban_test_wasms::ADD_F32),
+        crate::vm::Vm::new(&host, ContractId(hash), soroban_test_wasms::ADD_F32),
         (
             crate::xdr::ScErrorType::WasmVm,
             crate::xdr::ScErrorCode::InvalidAction
