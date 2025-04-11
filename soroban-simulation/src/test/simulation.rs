@@ -16,11 +16,11 @@ use soroban_env_host::e2e_testutils::{
 use soroban_env_host::fees::{FeeConfiguration, RentFeeConfiguration};
 use soroban_env_host::xdr::{
     AccountId, AlphaNum4, AssetCode4, ContractCostParamEntry, ContractCostParams, ContractCostType,
-    ContractDataDurability, ContractDataEntry, ContractExecutable, ExtensionPoint, Hash,
-    HostFunction, Int128Parts, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerFootprint,
-    LedgerKey, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
-    ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScSymbol, ScVal,
-    SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    ContractDataDurability, ContractDataEntry, ContractExecutable, ContractId, ExtensionPoint,
+    Hash, HostFunction, Int128Parts, InvokeContractArgs, LedgerEntry, LedgerEntryData,
+    LedgerFootprint, LedgerKey, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress,
+    ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScSymbol,
+    ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, SorobanTransactionData,
     SorobanTransactionDataExt, TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags,
     Uint256, VecM,
@@ -144,7 +144,7 @@ fn test_simulate_upload_wasm() {
                     read_write: vec![get_wasm_key(ADD_I32)].try_into().unwrap()
                 },
                 instructions: expected_instructions,
-                read_bytes: 0,
+                disk_read_bytes: 0,
                 write_bytes: expected_write_bytes,
             },
             resource_fee: 14073223,
@@ -198,7 +198,7 @@ fn test_simulate_upload_wasm() {
                     read_write: vec![get_wasm_key(ADD_I32)].try_into().unwrap()
                 },
                 instructions: (expected_instructions as f64 * 1.1) as u32,
-                read_bytes: 0,
+                disk_read_bytes: 0,
                 write_bytes: expected_write_bytes + 300,
             },
             resource_fee: 21109107,
@@ -331,10 +331,10 @@ fn test_simulate_create_contract() {
                     read_write: vec![contract.contract_key.clone()].try_into().unwrap()
                 },
                 instructions: expected_instructions,
-                read_bytes: 0,
+                disk_read_bytes: 0,
                 write_bytes: 104,
             },
-            resource_fee: 13160,
+            resource_fee: 13161,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
@@ -492,10 +492,10 @@ fn test_simulate_invoke_contract_with_auth() {
                     .unwrap()
                 },
                 instructions: expected_instructions,
-                read_bytes: 144,
+                disk_read_bytes: 144,
                 write_bytes: 76,
             },
-            resource_fee: 78498,
+            resource_fee: 115271,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
@@ -565,7 +565,7 @@ fn test_simulate_extend_ttl_op() {
                         read_write: Default::default()
                     },
                     instructions: 0,
-                    read_bytes: 0,
+                    disk_read_bytes: 0,
                     write_bytes: 0,
                 },
                 resource_fee: 280,
@@ -602,7 +602,7 @@ fn test_simulate_extend_ttl_op() {
                         read_write: Default::default()
                     },
                     instructions: 0,
-                    read_bytes: 0,
+                    disk_read_bytes: 0,
                     write_bytes: 0,
                 },
                 resource_fee: 17929120,
@@ -630,7 +630,7 @@ fn test_simulate_extend_ttl_op() {
                         read_write: Default::default()
                     },
                     instructions: 0,
-                    read_bytes: 0,
+                    disk_read_bytes: 0,
                     write_bytes: 0,
                 },
                 resource_fee: 306142974,
@@ -675,7 +675,7 @@ fn test_simulate_extend_ttl_op() {
                         .resources
                         .footprint,
                     instructions: 0,
-                    read_bytes: 0,
+                    disk_read_bytes: 0,
                     write_bytes: 0,
                 },
                 resource_fee: 459214435,
@@ -731,7 +731,7 @@ fn test_simulate_restore_op() {
                         read_write: Default::default()
                     },
                     instructions: 0,
-                    read_bytes: 0,
+                    disk_read_bytes: 0,
                     write_bytes: 0,
                 },
                 resource_fee: 279,
@@ -764,7 +764,7 @@ fn test_simulate_restore_op() {
                             .unwrap()
                     },
                     instructions: 0,
-                    read_bytes: expected_rw_bytes,
+                    disk_read_bytes: expected_rw_bytes,
                     write_bytes: expected_rw_bytes,
                 },
                 resource_fee: 32017829,
@@ -793,7 +793,7 @@ fn test_simulate_restore_op() {
                         read_write: keys.clone().tap_mut(|v| v.sort()).try_into().unwrap()
                     },
                     instructions: 0,
-                    read_bytes: expected_rw_bytes,
+                    disk_read_bytes: expected_rw_bytes,
                     write_bytes: expected_rw_bytes,
                 },
                 resource_fee: 32615676,
@@ -821,7 +821,7 @@ fn test_simulate_restore_op() {
                         read_write: keys.clone().tap_mut(|v| v.sort()).try_into().unwrap()
                     },
                     instructions: 0,
-                    read_bytes: (expected_rw_bytes as f64 * 1.2) as u32,
+                    disk_read_bytes: (expected_rw_bytes as f64 * 1.2) as u32,
                     write_bytes: (expected_rw_bytes as f64 * 1.3) as u32,
                 },
                 resource_fee: 48923231,
@@ -956,7 +956,7 @@ fn create_sac_ledger_entry(sac_address: &ScAddress, admin_address: &ScAddress) -
 fn test_simulate_successful_sac_call() {
     let source_account = get_account_id([123; 32]);
     let other_account = get_account_id([124; 32]);
-    let sac_address = ScAddress::Contract(Hash([111; 32]));
+    let sac_address = ScAddress::Contract(ContractId(Hash([111; 32])));
     let call_args: VecM<_> = vec![
         ScVal::Address(ScAddress::Account(other_account.clone())),
         ScVal::I128(Int128Parts { hi: 0, lo: 1 }),
@@ -1041,10 +1041,10 @@ fn test_simulate_successful_sac_call() {
                         .unwrap()
                 },
                 instructions: 3260072,
-                read_bytes: 116,
+                disk_read_bytes: 116,
                 write_bytes: 116,
             },
-            resource_fee: 28345,
+            resource_fee: 52814,
         })
     );
 }
@@ -1060,7 +1060,7 @@ fn test_simulate_successful_sac_call() {
 fn test_simulate_unsuccessful_sac_call_with_try_call() {
     let source_account = get_account_id([123; 32]);
     let other_account = get_account_id([124; 32]);
-    let sac_address = ScAddress::Contract(Hash([111; 32]));
+    let sac_address = ScAddress::Contract(ContractId(Hash([111; 32])));
     let contract = CreateContractData::new([1; 32], TRY_CALL_SAC);
     let host_fn = HostFunction::InvokeContract(InvokeContractArgs {
         contract_address: contract.contract_address.clone(),
@@ -1144,10 +1144,10 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
                     read_write: Default::default(),
                 },
                 instructions: 5354711,
-                read_bytes: 0,
+                disk_read_bytes: 0,
                 write_bytes: 0,
             },
-            resource_fee: 5808,
+            resource_fee: 5703,
         })
     );
 }

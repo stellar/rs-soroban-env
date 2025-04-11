@@ -4,7 +4,7 @@ use crate::{
     budget::AsBudget,
     events::{Events, HostEvent},
     host::metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
-    xdr::{self, ScVal},
+    xdr::{self, ContractId, ScVal},
     BytesObject, Host, HostError, Val, VecObject,
 };
 
@@ -25,7 +25,9 @@ impl InternalContractEvent {
         let topics = host.vecobject_to_scval_vec(self.topics)?;
         let data = host.from_host_val(self.data)?;
         let contract_id = match self.contract_id {
-            Some(id) => Some(host.hash_from_bytesobj_input("contract_id", id)?),
+            Some(id) => Some(ContractId(
+                host.hash_from_bytesobj_input("contract_id", id)?,
+            )),
             None => None,
         };
         Ok(xdr::ContractEvent {
@@ -55,7 +57,7 @@ impl InternalContractEvent {
 
 #[derive(Clone, Debug)]
 pub(crate) struct InternalDiagnosticEvent {
-    pub contract_id: Option<crate::xdr::Hash>,
+    pub contract_id: Option<crate::xdr::ContractId>,
     pub topics: Vec<InternalDiagnosticArg>,
     pub args: Vec<InternalDiagnosticArg>,
 }

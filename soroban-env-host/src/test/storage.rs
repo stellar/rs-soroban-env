@@ -4,8 +4,8 @@ use crate::budget::{AsBudget, Budget};
 use crate::host_object::MuxedScAddress;
 use crate::storage::{AccessType, Footprint, Storage};
 use crate::xdr::{
-    ContractDataDurability, LedgerKey, LedgerKeyContractData, MuxedEd25519Account, ScAddress,
-    ScErrorCode, ScErrorType, ScVal, Uint256,
+    ContractDataDurability, ContractId, LedgerKey, LedgerKeyContractData, MuxedEd25519Account,
+    ScAddress, ScErrorCode, ScErrorType, ScVal, Uint256,
 };
 use crate::{Host, HostError, MeteredOrdMap};
 use soroban_env_common::{AddressObject, Env, MuxedAddressObject, Symbol, TryFromVal, TryIntoVal};
@@ -18,7 +18,7 @@ fn footprint_record_access() -> Result<(), HostError> {
     let mut fp = Footprint::default();
     // record when key not exist
     let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-        contract: ScAddress::Contract([0; 32].into()),
+        contract: ScAddress::Contract(ContractId([0; 32].into())),
         key: ScVal::I32(0),
         durability: ContractDataDurability::Persistent,
     }));
@@ -46,14 +46,14 @@ fn footprint_record_access() -> Result<(), HostError> {
 fn footprint_enforce_access() -> Result<(), HostError> {
     let budget = Budget::default();
     let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-        contract: ScAddress::Contract([0; 32].into()),
+        contract: ScAddress::Contract(ContractId([0; 32].into())),
         key: ScVal::I32(0),
         durability: ContractDataDurability::Persistent,
     }));
 
     // Key not in footprint. Only difference is type_
     let key2 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-        contract: ScAddress::Contract([0; 32].into()),
+        contract: ScAddress::Contract(ContractId([0; 32].into())),
         key: ScVal::I32(0),
         durability: ContractDataDurability::Temporary,
     }));
@@ -77,7 +77,7 @@ fn footprint_enforce_access_not_exist() -> Result<(), HostError> {
     let budget = Budget::default();
     let mut fp = Footprint::default();
     let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-        contract: ScAddress::Contract([0; 32].into()),
+        contract: ScAddress::Contract(ContractId([0; 32].into())),
         key: ScVal::I32(0),
         durability: ContractDataDurability::Persistent,
     }));
@@ -93,7 +93,7 @@ fn footprint_enforce_access_not_exist() -> Result<(), HostError> {
 fn footprint_attempt_to_write_readonly_entry() -> Result<(), HostError> {
     let budget = Budget::default();
     let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-        contract: ScAddress::Contract([0; 32].into()),
+        contract: ScAddress::Contract(ContractId([0; 32].into())),
         key: ScVal::I32(0),
         durability: ContractDataDurability::Persistent,
     }));

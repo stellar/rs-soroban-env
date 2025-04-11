@@ -82,10 +82,10 @@ impl NetworkConfig {
         let memory_cost_params = load_setting!(snapshot, ContractCostParamsMemoryBytes);
 
         let write_fee_configuration = RentWriteFeeConfiguration {
-            state_target_size_bytes: ledger_cost.bucket_list_target_size_bytes,
-            rent_fee_1kb_state_size_low: ledger_cost.write_fee1_kb_bucket_list_low,
-            rent_fee_1kb_state_size_high: ledger_cost.write_fee1_kb_bucket_list_high,
-            state_size_rent_fee_growth_factor: ledger_cost.bucket_list_write_fee_growth_factor,
+            state_target_size_bytes: ledger_cost.soroban_state_target_size_bytes,
+            rent_fee_1kb_state_size_low: ledger_cost.rent_fee1_kb_soroban_state_size_low,
+            rent_fee_1kb_state_size_high: ledger_cost.rent_fee1_kb_soroban_state_size_high,
+            state_size_rent_fee_growth_factor: ledger_cost.soroban_state_rent_fee_growth_factor,
         };
         let bucket_list_size: i64 = bucket_list_size
             .try_into()
@@ -95,9 +95,9 @@ impl NetworkConfig {
 
         let fee_configuration = FeeConfiguration {
             fee_per_instruction_increment: compute.fee_rate_per_instructions_increment,
-            fee_per_disk_read_entry: ledger_cost.fee_read_ledger_entry,
+            fee_per_disk_read_entry: ledger_cost.fee_disk_read_ledger_entry,
             fee_per_write_entry: ledger_cost.fee_write_ledger_entry,
-            fee_per_disk_read_1kb: ledger_cost.fee_read1_kb,
+            fee_per_disk_read_1kb: ledger_cost.fee_disk_read1_kb,
             fee_per_write_1kb: ledger_cost_ext.fee_write1_kb,
             fee_per_historical_1kb: historical_data.fee_historical1_kb,
             fee_per_contract_event_1kb: events.fee_contract_events1_kb,

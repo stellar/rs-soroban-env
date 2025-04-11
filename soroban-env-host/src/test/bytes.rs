@@ -3,9 +3,9 @@ use crate::{
     budget::AsBudget,
     testutils::wasm,
     xdr::{
-        AccountId, ClaimableBalanceId, ContractCostType, Hash, MuxedEd25519Account, PoolId,
-        PublicKey, ScAddress, ScBytes, ScError, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,
-        ScVec, Uint256, WriteXdr,
+        AccountId, ClaimableBalanceId, ContractCostType, ContractId, Hash, MuxedEd25519Account,
+        PoolId, PublicKey, ScAddress, ScBytes, ScError, ScErrorCode, ScErrorType, ScMap,
+        ScMapEntry, ScVal, ScVec, Uint256, WriteXdr,
     },
     BytesObject, Compare, Env, EnvBase, Error, Host, HostError, TryFromVal, U32Val, Val,
     DEFAULT_XDR_RW_LIMITS,
@@ -256,7 +256,9 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
         PublicKey::PublicKeyTypeEd25519(Uint256([255; 32])),
     ))))?;
     // Contract address
-    roundtrip(ScVal::Address(ScAddress::Contract(Hash([255; 32]))))?;
+    roundtrip(ScVal::Address(ScAddress::Contract(ContractId(Hash(
+        [255; 32],
+    )))))?;
     // Muxed account
     roundtrip(ScVal::Address(ScAddress::MuxedAccount(
         MuxedEd25519Account {

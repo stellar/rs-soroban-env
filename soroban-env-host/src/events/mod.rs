@@ -32,7 +32,7 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
             }
         },
         ScAddress::Contract(hash) => {
-            let strkey = stellar_strkey::Contract(hash.0);
+            let strkey = stellar_strkey::Contract(hash.0 .0);
             write!(f, "{}", strkey)
         }
         ScAddress::MuxedAccount(muxed_account) => {
@@ -134,7 +134,7 @@ impl core::fmt::Display for HostEvent {
         match &self.event.contract_id {
             None => (),
             Some(hash) => {
-                let strkey = stellar_strkey::Contract(hash.0);
+                let strkey = stellar_strkey::Contract(hash.0 .0);
                 write!(f, "contract:{}, ", strkey)?
             }
         }
@@ -184,12 +184,12 @@ impl core::fmt::Display for HostEvent {
 fn host_event_contract_id_is_strkey() {
     use crate::xdr::{
         AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-        ExtensionPoint, Hash, PublicKey,
+        ContractId, ExtensionPoint, Hash, PublicKey,
     };
     let he = HostEvent {
         event: ContractEvent {
             ext: ExtensionPoint::V0,
-            contract_id: Some(Hash([0; 32])),
+            contract_id: Some(ContractId(Hash([0; 32]))),
             type_: ContractEventType::Diagnostic,
             body: ContractEventBody::V0(ContractEventV0 {
                 topics: vec![ScVal::Address(ScAddress::Account(AccountId(

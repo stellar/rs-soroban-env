@@ -721,7 +721,7 @@ pub fn invoke_host_function_in_recording_mode(
     let mut resources = SorobanResources {
         footprint,
         instructions: 0,
-        read_bytes: disk_read_bytes,
+        disk_read_bytes,
         write_bytes: 0,
     };
     let _resources_roundtrip: SorobanResources =

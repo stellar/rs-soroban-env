@@ -71,7 +71,7 @@ fn write_contract_balance(
     // We take an unused reference to a "witness" contract-id Hash here, to help
     // ensure this function is only called from a context where `addr` has been
     // matched as an ScAddress::Contract(hash) rather than ScAddress::Account(_)
-    _witness_addr_contract_id: &crate::xdr::Hash,
+    _witness_addr_contract_id: &crate::xdr::ContractId,
 ) -> Result<(), HostError> {
     let key = DataKey::Balance(addr);
     e.put_contract_data(

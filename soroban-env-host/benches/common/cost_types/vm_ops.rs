@@ -22,7 +22,7 @@ macro_rules! impl_measurement_for_instantiation_cost_type {
                 _rng: &mut StdRng,
                 input: u64,
             ) -> VmInstantiationSample {
-                let id: xdr::Hash = [0; 32].into();
+                let id = xdr::ContractId([0; 32].into());
                 let n = (Self::INPUT_BASE_SIZE + input * $MAGNITUDE) as usize;
                 let wasm = $BUILD(n);
                 #[allow(unused_mut)]

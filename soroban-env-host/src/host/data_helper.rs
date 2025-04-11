@@ -9,9 +9,9 @@ use crate::{
     vm::VersionedContractCodeCostInputs,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
-        ContractDataEntry, ContractExecutable, ContractIdPreimage, ExtensionPoint, Hash,
-        HashIdPreimage, HashIdPreimageContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt,
-        LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+        ContractDataEntry, ContractExecutable, ContractId, ContractIdPreimage, ExtensionPoint,
+        Hash, HashIdPreimage, HashIdPreimageContractId, LedgerEntry, LedgerEntryData,
+        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
         LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
         ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
     },
@@ -74,7 +74,7 @@ impl Host {
 
     pub(crate) fn contract_instance_ledger_key(
         &self,
-        contract_id: &Hash,
+        contract_id: &ContractId,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let contract_id = contract_id.metered_clone(self)?;
         Rc::metered_new(
@@ -181,7 +181,7 @@ impl Host {
         &self,
         executable: Option<ContractExecutable>,
         instance_storage: Option<ScMap>,
-        contract_id: Hash,
+        contract_id: ContractId,
         key: &Rc<LedgerKey>,
     ) -> Result<(), HostError> {
         if self
@@ -449,7 +449,10 @@ impl Host {
         )
     }
 
-    pub(crate) fn contract_id_from_scaddress(&self, address: ScAddress) -> Result<Hash, HostError> {
+    pub(crate) fn contract_id_from_scaddress(
+        &self,
+        address: ScAddress,
+    ) -> Result<ContractId, HostError> {
         match address {
             ScAddress::Contract(contract_id) => Ok(contract_id),
             _ => Err(self.err(
@@ -464,7 +467,7 @@ impl Host {
     pub(crate) fn contract_id_from_address(
         &self,
         address: AddressObject,
-    ) -> Result<Hash, HostError> {
+    ) -> Result<ContractId, HostError> {
         self.visit_obj(address, |addr: &ScAddress| {
             self.contract_id_from_scaddress(addr.metered_clone(self)?)
         })
@@ -581,7 +584,7 @@ impl Host {
     // that marks contracts created with `register_test_contract`.
     pub(crate) fn is_test_contract_executable(
         &self,
-        contract_id: &Hash,
+        contract_id: &ContractId,
     ) -> Result<bool, HostError> {
         let key = self.contract_instance_ledger_key(contract_id)?;
         let instance = self.retrieve_contract_instance_from_storage(&key)?;

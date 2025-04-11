@@ -19,10 +19,11 @@ use crate::{
     testutils::generate_bytes_array,
     xdr::{
         self, AccountFlags, AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4,
-        ContractEventType, ContractExecutable, Hash, InvokeContractArgs, LedgerEntryData,
-        LedgerKey, Liabilities, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
-        ScSymbol, ScVal, SorobanAuthorizedFunction, SorobanAuthorizedInvocation, TrustLineEntry,
-        TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
+        ContractEventType, ContractExecutable, ContractId, Hash, InvokeContractArgs,
+        LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScAddress, ScContractInstance,
+        ScErrorCode, ScErrorType, ScSymbol, ScVal, SorobanAuthorizedFunction,
+        SorobanAuthorizedInvocation, TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1,
+        TrustLineEntryV1Ext, TrustLineFlags,
     },
     Env, EnvBase, Host, HostError, LedgerInfo, Symbol, TryFromVal, TryIntoVal, Val,
 };
@@ -289,7 +290,7 @@ impl StellarAssetContractTest {
     {
         self.host.with_frame(
             Frame::TestContract(TestContractFrame::new(
-                Hash(contract_id_bytes.to_array().unwrap()),
+                ContractId(Hash(contract_id_bytes.to_array().unwrap())),
                 Symbol::try_from_small_str("foo").unwrap(),
                 vec![],
                 ScContractInstance {
@@ -1680,7 +1681,7 @@ fn test_auth_required() {
     let user_1_addr = contract_id_to_address(&test.host, user_1);
     let user_2_addr = contract_id_to_address(&test.host, user_2);
 
-    let user_1_invoker = TestSigner::ContractInvoker(Hash(user_1));
+    let user_1_invoker = TestSigner::ContractInvoker(ContractId(Hash(user_1)));
     let user_1_bytes = BytesN::<32>::try_from_val(
         &test.host,
         &test.host.bytes_new_from_slice(&user_1).unwrap(),
@@ -2116,7 +2117,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
 
     // Contract invoker can't perform unauthorized admin operation.
     let contract_id = generate_bytes_array(&test.host);
-    let contract_invoker = TestSigner::ContractInvoker(Hash(contract_id));
+    let contract_invoker = TestSigner::ContractInvoker(ContractId(Hash(contract_id)));
     let contract_id_bytes = BytesN::<32>::try_from_val(
         &test.host,
         &test.host.bytes_new_from_slice(&contract_id).unwrap(),
@@ -2139,8 +2140,8 @@ fn test_contract_invoker_auth() {
 
     let admin_contract_id = generate_bytes_array(&test.host);
     let user_contract_id = generate_bytes_array(&test.host);
-    let admin_contract_invoker = TestSigner::ContractInvoker(Hash(admin_contract_id));
-    let user_contract_invoker = TestSigner::ContractInvoker(Hash(user_contract_id));
+    let admin_contract_invoker = TestSigner::ContractInvoker(ContractId(Hash(admin_contract_id)));
+    let user_contract_invoker = TestSigner::ContractInvoker(ContractId(Hash(user_contract_id)));
     let admin_contract_address = contract_id_to_address(&test.host, admin_contract_id);
     let user_contract_address = contract_id_to_address(&test.host, user_contract_id);
     let admin_contract_id_bytes = BytesN::<32>::try_from_val(
