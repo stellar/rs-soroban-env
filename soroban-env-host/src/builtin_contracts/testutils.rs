@@ -8,12 +8,12 @@ use ed25519_dalek::{Signer, SigningKey};
 use rand::Rng;
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
-    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, Hash, HashIdPreimage,
-    HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry, LedgerEntryData,
-    LedgerEntryExt, LedgerKey, Liabilities, MuxedEd25519Account, PublicKey, ScAddress, ScSymbol,
-    ScVal, SequenceNumber, SignerKey, SorobanAddressCredentials, SorobanAuthorizationEntry,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Thresholds,
-    Uint256,
+    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, ContractId, Hash,
+    HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry,
+    LedgerEntryData, LedgerEntryExt, LedgerKey, Liabilities, MuxedEd25519Account, PublicKey,
+    ScAddress, ScSymbol, ScVal, SequenceNumber, SignerKey, SorobanAddressCredentials,
+    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+    SorobanCredentials, Thresholds, Uint256,
 };
 use soroban_env_common::{EnvBase, TryFromVal, Val};
 
@@ -49,7 +49,7 @@ pub(crate) fn contract_id_to_address(host: &Host, contract_id: [u8; 32]) -> Addr
     Address::try_from_val(
         host,
         &host
-            .add_host_object(ScAddress::Contract(Hash(contract_id)))
+            .add_host_object(ScAddress::Contract(ContractId(Hash(contract_id))))
             .unwrap(),
     )
     .unwrap()
@@ -57,7 +57,7 @@ pub(crate) fn contract_id_to_address(host: &Host, contract_id: [u8; 32]) -> Addr
 
 pub(crate) enum TestSigner<'a> {
     AccountInvoker(AccountId),
-    ContractInvoker(Hash),
+    ContractInvoker(ContractId),
     Account(AccountSigner<'a>),
     AccountContract(AccountContractSigner<'a>),
 }

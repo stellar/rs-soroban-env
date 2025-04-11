@@ -26,7 +26,7 @@ use crate::{
         metered_clone::MeteredContainer,
         metered_hash::{CountingHasher, MeteredHash},
     },
-    xdr::{ContractCostType, Hash, ScErrorCode, ScErrorType},
+    xdr::{ContractCostType, ContractId, ScErrorCode, ScErrorType},
     ConversionError, ErrorHandler, Host, HostError, Symbol, SymbolStr, TryIntoVal, Val,
     WasmiMarshal,
 };
@@ -36,7 +36,9 @@ use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 
 pub use module_cache::ModuleCache;
-pub use parsed_module::{CompilationContext, ParsedModule, VersionedContractCodeCostInputs};
+pub use parsed_module::{
+    wasm_module_memory_cost, CompilationContext, ParsedModule, VersionedContractCodeCostInputs,
+};
 
 use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
@@ -83,7 +85,7 @@ impl Drop for VmInstantiationTimer {
 /// WASM module. Any other lookups on any tables other than import functions
 /// will fail.
 pub struct Vm {
-    pub(crate) contract_id: Hash,
+    pub(crate) contract_id: ContractId,
     #[allow(dead_code)]
     pub(crate) module: Arc<ParsedModule>,
     wasmi_store: RefCell<wasmi::Store<Host>>,
@@ -188,7 +190,7 @@ impl Vm {
     /// [Vm::new] via [Vm::new_with_cost_inputs].
     pub fn from_parsed_module_and_wasmi_linker(
         host: &Host,
-        contract_id: Hash,
+        contract_id: ContractId,
         parsed_module: Arc<ParsedModule>,
         wasmi_linker: &wasmi::Linker<Host>,
     ) -> Result<Rc<Self>, HostError> {
@@ -234,7 +236,7 @@ impl Vm {
     /// With the introduction of the granular cost inputs this method
     /// should only be used for the one-off full parses of the new Wasms
     /// during the initial upload verification.
-    pub fn new(host: &Host, contract_id: Hash, wasm: &[u8]) -> Result<Rc<Self>, HostError> {
+    pub fn new(host: &Host, contract_id: ContractId, wasm: &[u8]) -> Result<Rc<Self>, HostError> {
         let cost_inputs = VersionedContractCodeCostInputs::V0 {
             wasm_bytes: wasm.len(),
         };
@@ -243,7 +245,7 @@ impl Vm {
 
     pub(crate) fn new_with_cost_inputs(
         host: &Host,
-        contract_id: Hash,
+        contract_id: ContractId,
         wasm: &[u8],
         cost_inputs: VersionedContractCodeCostInputs,
     ) -> Result<Rc<Self>, HostError> {

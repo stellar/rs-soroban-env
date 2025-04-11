@@ -24,7 +24,7 @@ pub struct ModuleCache {
     modules: ModuleCacheMap,
 }
 
-// We may use the ModuleCache from multiple C++ theads where
+// We may use the ModuleCache from multiple C++ threads where
 // there's no checking of Send+Sync but we can at least ensure
 // Rust thinks its API is thread-safe.
 static_assertions::assert_impl_all!(ModuleCache: Send, Sync);

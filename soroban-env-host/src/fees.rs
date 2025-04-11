@@ -14,19 +14,19 @@ pub const INSTRUCTIONS_INCREMENT: i64 = 10000;
 pub const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
 
 // minimum effective write fee per 1KB
-pub const MINIMUM_WRITE_FEE_PER_1KB: i64 = 1000;
+pub const MINIMUM_RENT_WRITE_FEE_PER_1KB: i64 = 1000;
 
 /// These are the resource upper bounds specified by the Soroban transaction.
 pub struct TransactionResources {
     /// Number of CPU instructions.
     pub instructions: u32,
     /// Number of ledger entries the transaction reads.
-    pub read_entries: u32,
+    pub disk_read_entries: u32,
     /// Number of ledger entries the transaction writes (these are also counted
     /// as entries that are being read for the sake of the respective fees).
     pub write_entries: u32,
     /// Number of bytes read from ledger.
-    pub read_bytes: u32,
+    pub disk_read_bytes: u32,
     /// Number of bytes written to ledger.
     pub write_bytes: u32,
     /// Size of the contract events XDR.
@@ -46,13 +46,12 @@ pub struct FeeConfiguration {
     /// Fee per `INSTRUCTIONS_INCREMENT=10000` instructions.
     pub fee_per_instruction_increment: i64,
     /// Fee per 1 entry read from ledger.
-    pub fee_per_read_entry: i64,
+    pub fee_per_disk_read_entry: i64,
     /// Fee per 1 entry written to ledger.
     pub fee_per_write_entry: i64,
     /// Fee per 1KB read from ledger.
-    pub fee_per_read_1kb: i64,
-    /// Fee per 1KB written to ledger. This has to be computed via
-    /// `compute_write_fee_per_1kb`.
+    pub fee_per_disk_read_1kb: i64,
+    /// Fee per 1KB of state written to the ledger.
     pub fee_per_write_1kb: i64,
     /// Fee per 1KB written to history (the history write size is based on
     /// transaction size and `TX_BASE_RESULT_SIZE`).
@@ -63,21 +62,22 @@ pub struct FeeConfiguration {
     pub fee_per_transaction_size_1kb: i64,
 }
 
-/// Network configuration used to determine the ledger write fee.
+/// Network configuration used to determine the ledger write fee used in rent
+/// computations for the Soroban state.
 ///
 /// This should be normally loaded from the ledger.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct WriteFeeConfiguration {
-    // Write fee grows linearly until bucket list reaches this size.
-    pub bucket_list_target_size_bytes: i64,
-    // Fee per 1KB write when the bucket list is empty.
-    pub write_fee_1kb_bucket_list_low: i64,
-    // Fee per 1KB write when the bucket list has reached
-    // `bucket_list_target_size_bytes`.
-    pub write_fee_1kb_bucket_list_high: i64,
+pub struct RentWriteFeeConfiguration {
+    // Write fee grows linearly until the Soroban state reaches this size.
+    pub state_target_size_bytes: i64,
+    // Fee per 1KB write when the state size is 0.
+    pub rent_fee_1kb_state_size_low: i64,
+    // Fee per 1KB write when the Soroban state has reached
+    // `state_target_size_bytes`.
+    pub rent_fee_1kb_state_size_high: i64,
     // Write fee multiplier for any additional data past the first
-    // `bucket_list_target_size_bytes`.
-    pub bucket_list_write_fee_growth_factor: u32,
+    // `state_target_size_bytes`.
+    pub state_size_rent_fee_growth_factor: u32,
 }
 
 /// Change in a single ledger entry with parameters relevant for rent fee
@@ -88,41 +88,41 @@ pub struct WriteFeeConfiguration {
 pub struct LedgerEntryRentChange {
     /// Whether this is persistent or temporary entry.
     pub is_persistent: bool,
-    /// Size of the entry in bytes before it has been modified, including the
-    /// key.
-    /// `0` for newly-created entires.
+    /// In-memory size of the entry in bytes before it has been modified.
+    /// Should be `0` for newly-created entires.
     pub old_size_bytes: u32,
-    /// Size of the entry in bytes after it has been modified, including the
-    /// key.
+    /// In-memory size of the entry in bytes after it has been modified.
+    /// Should be `0` for removed entries.
     pub new_size_bytes: u32,
     /// Live until ledger of the entry before it has been modified.
-    /// Should be less than the current ledger for newly-created entires.
+    /// Should be '0' for newly-created entires.
     pub old_live_until_ledger: u32,
     /// Live until ledger of the entry after it has been modified.
+    /// Should be `0` for removed entries.
     pub new_live_until_ledger: u32,
 }
 
 /// Rent fee-related network configuration.
 ///
 /// This should be normally loaded from the ledger, with exception of the
-/// `fee_per_write_1kb`, that has to be computed via `compute_write_fee_per_1kb`
-/// function.
+/// `fee_per_rent_1kb`, that has to be computed via
+/// `compute_rent_write_fee_per_1kb` function.
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct RentFeeConfiguration {
-    /// Fee per 1KB written to ledger.
-    /// This is the same field as in `FeeConfiguration` and it has to be
-    /// computed via `compute_write_fee_per_1kb`.
+    // Fee per 1KB written to the ledger.
+    // This is the same value as `fee_per_write_1kb` in `FeeConfiguration`.
     pub fee_per_write_1kb: i64,
+    /// Fee per 1KB of rented ledger space.
+    /// This has to be computed via `compute_rent_write_fee_per_1kb`.
+    pub fee_per_rent_1kb: i64,
     /// Fee per 1 entry written to ledger.
     /// This is the same field as in `FeeConfiguration`.
     pub fee_per_write_entry: i64,
     /// Denominator for the total rent fee for persistent storage.
     ///
-    /// This can be thought of as the number of ledgers of rent that costs as
-    /// much, as writing the entry for the first time (i.e. if the value is
-    /// `1000`, then we would charge the entry write fee for every 1000 ledgers
-    /// of rent).
+    /// 1 KB of ledger space gets charged `fee_per_write_1kb` every
+    /// `persistent_rent_rate_denominator` ledgers.
     pub persistent_rent_rate_denominator: i64,
     /// Denominator for the total rent fee for temporary storage.
     ///
@@ -147,9 +147,9 @@ pub fn compute_transaction_resource_fee(
         fee_config.fee_per_instruction_increment,
         INSTRUCTIONS_INCREMENT,
     );
-    let ledger_read_entry_fee: i64 = fee_config.fee_per_read_entry.saturating_mul(
+    let ledger_read_entry_fee: i64 = fee_config.fee_per_disk_read_entry.saturating_mul(
         tx_resources
-            .read_entries
+            .disk_read_entries
             .saturating_add(tx_resources.write_entries)
             .into(),
     );
@@ -157,8 +157,8 @@ pub fn compute_transaction_resource_fee(
         .fee_per_write_entry
         .saturating_mul(tx_resources.write_entries.into());
     let ledger_read_bytes_fee = compute_fee_per_increment(
-        tx_resources.read_bytes,
-        fee_config.fee_per_read_1kb,
+        tx_resources.disk_read_bytes,
+        fee_config.fee_per_disk_read_1kb,
         DATA_SIZE_1KB_INCREMENT,
     );
     let ledger_write_bytes_fee = compute_fee_per_increment(
@@ -231,48 +231,47 @@ impl ClampFee for i128 {
     }
 }
 
-/// Computes the effective write fee per 1 KB of data written to ledger.
+/// Computes the effective rent fee per 1 KB of ledger space.
 ///
-/// The computed fee should be used in fee configuration for
-/// `compute_transaction_resource_fee` function.
+/// The computed fee should be used in rent fee configuration for
+/// `compute_rent_fee` function.
 ///
-/// This depends only on the current ledger (more specifically, bucket list)
-/// size.
-pub fn compute_write_fee_per_1kb(
-    bucket_list_size_bytes: i64,
-    fee_config: &WriteFeeConfiguration,
+/// This depends only on the current Soroban in-memory state size.
+pub fn compute_rent_write_fee_per_1kb(
+    soroban_state_size_bytes: i64,
+    fee_config: &RentWriteFeeConfiguration,
 ) -> i64 {
     let fee_rate_multiplier = fee_config
-        .write_fee_1kb_bucket_list_high
-        .saturating_sub(fee_config.write_fee_1kb_bucket_list_low)
+        .rent_fee_1kb_state_size_high
+        .saturating_sub(fee_config.rent_fee_1kb_state_size_low)
         .clamp_fee();
-    let mut write_fee_per_1kb: i64;
-    if bucket_list_size_bytes < fee_config.bucket_list_target_size_bytes {
+    let mut rent_write_fee_per_1kb: i64;
+    if soroban_state_size_bytes < fee_config.state_target_size_bytes {
         // Convert multipliers to i128 to make sure we can handle large bucket list
         // sizes.
-        write_fee_per_1kb = num_integer::div_ceil(
-            (fee_rate_multiplier as i128).saturating_mul(bucket_list_size_bytes as i128),
-            (fee_config.bucket_list_target_size_bytes as i128).max(1),
+        rent_write_fee_per_1kb = num_integer::div_ceil(
+            (fee_rate_multiplier as i128).saturating_mul(soroban_state_size_bytes as i128),
+            (fee_config.state_target_size_bytes as i128).max(1),
         )
         .clamp_fee();
         // no clamp_fee here
-        write_fee_per_1kb =
-            write_fee_per_1kb.saturating_add(fee_config.write_fee_1kb_bucket_list_low);
+        rent_write_fee_per_1kb =
+            rent_write_fee_per_1kb.saturating_add(fee_config.rent_fee_1kb_state_size_low);
     } else {
-        write_fee_per_1kb = fee_config.write_fee_1kb_bucket_list_high;
+        rent_write_fee_per_1kb = fee_config.rent_fee_1kb_state_size_high;
         let bucket_list_size_after_reaching_target =
-            bucket_list_size_bytes.saturating_sub(fee_config.bucket_list_target_size_bytes);
+            soroban_state_size_bytes.saturating_sub(fee_config.state_target_size_bytes);
         let post_target_fee = num_integer::div_ceil(
             (fee_rate_multiplier as i128)
                 .saturating_mul(bucket_list_size_after_reaching_target as i128)
-                .saturating_mul(fee_config.bucket_list_write_fee_growth_factor as i128),
-            (fee_config.bucket_list_target_size_bytes as i128).max(1),
+                .saturating_mul(fee_config.state_size_rent_fee_growth_factor as i128),
+            (fee_config.state_target_size_bytes as i128).max(1),
         )
         .clamp_fee();
-        write_fee_per_1kb = write_fee_per_1kb.saturating_add(post_target_fee);
+        rent_write_fee_per_1kb = rent_write_fee_per_1kb.saturating_add(post_target_fee);
     }
 
-    write_fee_per_1kb.max(MINIMUM_WRITE_FEE_PER_1KB)
+    rent_write_fee_per_1kb.max(MINIMUM_RENT_WRITE_FEE_PER_1KB)
 }
 
 /// Computes the total rent-related fee for the provided ledger entry changes.
@@ -280,9 +279,9 @@ pub fn compute_write_fee_per_1kb(
 /// The rent-related fees consist of the fees for TTL extensions and fees for
 /// increasing the entry size (with or without TTL extensions).
 ///
-/// This cannot handle unsantized inputs and relies on sane configuration and
+/// This cannot handle unsanitized inputs and relies on sane configuration and
 /// ledger changes. This is due to the fact that rent is managed automatically
-/// wihtout user-provided inputs.
+/// without user-provided inputs.
 pub fn compute_rent_fee(
     changed_entries: &[LedgerEntryRentChange],
     fee_config: &RentFeeConfiguration,
@@ -397,7 +396,7 @@ fn rent_fee_for_size_and_ledgers(
     // on sane input parameters as rent fee computation does not depend on any
     // user inputs.
     let num = (entry_size as i64)
-        .saturating_mul(fee_config.fee_per_write_1kb)
+        .saturating_mul(fee_config.fee_per_rent_1kb)
         .saturating_mul(rent_ledgers as i64);
     let storage_coef = if is_persistent {
         fee_config.persistent_rent_rate_denominator

@@ -26,7 +26,7 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
         ContractCodeEntryExt, ContractCodeEntryV1, ContractCostType, ContractExecutable,
-        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash,
+        ContractId, ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash,
         InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
         LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
@@ -317,6 +317,7 @@ impl MeteredClone for AccessType {}
 impl MeteredClone for TimePoint {}
 impl MeteredClone for Duration {}
 impl MeteredClone for Hash {}
+impl MeteredClone for ContractId {}
 impl MeteredClone for Uint256 {}
 impl MeteredClone for ContractCodeCostInputs {}
 impl MeteredClone for ContractCodeEntryV1 {}

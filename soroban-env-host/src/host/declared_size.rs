@@ -13,7 +13,7 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
-        ContractCodeEntryV1, ContractDataDurability, ContractEvent, ContractExecutable,
+        ContractCodeEntryV1, ContractDataDurability, ContractEvent, ContractExecutable, ContractId,
         ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, ExtensionPoint,
         Hash, Int128Parts, Int256Parts, InvokeContractArgs, LedgerEntry, LedgerEntryExt, LedgerKey,
         LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
@@ -140,6 +140,7 @@ impl_declared_size_type!(ScMapEntry, 128);
 impl_declared_size_type!(ScVec, 24);
 impl_declared_size_type!(ScMap, 24);
 impl_declared_size_type!(Hash, 32);
+impl_declared_size_type!(ContractId, 32);
 impl_declared_size_type!(Uint256, 32);
 impl_declared_size_type!(Int128Parts, 16);
 impl_declared_size_type!(UInt128Parts, 16);

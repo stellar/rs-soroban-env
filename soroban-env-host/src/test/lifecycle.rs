@@ -5,11 +5,11 @@ use crate::{
     storage::{AccessType, Footprint, Storage, StorageMap},
     xdr::{
         self, AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-        ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
-        CreateContractArgsV2, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
-        HostFunction, LedgerEntryData, Limited, ScAddress, ScBytes, ScErrorCode, ScErrorType,
-        ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
+        ContractExecutable, ContractId, ContractIdPreimage, ContractIdPreimageFromAddress,
+        CreateContractArgs, CreateContractArgsV2, ExtensionPoint, Hash, HashIdPreimage,
+        HashIdPreimageContractId, HostFunction, LedgerEntryData, Limited, ScAddress, ScBytes,
+        ScErrorCode, ScErrorType, ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry,
+        SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
     },
     Env, Host, LedgerInfo, Symbol, DEFAULT_XDR_RW_LIMITS,
 };
@@ -20,7 +20,7 @@ use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
 use crate::testutils::{generate_account_id, generate_bytes_array};
 
-fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
+fn get_contract_wasm_ref(host: &Host, contract_id: ContractId) -> Hash {
     let storage_key = host.contract_instance_ledger_key(&contract_id).unwrap();
     host.with_mut_storage(|s: &mut Storage| {
         assert!(s.has_with_host(&storage_key, &host, None).unwrap());
@@ -142,7 +142,7 @@ fn get_contract_id_from_address(
     host: &Host,
     address: ScAddress,
     salt: [u8; 32],
-) -> (Hash, ContractIdPreimage) {
+) -> (ContractId, ContractIdPreimage) {
     let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
         address,
         salt: Uint256(salt.to_vec().try_into().unwrap()),
@@ -155,11 +155,15 @@ fn get_contract_id_from_address(
         contract_id_preimage: contract_id_preimage.clone(),
     });
 
-    let contract_id = sha256_hash_id_preimage(full_id_preimage);
+    let contract_id = ContractId(sha256_hash_id_preimage(full_id_preimage));
     (contract_id, contract_id_preimage)
 }
 
-fn get_contract_id(host: &Host, account: AccountId, salt: [u8; 32]) -> (Hash, ContractIdPreimage) {
+fn get_contract_id(
+    host: &Host,
+    account: AccountId,
+    salt: [u8; 32],
+) -> (ContractId, ContractIdPreimage) {
     get_contract_id_from_address(host, ScAddress::Account(account), salt)
 }
 
@@ -174,7 +178,7 @@ fn create_contract_with_constructor(
     wasm: &[u8],
     constructor_args: &Vec<ScVal>,
     params: CreateContractTestParams,
-) -> Result<Hash, HostError> {
+) -> Result<ContractId, HostError> {
     host.set_source_account(source_account.clone()).unwrap();
     let (contract_id, contract_id_preimage) = get_contract_id(&host, source_account, salt);
 
@@ -238,7 +242,7 @@ fn create_contract_with_constructor(
     Ok(contract_id)
 }
 
-fn create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
+fn create_contract_from_source_account(host: &Host, wasm: &[u8]) -> ContractId {
     create_contract_with_constructor(
         host,
         generate_account_id(host),
@@ -269,7 +273,7 @@ fn create_contract_using_parent_id_test() {
         }),
     });
 
-    let child_id = sha256_hash_id_preimage(child_pre_image);
+    let child_id = ContractId(sha256_hash_id_preimage(child_pre_image));
     let child_wasm = ADD_I32;
 
     // Install the code for the child contract.
@@ -777,7 +781,7 @@ mod cap_54_55_56 {
                 })
             })
         }
-        fn from_contract_id(host: &Host, contract_id: Hash) -> Result<Self, HostError> {
+        fn from_contract_id(host: &Host, contract_id: ContractId) -> Result<Self, HostError> {
             let contract_key = host.contract_instance_ledger_key(&contract_id)?;
             let wasm_hash = get_contract_wasm_ref(host, contract_id);
             let wasm_key = host.contract_code_ledger_key(&wasm_hash)?;
@@ -867,7 +871,7 @@ mod cap_54_55_56 {
         upload_hostname: &'static str,
         second_hostname: &'static str,
         contract_cost_model_mode: TestContractCostModelMode,
-    ) -> Result<(ObservedHost, Hash), HostError> {
+    ) -> Result<(ObservedHost, ContractId), HostError> {
         // Phase 1: upload contract, tear down host, "close the ledger" and possibly change protocol.
         let (host, contract) = new_host_with_uploaded_contract(upload_hostname)?;
         let contract_id = host.contract_id_from_address(contract)?;
@@ -889,7 +893,7 @@ mod cap_54_55_56 {
         Ok((host, contract_id))
     }
 
-    fn clobber_refined_cost_model(host: &Host, contract_id: Hash) -> Result<(), HostError> {
+    fn clobber_refined_cost_model(host: &Host, contract_id: ContractId) -> Result<(), HostError> {
         let contract_key = host.contract_instance_ledger_key(&contract_id)?;
         let ContractExecutable::Wasm(wasm_hash) = host
             .retrieve_contract_instance_from_storage(&contract_key)?
@@ -1934,7 +1938,8 @@ mod cap_58_constructor {
                 let salt = generate_bytes_array(&host);
                 let (new_contract_id, contract_id_preimage) =
                     get_contract_id(&host, source_account.clone(), salt.clone());
-                let authorizer_address = ScAddress::Contract(Hash(generate_bytes_array(&host)));
+                let authorizer_address =
+                    ScAddress::Contract(ContractId(Hash(generate_bytes_array(&host))));
                 let authorizer_val = ScVal::Address(authorizer_address.clone());
                 let constructor_args = vec![
                     authorizer_val.clone(),
@@ -2170,7 +2175,7 @@ mod cap_58_constructor {
             constructor_args: &Vec<ScVal>,
             params: CreateContractTestParams,
             expected_context: HostVec,
-        ) -> Result<Hash, HostError> {
+        ) -> Result<ContractId, HostError> {
             let (contract_id, contract_id_preimage) =
                 get_contract_id_from_address(host, account_address.clone(), salt);
             // Check that the test is not misconfigured - we can't pass constructor args
@@ -2413,7 +2418,7 @@ mod cap_68_executable_getter {
     fn get_non_existent_executable() {
         let host = observe_host!(Host::test_host_with_recording_footprint());
         let contract_address = host
-            .add_host_object(ScAddress::Contract([0; 32].into()))
+            .add_host_object(ScAddress::Contract(ContractId([0; 32].into())))
             .unwrap();
         let account_address = host
             .add_host_object(ScAddress::Account(AccountId(

@@ -1,6 +1,6 @@
 use crate::{
     host::HostError,
-    xdr::{Hash, ScAddress},
+    xdr::{ContractId, Hash, ScAddress},
     Compare, ContractFunctionSet, EnvBase, Host, Symbol, Val,
 };
 
@@ -33,10 +33,10 @@ fn has_frame() -> Result<(), HostError> {
 
     // Host has a frame when executing a contract.
     let id = [0u8; 32];
-    let address = host.add_host_object(ScAddress::Contract(Hash(id)))?;
+    let address = host.add_host_object(ScAddress::Contract(ContractId(Hash(id))))?;
     host.register_test_contract(address, Rc::new(NoopContractFunctionSet))?;
     let func = Symbol::try_from_small_str("")?;
-    host.with_test_contract_frame(Hash(id), func, || {
+    host.with_test_contract_frame(ContractId(Hash(id)), func, || {
         assert!(host.has_frame()?);
         Ok(().into())
     })?;
