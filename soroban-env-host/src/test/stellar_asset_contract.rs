@@ -1431,6 +1431,116 @@ fn test_clawback_on_account() {
 }
 
 #[test]
+fn test_greater_than_i64_balances() {
+    let test = StellarAssetContractTest::setup(function_name!());
+    let admin = TestSigner::account(&test.issuer_key);
+    let contract = test.default_stellar_asset_contract();
+
+    let user = TestSigner::account(&test.user_key);
+    test.create_default_account(&user);
+
+    let transfer_contract_id_obj: soroban_env_common::AddressObject = test
+        .host
+        .register_test_contract_wasm(soroban_test_wasms::CONTRACT_SAC_TRANSFER_CONTRACT_P23);
+
+    let transfer_contract_addr: Address =
+        Address::try_from_val(&test.host, &transfer_contract_id_obj).unwrap();
+
+    for n in 1..4 {
+        contract
+            .mint(&admin, transfer_contract_addr.clone(), i64::MAX.into())
+            .unwrap();
+
+        assert_eq!(
+            contract.balance(transfer_contract_addr.clone()).unwrap(),
+            (i64::MAX as i128) * n
+        );
+    }
+
+    let _ = &test
+        .host
+        .call(
+            transfer_contract_id_obj,
+            Symbol::try_from_val(&test.host, &"transfer_amount").unwrap(),
+            test_vec![
+                &test.host,
+                contract.address,
+                contract.address,
+                (i64::MAX as i128) * 2
+            ]
+            .into(),
+        )
+        .unwrap();
+
+    assert_eq!(
+        contract.balance(transfer_contract_addr.clone()).unwrap(),
+        (i64::MAX as i128) * 1
+    );
+    assert_eq!(
+        contract.balance(contract.address.clone()).unwrap(),
+        (i64::MAX as i128) * 2
+    );
+
+    // Try to transfer more than available
+    assert_eq!(
+        to_contract_err(
+            test.host
+                .call(
+                    transfer_contract_id_obj,
+                    Symbol::try_from_val(&test.host, &"transfer_amount").unwrap(),
+                    test_vec![
+                        &test.host,
+                        contract.address,
+                        contract.address,
+                        (i64::MAX as i128) + 1
+                    ]
+                    .into()
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+
+    contract
+        .mint(
+            &admin,
+            transfer_contract_addr.clone(),
+            (i128::MAX - i64::MAX as i128).into(),
+        )
+        .unwrap();
+
+    assert_eq!(
+        contract.balance(transfer_contract_addr.clone()).unwrap(),
+        i128::MAX
+    );
+
+    let _ = &test
+        .host
+        .call(
+            transfer_contract_id_obj,
+            Symbol::try_from_val(&test.host, &"transfer_amount").unwrap(),
+            test_vec![
+                &test.host,
+                contract.address,
+                contract.address,
+                i128::MAX - ((i64::MAX as i128) * 2)
+            ]
+            .into(),
+        )
+        .unwrap();
+
+    assert_eq!(
+        contract.balance(transfer_contract_addr.clone()).unwrap(),
+        (i64::MAX as i128) * 2
+    );
+    assert_eq!(
+        contract.balance(contract.address.clone()).unwrap(),
+        i128::MAX
+    );
+}
+
+#[test]
 fn test_clawback_on_contract() {
     let test = StellarAssetContractTest::setup(function_name!());
     let admin = TestSigner::account(&test.issuer_key);

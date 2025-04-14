@@ -123,3 +123,6 @@ pub const CUSTOM_ACCOUNT_CONTEXT_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/22/test_custom_account_context.wasm").as_slice();
 pub const CONTRACT_STORAGE_WITH_VALS: &[u8] =
     include_bytes!("../wasm-workspace/opt/22/test_contract_data_val.wasm").as_slice();
+
+pub const CONTRACT_SAC_TRANSFER_CONTRACT_P23: &[u8] =
+    include_bytes!("../wasm-workspace/opt/23/contract_sac_transfer.wasm").as_slice();
