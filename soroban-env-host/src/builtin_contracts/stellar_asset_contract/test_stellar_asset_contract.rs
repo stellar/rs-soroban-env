@@ -147,19 +147,13 @@ impl<'a> TestStellarAssetContract<'a> {
     pub(crate) fn transfer_muxed(
         &self,
         from: &TestSigner,
-        from_mux_id: Option<u64>,
         to: MuxedAddress,
         amount: i128,
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             from,
             "transfer",
-            test_vec![
-                self.host,
-                from.muxed_address(self.host, from_mux_id),
-                to,
-                amount
-            ],
+            test_vec![self.host, from.address(self.host), to, amount],
         )
     }
 

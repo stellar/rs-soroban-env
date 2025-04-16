@@ -203,13 +203,12 @@ impl StellarAssetContract {
     // Metering: covered by components
     pub(crate) fn transfer(
         e: &Host,
-        from_mux: MuxedAddress,
+        from: Address,
         to_mux: MuxedAddress,
         amount: i128,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("SAC transfer");
         check_nonnegative_amount(e, amount)?;
-        let from = from_mux.address()?;
         let to = to_mux.address()?;
         from.require_auth()?;
 
@@ -220,7 +219,7 @@ impl StellarAssetContract {
 
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::transfer_maybe_with_issuer(e, from, from_mux.id()?, to, to_mux.id()?, amount)?;
+        event::transfer_maybe_with_issuer(e, from, to, to_mux.id()?, amount)?;
         Ok(())
     }
 
@@ -244,7 +243,7 @@ impl StellarAssetContract {
         spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::transfer_maybe_with_issuer(e, from, None, to, None, amount)?;
+        event::transfer_maybe_with_issuer(e, from, to, None, amount)?;
         Ok(())
     }
 
@@ -347,7 +346,7 @@ impl StellarAssetContract {
         )?;
 
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::mint(e, to, amount)?;
+        event::mint(e, to, None, amount)?;
         Ok(())
     }
 
