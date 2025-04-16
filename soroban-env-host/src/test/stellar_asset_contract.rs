@@ -821,6 +821,29 @@ fn test_cap_67_transfer_with_muxed_accounts() {
         contract.balance(user_2.address(&test.host)).unwrap(),
         5_000_000
     );
+
+    // Transfer from issuer to user 2 (muxed). This will emit a mint event
+    contract
+        .transfer_muxed(&admin, user_2.muxed_address(&test.host, Some(1)), 2)
+        .unwrap();
+
+    let mint_symbol = Symbol::try_from_small_str("mint").unwrap().to_val();
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                mint_symbol,
+                user_2.address(&test.host),
+                &token_name,
+            ],
+            test_map![&test.host, ("amount", 2_i128), ("to_muxed_id", 1u64)].into()
+        )]
+    );
+    assert_eq!(
+        contract.balance(user_2.address(&test.host)).unwrap(),
+        5_000_002
+    );
 }
 
 #[test]
