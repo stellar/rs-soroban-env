@@ -735,7 +735,6 @@ fn test_cap_67_transfer_with_muxed_accounts() {
     contract
         .transfer_muxed(
             &user,
-            Some(1234),
             user_2.muxed_address(&test.host, Some(567_890)),
             9_999_999,
         )
@@ -754,7 +753,6 @@ fn test_cap_67_transfer_with_muxed_accounts() {
             test_map![
                 &test.host,
                 ("amount", 9_999_999_i128),
-                ("from_muxed_id", 1234_u64),
                 ("to_muxed_id", 567_890_u64)
             ]
             .into()
@@ -772,12 +770,7 @@ fn test_cap_67_transfer_with_muxed_accounts() {
     // Transfer some balance from user 1 (non-muxed) to user 2, different
     // muxed destination.
     contract
-        .transfer_muxed(
-            &user,
-            None,
-            user_2.muxed_address(&test.host, Some(u64::MAX)),
-            1,
-        )
+        .transfer_muxed(&user, user_2.muxed_address(&test.host, Some(u64::MAX)), 1)
         .unwrap();
 
     assert_eq!(
@@ -802,14 +795,9 @@ fn test_cap_67_transfer_with_muxed_accounts() {
         10_000_000
     );
 
-    // Transfer from user 2 (muxed) to user 1 (non-muxed).
+    // Transfer from user 2 (non-muxed) to user 1 (non-muxed).
     contract
-        .transfer_muxed(
-            &user_2,
-            Some(0),
-            user.muxed_address(&test.host, None),
-            5_000_000,
-        )
+        .transfer_muxed(&user_2, user.muxed_address(&test.host, None), 5_000_000)
         .unwrap();
 
     assert_eq!(
@@ -822,12 +810,7 @@ fn test_cap_67_transfer_with_muxed_accounts() {
                 user.address(&test.host),
                 &token_name,
             ],
-            test_map![
-                &test.host,
-                ("amount", 5_000_000_i128),
-                ("from_muxed_id", 0_u64),
-            ]
-            .into()
+            5_000_000_i128.try_into_val(&test.host).unwrap()
         )]
     );
     assert_eq!(
@@ -837,6 +820,29 @@ fn test_cap_67_transfer_with_muxed_accounts() {
     assert_eq!(
         contract.balance(user_2.address(&test.host)).unwrap(),
         5_000_000
+    );
+
+    // Transfer from issuer to user 2 (muxed). This will emit a mint event
+    contract
+        .transfer_muxed(&admin, user_2.muxed_address(&test.host, Some(1)), 2)
+        .unwrap();
+
+    let mint_symbol = Symbol::try_from_small_str("mint").unwrap().to_val();
+    assert_eq!(
+        test.host.get_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                mint_symbol,
+                user_2.address(&test.host),
+                &token_name,
+            ],
+            test_map![&test.host, ("amount", 2_i128), ("to_muxed_id", 1u64)].into()
+        )]
+    );
+    assert_eq!(
+        contract.balance(user_2.address(&test.host)).unwrap(),
+        5_000_002
     );
 }
 
