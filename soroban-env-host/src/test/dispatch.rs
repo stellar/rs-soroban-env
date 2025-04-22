@@ -4,8 +4,8 @@ use crate::{
     budget::AsBudget,
     host_object::{HostMap, HostVec, MuxedScAddress},
     xdr::{
-        Duration, Hash, MuxedEd25519Account, ScAddress, ScBytes, ScErrorCode, ScErrorType,
-        ScString, ScSymbol, TimePoint, Uint256,
+        ContractId, Duration, Hash, MuxedEd25519Account, ScAddress, ScBytes, ScErrorCode,
+        ScErrorType, ScString, ScSymbol, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Env, Error, Host,
     HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object,
@@ -322,7 +322,7 @@ impl TestObject for MapObject {
 }
 impl TestObject for AddressObject {
     fn test_object(host: &Host) -> Self {
-        host.add_host_object(ScAddress::Contract(Hash([0; 32])))
+        host.add_host_object(ScAddress::Contract(ContractId(Hash([0; 32]))))
             .unwrap()
     }
 }

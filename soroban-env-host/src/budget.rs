@@ -207,6 +207,15 @@ impl BudgetImpl {
         })
     }
 
+    pub(crate) fn get_memory_cost(
+        &self,
+        ty: ContractCostType,
+        iterations: u64,
+        input: Option<u64>,
+    ) -> Result<u64, HostError> {
+        self.mem_bytes.get_cost(ty, iterations, input)
+    }
+
     pub fn charge(
         &mut self,
         ty: ContractCostType,
@@ -1153,6 +1162,16 @@ impl Budget {
     /// passed is consistent with the inherent model underneath.
     pub fn charge(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
         self.0.try_borrow_mut_or_err()?.charge(ty, 1, input)
+    }
+
+    pub(crate) fn get_memory_cost(
+        &self,
+        ty: ContractCostType,
+        input: Option<u64>,
+    ) -> Result<u64, HostError> {
+        self.0
+            .try_borrow_mut_or_err()?
+            .get_memory_cost(ty, 1, input)
     }
 
     /// Runs a user provided closure in shadow mode -- all metering is done

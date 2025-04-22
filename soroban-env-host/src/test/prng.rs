@@ -4,7 +4,7 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::{
     test::observe::ObservedHost,
-    xdr::{Hash, ScAddress, ScVal, ScVec},
+    xdr::{ContractId, Hash, ScAddress, ScVal, ScVec},
     AddressObject, BytesObject, Compare, ContractFunctionSet, Env, EnvBase, Host, HostError,
     StorageType, Symbol, SymbolSmall, TryFromVal, TryIntoVal, U32Val, U64Object, U64Val, Val,
     VecObject,
@@ -48,7 +48,7 @@ pub struct PRNGUsingTest;
 
 impl PRNGUsingTest {
     fn register_as(host: &Host, id: &[u8; 32]) -> AddressObject {
-        let scaddr = ScAddress::Contract(Hash(*id));
+        let scaddr = ScAddress::Contract(ContractId(Hash(*id)));
         let addrobj = host.add_host_object(scaddr).unwrap();
         host.register_test_contract(addrobj, std::rc::Rc::new(PRNGUsingTest))
             .unwrap();
@@ -185,7 +185,7 @@ fn prng_test() -> Result<(), HostError> {
     host.set_base_prng_seed([0; 32])?;
 
     let dummy_id = [0; 32];
-    let dummy_address = ScAddress::Contract(Hash(dummy_id));
+    let dummy_address = ScAddress::Contract(ContractId(Hash(dummy_id)));
     let id = host.add_host_object(dummy_address)?;
 
     host.register_test_contract(id, std::rc::Rc::new(PRNGUsingTest))?;

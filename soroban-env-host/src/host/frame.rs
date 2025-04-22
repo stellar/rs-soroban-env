@@ -8,8 +8,9 @@ use crate::{
     },
     storage::{InstanceStorageMap, StorageMap},
     xdr::{
-        ContractExecutable, ContractIdPreimage, CreateContractArgsV2, Hash, HostFunction,
-        HostFunctionType, ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScVal,
+        ContractExecutable, ContractId, ContractIdPreimage, CreateContractArgsV2, Hash,
+        HostFunction, HostFunctionType, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
+        ScVal,
     },
     AddressObject, Error, ErrorHandler, Host, HostError, Object, Symbol, SymbolStr, TryFromVal,
     TryIntoVal, Val, Vm, DEFAULT_HOST_DEPTH_LIMIT,
@@ -54,7 +55,7 @@ pub trait ContractFunctionSet {
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Debug, Clone)]
 pub(crate) struct TestContractFrame {
-    pub(crate) id: Hash,
+    pub(crate) id: ContractId,
     pub(crate) func: Symbol,
     pub(crate) args: Vec<Val>,
     pub(crate) panic: Rc<RefCell<Option<Error>>>,
@@ -76,7 +77,7 @@ impl std::hash::Hash for TestContractFrame {
 
 #[cfg(any(test, feature = "testutils"))]
 impl TestContractFrame {
-    pub fn new(id: Hash, func: Symbol, args: Vec<Val>, instance: ScContractInstance) -> Self {
+    pub fn new(id: ContractId, func: Symbol, args: Vec<Val>, instance: ScContractInstance) -> Self {
         Self {
             id,
             func,
@@ -142,13 +143,13 @@ pub(crate) enum Frame {
         relative_objects: Vec<Object>,
     },
     HostFunction(HostFunctionType),
-    StellarAssetContract(Hash, Symbol, Vec<Val>, ScContractInstance),
+    StellarAssetContract(ContractId, Symbol, Vec<Val>, ScContractInstance),
     #[cfg(any(test, feature = "testutils"))]
     TestContract(TestContractFrame),
 }
 
 impl Frame {
-    fn contract_id(&self) -> Option<&Hash> {
+    fn contract_id(&self) -> Option<&ContractId> {
         match self {
             Frame::ContractVM { vm, .. } => Some(&vm.contract_id),
             Frame::HostFunction(_) => None,
@@ -585,7 +586,9 @@ impl Host {
     /// Inspects the frame at the top of the context and returns the contract ID
     /// if it exists. Returns `Ok(None)` if the context stack is empty or has a
     /// non-contract frame on top.
-    pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
+    pub(crate) fn get_current_contract_id_opt_internal(
+        &self,
+    ) -> Result<Option<ContractId>, HostError> {
         self.with_current_frame_opt(|opt_frame| match opt_frame {
             Some(frame) => frame
                 .contract_id()
@@ -598,7 +601,7 @@ impl Host {
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
-    pub(crate) fn get_current_contract_id_internal(&self) -> Result<Hash, HostError> {
+    pub(crate) fn get_current_contract_id_internal(&self) -> Result<ContractId, HostError> {
         if let Some(id) = self.get_current_contract_id_opt_internal()? {
             Ok(id)
         } else {
@@ -623,7 +626,7 @@ impl Host {
     #[cfg(any(test, feature = "testutils"))]
     pub fn with_test_contract_frame<F>(
         &self,
-        id: Hash,
+        id: ContractId,
         func: Symbol,
         f: F,
     ) -> Result<Val, HostError>
@@ -640,7 +643,7 @@ impl Host {
     #[cfg(any(test, feature = "testutils"))]
     fn create_test_contract_frame(
         &self,
-        id: Hash,
+        id: ContractId,
         func: Symbol,
         args: Vec<Val>,
     ) -> Result<TestContractFrame, HostError> {
@@ -652,7 +655,7 @@ impl Host {
     // Notes on metering: this is covered by the called components.
     fn call_contract_fn(
         &self,
-        id: &Hash,
+        id: &ContractId,
         func: &Symbol,
         args: &[Val],
         treat_missing_function_as_noop: bool,
@@ -687,7 +690,7 @@ impl Host {
         }
     }
 
-    fn instantiate_vm(&self, id: &Hash, wasm_hash: &Hash) -> Result<Rc<Vm>, HostError> {
+    fn instantiate_vm(&self, id: &ContractId, wasm_hash: &Hash) -> Result<Rc<Vm>, HostError> {
         let contract_id = id.metered_clone(self)?;
         if let Some(cache) = &*self.try_borrow_module_cache()? {
             // Check that storage thinks the entry exists before
@@ -784,7 +787,7 @@ impl Host {
 
     pub(crate) fn get_contract_protocol_version(
         &self,
-        contract_id: &Hash,
+        contract_id: &ContractId,
     ) -> Result<u32, HostError> {
         #[cfg(any(test, feature = "testutils"))]
         if self.is_test_contract_executable(contract_id)? {
@@ -804,7 +807,7 @@ impl Host {
     // Notes on metering: this is covered by the called components.
     pub(crate) fn call_n_internal(
         &self,
-        id: &Hash,
+        id: &ContractId,
         func: Symbol,
         args: &[Val],
         call_params: CallParams,

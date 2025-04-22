@@ -544,7 +544,9 @@ mod tests {
             ScVal::Symbol(xdr::ScSymbol::try_from("very_big_symbol").unwrap()),
             ScVal::Vec(Some(xdr::ScVec::try_from((0,)).unwrap())),
             ScVal::Map(Some(xdr::ScMap::try_from(vec![]).unwrap())),
-            ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
+            ScVal::Address(xdr::ScAddress::Contract(xdr::ContractId(xdr::Hash(
+                [0; 32],
+            )))),
         ];
 
         let pairs: Vec<_> = xdr_vals
@@ -727,7 +729,9 @@ mod tests {
             .unwrap(),
             Tag::AddressObject => Val::try_from_val(
                 host,
-                &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
+                &ScVal::Address(xdr::ScAddress::Contract(xdr::ContractId(xdr::Hash(
+                    [0; 32],
+                )))),
             )
             .unwrap(),
             Tag::MuxedAddressObject => Val::try_from_val(

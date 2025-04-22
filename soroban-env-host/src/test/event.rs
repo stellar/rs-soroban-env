@@ -7,7 +7,8 @@ use crate::{
     testutils::AsScVal,
     xdr::{
         ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-        ExtensionPoint, Hash, ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal,
+        ContractId, ExtensionPoint, Hash, ScAddress, ScErrorCode, ScErrorType, ScMap, ScMapEntry,
+        ScVal,
     },
     Compare, ContractFunctionSet, Env, Error, ErrorHandler, Host, HostError, Symbol, SymbolSmall,
     Val, VecObject,
@@ -46,7 +47,7 @@ impl ContractFunctionSet for ContractWithSingleEvent {
 fn contract_event() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let dummy_id = [0; 32];
-    let dummy_address = ScAddress::Contract(Hash(dummy_id));
+    let dummy_address = ScAddress::Contract(ContractId(Hash(dummy_id)));
     let id = host.add_host_object(dummy_address)?;
     let test_contract = Rc::new(ContractWithSingleEvent {});
     let sym = Symbol::try_from_small_str("add").unwrap();
@@ -59,7 +60,7 @@ fn contract_event() -> Result<(), HostError> {
 
     let event_ref = ContractEvent {
         ext: ExtensionPoint::V0,
-        contract_id: Some(Hash(dummy_id)),
+        contract_id: Some(ContractId(Hash(dummy_id))),
         type_: ContractEventType::Contract,
         body: ContractEventBody::V0(ContractEventV0 {
             topics: host.map_err(vec![ScVal::U32(0), ScVal::U32(1)].try_into())?,
@@ -109,7 +110,7 @@ impl ContractFunctionSet for ContractWithMultipleEvents {
 #[test]
 fn test_event_rollback() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
-    let dummy_address = ScAddress::Contract(Hash([0; 32]));
+    let dummy_address = ScAddress::Contract(ContractId(Hash([0; 32])));
     let id = host.add_host_object(dummy_address)?;
     let test_contract = Rc::new(ContractWithMultipleEvents {});
     let sym = Symbol::try_from_small_str("add").unwrap();
@@ -121,7 +122,7 @@ fn test_event_rollback() -> Result<(), HostError> {
     );
     host.try_borrow_events_mut()?.rollback(1)?;
     // run `UPDATE_EXPECT=true cargo test` to update this.
-    let expected = expect!["[HostEvent { event: ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: VecM([I32(0), I32(1)]), data: U32(0) }) }, failed_call: false }, HostEvent { event: ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: System, body: V0(ContractEventV0 { topics: VecM([I32(0), I32(1)]), data: U32(0) }) }, failed_call: true }]"];
+    let expected = expect!["[HostEvent { event: ContractEvent { ext: V0, contract_id: Some(ContractId(Hash(0000000000000000000000000000000000000000000000000000000000000000))), type_: Contract, body: V0(ContractEventV0 { topics: VecM([I32(0), I32(1)]), data: U32(0) }) }, failed_call: false }, HostEvent { event: ContractEvent { ext: V0, contract_id: Some(ContractId(Hash(0000000000000000000000000000000000000000000000000000000000000000))), type_: System, body: V0(ContractEventV0 { topics: VecM([I32(0), I32(1)]), data: U32(0) }) }, failed_call: true }]"];
     let actual = format!("{:?}", host.try_borrow_events()?.externalize(&host)?.0);
     expected.assert_eq(&actual);
     Ok(())
@@ -157,7 +158,7 @@ fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
 #[test]
 fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
     let dummy_id = [0; 32];
-    let contract_id = Some(Hash(dummy_id));
+    let contract_id = Some(ContractId(Hash(dummy_id)));
     let topics = vec![
         InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("error")?.to_val()),
         InternalDiagnosticArg::HostVal(Val::from_i32(0).to_val()),
@@ -192,7 +193,7 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
 
 fn log_some_diagnostics(host: Host) -> Result<Events, HostError> {
     let args: Vec<_> = (0..1000).map(|u| Val::from_u32(u).to_val()).collect();
-    let contract_id = Hash([0; 32]);
+    let contract_id = ContractId(Hash([0; 32]));
     host.log_diagnostics("logging some diagnostics", args.as_slice());
     host.error(
         Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError),

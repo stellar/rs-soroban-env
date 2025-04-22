@@ -14,9 +14,9 @@ use crate::{
     vm::ModuleCache,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
-        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration, Hash,
-        LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
-        ScSymbol, ScVal, TimePoint, Uint256,
+        ContractId, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2,
+        Duration, Hash, LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType,
+        ScString, ScSymbol, ScVal, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
     MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal,
@@ -131,7 +131,7 @@ struct HostImpl {
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
     // production hosts)
     #[cfg(any(test, feature = "testutils"))]
-    contracts: RefCell<std::collections::BTreeMap<Hash, Rc<dyn ContractFunctionSet>>>,
+    contracts: RefCell<std::collections::BTreeMap<ContractId, Rc<dyn ContractFunctionSet>>>,
     // Store a copy of the `AuthorizationManager` for the last host function
     // invocation. In order to emulate the production behavior in tests, we reset
     // authorization manager after every invocation (as it's not meant to be
@@ -277,7 +277,7 @@ impl_checked_borrow_helpers!(
 );
 
 #[cfg(any(test, feature = "testutils"))]
-impl_checked_borrow_helpers!(contracts, std::collections::BTreeMap<Hash, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
+impl_checked_borrow_helpers!(contracts, std::collections::BTreeMap<ContractId, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
 
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
@@ -3224,7 +3224,7 @@ impl VmCallerEnv for Host {
                     );
                     strkey
                 }
-                ScAddress::Contract(Hash(h)) => stellar_strkey::Strkey::Contract(
+                ScAddress::Contract(ContractId(Hash(h))) => stellar_strkey::Strkey::Contract(
                     stellar_strkey::Contract(h.metered_clone(self)?),
                 ),
                 _ => {
@@ -3296,7 +3296,9 @@ impl VmCallerEnv for Host {
                     PublicKey::PublicKeyTypeEd25519(Uint256(pk.0)),
                 ))),
 
-                stellar_strkey::Strkey::Contract(c) => Ok(ScAddress::Contract(Hash(c.0))),
+                stellar_strkey::Strkey::Contract(c) => {
+                    Ok(ScAddress::Contract(ContractId(Hash(c.0))))
+                }
                 _ => {
                     return Err(self.err(
                         ScErrorType::Value,

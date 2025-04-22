@@ -4,7 +4,6 @@
 /// host functions.
 use std::{cmp::max, rc::Rc};
 
-use crate::storage::EntryWithLiveUntil;
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
     auth::RecordedAuthPayload,
@@ -31,6 +30,7 @@ use crate::{
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
 use crate::{ledger_info::get_key_durability, ModuleCache};
+use crate::{storage::EntryWithLiveUntil, vm::wasm_module_memory_cost};
 #[cfg(any(test, feature = "recording_mode"))]
 use sha2::{Digest, Sha256};
 
@@ -89,20 +89,24 @@ pub struct InvokeHostFunctionRecordingModeResult {
 pub struct LedgerEntryChange {
     /// Whether the ledger entry is read-only, as defined by the footprint.
     pub read_only: bool,
-
     /// Entry key encoded as `LedgerKey` XDR.
     pub encoded_key: Vec<u8>,
-    /// Size of the old entry in bytes. This is size of `LedgerEntry` encoded
-    /// XDR.
-    pub old_entry_size_bytes: u32,
+    /// Size of the 'old' entry to use in the rent computations.
+    /// This is the size of the encoded entry XDR for all of the entries besides
+    /// contract code, for which the module in-memory size is used instead.
+    pub old_entry_size_bytes_for_rent: u32,
     /// New value of the ledger entry encoded as `LedgerEntry` XDR.
     /// Only set for non-removed, non-readonly values, otherwise `None`.
     pub encoded_new_value: Option<Vec<u8>>,
+    /// Size of the 'new' entry to use in the rent computations.
+    /// This is the size of the encoded entry XDR (i.e. length of `encoded_new_value`)
+    /// for all of the entries besides contract code, for which the module
+    /// in-memory size is used instead.
+    pub new_entry_size_bytes_for_rent: u32,
     /// Change of the live until state of the entry.
     /// Only set for entries that have a TTL, otherwise `None`.
     pub ttl_change: Option<LedgerEntryLiveUntilChange>,
 }
-
 /// Represents the live until-related state of the entry.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct LedgerEntryLiveUntilChange {
@@ -162,7 +166,9 @@ pub fn get_ledger_changes(
         if let Some((old_entry, old_live_until_ledger)) = entry_with_live_until {
             let mut buf = vec![];
             metered_write_xdr(budget, old_entry.as_ref(), &mut buf)?;
-            entry_change.old_entry_size_bytes = buf.len() as u32;
+
+            entry_change.old_entry_size_bytes_for_rent =
+                entry_size_for_rent(budget, &old_entry, buf.len() as u32)?;
 
             if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
                 ttl_change.old_live_until_ledger =
@@ -188,6 +194,8 @@ pub fn get_ledger_changes(
                 if let Some((entry, _)) = entry_with_live_until_ledger {
                     let mut entry_buf = vec![];
                     metered_write_xdr(budget, entry.as_ref(), &mut entry_buf)?;
+                    entry_change.new_entry_size_bytes_for_rent =
+                        entry_size_for_rent(budget, &entry, entry_buf.len() as u32)?;
                     entry_change.encoded_new_value = Some(entry_buf);
                 }
             }
@@ -243,15 +251,15 @@ pub fn extract_rent_changes(ledger_changes: &[LedgerEntryChange]) -> Vec<LedgerE
             if let (Some(ttl_change), optional_encoded_new_value) =
                 (&entry_change.ttl_change, &entry_change.encoded_new_value)
             {
-                let new_size_bytes = if let Some(encoded_new_value) = optional_encoded_new_value {
-                    encoded_new_value.len() as u32
+                let new_size_bytes_for_rent = if optional_encoded_new_value.is_some() {
+                    entry_change.new_entry_size_bytes_for_rent
                 } else {
-                    entry_change.old_entry_size_bytes
+                    entry_change.old_entry_size_bytes_for_rent
                 };
 
                 // Skip the entry if 1. it is not extended and 2. the entry size has not increased
                 if ttl_change.old_live_until_ledger >= ttl_change.new_live_until_ledger
-                    && entry_change.old_entry_size_bytes >= new_size_bytes
+                    && entry_change.old_entry_size_bytes_for_rent >= new_size_bytes_for_rent
                 {
                     return None;
                 }
@@ -260,8 +268,8 @@ pub fn extract_rent_changes(ledger_changes: &[LedgerEntryChange]) -> Vec<LedgerE
                         ttl_change.durability,
                         ContractDataDurability::Persistent
                     ),
-                    old_size_bytes: entry_change.old_entry_size_bytes,
-                    new_size_bytes,
+                    old_size_bytes: entry_change.old_entry_size_bytes_for_rent,
+                    new_size_bytes: new_size_bytes_for_rent,
                     old_live_until_ledger: ttl_change.old_live_until_ledger,
                     new_live_until_ledger: ttl_change.new_live_until_ledger,
                 })
@@ -270,6 +278,27 @@ pub fn extract_rent_changes(ledger_changes: &[LedgerEntryChange]) -> Vec<LedgerE
             }
         })
         .collect()
+}
+
+/// Helper for computing the size of the ledger entry to be used in rent
+/// computations.
+///
+/// This returns the size of the Wasm module in memory for the contract code
+/// entries and the provided XDR size of the entry otherwise.
+///
+/// Note, that this doesn't compute the XDR size because the recomputation
+/// might be costly.
+pub fn entry_size_for_rent(
+    budget: &Budget,
+    entry: &LedgerEntry,
+    entry_xdr_size: u32,
+) -> Result<u32, HostError> {
+    Ok(match &entry.data {
+        LedgerEntryData::ContractCode(contract_code_entry) => {
+            wasm_module_memory_cost(budget, contract_code_entry)?.min(u32::MAX as u64) as u32
+        }
+        _ => entry_xdr_size,
+    })
 }
 
 /// Invokes a host function within a fresh host instance.
@@ -644,18 +673,25 @@ pub fn invoke_host_function_in_recording_mode(
         }
     }
 
-    let (footprint, read_bytes, init_ttl_map) = host.with_mut_storage(|storage| {
+    let (footprint, disk_read_bytes, init_ttl_map) = host.with_mut_storage(|storage| {
         let footprint = storage_footprint_to_ledger_footprint(&storage.footprint)?;
         let _footprint_from_xdr = build_storage_footprint_from_xdr(&budget, footprint.clone())?;
 
         let mut encoded_ledger_entries = Vec::with_capacity(storage.footprint.0.len());
         let mut encoded_ttl_entries = Vec::with_capacity(storage.footprint.0.len());
-        let mut read_bytes = 0_u32;
+        let mut disk_read_bytes = 0_u32;
         for (lk, _) in &storage.footprint.0 {
             let entry_with_live_until = ledger_snapshot.get(lk)?;
             if let Some((le, live_until)) = entry_with_live_until {
                 let encoded_le = host.to_xdr_non_metered(&*le)?;
-                read_bytes = read_bytes.saturating_add(encoded_le.len() as u32);
+                match &le.data {
+                    LedgerEntryData::ContractData(_) | LedgerEntryData::ContractCode(_) => (),
+                    _ => {
+                        // Non-Soroban entries are counted towards disk read bytes.
+                        disk_read_bytes = disk_read_bytes.saturating_add(encoded_le.len() as u32);
+                    }
+                }
+
                 encoded_ledger_entries.push(encoded_le);
                 if let Some(live_until_ledger) = live_until {
                     let key_xdr = host.to_xdr_non_metered(lk.as_ref())?;
@@ -680,12 +716,12 @@ pub fn invoke_host_function_in_recording_mode(
             ledger_seq,
         )?;
         let _init_storage_clone = init_storage.metered_clone(budget)?;
-        Ok((footprint, read_bytes, init_ttl_map))
+        Ok((footprint, disk_read_bytes, init_ttl_map))
     })?;
     let mut resources = SorobanResources {
         footprint,
         instructions: 0,
-        read_bytes,
+        disk_read_bytes,
         write_bytes: 0,
     };
     let _resources_roundtrip: SorobanResources =
@@ -850,13 +886,11 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
             budget,
         )?;
         let key = Rc::metered_new(ledger_entry_to_ledger_key(&le, budget)?, budget)?;
-
         if !ttl_buf.as_ref().is_empty() {
             let ttl_entry = Rc::metered_new(
                 metered_from_xdr_with_budget::<TtlEntry>(ttl_buf.as_ref(), budget)?,
                 budget,
             )?;
-
             if ttl_entry.live_until_ledger_seq < ledger_num {
                 return Err(Error::from_type_and_code(
                     ScErrorType::Storage,

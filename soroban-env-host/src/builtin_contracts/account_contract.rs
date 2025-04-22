@@ -15,8 +15,8 @@ use crate::{
         Host,
     },
     xdr::{
-        self, AccountId, ContractIdPreimage, Hash, ScErrorCode, ScErrorType, ThresholdIndexes,
-        Uint256,
+        self, AccountId, ContractId, ContractIdPreimage, ScErrorCode, ScErrorType,
+        ThresholdIndexes, Uint256,
     },
     Env, EnvBase, ErrorHandler, HostError, Symbol, TryFromVal, TryIntoVal, Val,
 };
@@ -143,7 +143,7 @@ fn invocation_tree_to_auth_contexts(
 // metering: covered
 pub(crate) fn check_account_contract_auth(
     host: &Host,
-    account_contract: &Hash,
+    account_contract: &ContractId,
     signature_payload: &[u8; 32],
     signature: Val,
     invocation: &AuthorizedInvocation,

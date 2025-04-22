@@ -1,8 +1,8 @@
 use crate::{host_object::MuxedScAddress, Host, HostError};
 use soroban_env_common::{
     xdr::{
-        AccountId, ClaimableBalanceId, Hash, MuxedEd25519Account, PoolId, PublicKey, ScAddress,
-        ScBytes, ScErrorCode, ScErrorType, ScString, ScVal, Uint256,
+        AccountId, ClaimableBalanceId, ContractId, Hash, MuxedEd25519Account, PoolId, PublicKey,
+        ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString, ScVal, Uint256,
     },
     Compare, Env, StringObject, Val,
 };
@@ -61,7 +61,9 @@ fn test_invalid_muxed_address_object_conversions() {
     ));
 
     assert!(HostError::result_matches_err(
-        host.add_host_object(MuxedScAddress(ScAddress::Contract(Hash([100; 32])))),
+        host.add_host_object(MuxedScAddress(ScAddress::Contract(ContractId(Hash(
+            [100; 32]
+        ))))),
         (ScErrorType::Object, ScErrorCode::InvalidInput)
     ));
 
@@ -154,7 +156,7 @@ fn test_contract_address_conversions() {
         0xe8, 0x9a,
     ];
     let address_obj = host
-        .add_host_object(ScAddress::Contract(Hash(contract_id)))
+        .add_host_object(ScAddress::Contract(ContractId(Hash(contract_id))))
         .unwrap();
 
     let strkey = host.address_to_strkey(address_obj).unwrap();

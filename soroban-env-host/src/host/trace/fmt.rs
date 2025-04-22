@@ -128,7 +128,7 @@ impl TraceEvent<'_> {
             Frame::StellarAssetContract(id, fn_name, args, _) => (
                 FrameId {
                     ty: "SAC",
-                    id: id.into(),
+                    id: (&id.0).into(),
                     sym: Some(*fn_name),
                 },
                 &args,
@@ -137,7 +137,7 @@ impl TraceEvent<'_> {
             Frame::TestContract(tc) => (
                 FrameId {
                     ty: "TEST",
-                    id: (&tc.id).into(),
+                    id: (&tc.id.0).into(),
                     sym: Some(tc.func),
                 },
                 &tc.args,

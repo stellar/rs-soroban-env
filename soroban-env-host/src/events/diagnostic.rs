@@ -6,7 +6,7 @@ use crate::{
         InternalEvent, InternalEventsBuffer,
     },
     host::metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
-    xdr::{Hash, ScBytes, ScString, ScVal, StringM},
+    xdr::{ContractId, ScBytes, ScString, ScVal, StringM},
     Error, Host, HostError, Symbol, SymbolSmall, Val,
 };
 
@@ -20,7 +20,7 @@ pub enum DiagnosticLevel {
 impl Host {
     fn record_diagnostic_event(
         &self,
-        contract_id: Option<Hash>,
+        contract_id: Option<ContractId>,
         topics: Vec<InternalDiagnosticArg>,
         args: Vec<InternalDiagnosticArg>,
     ) -> Result<(), HostError> {
@@ -107,7 +107,7 @@ impl Host {
     // correctly
     pub(crate) fn fn_call_diagnostics(
         &self,
-        called_contract_id: &Hash,
+        called_contract_id: &ContractId,
         func: &Symbol,
         args: &[Val],
     ) {
@@ -117,7 +117,7 @@ impl Host {
             let topics = vec![
                 InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_call")?.into()),
                 InternalDiagnosticArg::XdrVal(ScVal::Bytes(ScBytes::try_from(
-                    self.metered_slice_to_vec(called_contract_id.as_slice())?,
+                    self.metered_slice_to_vec(called_contract_id.0.as_slice())?,
                 )?)),
                 InternalDiagnosticArg::HostVal(func.into()),
             ];
@@ -131,7 +131,7 @@ impl Host {
 
     // Emits an event with topic = ["fn_return", function_name] and
     // data = [return_val]
-    pub(crate) fn fn_return_diagnostics(&self, contract_id: &Hash, func: &Symbol, res: &Val) {
+    pub(crate) fn fn_return_diagnostics(&self, contract_id: &ContractId, func: &Symbol, res: &Val) {
         self.with_debug_mode(|| {
             Vec::<InternalDiagnosticArg>::charge_bulk_init_cpy(2, self)?;
             let topics = vec![

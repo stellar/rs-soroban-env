@@ -1,5 +1,5 @@
 // Note: ignoring error handling safety in these tests.
-use crate::xdr::{ContractExecutable, Hash};
+use crate::xdr::{ContractExecutable, ContractId, Hash};
 use soroban_env_common::{AddressObject, Env};
 use soroban_test_wasms::CONTRACT_STORAGE;
 
@@ -8,7 +8,7 @@ use crate::Host;
 struct InstanceCodeTest {
     host: Host,
     contract_id: AddressObject,
-    contract: Hash,
+    contract: ContractId,
     code: Hash,
 }
 

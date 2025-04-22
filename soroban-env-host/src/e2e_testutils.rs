@@ -1,7 +1,7 @@
 use crate::vm::ParsedModule;
 use crate::xdr::{
     AccountEntry, AccountEntryExt, AccountId, ContractCodeEntry, ContractCodeEntryExt,
-    ContractCodeEntryV1, ContractDataDurability, ContractDataEntry, ContractExecutable,
+    ContractCodeEntryV1, ContractDataDurability, ContractDataEntry, ContractExecutable, ContractId,
     ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, CreateContractArgsV2,
     ExtensionPoint, HashIdPreimage, HashIdPreimageContractId, HostFunction, InvokeContractArgs,
     LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyContractCode,
@@ -67,10 +67,10 @@ pub fn wasm_entry(wasm: &[u8]) -> LedgerEntry {
     wasm_entry_with_refined_contract_cost_inputs(wasm, true)
 }
 
-pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
+pub(crate) fn contract_code_entry_with_refined_contract_cost_inputs(
     wasm: &[u8],
     add_refined_cost_inputs: bool,
-) -> LedgerEntry {
+) -> ContractCodeEntry {
     let ext = if !add_refined_cost_inputs {
         ContractCodeEntryExt::V0
     } else {
@@ -82,11 +82,20 @@ pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
             ext: ExtensionPoint::V0,
         })
     };
-    ledger_entry(LedgerEntryData::ContractCode(ContractCodeEntry {
+    ContractCodeEntry {
         ext,
         hash: get_wasm_hash(wasm).try_into().unwrap(),
         code: wasm.try_into().unwrap(),
-    }))
+    }
+}
+
+pub(crate) fn wasm_entry_with_refined_contract_cost_inputs(
+    wasm: &[u8],
+    add_refined_cost_inputs: bool,
+) -> LedgerEntry {
+    ledger_entry(LedgerEntryData::ContractCode(
+        contract_code_entry_with_refined_contract_cost_inputs(wasm, add_refined_cost_inputs),
+    ))
 }
 
 pub fn e2e_test_protocol_version() -> u32 {
@@ -153,11 +162,11 @@ impl CreateContractData {
             contract_id_preimage: contract_id_preimage.clone(),
             executable: ContractExecutable::Wasm(get_wasm_hash(wasm).try_into().unwrap()),
         });
-        let contract_address = ScAddress::Contract(
+        let contract_address = ScAddress::Contract(ContractId(
             get_contract_id_hash(&contract_id_preimage)
                 .try_into()
                 .unwrap(),
-        );
+        ));
         let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract: contract_address.clone(),
             key: ScVal::LedgerKeyContractInstance,

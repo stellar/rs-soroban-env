@@ -5,15 +5,15 @@ use soroban_env_host::{
     xdr::{
         ConfigSettingContractBandwidthV0, ConfigSettingContractComputeV0,
         ConfigSettingContractEventsV0, ConfigSettingContractHistoricalDataV0,
-        ConfigSettingContractLedgerCostV0, ConfigSettingEntry, ContractCostParamEntry,
-        ContractCostParams, ExtensionPoint, LedgerEntry, LedgerEntryData, StateArchivalSettings,
+        ConfigSettingContractLedgerCostExtV0, ConfigSettingContractLedgerCostV0,
+        ConfigSettingEntry, ContractCostParamEntry, ContractCostParams, ContractCostType,
+        ExtensionPoint, LedgerEntry, LedgerEntryData, StateArchivalSettings,
     },
     LedgerInfo,
 };
 
 use crate::testutils::MockSnapshotSource;
 use pretty_assertions::assert_eq;
-use soroban_env_host::xdr::ContractCostType;
 
 fn config_entry(entry: ConfigSettingEntry) -> (LedgerEntry, Option<u32>) {
     (ledger_entry(LedgerEntryData::ConfigSetting(entry)), None)
@@ -70,22 +70,28 @@ fn test_load_config_from_snapshot() {
             )),
             config_entry(ConfigSettingEntry::ContractLedgerCostV0(
                 ConfigSettingContractLedgerCostV0 {
-                    ledger_max_read_ledger_entries: 5,
-                    ledger_max_read_bytes: 6,
+                    ledger_max_disk_read_entries: 5,
+                    ledger_max_disk_read_bytes: 6,
                     ledger_max_write_ledger_entries: 7,
                     ledger_max_write_bytes: 8,
-                    tx_max_read_ledger_entries: 9,
-                    tx_max_read_bytes: 10,
+                    tx_max_disk_read_entries: 9,
+                    tx_max_disk_read_bytes: 10,
                     tx_max_write_ledger_entries: 11,
                     tx_max_write_bytes: 12,
-                    fee_read_ledger_entry: 13,
+                    fee_disk_read_ledger_entry: 13,
                     fee_write_ledger_entry: 14,
-                    fee_read1_kb: 15,
+                    fee_disk_read1_kb: 15,
                     // From tests/resources `test_compute_write_fee`
-                    bucket_list_target_size_bytes: 100_000_000_000_000,
-                    write_fee1_kb_bucket_list_low: 1_000_000,
-                    write_fee1_kb_bucket_list_high: 1_000_000_000,
-                    bucket_list_write_fee_growth_factor: 50,
+                    soroban_state_target_size_bytes: 100_000_000_000_000,
+                    rent_fee1_kb_soroban_state_size_low: 1_000_000,
+                    rent_fee1_kb_soroban_state_size_high: 1_000_000_000,
+                    soroban_state_rent_fee_growth_factor: 50,
+                },
+            )),
+            config_entry(ConfigSettingEntry::ContractLedgerCostExtV0(
+                ConfigSettingContractLedgerCostExtV0 {
+                    tx_max_in_memory_read_entries: 16,
+                    fee_write1_kb: 17,
                 },
             )),
             config_entry(ConfigSettingEntry::ContractHistoricalDataV0(
@@ -113,8 +119,8 @@ fn test_load_config_from_snapshot() {
                 persistent_rent_rate_denominator: 29,
                 temp_rent_rate_denominator: 30,
                 max_entries_to_archive: 31,
-                bucket_list_size_window_sample_size: 32,
-                bucket_list_window_sample_period: 33,
+                live_soroban_state_size_window_sample_size: 32,
+                live_soroban_state_size_window_sample_period: 33,
                 eviction_scan_size: 34,
                 starting_eviction_scan_level: 35,
             })),
@@ -132,22 +138,23 @@ fn test_load_config_from_snapshot() {
     let network_config =
         NetworkConfig::load_from_snapshot(&snapshot_source, 150_000_000_000_000).unwrap();
     // From tests/resources `test_compute_write_fee`
-    let write_fee = 1_000_000_000 + 50 * (1_000_000_000_i64 - 1_000_000) / 2;
+    let rent_fee_per_1kb = 1_000_000_000 + 50 * (1_000_000_000_i64 - 1_000_000) / 2;
     assert_eq!(
         network_config,
         NetworkConfig {
             fee_configuration: FeeConfiguration {
                 fee_per_instruction_increment: 3,
-                fee_per_read_entry: 13,
+                fee_per_disk_read_entry: 13,
                 fee_per_write_entry: 14,
-                fee_per_read_1kb: 15,
-                fee_per_write_1kb: write_fee,
+                fee_per_disk_read_1kb: 15,
+                fee_per_write_1kb: 17,
                 fee_per_historical_1kb: 20,
                 fee_per_contract_event_1kb: 22,
                 fee_per_transaction_size_1kb: 25,
             },
             rent_fee_configuration: RentFeeConfiguration {
-                fee_per_write_1kb: write_fee,
+                fee_per_rent_1kb: rent_fee_per_1kb,
+                fee_per_write_1kb: 17,
                 fee_per_write_entry: 14,
                 persistent_rent_rate_denominator: 29,
                 temporary_rent_rate_denominator: 30,
