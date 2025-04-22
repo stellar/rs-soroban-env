@@ -495,7 +495,7 @@ fn test_simulate_invoke_contract_with_auth() {
                 disk_read_bytes: 144,
                 write_bytes: 76,
             },
-            resource_fee: 115271,
+            resource_fee: 115198,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
