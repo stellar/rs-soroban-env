@@ -1,6 +1,6 @@
 use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
-use soroban_env_host::{cost_runner::*, xdr::Hash, Host, Symbol, Vm};
+use soroban_env_host::{cost_runner::*, xdr::ContractId, Host, Symbol, Vm};
 use soroban_synth_wasm::{Arity, GlobalRef, ModEmitter, Operand};
 use wasm_encoder::{ConstExpr, ExportKind, ValType};
 
@@ -617,7 +617,7 @@ macro_rules! impl_wasm_insn_measure_with_baseline_trap {
             type Runner = $runner;
             fn new_random_case(host: &Host, rng: &mut StdRng, step: u64) -> WasmInsnSample {
                 let insns = 1 + step * Self::STEP_SIZE;
-                let id: Hash = [0; 32].into();
+                let id = ContractId([0; 32].into());
                 let module = $wasm_gen(insns, rng);
                 let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample {
@@ -629,7 +629,7 @@ macro_rules! impl_wasm_insn_measure_with_baseline_trap {
 
             fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
                 let module = wasm_module_baseline_trap();
-                let id: Hash = [0; 32].into();
+                let id = ContractId([0; 32].into());
                 let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample {
                     vm,
@@ -655,7 +655,7 @@ macro_rules! impl_wasm_insn_measure_with_baseline_pass {
                 // averages out the overhead. If a scale factor is explictly passed in,
                 // then we grow/shrink it additionally.
                 let insns = 1 + step * Self::STEP_SIZE $(* $grow / $shrink)?;
-                let id: Hash = [0; 32].into();
+                let id = ContractId([0; 32].into());
                 let module = $wasm_gen(insns, rng);
                 let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample { vm, insns, overhead: module.overhead }
@@ -663,7 +663,7 @@ macro_rules! impl_wasm_insn_measure_with_baseline_pass {
 
             fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
                 let module = wasm_module_baseline_pass();
-                let id: Hash = [0; 32].into();
+                let id = ContractId([0; 32].into());
                 let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample { vm, insns: 0, overhead: module.overhead }
             }
