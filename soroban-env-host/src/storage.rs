@@ -734,6 +734,7 @@ impl Host {
     }
 }
 
+#[cfg(any(test, feature = "recording_mode"))]
 pub(crate) fn is_persistent_key(key: &LedgerKey) -> bool {
     match key {
         LedgerKey::ContractData(k) => {

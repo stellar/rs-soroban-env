@@ -20,9 +20,7 @@ use crate::{
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
         TraceHook,
     },
-    storage::{
-        is_persistent_key, AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap,
-    },
+    storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
     xdr::{
         AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
         LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
@@ -988,7 +986,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
                 }
                 // Skip expired temp entries, as these can't actually appear in
                 // storage.
-                if !is_persistent_key(key.as_ref()) {
+                if !crate::storage::is_persistent_key(key.as_ref()) {
                     continue;
                 }
             }
