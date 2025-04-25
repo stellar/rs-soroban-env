@@ -400,7 +400,7 @@ fn invoke_host_function_recording_helper(
     Ok(InvokeHostFunctionRecordingHelperResult {
         invoke_result: res.invoke_result,
         resources: res.resources,
-        restored_rw_entry_ids: res.restored_rw_entry_ids,
+        restored_rw_entry_ids: res.restored_rw_entry_indices,
         auth: res.auth,
         ledger_changes: res.ledger_changes.into_iter().map(|c| c.into()).collect(),
         contract_events: res.contract_events,

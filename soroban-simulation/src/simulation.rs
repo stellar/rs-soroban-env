@@ -186,7 +186,7 @@ pub fn simulate_invoke_host_function_op(
     let transaction_resources = compute_adjusted_transaction_resources(
         operation,
         &mut resources,
-        &recording_result.restored_rw_entry_ids,
+        &recording_result.restored_rw_entry_indices,
         adjustment_config,
         recording_result.contract_events_and_return_value_size,
     )?;
@@ -199,7 +199,7 @@ pub fn simulate_invoke_host_function_op(
     );
     simulation_result.transaction_data = Some(create_transaction_data(
         resources,
-        &recording_result.restored_rw_entry_ids,
+        &recording_result.restored_rw_entry_indices,
         resource_fee,
     )?);
 

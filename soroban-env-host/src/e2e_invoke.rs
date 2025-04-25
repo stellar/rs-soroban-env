@@ -65,7 +65,14 @@ pub struct InvokeHostFunctionRecordingModeResult {
     pub invoke_result: Result<ScVal, HostError>,
     /// Resources recorded during the invocation, including the footprint.
     pub resources: SorobanResources,
-    pub restored_rw_entry_ids: Vec<u32>,
+    /// Indices of the entries in read-write footprint that are to be
+    /// auto-restored when transaction is executed.
+    ///
+    /// Specifically, these are indices of ledger entry keys in
+    /// `resources.footprint.read_write` vector. Thus additional care should
+    /// be taken if the read-write footprint is re-arranged in any way (that
+    /// shouldn't normally be necessary though).
+    pub restored_rw_entry_indices: Vec<u32>,
     /// Authorization data, either passed through from the call (when provided),
     /// or recorded during the invocation.
     pub auth: Vec<SorobanAuthorizationEntry>,
@@ -427,6 +434,7 @@ pub fn invoke_host_function_with_trace_hook_and_module_cache<
         encoded_ledger_entries,
         encoded_ttl_entries,
         current_ledger_seq,
+        #[cfg(any(test, feature = "recording_mode"))]
         false,
     )?;
 
@@ -828,7 +836,7 @@ pub fn invoke_host_function_in_recording_mode(
     Ok(InvokeHostFunctionRecordingModeResult {
         invoke_result,
         resources,
-        restored_rw_entry_ids,
+        restored_rw_entry_indices: restored_rw_entry_ids,
         auth: output_auth,
         ledger_changes,
         contract_events,
@@ -927,7 +935,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     encoded_ledger_entries: I,
     encoded_ttl_entries: I,
     ledger_num: u32,
-    allow_expired_entries: bool,
+    #[cfg(any(test, feature = "recording_mode"))] allow_expired_entries: bool,
 ) -> Result<(StorageMap, TtlEntryMap), HostError> {
     let mut storage_map = StorageMap::new();
     let mut ttl_map = TtlEntryMap::new();
@@ -951,7 +959,26 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
                 metered_from_xdr_with_budget::<TtlEntry>(ttl_buf.as_ref(), budget)?,
                 budget,
             )?;
+            // In the default host flow (i.e. enforcing storage only) we don't
+            // expect expired entries to ever appear in the storage map, so
+            // that's always an internal error.
+            #[cfg(not(any(test, feature = "recording_mode")))]
             if ttl_entry.live_until_ledger_seq < ledger_num {
+                #[cfg(any(test, feature = "recording_mode"))]
+                if !allow_expired_entries {
+                    return Err(Error::from_type_and_code(
+                        ScErrorType::Storage,
+                        ScErrorCode::InternalError,
+                    )
+                    .into());
+                }
+            }
+            // In the recording mode we still compile both recording and
+            // enforcing functions, and we do allow expired entries in the
+            // recording mode when allow_expired_entries is true.
+            #[cfg(any(test, feature = "recording_mode"))]
+            if ttl_entry.live_until_ledger_seq < ledger_num {
+                #[cfg(any(test, feature = "recording_mode"))]
                 if !allow_expired_entries {
                     return Err(Error::from_type_and_code(
                         ScErrorType::Storage,
