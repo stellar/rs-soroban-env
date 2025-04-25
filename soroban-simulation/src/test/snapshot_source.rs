@@ -22,18 +22,15 @@ use std::rc::Rc;
 fn test_automatic_restoration() {
     let ledger_seq = 300;
     let snapshot = Rc::new(
-        MockSnapshotSource::from_entries(
-            vec![
-                (wasm_entry_non_validated(b"1"), Some(100)), // persistent, expired
-                (wasm_entry_non_validated(b"2"), Some(299)), // persistent, expired
-                (wasm_entry_non_validated(b"3"), Some(300)), // persistent, live
-                (wasm_entry_non_validated(b"4"), Some(400)), // persistent, live
-                (temp_entry(b"5"), Some(299)),               // temp, removed
-                (temp_entry(b"6"), Some(300)),               // temp, live
-                (temp_entry(b"7"), Some(400)),               // temp, live
-            ],
-            ledger_seq,
-        )
+        MockSnapshotSource::from_entries(vec![
+            (wasm_entry_non_validated(b"1"), Some(100)), // persistent, expired
+            (wasm_entry_non_validated(b"2"), Some(299)), // persistent, expired
+            (wasm_entry_non_validated(b"3"), Some(300)), // persistent, live
+            (wasm_entry_non_validated(b"4"), Some(400)), // persistent, live
+            (temp_entry(b"5"), Some(299)),               // temp, removed
+            (temp_entry(b"6"), Some(300)),               // temp, live
+            (temp_entry(b"7"), Some(400)),               // temp, live
+        ])
         .unwrap(),
     );
     let ledger_info = LedgerInfo {
@@ -172,7 +169,7 @@ fn test_automatic_restoration() {
                     disk_read_bytes: 112,
                     write_bytes: 112,
                 },
-                resource_fee: 6041,
+                resource_fee: 6044,
             }
         })
     );
@@ -259,14 +256,11 @@ fn test_simulation_snapshot_source_creates_account_extensions() {
         }
         _ => (),
     };
-    let inner_snapshot = MockSnapshotSource::from_entries(
-        vec![
-            (account_without_extensions.clone(), None),
-            (account_with_ext_v2.clone(), None),
-            (account_with_ext_v3.clone(), None),
-        ],
-        300,
-    )
+    let inner_snapshot = MockSnapshotSource::from_entries(vec![
+        (account_without_extensions.clone(), None),
+        (account_with_ext_v2.clone(), None),
+        (account_with_ext_v3.clone(), None),
+    ])
     .unwrap();
     let snapshot = SimulationSnapshotSource::new(&inner_snapshot);
     assert_eq!(

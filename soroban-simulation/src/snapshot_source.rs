@@ -1,52 +1,46 @@
-use crate::network_config::NetworkConfig;
-use crate::simulation::{
-    simulate_restore_op, RestoreOpSimulationResult, SimulationAdjustmentConfig,
-};
 use anyhow::{anyhow, Result};
+use soroban_env_host::ledger_info::get_key_durability;
+use soroban_env_host::storage::EntryWithLiveUntil;
 use soroban_env_host::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
-    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountEntryExtensionV3, ExtensionPoint,
-    LedgerEntryData, Liabilities, SponsorshipDescriptor, TimePoint,
+    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountEntryExtensionV3,
+    ContractDataDurability, ExtensionPoint, LedgerEntryData, Liabilities, ScErrorCode, ScErrorType,
+    SponsorshipDescriptor, TimePoint,
 };
-use soroban_env_host::{
-    ledger_info::get_key_durability,
-    storage::{EntryWithLiveUntil, SnapshotSource},
-    xdr::{ContractDataDurability, LedgerKey, ScErrorCode, ScErrorType},
-    HostError, LedgerInfo,
-};
+use soroban_env_host::LedgerInfo;
+use soroban_env_host::{storage::SnapshotSource, xdr::LedgerKey, HostError};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
-/// Read-only ledger snapshot accessor that also has access
-/// to archived entries.
-///
-/// Unlike `SnapshotSource` trait that must only return live entries,
-/// this should return both live and archived ledger entries.
-pub trait SnapshotSourceWithArchive {
-    fn get_including_archived(
-        &self,
-        key: &Rc<LedgerKey>,
-    ) -> std::result::Result<Option<EntryWithLiveUntil>, HostError>;
-}
+use crate::simulation::{
+    simulate_restore_op, RestoreOpSimulationResult, SimulationAdjustmentConfig,
+};
+use crate::NetworkConfig;
 
 /// The `SnapshotSource` implementation that automatically restores
 /// the archived ledger entries accessed during `get` calls.
 ///
+/// Use this to suppress the default auto-restoration behavior during the host
+/// function execution: by restoring the entries inside the snapshot the final
+/// simulation result would be 'as if' the entries have already been restored.
+/// This might be useful if the auto-restoration causes the resources to go
+/// above the per-transaction limit.
+///
 /// This does not define a concrete implementation for ledger lookups
-/// and just wraps a `SnapshotSourceWithArchive`.
+/// and just wraps a `SnapshotSource`.
 ///
 /// The restored entries will have the rent automatically bumped to
 /// `min_persistent_entry_ttl`, which is consistent with the behavior
 /// of `RestoreFootprintOp` if it was called in the same ledger.
-pub struct AutoRestoringSnapshotSource<T: SnapshotSourceWithArchive> {
+pub struct AutoRestoringSnapshotSource<T: SnapshotSource> {
     snapshot_source: Rc<T>,
     min_persistent_live_until_ledger: u32,
     current_ledger_sequence: u32,
     restored_ledger_keys: RefCell<BTreeSet<Rc<LedgerKey>>>,
 }
 
-impl<T: SnapshotSourceWithArchive> AutoRestoringSnapshotSource<T> {
+impl<T: SnapshotSource> AutoRestoringSnapshotSource<T> {
     pub fn new(snapshot_source: Rc<T>, ledger_info: &LedgerInfo) -> Result<Self, anyhow::Error> {
         Ok(Self {
             snapshot_source,
@@ -88,9 +82,9 @@ impl<T: SnapshotSourceWithArchive> AutoRestoringSnapshotSource<T> {
     }
 }
 
-impl<T: SnapshotSourceWithArchive> SnapshotSource for AutoRestoringSnapshotSource<T> {
+impl<T: SnapshotSource> SnapshotSource for AutoRestoringSnapshotSource<T> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
-        let entry_with_live_until = self.snapshot_source.get_including_archived(key)?;
+        let entry_with_live_until = self.snapshot_source.get(key)?;
         if let Some((entry, live_until)) = entry_with_live_until {
             if let Some(durability) = get_key_durability(key.as_ref()) {
                 let live_until = live_until.ok_or_else(|| {
@@ -181,16 +175,6 @@ pub(crate) struct SimulationSnapshotSource<'a> {
     entry_updater: RefCell<LedgerEntryUpdater>,
 }
 
-// This is the same as `SimulationSnapshotSource`, but for
-// `SnapshotSourceWithArchive` trait.
-// Note, that we don't implement both traits for `SimulationSnapshotSource` in order
-// to avoid confusion: we never want to accidentally create a `SnapshotSource` with
-// `SnapshotSourceWithArchive` inner snapshot, or vice versa.
-pub(crate) struct SimulationSnapshotSourceWithArchive<'a, T: SnapshotSourceWithArchive> {
-    inner_snapshot: &'a T,
-    entry_updater: RefCell<LedgerEntryUpdater>,
-}
-
 impl<'a> SimulationSnapshotSource<'a> {
     pub(crate) fn new(snapshot: &'a dyn SnapshotSource) -> Self {
         Self {
@@ -207,35 +191,12 @@ impl<'a> SimulationSnapshotSource<'a> {
     }
 }
 
-impl<'a, T: SnapshotSourceWithArchive> SimulationSnapshotSourceWithArchive<'a, T> {
-    pub(crate) fn new(snapshot: &'a T) -> Self {
-        Self {
-            inner_snapshot: &snapshot,
-            entry_updater: RefCell::new(Default::default()),
-        }
-    }
-}
-
 impl SnapshotSource for SimulationSnapshotSource<'_> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Option<EntryWithLiveUntil>, HostError> {
         Ok(self
             .entry_updater
             .borrow_mut()
             .maybe_update_entry(key, self.inner_snapshot.get(key)?))
-    }
-}
-
-impl<T: SnapshotSourceWithArchive> SnapshotSourceWithArchive
-    for SimulationSnapshotSourceWithArchive<'_, T>
-{
-    fn get_including_archived(
-        &self,
-        key: &Rc<LedgerKey>,
-    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
-        Ok(self
-            .entry_updater
-            .borrow_mut()
-            .maybe_update_entry(key, self.inner_snapshot.get_including_archived(key)?))
     }
 }
 

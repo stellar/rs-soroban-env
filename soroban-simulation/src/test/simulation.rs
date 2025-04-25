@@ -18,12 +18,12 @@ use soroban_env_host::xdr::{
     AccountId, AlphaNum4, AssetCode4, ContractCostParamEntry, ContractCostParams, ContractCostType,
     ContractDataDurability, ContractDataEntry, ContractExecutable, ContractId, ExtensionPoint,
     Hash, HostFunction, Int128Parts, InvokeContractArgs, LedgerEntry, LedgerEntryData,
-    LedgerFootprint, LedgerKey, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress,
-    ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScSymbol,
-    ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-    SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, SorobanTransactionData,
-    SorobanTransactionDataExt, TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags,
-    Uint256, VecM,
+    LedgerFootprint, LedgerKey, LedgerKeyContractData, LedgerKeyTrustLine, Limits, PublicKey,
+    ScAddress, ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString,
+    ScSymbol, ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources,
+    SorobanResourcesExtV0, SorobanTransactionData, SorobanTransactionDataExt, TrustLineAsset,
+    TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256, VecM, WriteXdr,
 };
 use soroban_env_host::HostError;
 use soroban_test_wasms::{ADD_I32, AUTH_TEST_CONTRACT, TRY_CALL_SAC};
@@ -108,8 +108,7 @@ fn test_simulate_upload_wasm() {
     let source_account = get_account_id([123; 32]);
     let ledger_info = default_ledger_info();
     let network_config = default_network_config();
-    let snapshot_source =
-        Rc::new(MockSnapshotSource::from_entries(vec![], ledger_info.sequence_number).unwrap());
+    let snapshot_source = Rc::new(MockSnapshotSource::from_entries(vec![]).unwrap());
 
     let res = simulate_invoke_host_function_op(
         snapshot_source.clone(),
@@ -132,7 +131,7 @@ fn test_simulate_upload_wasm() {
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
 
-    let expected_instructions = 1644805;
+    let expected_instructions = 1676095;
     let expected_write_bytes = 684;
     assert_eq!(
         res.transaction_data,
@@ -147,11 +146,11 @@ fn test_simulate_upload_wasm() {
                 disk_read_bytes: 0,
                 write_bytes: expected_write_bytes,
             },
-            resource_fee: 14073223,
+            resource_fee: 14073257,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 822401);
+    assert_eq!(res.simulated_memory, 838046);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -201,7 +200,7 @@ fn test_simulate_upload_wasm() {
                 disk_read_bytes: 0,
                 write_bytes: expected_write_bytes + 300,
             },
-            resource_fee: 21109107,
+            resource_fee: 21109142,
         })
     );
 }
@@ -212,8 +211,7 @@ fn test_simulation_returns_insufficient_budget_error() {
     let ledger_info = default_ledger_info();
     let mut network_config = default_network_config();
     network_config.tx_max_instructions = 100_000;
-    let snapshot_source =
-        Rc::new(MockSnapshotSource::from_entries(vec![], ledger_info.sequence_number).unwrap());
+    let snapshot_source = Rc::new(MockSnapshotSource::from_entries(vec![]).unwrap());
 
     let res = simulate_invoke_host_function_op(
         snapshot_source.clone(),
@@ -246,8 +244,7 @@ fn test_simulation_returns_logic_error() {
     let source_account = get_account_id([123; 32]);
     let ledger_info = default_ledger_info();
     let network_config = default_network_config();
-    let snapshot_source =
-        Rc::new(MockSnapshotSource::from_entries(vec![], ledger_info.sequence_number).unwrap());
+    let snapshot_source = Rc::new(MockSnapshotSource::from_entries(vec![]).unwrap());
     let bad_wasm = [0; 1000];
 
     let res = simulate_invoke_host_function_op(
@@ -284,13 +281,10 @@ fn test_simulate_create_contract() {
     let contract = CreateContractData::new([1; 32], ADD_I32);
 
     let snapshot_source = Rc::new(
-        MockSnapshotSource::from_entries(
-            vec![(
-                contract.wasm_entry,
-                Some(ledger_info.sequence_number + 1000),
-            )],
-            ledger_info.sequence_number,
-        )
+        MockSnapshotSource::from_entries(vec![(
+            contract.wasm_entry,
+            Some(ledger_info.sequence_number + 1000),
+        )])
         .unwrap(),
     );
 
@@ -320,7 +314,7 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    let expected_instructions = 2587992;
+    let expected_instructions = 2739690;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -334,11 +328,11 @@ fn test_simulate_create_contract() {
                 disk_read_bytes: 0,
                 write_bytes: 104,
             },
-            resource_fee: 13161,
+            resource_fee: 13313,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 1293994);
+    assert_eq!(res.simulated_memory, 1369843);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -397,33 +391,30 @@ fn test_simulate_invoke_contract_with_auth() {
     let ledger_info = default_ledger_info();
     let network_config = default_network_config();
     let snapshot_source = Rc::new(
-        MockSnapshotSource::from_entries(
-            vec![
-                (
-                    contracts[0].wasm_entry.clone(),
-                    Some(ledger_info.sequence_number + 100),
-                ),
-                (
-                    contracts[0].contract_entry.clone(),
-                    Some(ledger_info.sequence_number + 1000),
-                ),
-                (
-                    contracts[1].contract_entry.clone(),
-                    Some(ledger_info.sequence_number + 1000),
-                ),
-                (
-                    contracts[2].contract_entry.clone(),
-                    Some(ledger_info.sequence_number + 1000),
-                ),
-                (
-                    contracts[3].contract_entry.clone(),
-                    Some(ledger_info.sequence_number + 1000),
-                ),
-                // Source account doesn't need to be accessed
-                (account_entry(&other_account), None),
-            ],
-            ledger_info.sequence_number,
-        )
+        MockSnapshotSource::from_entries(vec![
+            (
+                contracts[0].wasm_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                contracts[0].contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            (
+                contracts[1].contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            (
+                contracts[2].contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            (
+                contracts[3].contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            // Source account doesn't need to be accessed
+            (account_entry(&other_account), None),
+        ])
         .unwrap(),
     );
 
@@ -466,7 +457,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 40234834;
+    let expected_instructions = 40782813;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -495,17 +486,126 @@ fn test_simulate_invoke_contract_with_auth() {
                 disk_read_bytes: 144,
                 write_bytes: 76,
             },
-            resource_fee: 115198,
+            resource_fee: 115746,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 20117392);
+    assert_eq!(res.simulated_memory, 20391380);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
             state_before: None,
             state_after: Some(nonce_entry(other_account_address, other_account_nonce))
         }]
+    );
+}
+
+#[test]
+fn test_simulate_invoke_contract_with_autorestore() {
+    let contracts = vec![
+        CreateContractData::new([1; 32], AUTH_TEST_CONTRACT),
+        CreateContractData::new([2; 32], AUTH_TEST_CONTRACT),
+    ];
+
+    let tree = AuthContractInvocationNode {
+        address: contracts[0].contract_address.clone(),
+        children: vec![AuthContractInvocationNode {
+            address: contracts[1].contract_address.clone(),
+            children: vec![],
+        }],
+    };
+    let source_account = get_account_id([123; 32]);
+    let host_fn = auth_contract_invocation(
+        vec![ScAddress::Account(source_account.clone())],
+        tree.clone(),
+    );
+    let ledger_info = default_ledger_info();
+    let network_config = default_network_config();
+    let snapshot_source = Rc::new(
+        MockSnapshotSource::from_entries(vec![
+            (
+                contracts[0].wasm_entry.clone(),
+                Some(ledger_info.sequence_number - 100),
+            ),
+            (
+                contracts[0].contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            (
+                contracts[1].contract_entry.clone(),
+                Some(ledger_info.sequence_number - 1),
+            ),
+            // Source account doesn't need to be accessed
+        ])
+        .unwrap(),
+    );
+
+    let res = simulate_invoke_host_function_op(
+        snapshot_source,
+        &network_config,
+        &SimulationAdjustmentConfig::no_adjustments(),
+        &ledger_info,
+        host_fn,
+        RecordingInvocationAuthMode::Recording(true),
+        &source_account,
+        [1; 32],
+        true,
+    )
+    .unwrap();
+    assert_eq!(res.invoke_result.unwrap(), ScVal::Void);
+
+    assert!(res.contract_events.is_empty());
+    assert!(!res.diagnostic_events.is_empty());
+
+    let expected_instructions = 9882872;
+    let wasm_entry_size = contracts[0]
+        .wasm_entry
+        .to_xdr(Limits::none())
+        .unwrap()
+        .len() as u32;
+    let contract_1_size = contracts[1]
+        .contract_entry
+        .to_xdr(Limits::none())
+        .unwrap()
+        .len() as u32;
+    assert_eq!(
+        res.transaction_data,
+        Some(SorobanTransactionData {
+            ext: SorobanTransactionDataExt::V1(SorobanResourcesExtV0 {
+                archived_soroban_entries: vec![0, 1].try_into().unwrap()
+            }),
+            resources: SorobanResources {
+                footprint: LedgerFootprint {
+                    read_only: vec![contracts[0].contract_key.clone(),].try_into().unwrap(),
+                    read_write: vec![
+                        contracts[1].contract_key.clone(),
+                        contracts[0].wasm_key.clone(),
+                    ]
+                    .tap_mut(|v| v.sort())
+                    .try_into()
+                    .unwrap(),
+                },
+                instructions: expected_instructions,
+                disk_read_bytes: wasm_entry_size + contract_1_size,
+                write_bytes: wasm_entry_size + contract_1_size,
+            },
+            resource_fee: 17966850,
+        })
+    );
+    assert_eq!(res.simulated_instructions, expected_instructions);
+    assert_eq!(res.simulated_memory, 4941429);
+    assert_eq!(
+        res.modified_entries,
+        vec![
+            LedgerEntryDiff {
+                state_before: None,
+                state_after: Some(contracts[1].contract_entry.clone())
+            },
+            LedgerEntryDiff {
+                state_before: None,
+                state_after: Some(contracts[0].wasm_entry.clone())
+            }
+        ]
     );
 }
 
@@ -542,8 +642,7 @@ fn test_simulate_extend_ttl_op() {
         .iter()
         .map(|e| ledger_entry_to_ledger_key(&e.0).unwrap())
         .collect();
-    let snapshot_source =
-        MockSnapshotSource::from_entries(entries, ledger_info.sequence_number).unwrap();
+    let snapshot_source = MockSnapshotSource::from_entries(entries).unwrap();
 
     let no_op_extension = simulate_extend_ttl_op(
         &snapshot_source,
@@ -678,10 +777,23 @@ fn test_simulate_extend_ttl_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 459214435,
+                resource_fee: 459214436,
             }
         }
     );
+
+    // Extending expired entries is not allowed.
+    let mut ledger_info_with_increased_ledger_seq = ledger_info;
+    ledger_info_with_increased_ledger_seq.sequence_number += 101;
+    assert!(simulate_extend_ttl_op(
+        &snapshot_source,
+        &network_config,
+        &SimulationAdjustmentConfig::no_adjustments(),
+        &ledger_info_with_increased_ledger_seq,
+        &keys,
+        100_001,
+    )
+    .is_err());
 }
 
 #[test]
@@ -708,8 +820,7 @@ fn test_simulate_restore_op() {
         .iter()
         .map(|e| ledger_entry_to_ledger_key(&e.0).unwrap())
         .collect();
-    let snapshot_source =
-        MockSnapshotSource::from_entries(entries, ledger_info.sequence_number).unwrap();
+    let snapshot_source = MockSnapshotSource::from_entries(entries).unwrap();
 
     let no_op_restoration = simulate_restore_op(
         &snapshot_source,
@@ -734,7 +845,7 @@ fn test_simulate_restore_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 279,
+                resource_fee: 280,
             }
         }
     );
@@ -796,7 +907,7 @@ fn test_simulate_restore_op() {
                     disk_read_bytes: expected_rw_bytes,
                     write_bytes: expected_rw_bytes,
                 },
-                resource_fee: 32615676,
+                resource_fee: 32615677,
             }
         }
     );
@@ -824,7 +935,7 @@ fn test_simulate_restore_op() {
                     disk_read_bytes: (expected_rw_bytes as f64 * 1.2) as u32,
                     write_bytes: (expected_rw_bytes as f64 * 1.3) as u32,
                 },
-                resource_fee: 48923231,
+                resource_fee: 48923232,
             }
         }
     );
@@ -835,10 +946,10 @@ fn test_simulate_restore_op_returns_error_for_temp_entries() {
     let ledger_info = default_ledger_info();
     let network_config = default_network_config();
 
-    let snapshot_source = MockSnapshotSource::from_entries(
-        vec![(temp_entry(b"123"), Some(ledger_info.sequence_number - 10))],
-        ledger_info.sequence_number,
-    )
+    let snapshot_source = MockSnapshotSource::from_entries(vec![(
+        temp_entry(b"123"),
+        Some(ledger_info.sequence_number - 10),
+    )])
     .unwrap();
 
     let res = simulate_restore_op(
@@ -856,8 +967,7 @@ fn test_simulate_restore_op_returns_error_for_non_existent_entry() {
     let ledger_info = default_ledger_info();
     let network_config = default_network_config();
 
-    let snapshot_source =
-        MockSnapshotSource::from_entries(vec![], ledger_info.sequence_number).unwrap();
+    let snapshot_source = MockSnapshotSource::from_entries(vec![]).unwrap();
 
     let res = simulate_restore_op(
         &snapshot_source,
@@ -985,18 +1095,15 @@ fn test_simulate_successful_sac_call() {
     let ledger_info = default_ledger_info();
     let network_config = default_network_config();
     let snapshot_source = Rc::new(
-        MockSnapshotSource::from_entries(
-            vec![
-                (
-                    contract_instance_le.clone(),
-                    Some(ledger_info.sequence_number + 100),
-                ),
-                (trustline_le.clone(), None),
-                (account_entry(&source_account), None),
-                (account_entry(&other_account), None),
-            ],
-            ledger_info.sequence_number,
-        )
+        MockSnapshotSource::from_entries(vec![
+            (
+                contract_instance_le.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (trustline_le.clone(), None),
+            (account_entry(&source_account), None),
+            (account_entry(&other_account), None),
+        ])
         .unwrap(),
     );
     let res = simulate_invoke_host_function_op(
@@ -1040,11 +1147,11 @@ fn test_simulate_successful_sac_call() {
                         .try_into()
                         .unwrap()
                 },
-                instructions: 3260072,
+                instructions: 3443303,
                 disk_read_bytes: 116,
                 write_bytes: 116,
             },
-            resource_fee: 52814,
+            resource_fee: 52999,
         })
     );
 }
@@ -1077,25 +1184,22 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
     let network_config = default_network_config();
 
     let snapshot_source = Rc::new(
-        MockSnapshotSource::from_entries(
-            vec![
-                (
-                    sac_instance_le.clone(),
-                    Some(ledger_info.sequence_number + 100),
-                ),
-                (
-                    contract.wasm_entry.clone(),
-                    Some(ledger_info.sequence_number + 100),
-                ),
-                (
-                    contract.contract_entry.clone(),
-                    Some(ledger_info.sequence_number + 100),
-                ),
-                (account_entry(&source_account), None),
-                (account_entry(&other_account), None),
-            ],
-            ledger_info.sequence_number,
-        )
+        MockSnapshotSource::from_entries(vec![
+            (
+                sac_instance_le.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                contract.wasm_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                contract.contract_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (account_entry(&source_account), None),
+            (account_entry(&other_account), None),
+        ])
         .unwrap(),
     );
 
@@ -1143,11 +1247,11 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
                     // No entries should be actually modified.
                     read_write: Default::default(),
                 },
-                instructions: 5354711,
+                instructions: 5564767,
                 disk_read_bytes: 0,
                 write_bytes: 0,
             },
-            resource_fee: 5703,
+            resource_fee: 5913,
         })
     );
 }

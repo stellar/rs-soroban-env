@@ -1,10 +1,8 @@
-use super::snapshot_source::SnapshotSourceWithArchive;
 use crate::network_config::NetworkConfig;
 use crate::simulation::{SimulationAdjustmentConfig, SimulationAdjustmentFactor};
 use anyhow::{anyhow, ensure, Context, Result};
 
 use soroban_env_host::e2e_invoke::entry_size_for_rent;
-use soroban_env_host::xdr::SorobanTransactionDataExt;
 use soroban_env_host::{
     fees::{
         compute_rent_fee, compute_transaction_resource_fee, LedgerEntryRentChange,
@@ -16,9 +14,9 @@ use soroban_env_host::{
         BytesM, ContractDataDurability, DecoratedSignature, Duration, Hash, LedgerBounds,
         LedgerFootprint, LedgerKey, Memo, MuxedAccount, MuxedAccountMed25519, Operation,
         OperationBody, Preconditions, PreconditionsV2, SequenceNumber, Signature, SignatureHint,
-        SignerKey, SignerKeyEd25519SignedPayload, SorobanResources, SorobanTransactionData,
-        TimeBounds, TimePoint, Transaction, TransactionExt, TransactionV1Envelope, Uint256,
-        WriteXdr,
+        SignerKey, SignerKeyEd25519SignedPayload, SorobanResources, SorobanResourcesExtV0,
+        SorobanTransactionData, SorobanTransactionDataExt, TimeBounds, TimePoint, Transaction,
+        TransactionExt, TransactionV1Envelope, Uint256, WriteXdr,
     },
     LedgerInfo, DEFAULT_XDR_RW_LIMITS,
 };
@@ -86,6 +84,7 @@ pub(crate) fn compute_resource_fee(
 pub(crate) fn compute_adjusted_transaction_resources(
     operation: OperationBody,
     simulated_operation_resources: &mut SorobanResources,
+    restored_rw_entry_ids: &Vec<u32>,
     adjustment_config: &SimulationAdjustmentConfig,
     contract_events_and_return_value_size: u32,
 ) -> Result<TransactionResources> {
@@ -107,6 +106,7 @@ pub(crate) fn compute_adjusted_transaction_resources(
             }
         }
     }
+    disk_read_entries += restored_rw_entry_ids.len() as u32;
     Ok(TransactionResources {
         instructions: simulated_operation_resources.instructions,
         disk_read_entries,
@@ -114,8 +114,12 @@ pub(crate) fn compute_adjusted_transaction_resources(
         disk_read_bytes: simulated_operation_resources.disk_read_bytes,
         write_bytes: simulated_operation_resources.write_bytes,
         transaction_size_bytes: adjustment_config.tx_size.adjust_u32(
-            estimate_max_transaction_size_for_operation(operation, &simulated_operation_resources)
-                .context("could not compute the maximum transaction size for operation")?,
+            estimate_max_transaction_size_for_operation(
+                operation,
+                &simulated_operation_resources,
+                restored_rw_entry_ids,
+            )
+            .context("could not compute the maximum transaction size for operation")?,
         ),
         contract_events_size_bytes: contract_events_and_return_value_size,
     })
@@ -141,9 +145,14 @@ pub(crate) fn simulate_extend_ttl_op_resources(
         let current_live_until_ledger = live_until.ok_or_else(|| {
             anyhow!("Internal error: missing TTL for ledger key that must have TTL: `{key:?}`")
         })?;
+        // Skip entries that don't need extension.
         if new_live_until_ledger <= current_live_until_ledger {
             continue;
         }
+        ensure!(
+            current_live_until_ledger >= current_ledger_seq,
+            "Can't extend for an expired entry with key: {key:?}. The entry must be restored before it can be extended."
+        );
         extended_keys.push(key.clone());
         let entry_xdr_size = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
         let entry_size: u32 = entry_size_for_rent(&budget, &entry, entry_xdr_size)?;
@@ -170,7 +179,7 @@ pub(crate) fn simulate_extend_ttl_op_resources(
 
 pub(crate) fn simulate_restore_op_resources(
     keys_to_restore: &[LedgerKey],
-    snapshot_source: &impl SnapshotSourceWithArchive,
+    snapshot_source: &impl SnapshotSource,
     network_config: &NetworkConfig,
     ledger_info: &LedgerInfo,
 ) -> Result<(SorobanResources, Vec<LedgerEntryRentChange>)> {
@@ -191,7 +200,7 @@ pub(crate) fn simulate_restore_op_resources(
             "Can't restore a ledger entry with key: {key:?}. Only persistent ledger entries with TTL can be restored."
         );
         let entry_with_live_until = snapshot_source
-            .get_including_archived(&Rc::new(key.clone()))?
+            .get(&Rc::new(key.clone()))?
             .ok_or_else(|| anyhow!("Missing entry to restore for key {key:?}"))?;
         let (entry, live_until) = entry_with_live_until;
 
@@ -231,6 +240,7 @@ pub(crate) fn simulate_restore_op_resources(
 fn estimate_max_transaction_size_for_operation(
     operation: OperationBody,
     resources: &SorobanResources,
+    restored_rw_entry_ids: &Vec<u32>,
 ) -> Result<u32> {
     let source = MuxedAccount::MuxedEd25519(MuxedAccountMed25519 {
         id: 0,
@@ -281,7 +291,9 @@ fn estimate_max_transaction_size_for_operation(
                     write_bytes: 0,
                 },
                 resource_fee: 0,
-                ext: SorobanTransactionDataExt::V0,
+                ext: SorobanTransactionDataExt::V1(SorobanResourcesExtV0 {
+                    archived_soroban_entries: restored_rw_entry_ids.try_into()?,
+                }),
             }),
         },
         signatures: signatures.try_into()?,
