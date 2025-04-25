@@ -935,7 +935,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     encoded_ledger_entries: I,
     encoded_ttl_entries: I,
     ledger_num: u32,
-    #[cfg(any(test, feature = "recording_mode"))] allow_expired_entries: bool,
+    #[cfg(any(test, feature = "recording_mode"))] is_recording_mode: bool,
 ) -> Result<(StorageMap, TtlEntryMap), HostError> {
     let mut storage_map = StorageMap::new();
     let mut ttl_map = TtlEntryMap::new();
@@ -965,7 +965,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
             #[cfg(not(any(test, feature = "recording_mode")))]
             if ttl_entry.live_until_ledger_seq < ledger_num {
                 #[cfg(any(test, feature = "recording_mode"))]
-                if !allow_expired_entries {
+                if !is_recording_mode {
                     return Err(Error::from_type_and_code(
                         ScErrorType::Storage,
                         ScErrorCode::InternalError,
@@ -979,7 +979,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
             #[cfg(any(test, feature = "recording_mode"))]
             if ttl_entry.live_until_ledger_seq < ledger_num {
                 #[cfg(any(test, feature = "recording_mode"))]
-                if !allow_expired_entries {
+                if !is_recording_mode {
                     return Err(Error::from_type_and_code(
                         ScErrorType::Storage,
                         ScErrorCode::InternalError,
