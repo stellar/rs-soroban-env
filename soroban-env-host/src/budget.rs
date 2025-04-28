@@ -1121,6 +1121,22 @@ impl Budget {
         )?))))
     }
 
+    /// Initializes the budget from network configuration settings.
+    /// Allows customizing the shadow CPU/memory limits.
+    pub fn try_from_configs_with_shadow_limits(
+        cpu_limit: u64,
+        mem_limit: u64,
+        cpu_shadow_limit: u64,
+        mem_shadow_limit: u64,
+        cpu_cost_params: ContractCostParams,
+        mem_cost_params: ContractCostParams,
+    ) -> Result<Self, HostError> {
+        let budget =
+            Budget::try_from_configs(cpu_limit, mem_limit, cpu_cost_params, mem_cost_params)?;
+        budget.set_shadow_limits(cpu_shadow_limit, mem_shadow_limit)?;
+        Ok(budget)
+    }
+
     // Helper function to avoid panics from multiple borrow_muts
     fn with_mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
     where
