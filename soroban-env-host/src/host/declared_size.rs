@@ -413,8 +413,20 @@ mod test {
         #[cfg(target_arch = "x86_64")]
         check_x64_host_object_size_that_changed_at_rust_1_77();
 
+        #[rustversion::before(1.81)]
         #[cfg(target_arch = "aarch64")]
-        expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        fn check_aarch64_host_object_size_that_changed_at_rust_1_81() {
+            expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        }
+        #[rustversion::since(1.81)]
+        #[cfg(target_arch = "aarch64")]
+        fn check_aarch64_host_object_size_that_changed_at_rust_1_81() {
+            expect!["64"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        check_aarch64_host_object_size_that_changed_at_rust_1_81();
+
         expect!["16"].assert_eq(size_of::<HostError>().to_string().as_str());
         #[cfg(target_arch = "x86_64")]
         expect!["512"].assert_eq(size_of::<Context>().to_string().as_str());
