@@ -52,6 +52,7 @@ macro_rules! impl_declared_size_type {
 // that the actual size is as expected, and that the declared size is >= the actual size.
 
 // Primitive types
+impl_declared_size_type!((), 0);
 impl_declared_size_type!(bool, 1);
 impl_declared_size_type!(u8, 1);
 impl_declared_size_type!(u32, 4);
@@ -340,6 +341,7 @@ mod test {
         use std::mem::size_of;
 
         // primitive types
+        expect!["0"].assert_eq(size_of::<()>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<bool>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<u8>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<u32>().to_string().as_str());

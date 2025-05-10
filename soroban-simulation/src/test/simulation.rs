@@ -131,7 +131,7 @@ fn test_simulate_upload_wasm() {
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
 
-    let expected_instructions = 1676095;
+    let expected_instructions = 1684151;
     let expected_write_bytes = 684;
     assert_eq!(
         res.transaction_data,
@@ -146,11 +146,11 @@ fn test_simulate_upload_wasm() {
                 disk_read_bytes: 0,
                 write_bytes: expected_write_bytes,
             },
-            resource_fee: 14073257,
+            resource_fee: 14073265,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 838046);
+    assert_eq!(res.simulated_memory, 842074);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -200,7 +200,7 @@ fn test_simulate_upload_wasm() {
                 disk_read_bytes: 0,
                 write_bytes: expected_write_bytes + 300,
             },
-            resource_fee: 21109142,
+            resource_fee: 21109151,
         })
     );
 }
@@ -268,8 +268,8 @@ fn test_simulation_returns_logic_error() {
     assert!(!res.diagnostic_events.is_empty());
 
     assert_eq!(res.transaction_data, None);
-    assert_eq!(res.simulated_instructions, 154568);
-    assert_eq!(res.simulated_memory, 77284);
+    assert_eq!(res.simulated_instructions, 162624);
+    assert_eq!(res.simulated_memory, 81312);
     assert_eq!(res.modified_entries, vec![]);
 }
 
@@ -314,7 +314,7 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    let expected_instructions = 2739690;
+    let expected_instructions = 2747746;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -328,11 +328,11 @@ fn test_simulate_create_contract() {
                 disk_read_bytes: 0,
                 write_bytes: 104,
             },
-            resource_fee: 13313,
+            resource_fee: 13321,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 1369843);
+    assert_eq!(res.simulated_memory, 1373871);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -457,7 +457,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 40782813;
+    let expected_instructions = 40790869;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -486,11 +486,11 @@ fn test_simulate_invoke_contract_with_auth() {
                 disk_read_bytes: 144,
                 write_bytes: 76,
             },
-            resource_fee: 115746,
+            resource_fee: 115754,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 20391380);
+    assert_eq!(res.simulated_memory, 20395408);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -557,7 +557,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 9882872;
+    let expected_instructions = 9944232;
     let wasm_entry_size = contracts[0]
         .wasm_entry
         .to_xdr(Limits::none())
@@ -589,11 +589,11 @@ fn test_simulate_invoke_contract_with_autorestore() {
                 disk_read_bytes: wasm_entry_size + contract_1_size,
                 write_bytes: wasm_entry_size + contract_1_size,
             },
-            resource_fee: 17966850,
+            resource_fee: 17966912,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 4941429);
+    assert_eq!(res.simulated_memory, 4972109);
     assert_eq!(
         res.modified_entries,
         vec![
@@ -1147,11 +1147,11 @@ fn test_simulate_successful_sac_call() {
                         .try_into()
                         .unwrap()
                 },
-                instructions: 3443303,
+                instructions: 3451359,
                 disk_read_bytes: 116,
                 write_bytes: 116,
             },
-            resource_fee: 52999,
+            resource_fee: 53007,
         })
     );
 }
@@ -1247,11 +1247,11 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
                     // No entries should be actually modified.
                     read_write: Default::default(),
                 },
-                instructions: 5564767,
+                instructions: 5572823,
                 disk_read_bytes: 0,
                 write_bytes: 0,
             },
-            resource_fee: 5913,
+            resource_fee: 5921,
         })
     );
 }

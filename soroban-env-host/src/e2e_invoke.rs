@@ -7,7 +7,11 @@ use std::{cmp::max, rc::Rc};
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
     auth::RecordedAuthPayload,
-    xdr::{ContractEvent, ReadXdr, ScVal, SorobanAddressCredentials, SorobanCredentials, WriteXdr},
+    storage::is_persistent_key,
+    xdr::{
+        ContractEvent, ReadXdr, ScVal, SorobanAddressCredentials, SorobanCredentials,
+        SorobanResourcesExtV0, WriteXdr,
+    },
     DEFAULT_XDR_RW_LIMITS,
 };
 use crate::{
@@ -25,7 +29,7 @@ use crate::{
         AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
         LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
         LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
-        SorobanAuthorizationEntry, SorobanResources, TtlEntry,
+        SorobanAuthorizationEntry, SorobanResources, SorobanTransactionDataExt, TtlEntry,
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
@@ -34,7 +38,8 @@ use crate::{storage::EntryWithLiveUntil, vm::wasm_module_memory_cost};
 #[cfg(any(test, feature = "recording_mode"))]
 use sha2::{Digest, Sha256};
 
-pub type TtlEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<TtlEntry>, Budget>;
+type TtlEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<TtlEntry>, Budget>;
+type RestoredKeySet = MeteredOrdMap<Rc<LedgerKey>, (), Budget>;
 
 /// Result of invoking a single host function prepared for embedder consumption.
 pub struct InvokeHostFunctionResult {
@@ -129,14 +134,57 @@ pub struct LedgerEntryLiveUntilChange {
     pub new_live_until_ledger: u32,
 }
 
+// Builds a set for metered lookups of keys for entries that were restored from
+// the archived state.
+// This returns an `Option` instead of an empty set because most of the
+// invocations won't have this populated and it makes sense to not run
+// unnecessary metered work for them (even empty map lookups have some cost
+// charged).
+fn build_restored_key_set(
+    budget: &Budget,
+    resources: &SorobanResources,
+    resource_ext: &SorobanTransactionDataExt,
+) -> Result<Option<RestoredKeySet>, HostError> {
+    match resource_ext {
+        SorobanTransactionDataExt::V0 => Ok(None),
+        SorobanTransactionDataExt::V1(soroban_resources_ext_v0) => {
+            if soroban_resources_ext_v0.archived_soroban_entries.is_empty() {
+                return Ok(None);
+            }
+            let rw_footprint = &resources.footprint.read_write;
+            let mut key_set = RestoredKeySet::default();
+            for e in soroban_resources_ext_v0.archived_soroban_entries.iter() {
+                key_set = key_set.insert(
+                    Rc::new(
+                        rw_footprint
+                            .get(*e as usize)
+                            .ok_or_else(|| {
+                                HostError::from(Error::from_type_and_code(
+                                    ScErrorType::Storage,
+                                    ScErrorCode::InternalError,
+                                ))
+                            })?
+                            .metered_clone(budget)?,
+                    ),
+                    (),
+                    budget,
+                )?;
+            }
+            Ok(Some(key_set))
+        }
+    }
+}
+
 /// Returns the difference between the `storage` and its initial snapshot as
 /// `LedgerEntryChanges`.
 /// Returns an entry for every item in `storage` footprint.
-pub fn get_ledger_changes(
+fn get_ledger_changes(
     budget: &Budget,
     storage: &Storage,
     init_storage_snapshot: &(impl SnapshotSource + ?Sized),
     init_ttl_entries: TtlEntryMap,
+    min_live_until_ledger: u32,
+    restored_keys: &Option<RestoredKeySet>,
     #[cfg(any(test, feature = "recording_mode"))] current_ledger_seq: u32,
 ) -> Result<Vec<LedgerEntryChange>, HostError> {
     // Skip allocation metering for this for the sake of simplicity - the
@@ -184,6 +232,9 @@ pub fn get_ledger_changes(
                     old_live_until_ledger.ok_or_else(internal_error)?;
                 // In recording mode we might encounter ledger changes that have an expired 'old'
                 // entry. In that case we should treat it as non-existent instead.
+                // Note, that this should only be necessary for the temporary
+                // entries, the auto-restored persistent entries are handled below
+                // via `restored_keys` check.
                 #[cfg(any(test, feature = "recording_mode"))]
                 if ttl_change.old_live_until_ledger < current_ledger_seq {
                     ttl_change.old_live_until_ledger = 0;
@@ -213,6 +264,17 @@ pub fn get_ledger_changes(
                     entry_change.new_entry_size_bytes_for_rent =
                         entry_size_for_rent(budget, &entry, entry_buf.len() as u32)?;
                     entry_change.encoded_new_value = Some(entry_buf);
+
+                    if let Some(restored_keys) = &restored_keys {
+                        if restored_keys.contains_key::<LedgerKey>(key, budget)? {
+                            entry_change.old_entry_size_bytes_for_rent = 0;
+                            if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
+                                ttl_change.old_live_until_ledger = 0;
+                                ttl_change.new_live_until_ledger =
+                                    max(ttl_change.new_live_until_ledger, min_live_until_ledger);
+                            }
+                        }
+                    }
                 }
             }
             None => {
@@ -242,7 +304,7 @@ fn add_footprint_only_ledger_changes(
     for (key, access_type) in storage.footprint.0.iter(budget)? {
         // We have to check if the entry exists in the internal storage map
         // because `has` check on storage affects the footprint.
-        if storage.map.contains_key(key, budget)? {
+        if storage.map.contains_key::<Rc<LedgerKey>>(key, budget)? {
             continue;
         }
         let mut entry_change = LedgerEntryChange::default();
@@ -341,75 +403,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     enable_diagnostics: bool,
     encoded_host_fn: T,
     encoded_resources: T,
-    encoded_source_account: T,
-    encoded_auth_entries: I,
-    ledger_info: LedgerInfo,
-    encoded_ledger_entries: I,
-    encoded_ttl_entries: I,
-    base_prng_seed: T,
-    diagnostic_events: &mut Vec<DiagnosticEvent>,
-) -> Result<InvokeHostFunctionResult, HostError> {
-    invoke_host_function_with_trace_hook(
-        budget,
-        enable_diagnostics,
-        encoded_host_fn,
-        encoded_resources,
-        encoded_source_account,
-        encoded_auth_entries,
-        ledger_info,
-        encoded_ledger_entries,
-        encoded_ttl_entries,
-        base_prng_seed,
-        diagnostic_events,
-        None,
-    )
-}
-
-/// Same as `invoke_host_function` but allows to pass a trace hook which will
-/// be installed in the host for the duration of the invocation.
-#[allow(clippy::too_many_arguments)]
-pub fn invoke_host_function_with_trace_hook<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
-    budget: &Budget,
-    enable_diagnostics: bool,
-    encoded_host_fn: T,
-    encoded_resources: T,
-    encoded_source_account: T,
-    encoded_auth_entries: I,
-    ledger_info: LedgerInfo,
-    encoded_ledger_entries: I,
-    encoded_ttl_entries: I,
-    base_prng_seed: T,
-    diagnostic_events: &mut Vec<DiagnosticEvent>,
-    trace_hook: Option<TraceHook>,
-) -> Result<InvokeHostFunctionResult, HostError> {
-    invoke_host_function_with_trace_hook_and_module_cache(
-        budget,
-        enable_diagnostics,
-        encoded_host_fn,
-        encoded_resources,
-        encoded_source_account,
-        encoded_auth_entries,
-        ledger_info,
-        encoded_ledger_entries,
-        encoded_ttl_entries,
-        base_prng_seed,
-        diagnostic_events,
-        trace_hook,
-        None,
-    )
-}
-
-/// Same as `invoke_host_function_with_trace_hook` but allows to pass a `ModuleCache`
-/// which should be pre-loaded with all contracts in this invocation.
-#[allow(clippy::too_many_arguments)]
-pub fn invoke_host_function_with_trace_hook_and_module_cache<
-    T: AsRef<[u8]>,
-    I: ExactSizeIterator<Item = T>,
->(
-    budget: &Budget,
-    enable_diagnostics: bool,
-    encoded_host_fn: T,
-    encoded_resources: T,
+    encoded_resources_ext: T,
     encoded_source_account: T,
     encoded_auth_entries: I,
     ledger_info: LedgerInfo,
@@ -424,8 +418,19 @@ pub fn invoke_host_function_with_trace_hook_and_module_cache<
 
     let resources: SorobanResources =
         metered_from_xdr_with_budget(encoded_resources.as_ref(), &budget)?;
+    let resources_ext: SorobanTransactionDataExt =
+        metered_from_xdr_with_budget(encoded_resources_ext.as_ref(), &budget)?;
+    let restored_keys = build_restored_key_set(&budget, &resources, &resources_ext)?;
     let footprint = build_storage_footprint_from_xdr(&budget, resources.footprint)?;
     let current_ledger_seq = ledger_info.sequence_number;
+    let min_live_until_ledger = ledger_info
+        .min_live_until_ledger_checked(ContractDataDurability::Persistent)
+        .ok_or_else(|| {
+            HostError::from(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+            ))
+        })?;
     let (storage_map, init_ttl_map) = build_storage_map_from_xdr_ledger_entries(
         &budget,
         &footprint,
@@ -490,6 +495,8 @@ pub fn invoke_host_function_with_trace_hook_and_module_cache<
             &storage,
             &init_storage_snapshot,
             init_ttl_map,
+            min_live_until_ledger,
+            &restored_keys,
             #[cfg(any(test, feature = "recording_mode"))]
             current_ledger_seq,
         )?;
@@ -645,12 +652,18 @@ pub fn invoke_host_function_in_recording_mode(
     base_prng_seed: [u8; 32],
     diagnostic_events: &mut Vec<DiagnosticEvent>,
 ) -> Result<InvokeHostFunctionRecordingModeResult, HostError> {
-    use crate::storage::is_persistent_key;
-
     let storage = Storage::with_recording_footprint(ledger_snapshot.clone())?;
     let host = Host::with_storage_and_budget(storage, budget.clone());
     let is_recording_auth = matches!(auth_mode, RecordingInvocationAuthMode::Recording(_));
     let ledger_seq = ledger_info.sequence_number;
+    let min_live_until_ledger = ledger_info
+        .min_live_until_ledger_checked(ContractDataDurability::Persistent)
+        .ok_or_else(|| {
+            HostError::from(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+            ))
+        })?;
     let host_function = host.xdr_roundtrip(host_fn)?;
     let source_account: AccountId = host.xdr_roundtrip(source_account)?;
     host.set_source_account(source_account)?;
@@ -700,8 +713,8 @@ pub fn invoke_host_function_in_recording_mode(
         }
     }
 
-    let (footprint, disk_read_bytes, init_ttl_map, restored_rw_entry_ids) =
-        host.with_mut_storage(|storage| {
+    let (footprint, disk_read_bytes, init_ttl_map, restored_rw_entry_ids, restored_keys) = host
+        .with_mut_storage(|storage| {
             let footprint = storage_footprint_to_ledger_footprint(&storage.footprint)?;
             let _footprint_from_xdr = build_storage_footprint_from_xdr(&budget, footprint.clone())?;
 
@@ -710,6 +723,7 @@ pub fn invoke_host_function_in_recording_mode(
             let mut disk_read_bytes = 0_u32;
             let mut current_rw_id = 0;
             let mut restored_rw_entry_ids = vec![];
+            let mut restored_keys = RestoredKeySet::default();
 
             for (lk, access_type) in &storage.footprint.0 {
                 let entry_with_live_until = ledger_snapshot.get(lk)?;
@@ -732,6 +746,8 @@ pub fn invoke_host_function_in_recording_mode(
                                     disk_read_bytes =
                                         disk_read_bytes.saturating_add(encoded_le.len() as u32);
                                     restored_rw_entry_ids.push(current_rw_id);
+                                    restored_keys =
+                                        restored_keys.insert(lk.clone(), (), &budget)?;
                                 }
                             }
                         }
@@ -775,6 +791,7 @@ pub fn invoke_host_function_in_recording_mode(
                 disk_read_bytes,
                 init_ttl_map,
                 restored_rw_entry_ids,
+                restored_keys,
             ))
         })?;
     let mut resources = SorobanResources {
@@ -785,17 +802,31 @@ pub fn invoke_host_function_in_recording_mode(
     };
     let _resources_roundtrip: SorobanResources =
         host.metered_from_xdr(host.to_xdr_non_metered(&resources)?.as_slice())?;
+    let resources_ext = SorobanTransactionDataExt::V1(SorobanResourcesExtV0 {
+        archived_soroban_entries: restored_rw_entry_ids
+            .clone()
+            .try_into()
+            .map_err(|_| HostError::from((ScErrorType::Context, ScErrorCode::InternalError)))?,
+    });
+    let _resources_ext_roundtrip: SorobanTransactionDataExt =
+        host.metered_from_xdr(host.to_xdr_non_metered(&resources_ext)?.as_slice())?;
     let (storage, events) = host.try_finish()?;
     if enable_diagnostics {
         extract_diagnostic_events(&events, diagnostic_events);
     }
-
+    let restored_keys = if restored_keys.map.is_empty() {
+        None
+    } else {
+        Some(restored_keys)
+    };
     let (ledger_changes, contract_events) = if invoke_result.is_ok() {
         let mut ledger_changes = get_ledger_changes(
             &budget,
             &storage,
             &*ledger_snapshot,
             init_ttl_map,
+            min_live_until_ledger,
+            &restored_keys,
             ledger_seq,
         )?;
         // Add the keys that only exist in the footprint, but not in the
