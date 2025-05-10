@@ -253,6 +253,7 @@ pub trait MeteredClone: Clone + DeclaredSizeForMetering {
 }
 
 // region: primitive types
+impl MeteredClone for () {}
 impl MeteredClone for u8 {}
 impl MeteredClone for u32 {}
 impl MeteredClone for i32 {}
