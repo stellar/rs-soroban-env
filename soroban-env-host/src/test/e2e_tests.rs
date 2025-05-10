@@ -28,7 +28,7 @@ use crate::{
         LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData,
         Limits, ReadXdr, ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
         ScNonceKey, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
-        TtlEntry, Uint256, WriteXdr,
+        SorobanResourcesExtV0, SorobanTransactionDataExt, TtlEntry, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -45,7 +45,6 @@ use soroban_test_wasms::{
     UPDATEABLE_CONTRACT,
 };
 use std::rc::Rc;
-use stellar_xdr::curr::{SorobanResourcesExtV0, SorobanTransactionDataExt};
 
 // It's tricky to get exactly the same instruction consumption
 // in the recording storage/auth mode vs the enforcing mode. For
@@ -2107,11 +2106,11 @@ fn test_invoke_contract_with_storage_extension_and_autorestore() {
     let ledger_info = default_ledger_info();
     let key = symbol_sc_val("key");
     let val = u64_sc_val(u64::MAX);
-    let data_extend_ledger = ledger_info.sequence_number + ledger_info.min_persistent_entry_ttl * 2;
+    let ttl_extension = ledger_info.min_persistent_entry_ttl * 2;
     let host_fn = invoke_contract_host_fn(
         &cd.contract_address,
         "extend_persistent",
-        vec![key.clone(), u32_sc_val(1), u32_sc_val(data_extend_ledger)],
+        vec![key.clone(), u32_sc_val(1), u32_sc_val(ttl_extension)],
     );
     let data_key = contract_data_key(
         &cd.contract_address,
@@ -2162,6 +2161,7 @@ fn test_invoke_contract_with_storage_extension_and_autorestore() {
         LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, ledger_info.sequence_number + 100);
     // Wasm change is no-op, but it's not read-only.
     wasm_entry_change.read_only = false;
+    wasm_entry_change.new_value = Some(cd.wasm_entry.clone());
     let contract_entry_change = LedgerEntryChangeHelper {
         read_only: false,
         key: cd.contract_key.clone(),
@@ -2185,7 +2185,7 @@ fn test_invoke_contract_with_storage_extension_and_autorestore() {
             key_hash: compute_key_hash(&data_key),
             durability: ContractDataDurability::Persistent,
             old_live_until_ledger: 0,
-            new_live_until_ledger: data_extend_ledger,
+            new_live_until_ledger: ledger_info.sequence_number + ttl_extension,
         }),
     };
     assert_eq!(
