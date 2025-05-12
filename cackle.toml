@@ -538,3 +538,4 @@ allow_unsafe = true
 
 [pkg.cfg_eval]
 allow_proc_macro = true
+allow_unsafe = true
