@@ -535,3 +535,6 @@ allow_unsafe = true
 
 [pkg.ark-ff]
 allow_unsafe = true
+
+[pkg.cfg_eval]
+allow_proc_macro = true
