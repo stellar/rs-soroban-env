@@ -33,7 +33,7 @@ num_enum = "0.7.1"
 num-traits = "0.2.17"
 
 [features]
-std = ["stellar-xdr/std", "stellar-xdr/base64"]
+std = ["stellar-xdr/std"]
 serde = ["dep:serde", "stellar-xdr/serde"]
 wasmi = ["dep:wasmi", "dep:wasmparser"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
