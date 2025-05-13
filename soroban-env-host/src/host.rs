@@ -2871,6 +2871,24 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(vnew)?)
     }
 
+    fn string_to_bytes(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        str: StringObject,
+    ) -> Result<BytesObject, HostError> {
+        let scb = self.visit_obj(str, |s: &ScString| self.scbytes_from_slice(s.as_slice()))?;
+        self.add_host_object(scb)
+    }
+
+    fn bytes_to_string(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        bytes: BytesObject,
+    ) -> Result<StringObject, HostError> {
+        let bytes = self.visit_obj(bytes, |b: &ScBytes| self.metered_slice_to_vec(b.as_slice()))?;
+        self.add_host_object(ScString(bytes.try_into()?))
+    }
+
     // endregion: "buf" module functions
     // region: "crypto" module functions
 
