@@ -89,7 +89,7 @@ fn test_load_config_from_snapshot() {
         )),
         config_entry(ConfigSettingEntry::ContractLedgerCostExtV0(
             ConfigSettingContractLedgerCostExtV0 {
-                tx_max_in_memory_read_entries: 16,
+                tx_max_footprint_entries: 16,
                 fee_write1_kb: 17,
             },
         )),
