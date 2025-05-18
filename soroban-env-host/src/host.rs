@@ -744,17 +744,9 @@ impl Host {
         self.create_contract_internal(Some(deployer), args, constructor_args_vec)
     }
 
-    pub fn check_same_env(&self, other: &Self) -> Result<(), HostError> {
-        if Rc::ptr_eq(&self.0, &other.0) {
-            Ok(())
-        } else {
-            Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "check_same_env on different Hosts",
-                &[],
-            ))
-        }
+    /// Returns true if the Host contains the same instance of HostImpl.
+    pub fn is_same(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
 

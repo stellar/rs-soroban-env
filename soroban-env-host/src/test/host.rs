@@ -8,6 +8,17 @@ use crate::{
 };
 
 #[test]
+fn is_same_host_impl() {
+    let host1 = Host::default();
+    let host1_clone = host1.clone();
+    let host2 = Host::default();
+
+    assert!(host1.is_same(&host1));
+    assert!(host1.is_same(&host1_clone));
+    assert!(!host1.is_same(&host2));
+}
+
+#[test]
 fn invalid_object_handles() -> Result<(), HostError> {
     let create_host = || -> Result<Host, HostError> {
         let budget = Budget::default();
