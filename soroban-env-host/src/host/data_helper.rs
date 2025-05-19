@@ -547,6 +547,7 @@ impl Host {
     }
 
     /// Returns all the ledger entries stored in the storage as key-value pairs.
+    #[allow(clippy::type_complexity)]
     pub fn get_stored_entries(
         &self,
     ) -> Result<Vec<(Rc<LedgerKey>, Option<EntryWithLiveUntil>)>, HostError> {
