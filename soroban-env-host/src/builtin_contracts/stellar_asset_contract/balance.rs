@@ -453,7 +453,7 @@ fn transfer_account_balance(
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
             le = Host::modify_ledger_entry_data(host, &le, LedgerEntryData::Account(ae))?;
-            storage.put_with_host(&lk, &le, None, &host, None)
+            storage.put(&lk, &le, None, &host, None)
         } else {
             Err(err!(
                 host,
@@ -535,7 +535,7 @@ fn transfer_trustline_balance(
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
             le = Host::modify_ledger_entry_data(host, &le, LedgerEntryData::Trustline(tl))?;
-            storage.put_with_host(&lk, &le, None, &host, None)
+            storage.put(&lk, &le, None, &host, None)
         } else {
             Err(err!(
                 host,
@@ -805,7 +805,7 @@ fn set_trustline_authorization(
             tl.flags |= TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32;
         }
         le = Host::modify_ledger_entry_data(host, &le, LedgerEntryData::Trustline(tl))?;
-        storage.put_with_host(&lk, &le, None, &host, None)
+        storage.put(&lk, &le, None, &host, None)
     })
 }
 

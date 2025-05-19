@@ -19,7 +19,7 @@ use crate::{
 };
 
 impl Host {
-    pub fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    pub(crate) fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&mut Storage) -> Result<U, HostError>,
     {
@@ -115,9 +115,7 @@ impl Host {
         &self,
         key: &Rc<LedgerKey>,
     ) -> Result<ScContractInstance, HostError> {
-        let entry = self
-            .try_borrow_storage_mut()?
-            .get_with_host(key, self, None)?;
+        let entry = self.try_borrow_storage_mut()?.get(key, self, None)?;
         self.extract_contract_instance_from_ledger_entry(&entry)
     }
 
@@ -137,11 +135,7 @@ impl Host {
         wasm_hash: &Hash,
     ) -> Result<(BytesM, VersionedContractCodeCostInputs), HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
-        match &self
-            .try_borrow_storage_mut()?
-            .get_with_host(&key, self, None)?
-            .data
-        {
+        match &self.try_borrow_storage_mut()?.get(&key, self, None)?.data {
             LedgerEntryData::ContractCode(e) => {
                 let code = e.code.metered_clone(self)?;
                 let costs = match &e.ext {
@@ -167,8 +161,7 @@ impl Host {
 
     pub(crate) fn wasm_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
-        self.try_borrow_storage_mut()?
-            .has_with_host(&key, self, None)
+        self.try_borrow_storage_mut()?.has(&key, self, None)
     }
 
     // Stores the contract instance specified with its parts (executable and
@@ -184,10 +177,7 @@ impl Host {
         contract_id: ContractId,
         key: &Rc<LedgerKey>,
     ) -> Result<(), HostError> {
-        if self
-            .try_borrow_storage_mut()?
-            .has_with_host(key, self, None)?
-        {
+        if self.try_borrow_storage_mut()?.has(key, self, None)? {
             let (current, live_until_ledger) = self
                 .try_borrow_storage_mut()?
                 .get_with_live_until_ledger(key, self, None)?;
@@ -218,7 +208,7 @@ impl Host {
                 ));
             }
 
-            self.try_borrow_storage_mut()?.put_with_host(
+            self.try_borrow_storage_mut()?.put(
                 &key,
                 &Rc::metered_new(current, self)?,
                 live_until_ledger,
@@ -243,7 +233,7 @@ impl Host {
                 durability: ContractDataDurability::Persistent,
                 ext: ExtensionPoint::V0,
             };
-            self.try_borrow_storage_mut()?.put_with_host(
+            self.try_borrow_storage_mut()?.put(
                 key,
                 &Host::new_contract_data(self, data)?,
                 Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
@@ -305,17 +295,15 @@ impl Host {
     // notes on metering: `get` from storage is covered. Rest are free.
     pub(crate) fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id)?;
-        self.with_mut_storage(
-            |storage| match &storage.get_with_host(&acc, self, None)?.data {
-                LedgerEntryData::Account(ae) => ae.metered_clone(self),
-                e => Err(err!(
-                    self,
-                    (ScErrorType::Storage, ScErrorCode::InternalError),
-                    "ledger entry is not account",
-                    e.name()
-                )),
-            },
-        )
+        self.with_mut_storage(|storage| match &storage.get(&acc, self, None)?.data {
+            LedgerEntryData::Account(ae) => ae.metered_clone(self),
+            e => Err(err!(
+                self,
+                (ScErrorType::Storage, ScErrorCode::InternalError),
+                "ledger entry is not account",
+                e.name()
+            )),
+        })
     }
 
     pub(crate) fn to_account_key(&self, account_id: AccountId) -> Result<Rc<LedgerKey>, HostError> {
@@ -485,10 +473,7 @@ impl Host {
         // operation might only modify the internal `ScVal` value. Thus we
         // need to only overwrite the value in case if there is already an
         // existing ledger entry value for the key in the storage.
-        if self
-            .try_borrow_storage_mut()?
-            .has_with_host(&key, self, Some(k))?
-        {
+        if self.try_borrow_storage_mut()?.has(&key, self, Some(k))? {
             let (current, live_until_ledger) = self
                 .try_borrow_storage_mut()?
                 .get_with_live_until_ledger(&key, self, Some(k))?;
@@ -506,7 +491,7 @@ impl Host {
                     ));
                 }
             }
-            self.try_borrow_storage_mut()?.put_with_host(
+            self.try_borrow_storage_mut()?.put(
                 &key,
                 &Rc::metered_new(current, self)?,
                 live_until_ledger,
@@ -521,7 +506,7 @@ impl Host {
                 durability,
                 ext: ExtensionPoint::V0,
             };
-            self.try_borrow_storage_mut()?.put_with_host(
+            self.try_borrow_storage_mut()?.put(
                 &key,
                 &Host::new_contract_data(self, data)?,
                 Some(self.get_min_live_until_ledger(durability)?),
@@ -537,20 +522,36 @@ impl Host {
 #[cfg(any(test, feature = "testutils"))]
 use crate::crypto;
 #[cfg(any(test, feature = "testutils"))]
-use crate::storage::{AccessType, Footprint};
+use crate::storage::{AccessType, EntryWithLiveUntil, Footprint};
 
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
-    // Writes an arbitrary ledger entry to storage.
+    /// Writes an arbitrary ledger entry to storage.
     pub fn add_ledger_entry(
         &self,
         key: &Rc<LedgerKey>,
         val: &Rc<soroban_env_common::xdr::LedgerEntry>,
         live_until_ledger: Option<u32>,
     ) -> Result<(), HostError> {
-        self.with_mut_storage(|storage| {
-            storage.put_with_host(key, val, live_until_ledger, self, None)
-        })
+        self.with_mut_storage(|storage| storage.put(key, val, live_until_ledger, self, None))
+    }
+
+    /// Reads an arbitrary ledger entry from the storage.
+    ///
+    /// Returns `None` if the entry does not exist.
+    pub fn get_ledger_entry(
+        &self,
+        key: &Rc<LedgerKey>,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        self.with_mut_storage(|storage| storage.try_get_full(key, self, None))
+    }
+
+    /// Returns all the ledger entries stored in the storage as key-value pairs.
+    #[allow(clippy::type_complexity)]
+    pub fn get_stored_entries(
+        &self,
+    ) -> Result<Vec<(Rc<LedgerKey>, Option<EntryWithLiveUntil>)>, HostError> {
+        self.with_mut_storage(|storage| Ok(storage.map.map.clone()))
     }
 
     // Performs the necessary setup to access the provided ledger key/entry in

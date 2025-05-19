@@ -652,7 +652,7 @@ pub fn invoke_host_function_in_recording_mode(
     base_prng_seed: [u8; 32],
     diagnostic_events: &mut Vec<DiagnosticEvent>,
 ) -> Result<InvokeHostFunctionRecordingModeResult, HostError> {
-    let storage = Storage::with_recording_footprint(ledger_snapshot.clone())?;
+    let storage = Storage::with_recording_footprint(ledger_snapshot.clone());
     let host = Host::with_storage_and_budget(storage, budget.clone());
     let is_recording_auth = matches!(auth_mode, RecordingInvocationAuthMode::Recording(_));
     let ledger_seq = ledger_info.sequence_number;

@@ -78,7 +78,7 @@ pub struct Footprint(pub FootprintMap);
 
 impl Footprint {
     #[cfg(any(test, feature = "recording_mode"))]
-    pub fn record_access(
+    pub(crate) fn record_access(
         &mut self,
         key: &Rc<LedgerKey>,
         ty: AccessType,
@@ -102,7 +102,7 @@ impl Footprint {
         }
     }
 
-    pub fn enforce_access(
+    pub(crate) fn enforce_access(
         &mut self,
         key: &Rc<LedgerKey>,
         ty: AccessType,
@@ -202,16 +202,16 @@ impl Storage {
     /// Constructs a new [Storage] in [FootprintMode::Recording] using a
     /// given [SnapshotSource].
     #[cfg(any(test, feature = "recording_mode"))]
-    pub fn with_recording_footprint(src: Rc<dyn SnapshotSource>) -> Result<Self, HostError> {
-        Ok(Self {
+    pub fn with_recording_footprint(src: Rc<dyn SnapshotSource>) -> Self {
+        Self {
             mode: FootprintMode::Recording(src),
             footprint: Footprint::default(),
             map: Default::default(),
-        })
+        }
     }
 
     // Helper function the next 3 `get`-variants funnel into.
-    fn try_get_full(
+    fn try_get_full_helper(
         &mut self,
         key: &Rc<LedgerKey>,
         host: &Host,
@@ -227,31 +227,31 @@ impl Storage {
         }
     }
 
-    pub(crate) fn try_get_full_with_host(
+    pub(crate) fn try_get_full(
         &mut self,
         key: &Rc<LedgerKey>,
         host: &Host,
         key_val: Option<Val>,
     ) -> Result<Option<EntryWithLiveUntil>, HostError> {
         let res = self
-            .try_get_full(key, host)
+            .try_get_full_helper(key, host)
             .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))?;
         Ok(res)
     }
 
-    pub(crate) fn get_with_host(
+    pub(crate) fn get(
         &mut self,
         key: &Rc<LedgerKey>,
         host: &Host,
         key_val: Option<Val>,
     ) -> Result<Rc<LedgerEntry>, HostError> {
-        self.try_get_full_with_host(key, host, key_val)?
+        self.try_get_full(key, host, key_val)?
             .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
             .map(|e| e.0)
             .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
-    // Like `get_with_host`, but distinguishes between missing values (return `Ok(None)`)
+    // Like `get`, but distinguishes between missing values (return `Ok(None)`)
     // and out-of-footprint values or errors (`Err(...)`).
     pub(crate) fn try_get(
         &mut self,
@@ -259,7 +259,7 @@ impl Storage {
         host: &Host,
         key_val: Option<Val>,
     ) -> Result<Option<Rc<LedgerEntry>>, HostError> {
-        self.try_get_full_with_host(key, host, key_val)
+        self.try_get_full(key, host, key_val)
             .map(|ok| ok.map(|pair| pair.0))
     }
 
@@ -283,7 +283,7 @@ impl Storage {
         host: &Host,
         key_val: Option<Val>,
     ) -> Result<EntryWithLiveUntil, HostError> {
-        self.try_get_full_with_host(key, host, key_val)
+        self.try_get_full(key, host, key_val)
             .and_then(|maybe_entry| {
                 maybe_entry.ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
             })
@@ -291,7 +291,7 @@ impl Storage {
     }
 
     // Helper function `put` and `del` funnel into.
-    fn put_opt(
+    fn put_opt_helper(
         &mut self,
         key: &Rc<LedgerKey>,
         val: Option<EntryWithLiveUntil>,
@@ -318,14 +318,14 @@ impl Storage {
         Ok(())
     }
 
-    fn put_opt_with_host(
+    fn put_opt(
         &mut self,
         key: &Rc<LedgerKey>,
         val: Option<EntryWithLiveUntil>,
         host: &Host,
         key_val: Option<Val>,
     ) -> Result<(), HostError> {
-        self.put_opt(key, val, host)
+        self.put_opt_helper(key, val, host)
             .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
@@ -338,7 +338,7 @@ impl Storage {
     /// In [FootprintMode::Enforcing] mode, succeeds only if the written
     /// [LedgerKey] has been declared in the [Footprint] as
     /// [AccessType::ReadWrite].
-    pub(crate) fn put_with_host(
+    pub(crate) fn put(
         &mut self,
         key: &Rc<LedgerKey>,
         val: &Rc<LedgerEntry>,
@@ -347,7 +347,7 @@ impl Storage {
         key_val: Option<Val>,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage put");
-        self.put_opt_with_host(key, Some((val.clone(), live_until_ledger)), host, key_val)
+        self.put_opt(key, Some((val.clone(), live_until_ledger)), host, key_val)
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
@@ -359,14 +359,14 @@ impl Storage {
     /// In [FootprintMode::Enforcing] mode, succeeds only if the deleted
     /// [LedgerKey] has been declared in the [Footprint] as
     /// [AccessType::ReadWrite].
-    pub(crate) fn del_with_host(
+    pub(crate) fn del(
         &mut self,
         key: &Rc<LedgerKey>,
         host: &Host,
         key_val: Option<Val>,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage del");
-        self.put_opt_with_host(key, None, host, key_val)
+        self.put_opt(key, None, host, key_val)
             .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))
     }
 
@@ -379,14 +379,14 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
     /// declared in the [Footprint].
-    pub(crate) fn has_with_host(
+    pub(crate) fn has(
         &mut self,
         key: &Rc<LedgerKey>,
         host: &Host,
         key_val: Option<Val>,
     ) -> Result<bool, HostError> {
         let _span = tracy_span!("storage has");
-        Ok(self.try_get_full_with_host(key, host, key_val)?.is_some())
+        Ok(self.try_get_full(key, host, key_val)?.is_some())
     }
 
     /// Extends `key` to live `extend_to` ledgers from now (not counting the
