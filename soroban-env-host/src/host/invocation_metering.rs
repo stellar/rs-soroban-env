@@ -323,7 +323,7 @@ impl InvocationMeter {
             let mut entry_size = 0;
             let mut new_entry_size_for_rent = 0;
             let mut entry_live_until_ledger = None;
-            let maybe_entry = curr_storage.try_get_full_with_host(key, host, None)?;
+            let maybe_entry = curr_storage.try_get_full(key, host, None)?;
             if let Some((entry, entry_live_until)) = maybe_entry {
                 let mut buf = Vec::<u8>::new();
                 metered_write_xdr(host.budget_ref(), entry.as_ref(), &mut buf)?;

@@ -697,10 +697,7 @@ impl Host {
             // checking the cache: this seems like overkill but it
             // provides some future-proofing, see below.
             let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
-            if self
-                .try_borrow_storage_mut()?
-                .has_with_host(&wasm_key, self, None)?
-            {
+            if self.try_borrow_storage_mut()?.has(&wasm_key, self, None)? {
                 if let Some(parsed_module) = cache.get_module(wasm_hash)? {
                     return Vm::from_parsed_module_and_wasmi_linker(
                         self,

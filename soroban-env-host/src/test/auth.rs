@@ -299,7 +299,7 @@ impl AuthTest {
             .unwrap();
         self.host
             .with_mut_storage(|storage| {
-                if !storage.has_with_host(&nonce_key, &self.host, None)? {
+                if !storage.has(&nonce_key, &self.host, None)? {
                     return Ok(None);
                 }
                 let (_, live_until_ledger) =
@@ -550,7 +550,7 @@ fn test_single_authorized_call() {
             let key = test.host.to_account_key(account_id)?;
             // Note, that this represents 'correct footprint, missing value' scenario.
             // Incorrect footprint scenario is not covered (it's not auth specific).
-            storage.del_with_host(&key, &test.host, None)
+            storage.del(&key, &test.host, None)
         })
         .unwrap();
 

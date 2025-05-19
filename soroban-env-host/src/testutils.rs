@@ -221,7 +221,7 @@ impl Host {
 
     pub fn test_host_with_recording_footprint() -> Self {
         let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
-        let storage = Storage::with_recording_footprint(snapshot_source).unwrap();
+        let storage = Storage::with_recording_footprint(snapshot_source);
         let host = Host::with_storage_and_budget(storage, Budget::default());
         host.set_test_ledger_info_with_current_test_protocol();
         host.set_test_prng();

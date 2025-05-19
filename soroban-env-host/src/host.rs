@@ -2095,8 +2095,7 @@ impl VmCallerEnv for Host {
         let res = match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
-                self.try_borrow_storage_mut()?
-                    .has_with_host(&key, self, Some(k))?
+                self.try_borrow_storage_mut()?.has(&key, self, Some(k))?
             }
             StorageType::Instance => {
                 self.with_instance_storage(|s| Ok(s.map.get(&k, self)?.is_some()))?
@@ -2116,9 +2115,7 @@ impl VmCallerEnv for Host {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
-                let entry = self
-                    .try_borrow_storage_mut()?
-                    .get_with_host(&key, self, Some(k))?;
+                let entry = self.try_borrow_storage_mut()?.get(&key, self, Some(k))?;
                 match &entry.data {
                     LedgerEntryData::ContractData(e) => Ok(self.to_valid_host_val(&e.val)?),
                     _ => Err(self.err(
@@ -2155,8 +2152,7 @@ impl VmCallerEnv for Host {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
-                self.try_borrow_storage_mut()?
-                    .del_with_host(&key, self, Some(k))?;
+                self.try_borrow_storage_mut()?.del(&key, self, Some(k))?;
             }
             StorageType::Instance => {
                 self.with_mut_instance_storage(|s| {
@@ -3367,44 +3363,40 @@ impl VmCallerEnv for Host {
         address: AddressObject,
     ) -> Result<Val, Self::Error> {
         let sc_address = self.scaddress_from_address(address)?;
-        let maybe_executable =
-            match sc_address {
-                ScAddress::Account(account_id) => {
-                    let key = self.to_account_key(account_id)?;
-                    if self
-                        .try_borrow_storage_mut()?
-                        .has_with_host(&key, &self, None)?
-                    {
-                        Some(AddressExecutable::Account)
-                    } else {
-                        None
-                    }
+        let maybe_executable = match sc_address {
+            ScAddress::Account(account_id) => {
+                let key = self.to_account_key(account_id)?;
+                if self.try_borrow_storage_mut()?.has(&key, &self, None)? {
+                    Some(AddressExecutable::Account)
+                } else {
+                    None
                 }
-                ScAddress::Contract(id) => {
-                    let storage_key = self.contract_instance_ledger_key(&id)?;
-                    let maybe_instance_entry = self
-                        .try_borrow_storage_mut()?
-                        .try_get_full_with_host(&storage_key, self, None)?;
-                    if let Some((instance_entry, _ttl)) = maybe_instance_entry {
-                        let instance =
-                            self.extract_contract_instance_from_ledger_entry(&instance_entry)?;
-                        Some(AddressExecutable::from_contract_executable_xdr(
-                            &self,
-                            &instance.executable,
-                        )?)
-                    } else {
-                        None
-                    }
+            }
+            ScAddress::Contract(id) => {
+                let storage_key = self.contract_instance_ledger_key(&id)?;
+                let maybe_instance_entry =
+                    self.try_borrow_storage_mut()?
+                        .try_get_full(&storage_key, self, None)?;
+                if let Some((instance_entry, _ttl)) = maybe_instance_entry {
+                    let instance =
+                        self.extract_contract_instance_from_ledger_entry(&instance_entry)?;
+                    Some(AddressExecutable::from_contract_executable_xdr(
+                        &self,
+                        &instance.executable,
+                    )?)
+                } else {
+                    None
                 }
-                _ => {
-                    return Err(self.err(
-                        ScErrorType::Object,
-                        ScErrorCode::InternalError,
-                        "Unexpected Address variant in get_address_executable",
-                        &[address.into()],
-                    ));
-                }
-            };
+            }
+            _ => {
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::InternalError,
+                    "Unexpected Address variant in get_address_executable",
+                    &[address.into()],
+                ));
+            }
+        };
         if let Some(exec) = maybe_executable {
             Val::try_from_val(self, &exec)
         } else {
