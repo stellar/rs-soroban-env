@@ -1130,6 +1130,75 @@ fn test_allowance_live_until() {
             .unwrap(),
         10_000
     );
+
+    // Create an allowance with maximum possible lifetime.
+    contract
+        .approve(
+            &user,
+            user_2.address(&test.host),
+            10,
+            test.host.max_live_until_ledger().unwrap(),
+        )
+        .unwrap();
+    // Advance ledger to to the maximum ledger the allowance is valid for.
+    test.host
+        .with_mut_ledger_info(|li| {
+            li.sequence_number = li.max_live_until_ledger_checked().unwrap();
+        })
+        .unwrap();
+
+    assert_eq!(
+        contract
+            .allowance(user.address(&test.host), user_2.address(&test.host))
+            .unwrap(),
+        10,
+    );
+
+    contract
+        .transfer_from(
+            &user_2,
+            user.address(&test.host),
+            user_2.address(&test.host),
+            5,
+        )
+        .unwrap();
+
+    // Advance ledger num by one more ledger. Allowance should no longer be valid.
+    test.host
+        .with_mut_ledger_info(|li| li.sequence_number = li.sequence_number + 1)
+        .unwrap();
+
+    assert_eq!(
+        to_contract_err(
+            contract
+                .transfer_from(
+                    &user_2,
+                    user.address(&test.host),
+                    user_2.address(&test.host),
+                    1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::AllowanceError
+    );
+
+    // It's not possible to create an allowance that lives for longer than
+    // max TTL allows.
+    assert_eq!(
+        to_contract_err(
+            contract
+                .approve(
+                    &user,
+                    user_2.address(&test.host),
+                    10,
+                    test.host.max_live_until_ledger().unwrap() + 1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::AllowanceError
+    );
 }
 
 #[test]
