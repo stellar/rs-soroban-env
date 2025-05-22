@@ -12,6 +12,9 @@ use soroban_env_host::xdr::{
 use soroban_env_host::LedgerInfo;
 use std::rc::Rc;
 
+const CPU_SHADOW_LIMIT_FACTOR: u64 = 10;
+const MEMORY_SHADOW_LIMIT_FACTOR: u64 = 2;
+
 /// Network configuration necessary for Soroban operation simulations.
 ///
 /// This should normally be loaded from the ledger.
@@ -136,9 +139,15 @@ impl NetworkConfig {
     }
 
     pub(crate) fn create_budget(&self) -> Result<Budget> {
-        Budget::try_from_configs(
+        let cpu_shadow_limit =
+            (self.tx_max_instructions as u64).saturating_mul(CPU_SHADOW_LIMIT_FACTOR);
+        let mem_shadow_limit =
+            (self.tx_memory_limit as u64).saturating_mul(MEMORY_SHADOW_LIMIT_FACTOR);
+        Budget::try_from_configs_with_shadow_limits(
             self.tx_max_instructions as u64,
             self.tx_memory_limit as u64,
+            cpu_shadow_limit,
+            mem_shadow_limit,
             self.cpu_cost_params.clone(),
             self.memory_cost_params.clone(),
         )
