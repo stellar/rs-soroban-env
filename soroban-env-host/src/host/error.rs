@@ -38,25 +38,14 @@ impl Into<Error> for HostError {
 
 impl DebugInfo {
     fn write_events(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO: maybe make this something users can adjust?
-        // https://github.com/stellar/rs-soroban-env/issues/1288
-        const MAX_EVENTS: usize = 25;
         let mut wrote_heading = false;
-        for (i, e) in self.events.0.iter().rev().take(MAX_EVENTS).enumerate() {
+        for (i, e) in self.events.0.iter().rev().enumerate() {
             if !wrote_heading {
                 writeln!(f)?;
                 writeln!(f, "Event log (newest first):")?;
                 wrote_heading = true;
             }
             writeln!(f, "   {}: {}", i, e)?;
-        }
-        if self.events.0.len() > MAX_EVENTS {
-            writeln!(
-                f,
-                "   {}: ... {} events elided ...",
-                MAX_EVENTS,
-                self.events.0.len() - MAX_EVENTS
-            )?;
         }
         Ok(())
     }
