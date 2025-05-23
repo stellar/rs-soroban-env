@@ -13,8 +13,14 @@ pub const TTL_ENTRY_SIZE: u32 = 48;
 pub const INSTRUCTIONS_INCREMENT: i64 = 10000;
 pub const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
 
-// minimum effective write fee per 1KB
+// Minimum effective rent write fee per 1KB.
 pub const MINIMUM_RENT_WRITE_FEE_PER_1KB: i64 = 1000;
+
+// The effective rent cost for the contract code entries will be divided by
+// this value.
+// Note, this is a constant for now, but can become a network setting in the
+// future protocols.
+pub const CODE_ENTRY_RENT_DISCOUNT_FACTOR: i64 = 2;
 
 /// These are the resource upper bounds specified by the Soroban transaction.
 pub struct TransactionResources {
@@ -88,6 +94,8 @@ pub struct RentWriteFeeConfiguration {
 pub struct LedgerEntryRentChange {
     /// Whether this is persistent or temporary entry.
     pub is_persistent: bool,
+    /// Whether this is a contract code entry.
+    pub is_code_entry: bool,
     /// In-memory size of the entry in bytes before it has been modified.
     /// Should be `0` for newly-created entires.
     pub old_size_bytes: u32,
@@ -379,6 +387,9 @@ fn rent_fee_per_entry_change(
             rent_ledgers,
             fee_config,
         ));
+    }
+    if entry_change.is_code_entry {
+        fee /= CODE_ENTRY_RENT_DISCOUNT_FACTOR;
     }
     fee
 }
