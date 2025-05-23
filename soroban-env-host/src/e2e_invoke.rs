@@ -27,9 +27,10 @@ use crate::{
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
     xdr::{
         AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
-        LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
-        SorobanAuthorizationEntry, SorobanResources, SorobanTransactionDataExt, TtlEntry,
+        LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine,
+        ScErrorCode, ScErrorType, SorobanAuthorizationEntry, SorobanResources,
+        SorobanTransactionDataExt, TtlEntry,
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
@@ -127,6 +128,8 @@ pub struct LedgerEntryLiveUntilChange {
     pub key_hash: Vec<u8>,
     /// Durability of the entry.    
     pub durability: ContractDataDurability,
+    /// Type of the entry.
+    pub entry_type: LedgerEntryType,
     /// Live until ledger of the old entry.
     pub old_live_until_ledger: u32,
     /// Live until ledger of the new entry. Guaranteed to always be greater than
@@ -214,6 +217,7 @@ fn get_ledger_changes(
 
             entry_change.ttl_change = Some(LedgerEntryLiveUntilChange {
                 key_hash,
+                entry_type: key.discriminant(),
                 durability,
                 old_live_until_ledger: 0,
                 new_live_until_ledger: 0,
@@ -346,6 +350,7 @@ pub fn extract_rent_changes(ledger_changes: &[LedgerEntryChange]) -> Vec<LedgerE
                         ttl_change.durability,
                         ContractDataDurability::Persistent
                     ),
+                    is_code_entry: matches!(ttl_change.entry_type, LedgerEntryType::ContractCode),
                     old_size_bytes: entry_change.old_entry_size_bytes_for_rent,
                     new_size_bytes: new_size_bytes_for_rent,
                     old_live_until_ledger: ttl_change.old_live_until_ledger,

@@ -453,6 +453,7 @@ fn test_rent_extend_fees_with_only_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 1,
                 new_size_bytes: 1,
                 old_live_until_ledger: 100_000,
@@ -472,6 +473,7 @@ fn test_rent_extend_fees_with_only_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
                 old_live_until_ledger: 100_000,
@@ -490,6 +492,7 @@ fn test_rent_extend_fees_with_only_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 1,
                 new_size_bytes: 1,
                 old_live_until_ledger: 100_000,
@@ -508,6 +511,7 @@ fn test_rent_extend_fees_with_only_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
                 old_live_until_ledger: 100_000,
@@ -526,6 +530,7 @@ fn test_rent_extend_fees_with_only_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 5 * 1024,
                 old_live_until_ledger: 100_000,
@@ -544,6 +549,7 @@ fn test_rent_extend_fees_with_only_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: false,
+                is_code_entry: false,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
                 old_live_until_ledger: 100_000,
@@ -563,6 +569,7 @@ fn test_rent_extend_fees_with_only_extend() {
             &[
                 LedgerEntryRentChange {
                     is_persistent: false,
+                    is_code_entry: false,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
                     old_live_until_ledger: 100_000,
@@ -570,6 +577,7 @@ fn test_rent_extend_fees_with_only_extend() {
                 },
                 LedgerEntryRentChange {
                     is_persistent: true,
+                    is_code_entry: false,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
                     old_live_until_ledger: 100_000,
@@ -577,6 +585,7 @@ fn test_rent_extend_fees_with_only_extend() {
                 },
                 LedgerEntryRentChange {
                     is_persistent: true,
+                    is_code_entry: false,
                     old_size_bytes: 1,
                     new_size_bytes: 1,
                     old_live_until_ledger: 100_000,
@@ -584,6 +593,7 @@ fn test_rent_extend_fees_with_only_extend() {
                 },
                 LedgerEntryRentChange {
                     is_persistent: true,
+                    is_code_entry: false,
                     old_size_bytes: 1,
                     new_size_bytes: 1,
                     old_live_until_ledger: 100_000,
@@ -591,6 +601,7 @@ fn test_rent_extend_fees_with_only_extend() {
                 },
                 LedgerEntryRentChange {
                     is_persistent: true,
+                    is_code_entry: false,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
                     old_live_until_ledger: 100_000,
@@ -598,6 +609,7 @@ fn test_rent_extend_fees_with_only_extend() {
                 },
                 LedgerEntryRentChange {
                     is_persistent: false,
+                    is_code_entry: false,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
                     old_live_until_ledger: 100_000,
@@ -629,6 +641,7 @@ fn test_rent_extend_fees_with_only_size_change() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
                 old_live_until_ledger: 100_000,
@@ -646,6 +659,7 @@ fn test_rent_extend_fees_with_only_size_change() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: false,
+                is_code_entry: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
                 old_live_until_ledger: 100_000,
@@ -663,6 +677,7 @@ fn test_rent_extend_fees_with_only_size_change() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 99_999,
                 new_size_bytes: 100_000,
                 old_live_until_ledger: 100_000,
@@ -680,6 +695,7 @@ fn test_rent_extend_fees_with_only_size_change() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
                 old_live_until_ledger: 100_000,
@@ -698,6 +714,7 @@ fn test_rent_extend_fees_with_only_size_change() {
             &[
                 LedgerEntryRentChange {
                     is_persistent: true,
+                    is_code_entry: false,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
                     old_live_until_ledger: 100_000,
@@ -705,6 +722,7 @@ fn test_rent_extend_fees_with_only_size_change() {
                 },
                 LedgerEntryRentChange {
                     is_persistent: false,
+                    is_code_entry: false,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
                     old_live_until_ledger: 100_000,
@@ -734,6 +752,7 @@ fn test_rent_extend_with_size_change_and_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
                 old_live_until_ledger: 100_000,
@@ -753,6 +772,7 @@ fn test_rent_extend_with_size_change_and_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: false,
+                is_code_entry: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
                 old_live_until_ledger: 100_000,
@@ -773,6 +793,7 @@ fn test_rent_extend_with_size_change_and_extend() {
             &[
                 LedgerEntryRentChange {
                     is_persistent: true,
+                    is_code_entry: false,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
                     old_live_until_ledger: 100_000,
@@ -780,6 +801,7 @@ fn test_rent_extend_with_size_change_and_extend() {
                 },
                 LedgerEntryRentChange {
                     is_persistent: false,
+                    is_code_entry: false,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
                     old_live_until_ledger: 100_000,
@@ -800,6 +822,7 @@ fn test_rent_extend_with_size_change_and_extend() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 1,
                 new_size_bytes: 2,
                 old_live_until_ledger: 100_000,
@@ -830,6 +853,7 @@ fn test_rent_extend_without_old_entry() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: true,
+                is_code_entry: false,
                 old_size_bytes: 0,
                 new_size_bytes: 100_000,
                 old_live_until_ledger: 0,
@@ -848,6 +872,7 @@ fn test_rent_extend_without_old_entry() {
         compute_rent_fee(
             &[LedgerEntryRentChange {
                 is_persistent: false,
+                is_code_entry: false,
                 old_size_bytes: 0,
                 new_size_bytes: 100_000,
                 old_live_until_ledger: 0,
