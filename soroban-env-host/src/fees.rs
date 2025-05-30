@@ -147,12 +147,9 @@ pub fn compute_transaction_resource_fee(
         fee_config.fee_per_instruction_increment,
         INSTRUCTIONS_INCREMENT,
     );
-    let ledger_read_entry_fee: i64 = fee_config.fee_per_disk_read_entry.saturating_mul(
-        tx_resources
-            .disk_read_entries
-            .saturating_add(tx_resources.write_entries)
-            .into(),
-    );
+    let ledger_read_entry_fee: i64 = fee_config
+        .fee_per_disk_read_entry
+        .saturating_mul(tx_resources.disk_read_entries.into());
     let ledger_write_entry_fee = fee_config
         .fee_per_write_entry
         .saturating_mul(tx_resources.write_entries.into());
