@@ -28,7 +28,7 @@ test-all-protocols:
 # in soroban_, not the host itself. So we only check the guest package with it.
 build:
 	cargo hack --locked --each-feature clippy
-	cargo --locked clippy --target wasm32-unknown-unknown
+	cargo hack --locked --each-feature clippy --target wasm32-unknown-unknown
 	cargo --locked clippy --package soroban-env-guest --target wasm32v1-none
 
 # We use "run" to run the soroban-env-host/src/bin/main.rs
