@@ -136,8 +136,8 @@ fn resource_fee_computation_with_single_resource() {
             }),
             &fee_config,
         ),
-        // Write entries are also counted towards the read entry fee.
-        (2000 + 3000 + BASE_HISTORICAL_FEE, 0)
+        // Write entries are not counted towards the read entry fee unless they were on disk.
+        (3000 + BASE_HISTORICAL_FEE, 0)
     );
     assert_eq!(
         compute_transaction_resource_fee(
@@ -146,7 +146,18 @@ fn resource_fee_computation_with_single_resource() {
             }),
             &fee_config,
         ),
-        ((2000 + 3000) * 5 + BASE_HISTORICAL_FEE, 0)
+        (3000 * 5 + BASE_HISTORICAL_FEE, 0)
+    );
+    // Read and Write entries
+    assert_eq!(
+        compute_transaction_resource_fee(
+            &change_resource(|res: &mut TransactionResources| {
+                res.write_entries = 1;
+                res.disk_read_entries = 1;
+            }),
+            &fee_config,
+        ),
+        (2000 + 3000 + BASE_HISTORICAL_FEE, 0)
     );
     assert_eq!(
         compute_transaction_resource_fee(
@@ -155,10 +166,7 @@ fn resource_fee_computation_with_single_resource() {
             }),
             &fee_config,
         ),
-        (
-            8_589_934_590_000 + 12_884_901_885_000 + BASE_HISTORICAL_FEE,
-            0
-        )
+        (12_884_901_885_000 + BASE_HISTORICAL_FEE, 0)
     );
 
     // Read bytes
@@ -376,9 +384,9 @@ fn resource_fee_computation() {
                 fee_per_transaction_size_1kb: 100,
             },
         ),
-        // 2 entry read + 1 write + 30 from TX_BASE_RESULT_SIZE + 1 for
+        // 1 entry read + 1 write + 30 from TX_BASE_RESULT_SIZE + 1 for
         // everything else
-        (334, 1)
+        (234, 1)
     );
 
     // Different resource/fee values
@@ -404,7 +412,7 @@ fn resource_fee_computation() {
                 fee_per_transaction_size_1kb: 900,
             },
         ),
-        (1_242_089, 62824)
+        (1_222_089, 62824)
     );
 
     // Integer limits
