@@ -31,6 +31,7 @@ fn test_automatic_restoration() {
                 (temp_entry(b"5"), Some(299)),               // temp, removed
                 (temp_entry(b"6"), Some(300)),               // temp, live
                 (temp_entry(b"7"), Some(400)),               // temp, live
+                (wasm_entry_non_validated(b"8"), None),      // persistent, expired (no live-until)
             ],
             ledger_seq,
         )
@@ -145,6 +146,17 @@ fn test_automatic_restoration() {
             .unwrap(),
         Some((Rc::new(temp_entry(b"7")), Some(400)))
     );
+    assert_eq!(
+        auto_restoring_snapshot
+            .get(&Rc::new(
+                ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"8")).unwrap()
+            ))
+            .unwrap(),
+        Some((
+            Rc::new(wasm_entry_non_validated(b"8")),
+            Some(restored_entry_expiration)
+        ))
+    );
 
     assert_eq!(
         auto_restoring_snapshot
@@ -161,6 +173,7 @@ fn test_automatic_restoration() {
                     footprint: LedgerFootprint {
                         read_only: Default::default(),
                         read_write: vec![
+                            ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"8")).unwrap(),
                             ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"1")).unwrap(),
                             ledger_entry_to_ledger_key(&wasm_entry_non_validated(b"2")).unwrap(),
                         ]
@@ -168,10 +181,10 @@ fn test_automatic_restoration() {
                         .unwrap()
                     },
                     instructions: 0,
-                    read_bytes: 112,
-                    write_bytes: 112,
+                    read_bytes: 168,
+                    write_bytes: 168,
                 },
-                resource_fee: 62192,
+                resource_fee: 92793,
             }
         })
     );

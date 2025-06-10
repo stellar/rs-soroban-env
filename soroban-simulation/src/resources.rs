@@ -214,13 +214,14 @@ pub(crate) fn simulate_restore_op_resources(
             .ok_or_else(|| anyhow!("Missing entry to restore for key {key:?}"))?;
         let (entry, live_until) = entry_with_live_until;
 
-        let current_live_until_ledger = live_until.ok_or_else(|| {
-            anyhow!("Internal error: missing TTL for ledger key that must have TTL: `{key:?}`")
-        })?;
-
-        if current_live_until_ledger >= ledger_info.sequence_number {
+        // If the entry's snapshot source has a live until for the entry, check that it is in the
+        // past relative to the current ledgers seq, and skip doing anything with the entry if not.
+        // An entry's snapshot source may not have a live until for the entry once an entry is
+        // archived, and if so, this check will fail the comparison and pass through.
+        if live_until >= Some(ledger_info.sequence_number) {
             continue;
         }
+
         restored_keys.push(key.clone());
 
         let entry_size: u32 = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;

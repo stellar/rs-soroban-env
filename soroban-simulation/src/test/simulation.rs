@@ -840,6 +840,50 @@ fn test_simulate_restore_op() {
 }
 
 #[test]
+fn test_simulate_restore_op_entry_no_live_until() {
+    let ledger_info = default_ledger_info();
+    let network_config = default_network_config();
+    let entries = vec![(wasm_entry(ADD_I32), None)];
+    let keys: Vec<LedgerKey> = entries
+        .iter()
+        .map(|e| ledger_entry_to_ledger_key(&e.0).unwrap())
+        .collect();
+    let snapshot_source =
+        MockSnapshotSource::from_entries(entries, ledger_info.sequence_number).unwrap();
+
+    let restoration = simulate_restore_op(
+        &snapshot_source,
+        &network_config,
+        &SimulationAdjustmentConfig::no_adjustments(),
+        &ledger_info,
+        &keys,
+    )
+    .unwrap();
+    let expected_rw_bytes = 684;
+    assert_eq!(
+        restoration,
+        RestoreOpSimulationResult {
+            transaction_data: SorobanTransactionData {
+                ext: ExtensionPoint::V0,
+                resources: SorobanResources {
+                    footprint: LedgerFootprint {
+                        read_only: Default::default(),
+                        read_write: vec![keys[0].clone()]
+                            .tap_mut(|v| v.sort())
+                            .try_into()
+                            .unwrap()
+                    },
+                    instructions: 0,
+                    read_bytes: expected_rw_bytes,
+                    write_bytes: expected_rw_bytes,
+                },
+                resource_fee: 33847,
+            }
+        }
+    );
+}
+
+#[test]
 fn test_simulate_restore_op_returns_error_for_temp_entries() {
     let ledger_info = default_ledger_info();
     let network_config = default_network_config();
