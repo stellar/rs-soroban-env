@@ -87,11 +87,7 @@ impl<T: SnapshotSource> SnapshotSource for AutoRestoringSnapshotSource<T> {
         let entry_with_live_until = self.snapshot_source.get(key)?;
         if let Some((entry, live_until)) = entry_with_live_until {
             if let Some(durability) = get_key_durability(key.as_ref()) {
-                let live_until = live_until.ok_or_else(|| {
-                    // Entries with durability must have TTL.
-                    HostError::from((ScErrorType::Storage, ScErrorCode::InternalError))
-                })?;
-                if live_until < self.current_ledger_sequence {
+                if live_until < Some(self.current_ledger_sequence) {
                     return match durability {
                         ContractDataDurability::Temporary => Ok(None),
                         ContractDataDurability::Persistent => {
