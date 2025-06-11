@@ -28,7 +28,7 @@ use crate::{
         LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData,
         Limits, ReadXdr, ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
         ScNonceKey, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
-        SorobanResourcesExtV0, SorobanTransactionDataExt, TtlEntry, Uint256, WriteXdr,
+        TtlEntry, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -270,14 +270,6 @@ fn invoke_host_function_helper_with_restored_entries(
     let limits = Limits::none();
     let encoded_host_fn = host_fn.to_xdr(limits.clone()).unwrap();
     let encoded_resources = resources.to_xdr(limits.clone()).unwrap();
-    let resources_ext = if restored_entry_ids.is_empty() {
-        SorobanTransactionDataExt::V0
-    } else {
-        SorobanTransactionDataExt::V1(SorobanResourcesExtV0 {
-            archived_soroban_entries: restored_entry_ids.try_into().unwrap(),
-        })
-    };
-    let encoded_resources_ext = resources_ext.to_xdr(limits.clone()).unwrap();
     let encoded_source_account = source_account.to_xdr(limits.clone()).unwrap();
     let encoded_auth_entries: Vec<Vec<u8>> = auth_entries
         .iter()
@@ -326,7 +318,7 @@ fn invoke_host_function_helper_with_restored_entries(
         enable_diagnostics,
         encoded_host_fn,
         encoded_resources,
-        encoded_resources_ext,
+        restored_entry_ids,
         encoded_source_account,
         encoded_auth_entries.into_iter(),
         ledger_info.clone(),
@@ -794,7 +786,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    let (expected_insns, expected_write_bytes) = (1826895, 684);
+    let (expected_insns, expected_write_bytes) = (1767593, 684);
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -832,7 +824,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    let expected_instructions = 1152949;
+    let expected_instructions = 1093647;
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1322,7 +1314,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 722885,
+            instructions: 663583,
             disk_read_bytes: 0,
             write_bytes: 104,
         }
@@ -1463,7 +1455,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1130043,
+            instructions: 1070741,
             disk_read_bytes: 0,
             write_bytes: 176,
         }
@@ -1524,7 +1516,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 724332,
+            instructions: 665030,
             disk_read_bytes: 0,
             write_bytes: 104,
         }
@@ -1958,7 +1950,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 957308,
+            instructions: 898006,
             disk_read_bytes: 0,
             write_bytes: 80,
         }
@@ -2026,7 +2018,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 1069162,
+            instructions: 1009860,
             disk_read_bytes: 0,
             write_bytes: 0,
         }
@@ -2317,7 +2309,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
                 .try_into()
                 .unwrap(),
             },
-            instructions: 1087583,
+            instructions: 1027906,
             disk_read_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
             write_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
         }
@@ -2442,7 +2434,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
                     .try_into()
                     .unwrap(),
             },
-            instructions: 1087896,
+            instructions: 1028344,
             disk_read_bytes: data_entry_size + instance_entry_size,
             write_bytes: data_entry_size + instance_entry_size,
         }
@@ -2561,7 +2553,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
                     .try_into()
                     .unwrap(),
             },
-            instructions: 1086313,
+            instructions: 1026761,
             disk_read_bytes: wasm_entry_size + instance_entry_size,
             write_bytes: wasm_entry_size + instance_entry_size,
         }
@@ -2679,7 +2671,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
                 read_only: vec![cd.contract_key.clone()].try_into().unwrap(),
                 read_write: vec![data_key, cd.wasm_key.clone()].try_into().unwrap(),
             },
-            instructions: 1088361,
+            instructions: 1028934,
             disk_read_bytes: wasm_entry_size,
             write_bytes: wasm_entry_size + temp_entry_size,
         }
