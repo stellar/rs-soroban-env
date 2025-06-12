@@ -140,14 +140,14 @@ pub struct LedgerEntryLiveUntilChange {
 fn build_restored_key_set(
     budget: &Budget,
     resources: &SorobanResources,
-    restored_rw_entry_ids: &[u32],
+    restored_rw_entry_indices: &[u32],
 ) -> Result<Option<RestoredKeySet>, HostError> {
-    if restored_rw_entry_ids.is_empty() {
+    if restored_rw_entry_indices.is_empty() {
         return Ok(None);
     }
     let rw_footprint = &resources.footprint.read_write;
     let mut key_set = RestoredKeySet::default();
-    for e in restored_rw_entry_ids {
+    for e in restored_rw_entry_indices {
         key_set = key_set.insert(
             Rc::new(
                 rw_footprint
@@ -395,7 +395,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     enable_diagnostics: bool,
     encoded_host_fn: T,
     encoded_resources: T,
-    restored_rw_entry_ids: &[u32],
+    restored_rw_entry_indices: &[u32],
     encoded_source_account: T,
     encoded_auth_entries: I,
     ledger_info: LedgerInfo,
@@ -410,7 +410,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
 
     let resources: SorobanResources =
         metered_from_xdr_with_budget(encoded_resources.as_ref(), &budget)?;
-    let restored_keys = build_restored_key_set(&budget, &resources, &restored_rw_entry_ids)?;
+    let restored_keys = build_restored_key_set(&budget, &resources, &restored_rw_entry_indices)?;
     let footprint = build_storage_footprint_from_xdr(&budget, resources.footprint)?;
     let current_ledger_seq = ledger_info.sequence_number;
     let min_live_until_ledger = ledger_info
