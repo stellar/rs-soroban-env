@@ -12,11 +12,11 @@ use soroban_env_host::{
     storage::SnapshotSource,
     xdr::{
         BytesM, ContractDataDurability, DecoratedSignature, Duration, Hash, LedgerBounds,
-        LedgerFootprint, LedgerKey, Memo, MuxedAccount, MuxedAccountMed25519, Operation,
-        OperationBody, Preconditions, PreconditionsV2, SequenceNumber, Signature, SignatureHint,
-        SignerKey, SignerKeyEd25519SignedPayload, SorobanResources, SorobanResourcesExtV0,
-        SorobanTransactionData, SorobanTransactionDataExt, TimeBounds, TimePoint, Transaction,
-        TransactionExt, TransactionV1Envelope, Uint256, WriteXdr,
+        LedgerEntryType, LedgerFootprint, LedgerKey, Memo, MuxedAccount, MuxedAccountMed25519,
+        Operation, OperationBody, Preconditions, PreconditionsV2, SequenceNumber, Signature,
+        SignatureHint, SignerKey, SignerKeyEd25519SignedPayload, SorobanResources,
+        SorobanResourcesExtV0, SorobanTransactionData, SorobanTransactionDataExt, TimeBounds,
+        TimePoint, Transaction, TransactionExt, TransactionV1Envelope, Uint256, WriteXdr,
     },
     LedgerInfo, DEFAULT_XDR_RW_LIMITS,
 };
@@ -158,6 +158,7 @@ pub(crate) fn simulate_extend_ttl_op_resources(
         let entry_size: u32 = entry_size_for_rent(&budget, &entry, entry_xdr_size)?;
         rent_changes.push(LedgerEntryRentChange {
             is_persistent: durability == ContractDataDurability::Persistent,
+            is_code_entry: matches!(key.discriminant(), LedgerEntryType::ContractCode),
             old_size_bytes: entry_size,
             new_size_bytes: entry_size,
             old_live_until_ledger: current_live_until_ledger,
@@ -218,6 +219,7 @@ pub(crate) fn simulate_restore_op_resources(
         restored_bytes = restored_bytes.saturating_add(entry_xdr_size);
         rent_changes.push(LedgerEntryRentChange {
             is_persistent: true,
+            is_code_entry: matches!(key.discriminant(), LedgerEntryType::ContractCode),
             old_size_bytes: 0,
             new_size_bytes: entry_rent_size,
             old_live_until_ledger: 0,

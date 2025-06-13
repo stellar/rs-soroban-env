@@ -25,10 +25,10 @@ use crate::{
         ContractExecutable, ContractId, ContractIdPreimage, ContractIdPreimageFromAddress,
         CreateContractArgs, DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage,
         HashIdPreimageSorobanAuthorization, HostFunction, InvokeContractArgs, LedgerEntry,
-        LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData,
-        Limits, ReadXdr, ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
-        ScNonceKey, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials, SorobanResources,
-        TtlEntry, Uint256, WriteXdr,
+        LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey, LedgerKeyContractCode,
+        LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScContractInstance, ScErrorCode,
+        ScErrorType, ScMap, ScNonceKey, ScVal, ScVec, SorobanAuthorizationEntry,
+        SorobanCredentials, SorobanResources, TtlEntry, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -191,6 +191,7 @@ impl LedgerEntryChangeHelper {
             ttl_change: if let Some(durability) = durability {
                 Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&ledger_key),
+                    entry_type: entry.data.discriminant(),
                     durability,
                     old_live_until_ledger: live_until_ledger,
                     new_live_until_ledger: live_until_ledger,
@@ -709,6 +710,7 @@ fn test_wasm_upload_success() {
             new_value: Some(wasm_entry(ADD_I32)),
             ttl_change: Some(LedgerEntryLiveUntilChange {
                 key_hash: compute_key_hash(&ledger_key),
+                entry_type: LedgerEntryType::ContractCode,
                 durability: ContractDataDurability::Persistent,
                 old_live_until_ledger: 0,
                 new_live_until_ledger: ledger_info.sequence_number
@@ -777,6 +779,7 @@ fn test_wasm_upload_success_in_recording_mode() {
             new_value: Some(wasm_entry(ADD_I32)),
             ttl_change: Some(LedgerEntryLiveUntilChange {
                 key_hash: compute_key_hash(&ledger_key),
+                entry_type: LedgerEntryType::ContractCode,
                 durability: ContractDataDurability::Persistent,
                 old_live_until_ledger: 0,
                 new_live_until_ledger: ledger_info.sequence_number
@@ -1002,6 +1005,7 @@ fn test_wasm_reupload_is_no_op() {
             new_value: Some(wasm_entry(ADD_I32)),
             ttl_change: Some(LedgerEntryLiveUntilChange {
                 key_hash: compute_key_hash(&get_wasm_key(ADD_I32)),
+                entry_type: LedgerEntryType::ContractCode,
                 durability: ContractDataDurability::Persistent,
                 old_live_until_ledger: ledger_info.sequence_number,
                 new_live_until_ledger: ledger_info.sequence_number,
@@ -1048,6 +1052,7 @@ fn test_wasm_upload_success_with_extra_footprint_entries() {
                 new_value: Some(wasm_entry(ADD_I32)),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&get_wasm_key(ADD_I32)),
+                    entry_type: LedgerEntryType::ContractCode,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1066,6 +1071,7 @@ fn test_wasm_upload_success_with_extra_footprint_entries() {
                 new_value: Some(wasm_entry(LINEAR_MEMORY)),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&get_wasm_key(LINEAR_MEMORY)),
+                    entry_type: LedgerEntryType::ContractCode,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: ledger_info.sequence_number + 1000,
                     new_live_until_ledger: ledger_info.sequence_number + 1000,
@@ -1078,6 +1084,7 @@ fn test_wasm_upload_success_with_extra_footprint_entries() {
                 new_value: None,
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&get_wasm_key(CONTRACT_STORAGE)),
+                    entry_type: LedgerEntryType::ContractCode,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: 0,
@@ -1126,6 +1133,7 @@ fn test_create_contract_success() {
                 new_value: Some(cd.contract_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1210,6 +1218,7 @@ fn test_create_contract_with_no_argument_constructor_success() {
                 )),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&temp_entry_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1229,6 +1238,7 @@ fn test_create_contract_with_no_argument_constructor_success() {
                 )),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&persistent_entry_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1243,6 +1253,7 @@ fn test_create_contract_with_no_argument_constructor_success() {
                 new_value: Some(expected_contract_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1293,6 +1304,7 @@ fn test_create_contract_success_in_recording_mode() {
                 new_value: Some(cd.contract_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1398,6 +1410,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 new_value: Some(cd.contract_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1424,6 +1437,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 ))),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&nonce_entry_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number + ledger_info.max_entry_ttl
@@ -1495,6 +1509,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 new_value: Some(cd.contract_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1588,6 +1603,7 @@ fn test_create_contract_success_with_extra_footprint_entries() {
                 new_value: Some(cd.contract_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1602,6 +1618,7 @@ fn test_create_contract_success_with_extra_footprint_entries() {
                 new_value: None,
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd2.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: 0,
@@ -1795,6 +1812,7 @@ fn test_invoke_contract_with_storage_ops_success() {
                 new_value: Some(new_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1854,6 +1872,7 @@ fn test_invoke_contract_with_storage_ops_success() {
                 new_value: None,
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: ledger_info.sequence_number + 500,
                     new_live_until_ledger: ledger_info.sequence_number + 5000,
@@ -1929,6 +1948,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 new_value: Some(new_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -1996,6 +2016,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 new_value: None,
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: ledger_info.sequence_number + 500,
                     new_live_until_ledger: ledger_info.sequence_number + 5000,
@@ -2065,6 +2086,7 @@ fn test_create_contract_success_with_autorestore() {
                 new_value: Some(cd.contract_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2079,6 +2101,7 @@ fn test_create_contract_success_with_autorestore() {
                 new_value: Some(cd.wasm_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.wasm_key),
+                    entry_type: LedgerEntryType::ContractCode,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2161,6 +2184,7 @@ fn test_invoke_contract_with_storage_extension_and_autorestore() {
         new_value: Some(cd.contract_entry.clone()),
         ttl_change: Some(LedgerEntryLiveUntilChange {
             key_hash: compute_key_hash(&cd.contract_key),
+            entry_type: LedgerEntryType::ContractData,
             durability: ContractDataDurability::Persistent,
             old_live_until_ledger: 0,
             new_live_until_ledger: ledger_info.sequence_number
@@ -2175,6 +2199,7 @@ fn test_invoke_contract_with_storage_extension_and_autorestore() {
         new_value: Some(data_entry.clone()),
         ttl_change: Some(LedgerEntryLiveUntilChange {
             key_hash: compute_key_hash(&data_key),
+            entry_type: LedgerEntryType::ContractData,
             durability: ContractDataDurability::Persistent,
             old_live_until_ledger: 0,
             new_live_until_ledger: ledger_info.sequence_number + ttl_extension,
@@ -2259,6 +2284,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
                 new_value: Some(persistent_data_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2272,6 +2298,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
                 new_value: Some(cd.contract_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2286,6 +2313,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
                 new_value: Some(cd.wasm_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.wasm_key),
+                    entry_type: LedgerEntryType::ContractCode,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2397,6 +2425,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
                 new_value: Some(new_persistent_data_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2411,6 +2440,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
                 new_value: Some(cd.contract_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2508,6 +2538,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
                 new_value: None,
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: 0,
@@ -2520,6 +2551,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
                 new_value: Some(cd.contract_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2534,6 +2566,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
                 new_value: Some(cd.wasm_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.wasm_key),
+                    entry_type: LedgerEntryType::ContractCode,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2636,6 +2669,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
                 new_value: Some(updated_temp_data_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
                     durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
@@ -2654,6 +2688,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
                 new_value: Some(cd.wasm_entry.clone()),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
                     key_hash: compute_key_hash(&cd.wasm_key),
+                    entry_type: LedgerEntryType::ContractCode,
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
