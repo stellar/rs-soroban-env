@@ -8,10 +8,7 @@ use std::{cmp::max, rc::Rc};
 use crate::{
     auth::RecordedAuthPayload,
     storage::is_persistent_key,
-    xdr::{
-        ContractEvent, ReadXdr, ScVal, SorobanAddressCredentials, SorobanCredentials,
-        SorobanResourcesExtV0, WriteXdr,
-    },
+    xdr::{ContractEvent, ReadXdr, ScVal, SorobanAddressCredentials, SorobanCredentials, WriteXdr},
     DEFAULT_XDR_RW_LIMITS,
 };
 use crate::{
@@ -29,7 +26,7 @@ use crate::{
         AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
         LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
         LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
-        SorobanAuthorizationEntry, SorobanResources, SorobanTransactionDataExt, TtlEntry,
+        SorobanAuthorizationEntry, SorobanResources, TtlEntry,
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
@@ -143,36 +140,31 @@ pub struct LedgerEntryLiveUntilChange {
 fn build_restored_key_set(
     budget: &Budget,
     resources: &SorobanResources,
-    resource_ext: &SorobanTransactionDataExt,
+    restored_rw_entry_indices: &[u32],
 ) -> Result<Option<RestoredKeySet>, HostError> {
-    match resource_ext {
-        SorobanTransactionDataExt::V0 => Ok(None),
-        SorobanTransactionDataExt::V1(soroban_resources_ext_v0) => {
-            if soroban_resources_ext_v0.archived_soroban_entries.is_empty() {
-                return Ok(None);
-            }
-            let rw_footprint = &resources.footprint.read_write;
-            let mut key_set = RestoredKeySet::default();
-            for e in soroban_resources_ext_v0.archived_soroban_entries.iter() {
-                key_set = key_set.insert(
-                    Rc::new(
-                        rw_footprint
-                            .get(*e as usize)
-                            .ok_or_else(|| {
-                                HostError::from(Error::from_type_and_code(
-                                    ScErrorType::Storage,
-                                    ScErrorCode::InternalError,
-                                ))
-                            })?
-                            .metered_clone(budget)?,
-                    ),
-                    (),
-                    budget,
-                )?;
-            }
-            Ok(Some(key_set))
-        }
+    if restored_rw_entry_indices.is_empty() {
+        return Ok(None);
     }
+    let rw_footprint = &resources.footprint.read_write;
+    let mut key_set = RestoredKeySet::default();
+    for e in restored_rw_entry_indices {
+        key_set = key_set.insert(
+            Rc::new(
+                rw_footprint
+                    .get(*e as usize)
+                    .ok_or_else(|| {
+                        HostError::from(Error::from_type_and_code(
+                            ScErrorType::Storage,
+                            ScErrorCode::InternalError,
+                        ))
+                    })?
+                    .metered_clone(budget)?,
+            ),
+            (),
+            budget,
+        )?;
+    }
+    Ok(Some(key_set))
 }
 
 /// Returns the difference between the `storage` and its initial snapshot as
@@ -403,7 +395,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     enable_diagnostics: bool,
     encoded_host_fn: T,
     encoded_resources: T,
-    encoded_resources_ext: T,
+    restored_rw_entry_indices: &[u32],
     encoded_source_account: T,
     encoded_auth_entries: I,
     ledger_info: LedgerInfo,
@@ -418,9 +410,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
 
     let resources: SorobanResources =
         metered_from_xdr_with_budget(encoded_resources.as_ref(), &budget)?;
-    let resources_ext: SorobanTransactionDataExt =
-        metered_from_xdr_with_budget(encoded_resources_ext.as_ref(), &budget)?;
-    let restored_keys = build_restored_key_set(&budget, &resources, &resources_ext)?;
+    let restored_keys = build_restored_key_set(&budget, &resources, &restored_rw_entry_indices)?;
     let footprint = build_storage_footprint_from_xdr(&budget, resources.footprint)?;
     let current_ledger_seq = ledger_info.sequence_number;
     let min_live_until_ledger = ledger_info
@@ -802,14 +792,6 @@ pub fn invoke_host_function_in_recording_mode(
     };
     let _resources_roundtrip: SorobanResources =
         host.metered_from_xdr(host.to_xdr_non_metered(&resources)?.as_slice())?;
-    let resources_ext = SorobanTransactionDataExt::V1(SorobanResourcesExtV0 {
-        archived_soroban_entries: restored_rw_entry_ids
-            .clone()
-            .try_into()
-            .map_err(|_| HostError::from((ScErrorType::Context, ScErrorCode::InternalError)))?,
-    });
-    let _resources_ext_roundtrip: SorobanTransactionDataExt =
-        host.metered_from_xdr(host.to_xdr_non_metered(&resources_ext)?.as_slice())?;
     let (storage, events) = host.try_finish()?;
     if enable_diagnostics {
         extract_diagnostic_events(&events, diagnostic_events);
