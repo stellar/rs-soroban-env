@@ -227,7 +227,7 @@ pub(crate) fn authorize_single_invocation(
         TestSigner::Account(_) | TestSigner::AccountContract(_) => Some((
             host.with_test_prng(|chacha| Ok(chacha.gen_range(0..=i64::MAX)))
                 .unwrap(),
-            10000,
+            host.with_ledger_info(|li| Ok(li.sequence_number)).unwrap() + 10000,
         )),
         TestSigner::ContractInvoker(_) => {
             return;
