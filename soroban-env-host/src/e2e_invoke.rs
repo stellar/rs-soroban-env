@@ -368,9 +368,9 @@ pub fn entry_size_for_rent(
     entry_xdr_size: u32,
 ) -> Result<u32, HostError> {
     Ok(match &entry.data {
-        LedgerEntryData::ContractCode(contract_code_entry) => {
-            wasm_module_memory_cost(budget, contract_code_entry)?.min(u32::MAX as u64) as u32
-        }
+        LedgerEntryData::ContractCode(contract_code_entry) => entry_xdr_size.saturating_add(
+            wasm_module_memory_cost(budget, contract_code_entry)?.min(u32::MAX as u64) as u32,
+        ),
         _ => entry_xdr_size,
     })
 }

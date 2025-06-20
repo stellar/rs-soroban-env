@@ -146,7 +146,7 @@ fn test_simulate_upload_wasm() {
                 disk_read_bytes: 0,
                 write_bytes: expected_write_bytes,
             },
-            resource_fee: 7037690,
+            resource_fee: 4714773,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
@@ -200,7 +200,7 @@ fn test_simulate_upload_wasm() {
                 disk_read_bytes: 0,
                 write_bytes: expected_write_bytes + 300,
             },
-            resource_fee: 10555801,
+            resource_fee: 7071426,
         })
     );
 }
@@ -589,7 +589,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
                 disk_read_bytes: wasm_entry_size + contract_1_size,
                 write_bytes: wasm_entry_size + contract_1_size,
             },
-            resource_fee: 8994061,
+            resource_fee: 6230340,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
@@ -704,7 +704,7 @@ fn test_simulate_extend_ttl_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 8965129,
+                resource_fee: 6204121,
             }
         }
     );
@@ -732,7 +732,7 @@ fn test_simulate_extend_ttl_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 153103833,
+                resource_fee: 104563088,
             }
         }
     );
@@ -777,7 +777,7 @@ fn test_simulate_extend_ttl_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 229655724,
+                resource_fee: 156844607,
             }
         }
     );
@@ -878,7 +878,7 @@ fn test_simulate_restore_op() {
                     disk_read_bytes: expected_rw_bytes,
                     write_bytes: expected_rw_bytes,
                 },
-                resource_fee: 16009439,
+                resource_fee: 10922801,
             }
         }
     );
@@ -907,7 +907,7 @@ fn test_simulate_restore_op() {
                     disk_read_bytes: expected_rw_bytes,
                     write_bytes: expected_rw_bytes,
                 },
-                resource_fee: 16313497,
+                resource_fee: 11130765,
             }
         }
     );
@@ -935,7 +935,7 @@ fn test_simulate_restore_op() {
                     disk_read_bytes: (expected_rw_bytes as f64 * 1.2) as u32,
                     write_bytes: (expected_rw_bytes as f64 * 1.3) as u32,
                 },
-                resource_fee: 24470002,
+                resource_fee: 16695904,
             }
         }
     );

@@ -1,18 +1,18 @@
 use crate::builtin_contracts::testutils::AccountContractSigner;
 use crate::crypto::sha256_hash_from_bytes_raw;
-use crate::e2e_invoke::RecordingInvocationAuthMode;
 use crate::e2e_testutils::{
     account_entry, bytes_sc_val, contract_code_entry_with_refined_contract_cost_inputs,
     upload_wasm_host_fn,
 };
 use crate::testutils::simple_account_sign_fn;
-use crate::vm::{wasm_module_memory_cost, VersionedContractCodeCostInputs};
+use crate::vm::VersionedContractCodeCostInputs;
 use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::testutils::TestSigner,
     e2e_invoke::{
-        invoke_host_function, invoke_host_function_in_recording_mode, ledger_entry_to_ledger_key,
-        LedgerEntryChange, LedgerEntryLiveUntilChange,
+        entry_size_for_rent, invoke_host_function, invoke_host_function_in_recording_mode,
+        ledger_entry_to_ledger_key, LedgerEntryChange, LedgerEntryLiveUntilChange,
+        RecordingInvocationAuthMode,
     },
     e2e_testutils::{
         auth_contract_invocation, create_contract_auth, default_ledger_info, get_account_id,
@@ -177,12 +177,13 @@ impl LedgerEntryChangeHelper {
             LedgerKey::ContractCode(_) => Some(ContractDataDurability::Persistent),
             _ => None,
         };
-        let old_entry_size_bytes_for_rent = match &entry.data {
-            LedgerEntryData::ContractCode(contract_code_entry) => {
-                wasm_module_memory_cost(&Budget::default(), contract_code_entry).unwrap() as u32
-            }
-            _ => entry.to_xdr(Limits::none()).unwrap().len() as u32,
-        };
+        let old_entry_size_bytes_for_rent = entry_size_for_rent(
+            &Budget::default(),
+            entry,
+            entry.to_xdr(Limits::none()).unwrap().len() as u32,
+        )
+        .unwrap();
+
         Self {
             read_only: true,
             key: ledger_key.clone(),
@@ -991,15 +992,18 @@ fn test_wasm_reupload_is_no_op() {
         res.invoke_result.unwrap(),
         bytes_sc_val(&get_wasm_hash(ADD_I32))
     );
-
+    let code_entry = ledger_entry(LedgerEntryData::ContractCode(
+        contract_code_entry_with_refined_contract_cost_inputs(ADD_I32, true),
+    ));
     assert_eq!(
         res.ledger_changes,
         vec![LedgerEntryChangeHelper {
             read_only: false,
             key: get_wasm_key(ADD_I32),
-            old_entry_size_bytes_for_rent: wasm_module_memory_cost(
+            old_entry_size_bytes_for_rent: entry_size_for_rent(
                 &Budget::default(),
-                &contract_code_entry_with_refined_contract_cost_inputs(ADD_I32, true),
+                &code_entry,
+                code_entry.to_xdr(Limits::none()).unwrap().len() as u32,
             )
             .unwrap() as u32,
             new_value: Some(wasm_entry(ADD_I32)),
@@ -1042,6 +1046,9 @@ fn test_wasm_upload_success_with_extra_footprint_entries() {
         res.invoke_result.unwrap(),
         bytes_sc_val(&get_wasm_hash(ADD_I32))
     );
+    let code_entry = ledger_entry(LedgerEntryData::ContractCode(
+        contract_code_entry_with_refined_contract_cost_inputs(LINEAR_MEMORY, true),
+    ));
     assert_eq!(
         res.ledger_changes,
         vec![
@@ -1063,9 +1070,10 @@ fn test_wasm_upload_success_with_extra_footprint_entries() {
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: get_wasm_key(LINEAR_MEMORY),
-                old_entry_size_bytes_for_rent: wasm_module_memory_cost(
+                old_entry_size_bytes_for_rent: entry_size_for_rent(
                     &Budget::default(),
-                    &contract_code_entry_with_refined_contract_cost_inputs(LINEAR_MEMORY, true),
+                    &code_entry,
+                    code_entry.to_xdr(Limits::none()).unwrap().len() as u32,
                 )
                 .unwrap() as u32,
                 new_value: Some(wasm_entry(LINEAR_MEMORY)),

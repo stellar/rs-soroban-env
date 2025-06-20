@@ -20,7 +20,7 @@ pub const MINIMUM_RENT_WRITE_FEE_PER_1KB: i64 = 1000;
 // this value.
 // Note, this is a constant for now, but can become a network setting in the
 // future protocols.
-pub const CODE_ENTRY_RENT_DISCOUNT_FACTOR: i64 = 2;
+pub const CODE_ENTRY_RENT_DISCOUNT_FACTOR: i64 = 3;
 
 /// These are the resource upper bounds specified by the Soroban transaction.
 pub struct TransactionResources {
