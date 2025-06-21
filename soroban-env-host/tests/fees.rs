@@ -547,9 +547,9 @@ fn test_rent_extend_fees_with_only_extend() {
             &fee_config,
             50_000,
         ),
-        // Rent: ceil(10 * 1024 * 1000 * 200_000 / (10_000 * 1024)) / 2 (=100_000)
+        // Rent: ceil(10 * 1024 * 1000 * 200_000 / (10_000 * 1024)) / 3 (=66_666)
         // Expiration entry write entry/bytes: 34
-        100_000 + 34
+        66_666 + 34
     );
 
     // Size decrease
@@ -654,10 +654,10 @@ fn test_rent_extend_fees_with_only_extend() {
             &fee_config,
             50_000,
         ),
-        // Rent: 20_000 + 200_000 + 100_000 + 1 + 20 + 200_000 + 20_000 (=540_021) +
+        // Rent: 20_000 + 200_000 + 66_666 + 1 + 20 + 200_000 + 20_000 (=506_687) +
         // Expiration entry write bytes: ceil(7 * 500 * 48 / 1024) (=165) +
         // Expiration entry write: 10 * 7
-        540_021 + 165 + 70
+        506_687 + 165 + 70
     );
 }
 
@@ -703,8 +703,8 @@ fn test_rent_extend_fees_with_only_size_change() {
             &fee_config,
             25_000,
         ),
-        // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024) / 2
-        732_425 / 2
+        // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024) / 3
+        732_425 / 3
     );
 
     // Large size increase, temp storage
@@ -793,8 +793,8 @@ fn test_rent_extend_fees_with_only_size_change() {
             &fee_config,
             25_000,
         ),
-        // 732_425 + 732_425 / 2 + 73_243
-        1_171_880
+        // 732_425 + 732_425 / 3 + 73_243
+        1_049_809
     );
 }
 
@@ -845,7 +845,7 @@ fn test_rent_extend_with_size_change_and_extend() {
         // Rent: 100_000 * 1000 * 200_000 / (10_000 * 1024) / 2 +
         // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024)
         // Expiration entry write entry/bytes: 34
-        2_685_550 / 2 + 34
+        2_685_550 / 3 + 34
     );
 
     // Temp entry
@@ -900,10 +900,10 @@ fn test_rent_extend_with_size_change_and_extend() {
             &fee_config,
             25_000,
         ),
-        // Rent: 2_685_550 + 2_685_550 / 2 + 268_556
+        // Rent: 2_685_550 + 2_685_550 / 3 + 268_556
         // Expiration entry write bytes: ceil(3 * 500 * 48 / 1024) (=71) +
         // Expiration entry write: 10 * 3
-        4_296_881 + 71 + 30
+        3_849_289 + 71 + 30
     );
 
     // Small increments
