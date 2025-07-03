@@ -1473,9 +1473,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.8"
+version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -1727,9 +1727,9 @@ dependencies = [
 
 [[package]]
 name = "stellar-xdr"
-version = "23.0.0-rc.1"
+version = "23.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11e08476633f75dfda6d41769619d8b54280d6b7807ac36bf09fa9c62afb8cfd"
+checksum = "632bf15309c2992c059fb499275a706f6afdfd68c690508d5d9bfa96c771477f"
 dependencies = [
  "arbitrary",
  "base64 0.22.1",
@@ -1740,6 +1740,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_with",
+ "sha2",
  "stellar-strkey",
 ]
 
