@@ -20,15 +20,15 @@ exclude = ["soroban-test-wasms/wasm-workspace"]
 # NB: When bumping the major version make sure to clean up the
 # code guarded by `unstable-*` features to make it enabled
 # unconditionally.
-version = "23.0.0-rc.1.1"
+version = "23.0.0-rc.2"
 rust-version = "1.84.0"
 
 [workspace.dependencies]
-soroban-env-common = { version = "=23.0.0-rc.1.1", path = "soroban-env-common", default-features = false }
-soroban-env-guest = { version = "=23.0.0-rc.1.1", path = "soroban-env-guest" }
-soroban-env-host = { version = "=23.0.0-rc.1.1", path = "soroban-env-host" }
-soroban-env-macros = { version = "=23.0.0-rc.1.1", path = "soroban-env-macros" }
-soroban-builtin-sdk-macros = { version = "=23.0.0-rc.1.1", path = "soroban-builtin-sdk-macros" }
+soroban-env-common = { version = "=23.0.0-rc.2", path = "soroban-env-common", default-features = false }
+soroban-env-guest = { version = "=23.0.0-rc.2", path = "soroban-env-guest" }
+soroban-env-host = { version = "=23.0.0-rc.2", path = "soroban-env-host" }
+soroban-env-macros = { version = "=23.0.0-rc.2", path = "soroban-env-macros" }
+soroban-builtin-sdk-macros = { version = "=23.0.0-rc.2", path = "soroban-builtin-sdk-macros" }
 # NB: this must match the wasmparser version wasmi is using
 wasmparser = "=0.116.1"
 
