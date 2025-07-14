@@ -3,3 +3,4 @@
 /vendor
 lcov.info
 .DS_Store
+.stellar/

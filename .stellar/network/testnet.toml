@@ -1,3 +1,0 @@
-rpc_url = "https://soroban-testnet.stellar.org"
-rpc_headers = []
-network_passphrase = "Test SDF Network ; September 2015"
