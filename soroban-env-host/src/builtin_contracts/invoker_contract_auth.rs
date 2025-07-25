@@ -82,8 +82,8 @@ impl InvokerContractAuthEntry {
                     ContractExecutable::StellarAsset => {
                         return Err(host.err(
                             ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "unexpected authorized StellarAsset contract creation",
+                            ScErrorCode::InvalidInput,
+                            "Stellar Asset contract creation can't be authorized",
                             &[],
                         ));
                     }
@@ -111,8 +111,8 @@ impl InvokerContractAuthEntry {
                     ContractExecutable::StellarAsset => {
                         return Err(host.err(
                             ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "unexpected authorized StellarAsset contract creation",
+                            ScErrorCode::InvalidInput,
+                            "Stellar Asset contract creation can't be authorized",
                             &[],
                         ));
                     }

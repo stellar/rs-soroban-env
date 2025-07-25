@@ -12,3 +12,4 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
+soroban-env-common = { workspace = true }

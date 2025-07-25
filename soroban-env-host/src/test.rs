@@ -19,6 +19,7 @@ mod hostile;
 #[cfg(opt_build)]
 mod hostile_opt;
 mod invocation;
+mod invoker_auth;
 mod ledger;
 mod lifecycle;
 mod lifetime_extension;
