@@ -1222,14 +1222,20 @@ impl AuthorizationManager {
         }
 
         let mut invoker_trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
-        if invoker_trackers.len() != snapshot.invoker_contract_tracker_root_snapshots.len() {
+
+        if invoker_trackers.len() < snapshot.invoker_contract_tracker_root_snapshots.len() {
             return Err(host.err(
                 ScErrorType::Auth,
                 ScErrorCode::InternalError,
-                "unexpected bad auth snapshot",
+                "the number of invoker contract trackers is smaller than in the snapshot",
                 &[],
             ));
         }
+        // If there are more trackers than in the snapshot, then the trackers have been
+        // created in the current (failed) frame, so we should remove them as a part
+        // of rollback.
+        invoker_trackers.truncate(snapshot.invoker_contract_tracker_root_snapshots.len());
+
         for (tracker, snapshot) in invoker_trackers
             .iter_mut()
             .zip(snapshot.invoker_contract_tracker_root_snapshots.iter())
