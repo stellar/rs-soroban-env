@@ -54,6 +54,7 @@ rev = "0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
 
 [profile.release]
 lto = true
+debug = true
 
 [profile.test-opt]
 inherits = "test"
