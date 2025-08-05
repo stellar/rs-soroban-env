@@ -17,8 +17,8 @@ mod fmt;
 // than normal; not so high that it will run forever but high enough that we can manage
 // to actually record the quantity of detail that tracing records (eg. hashing everything
 // in the host on every host function call and return!).
-const TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR: u64 = 500;
-const TRACE_STATE_SHADOW_MEM_LIMIT_FACTOR: u64 = 30;
+const TRACE_STATE_SHADOW_CPU_LIMIT_FACTOR: u64 = 5000;
+const TRACE_STATE_SHADOW_MEM_LIMIT_FACTOR: u64 = 300;
 
 pub type TraceHook = Rc<dyn for<'a> Fn(&'a Host, TraceEvent<'a>) -> Result<(), HostError>>;
 
