@@ -1532,7 +1532,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "soroban-bench-utils"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "perf-event",
  "soroban-env-common",
@@ -1542,7 +1542,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-builtin-sdk-macros"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1552,7 +1552,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-common"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "arbitrary",
  "crate-git-revision",
@@ -1571,7 +1571,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-guest"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "soroban-env-common",
  "static_assertions",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-host"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "arbitrary",
  "ark-bls12-381",
@@ -1638,7 +1638,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-macros"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1651,7 +1651,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-simulation"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "anyhow",
  "pretty_assertions",
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-synth-wasm"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "arbitrary",
  "expect-test",
@@ -1679,7 +1679,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-test-wasms"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 
 [[package]]
 name = "soroban-wasmi"
@@ -1795,7 +1795,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "test_no_std"
-version = "23.0.0-rc.3"
+version = "23.0.0"
 dependencies = [
  "soroban-env-common",
 ]
