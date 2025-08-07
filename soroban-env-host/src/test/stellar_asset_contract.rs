@@ -80,14 +80,14 @@ impl StellarAssetContractTest {
     fn default_stellar_asset_contract_with_admin_id(
         &self,
         new_admin: &Address,
-    ) -> TestStellarAssetContract {
+    ) -> TestStellarAssetContract<'_> {
         let contract = self.default_stellar_asset_contract();
         let issuer = TestSigner::account(&self.issuer_key);
         contract.set_admin(&issuer, new_admin.clone()).unwrap();
         contract
     }
 
-    fn default_stellar_asset_contract(&self) -> TestStellarAssetContract {
+    fn default_stellar_asset_contract(&self) -> TestStellarAssetContract<'_> {
         let issuer_id = signing_key_to_account_id(&self.issuer_key);
         self.create_account(
             &issuer_id,

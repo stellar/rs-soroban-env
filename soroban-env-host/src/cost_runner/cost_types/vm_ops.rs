@@ -151,6 +151,8 @@ mod v21 {
     }
 
     // This cost-type is recycled as unrefined-model, parse-only phase.
+    // TODO: Figure out how to handle this better.
+    #[allow(dead_code)]
     pub struct VmInstantiationRun;
     // This cost-type is recycled as unrefined-model, instantiate-only phase.
     pub struct VmCachedInstantiationRun;
