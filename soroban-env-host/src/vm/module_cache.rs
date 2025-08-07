@@ -54,7 +54,7 @@ impl Default for ModuleCacheMap {
 impl ModuleCacheMap {
     fn lock_map(
         map: &Arc<Mutex<BTreeMap<Hash, Arc<ParsedModule>>>>,
-    ) -> Result<MutexGuard<BTreeMap<Hash, Arc<ParsedModule>>>, HostError> {
+    ) -> Result<MutexGuard<'_, BTreeMap<Hash, Arc<ParsedModule>>>, HostError> {
         map.lock()
             .map_err(|_| HostError::from((ScErrorType::Context, ScErrorCode::InternalError)))
     }
