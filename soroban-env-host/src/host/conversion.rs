@@ -485,7 +485,9 @@ impl Host {
                     let v = self.to_host_val(&pair.val)?;
                     mm.push((k, v))
                 }
-                Ok(self.add_host_object(HostMap::from_map(mm, self)?)?.into())
+                Ok(self
+                    .add_host_object(HostMap::from_map_with_host(mm, self)?)?
+                    .into())
             }
             ScVal::Vec(None) => Err(self.err(
                 ScErrorType::Value,
