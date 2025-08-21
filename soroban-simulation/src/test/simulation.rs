@@ -557,7 +557,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 9936120;
+    let expected_instructions = 10942546;
     let wasm_entry_size = contracts[0]
         .wasm_entry
         .to_xdr(Limits::none())
@@ -589,11 +589,11 @@ fn test_simulate_invoke_contract_with_autorestore() {
                 disk_read_bytes: wasm_entry_size + contract_1_size,
                 write_bytes: wasm_entry_size + contract_1_size,
             },
-            resource_fee: 6230340,
+            resource_fee: 6231346,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 4968053);
+    assert_eq!(res.simulated_memory, 5471262);
     assert_eq!(
         res.modified_entries,
         vec![

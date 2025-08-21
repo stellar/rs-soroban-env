@@ -753,12 +753,27 @@ impl Host {
             if let Some((parsed_module, wasmi_linker)) =
                 self.budget_ref().with_observable_shadow_mode(|| {
                     use crate::vm::ParsedModule;
+                    let current_ledger_sequence =
+                        self.with_ledger_info(|li| Ok(li.sequence_number))?;
                     let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
-                    if self
+                    let snapshot_value = self
                         .try_borrow_storage()?
-                        .get_snapshot_value(self, &wasm_key)?
-                        .is_some()
-                    {
+                        .get_snapshot_value(self, &wasm_key)?;
+                    if let Some((_, live_until_ledger)) = snapshot_value {
+                        let live_until_ledger = live_until_ledger.ok_or_else(|| {
+                            self.err(
+                                ScErrorType::Storage,
+                                ScErrorCode::InternalError,
+                                "live_until_ledger is not provided for contract code",
+                                &[],
+                            )
+                        })?;
+                        // Archived contract code entries will be cache misses
+                        // during the execution with auto-restore, so we need
+                        // to charge the compilation to budget.
+                        if live_until_ledger < current_ledger_sequence {
+                            return Ok(None);
+                        }
                         let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
                         let parsed_module =
                             ParsedModule::new_with_isolated_engine(self, code.as_slice(), costs)?;
