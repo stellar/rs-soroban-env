@@ -766,9 +766,9 @@ pub fn invoke_host_function_in_recording_mode(
                     } else {
                         encoded_ttl_entries.push(vec![]);
                     }
-                    if matches!(*access_type, AccessType::ReadWrite) {
-                        current_rw_id += 1;
-                    }
+                }
+                if matches!(*access_type, AccessType::ReadWrite) {
+                    current_rw_id += 1;
                 }
             }
             let (init_storage, init_ttl_map) = build_storage_map_from_xdr_ledger_entries(
