@@ -986,6 +986,25 @@ impl AuthorizationManager {
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
+    fn is_invoker_contract(&self, host: &Host, address: AddressObject) -> Result<bool, HostError> {
+        let call_stack = self.try_borrow_call_stack(host)?;
+        for i in 0..(call_stack.len() - 1) {
+            match call_stack[i] {
+                AuthStackFrame::CreateContractHostFn(_) => (),
+                AuthStackFrame::Contract(ref contract_frame) => {
+                    if host
+                        .compare(&contract_frame.contract_address, &address)?
+                        .is_eq()
+                    {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    #[cfg(any(test, feature = "recording_mode"))]
     fn require_auth_recording(
         &self,
         host: &Host,
@@ -1068,6 +1087,16 @@ impl AuthorizationManager {
         // Alert the user in `disable_non_root_auth` mode if we're not
         // in the root stack frame.
         if recording_info.disable_non_root_auth && self.try_borrow_call_stack(host)?.len() != 1 {
+            if self.is_invoker_contract(host, address)? {
+                return Err(host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InvalidAction,
+                    "[recording authorization only] encountered unauthorized call for a \
+                    contract higher up in the call stack, make sure that you have called \
+                    `authorize_as_current_contract()` with the appropriate arguments for it.",
+                    &[address.into()],
+                ));
+            }
             return Err(host.err(
                 ScErrorType::Auth,
                 ScErrorCode::InvalidAction,
