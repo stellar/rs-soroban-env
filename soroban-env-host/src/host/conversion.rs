@@ -485,7 +485,27 @@ impl Host {
                     let v = self.to_host_val(&pair.val)?;
                     mm.push((k, v))
                 }
-                Ok(self.add_host_object(HostMap::from_map(mm, self)?)?.into())
+                Ok(self
+                    .add_host_object(HostMap::from_map(mm, self).map_err(|err| {
+                        let mut err = err;
+                        self.with_debug_mode(|| {
+                            if !err.error.is_type(ScErrorType::Object)
+                                || !err.error.is_code(ScErrorCode::InvalidInput)
+                            {
+                                err = self.err(
+                                    ScErrorType::Object,
+                                    ScErrorCode::InvalidInput,
+                                    "ScMap was not sorted by key for conversion to host object",
+                                    &[],
+                                );
+                                return Ok(());
+                            }
+
+                            Ok(())
+                        });
+                        err
+                    })?)?
+                    .into())
             }
             ScVal::Vec(None) => Err(self.err(
                 ScErrorType::Value,
