@@ -145,6 +145,10 @@ struct HostImpl {
     // interface, it exists strictly for internal testing of the host.
     #[doc(hidden)]
     trace_hook: RefCell<Option<TraceHook>>,
+    // A flag for temporarily disabling tracing. This is used to avoid tracing
+    // calls in debug mode.
+    #[doc(hidden)]
+    disable_tracing: RefCell<bool>,
     // Store a simple contract invocation hook for public usage.
     // The hook triggers when the top-level contract invocation
     // starts and when it ends.
@@ -325,6 +329,14 @@ impl_checked_borrow_helpers!(
     try_borrow_suppress_diagnostic_events_mut
 );
 
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
+    invocation_meter,
+    InvocationMeter,
+    try_borrow_invocation_meter,
+    try_borrow_invocation_meter_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -368,6 +380,7 @@ impl Host {
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
             trace_hook: RefCell::new(None),
+            disable_tracing: RefCell::new(false),
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
@@ -656,15 +669,51 @@ impl Host {
     /// debug-level _only_ flows into other functions that are themselves
     /// debug-mode-guarded and/or only write results into debug state (eg.
     /// diagnostic events).
-    pub(crate) fn with_debug_mode<F>(&self, f: F)
+    /// When `allow_new_objects` flag is `false` the tests will assert that no
+    /// new objects have been created. This should be the default behavior for
+    /// most of the use cases of `with_debug_mode`, which is why it's the
+    /// default setting. The callers that do need to create new objects should
+    /// set this to `true` and should also have a justification for why it's
+    /// safe (usually because we're in the error code path).
+    pub(crate) fn with_debug_mode_allowing_new_objects<F>(&self, f: F, _allow_new_objects: bool)
     where
         F: FnOnce() -> Result<(), HostError>,
     {
         if let Ok(cell) = self.0.diagnostic_level.try_borrow_or_err() {
             if matches!(*cell, DiagnosticLevel::Debug) {
-                return self.budget_ref().with_shadow_mode(f);
+                // Temporarily disable tracing as debug mode operations are
+                // meant to be not observable and thus make no sense to snapshot
+                // for traces.
+                if let Ok(mut disable_tracing) = self.0.disable_tracing.try_borrow_mut() {
+                    *disable_tracing = true;
+                }
+                // Sanity check for tests: make sure that we don't add new
+                // objects in debug mode. Since objects are immutable, this
+                // should be sufficient to make sure no object changes happened.
+                // Note, that we could also sanity check that storage and events
+                // haven't  been modified as well, but unlike objects it's much
+                // less likely to accidentally modify them in debug mode.
+                #[cfg(test)]
+                let init_global_objs_size = self.global_objs_size();
+                self.budget_ref().with_shadow_mode(f);
+                #[cfg(test)]
+                if !_allow_new_objects {
+                    assert_eq!(init_global_objs_size, self.global_objs_size());
+                }
+                if let Ok(mut disable_tracing) = self.0.disable_tracing.try_borrow_mut() {
+                    *disable_tracing = false;
+                }
             }
         }
+    }
+
+    /// Default version of `with_debug_mode_allowing_new_objects` that disallows
+    /// creating new objects (only enforced in tests).
+    pub(crate) fn with_debug_mode<F>(&self, f: F)
+    where
+        F: FnOnce() -> Result<(), HostError>,
+    {
+        self.with_debug_mode_allowing_new_objects(f, false);
     }
 
     /// Calls the provided function while ensuring that no diagnostic events are
@@ -871,6 +920,11 @@ impl EnvBase for Host {
     }
 
     fn tracing_enabled(&self) -> bool {
+        if let Ok(disable_tracing) = self.0.disable_tracing.try_borrow() {
+            if *disable_tracing {
+                return false;
+            }
+        }
         match self.try_borrow_trace_hook() {
             Ok(hook) => hook.is_some(),
             Err(_) => false,
@@ -2272,6 +2326,10 @@ impl VmCallerEnv for Host {
         wasm_hash: BytesObject,
         salt: BytesObject,
     ) -> Result<AddressObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
         self.create_contract_impl(deployer, wasm_hash, salt, None)
     }
 
@@ -2283,6 +2341,10 @@ impl VmCallerEnv for Host {
         salt: BytesObject,
         constructor_args: VecObject,
     ) -> Result<AddressObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
         self.create_contract_impl(deployer, wasm_hash, salt, Some(constructor_args))
     }
 
@@ -2292,6 +2354,10 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         serialized_asset: BytesObject,
     ) -> Result<AddressObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
         let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
         let contract_id_preimage = ContractIdPreimage::Asset(asset);
         let executable = ContractExecutable::StellarAsset;
@@ -2333,7 +2399,9 @@ impl VmCallerEnv for Host {
         wasm: BytesObject,
     ) -> Result<BytesObject, HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::WasmUploadEntryPoint,
+        );
 
         let wasm_vec =
             self.visit_obj(wasm, |bytes: &ScBytes| bytes.as_vec().metered_clone(self))?;
@@ -2375,7 +2443,13 @@ impl VmCallerEnv for Host {
         args: VecObject,
     ) -> Result<Val, HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::contract_invocation_with_address_obj(
+                self,
+                contract_address,
+                func,
+            ),
+        );
 
         let argvec = self.call_args_from_obj(args)?;
         // this is the recommended path of calling a contract, with `reentry`
@@ -2405,7 +2479,13 @@ impl VmCallerEnv for Host {
         args: VecObject,
     ) -> Result<Val, HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::contract_invocation_with_address_obj(
+                self,
+                contract_address,
+                func,
+            ),
+        );
 
         let argvec = self.call_args_from_obj(args)?;
         // this is the "loosened" path of calling a contract.
@@ -3619,8 +3699,18 @@ impl Host {
     pub fn get_last_invocation_resources(
         &self,
     ) -> Option<invocation_metering::InvocationResources> {
-        if let Ok(scope) = self.0.invocation_meter.try_borrow() {
-            scope.get_invocation_resources()
+        if let Ok(meter) = self.0.invocation_meter.try_borrow() {
+            meter.get_root_invocation_resources()
+        } else {
+            None
+        }
+    }
+
+    pub fn get_detailed_last_invocation_resources(
+        &self,
+    ) -> Option<invocation_metering::DetailedInvocationResources> {
+        if let Ok(meter) = self.0.invocation_meter.try_borrow() {
+            meter.get_detailed_invocation_resources()
         } else {
             None
         }

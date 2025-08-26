@@ -2319,7 +2319,11 @@ impl Host {
         contract: AddressObject,
         args: VecObject,
     ) -> Result<Val, HostError> {
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::check_auth_invocation(
+                self, contract,
+            ),
+        );
 
         use crate::builtin_contracts::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
         let contract_id = self.contract_id_from_address(contract)?;

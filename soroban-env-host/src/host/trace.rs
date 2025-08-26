@@ -207,7 +207,7 @@ impl Host {
         }
         0
     }
-    fn global_objs_size(&self) -> usize {
+    pub(crate) fn global_objs_size(&self) -> usize {
         if let Ok(objs) = self.0.objects.try_borrow() {
             objs.len()
         } else {

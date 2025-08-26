@@ -320,7 +320,9 @@ impl Host {
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
 
         use crate::Env;
         self.register_test_contract_with_constructor(
@@ -337,7 +339,9 @@ impl Host {
         constructor_args: crate::VecObject,
     ) -> Result<(), HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
 
         let contract_id = self.contract_id_from_address(contract_address)?;
         let instance_key = self.contract_instance_ledger_key(&contract_id)?;

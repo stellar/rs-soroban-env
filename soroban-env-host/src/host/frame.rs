@@ -633,7 +633,9 @@ impl Host {
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
         self.with_frame(
             Frame::TestContract(self.create_test_contract_frame(id, func, vec![])?),
             f,
@@ -809,6 +811,12 @@ impl Host {
         args: &[Val],
         call_params: CallParams,
     ) -> Result<Val, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::contract_invocation(
+                self, id, func,
+            ),
+        );
         // Internal host calls may call some special functions that otherwise
         // aren't allowed to be called.
         if !call_params.internal_host_call
@@ -1057,7 +1065,9 @@ impl Host {
     // Notes on metering: covered by the called components.
     pub fn invoke_function(&self, hf: HostFunction) -> Result<ScVal, HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::from_host_function(&hf),
+        );
 
         let rv = self.invoke_function_and_return_val(hf)?;
         self.from_host_val(rv)
