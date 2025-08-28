@@ -1092,7 +1092,7 @@ impl AuthorizationManager {
                     ScErrorType::Auth,
                     ScErrorCode::InvalidAction,
                     "[recording authorization only] encountered unauthorized call for a \
-                    contract higher up in the call stack, make sure that you have called \
+                    contract earlier in the call stack, make sure that you have called \
                     `authorize_as_current_contract()` with the appropriate arguments for it.",
                     &[address.into()],
                 ));
