@@ -1046,7 +1046,7 @@ impl EnvBase for Host {
                 Ok((sym.to_val(), val))
             })
             .collect::<Result<Vec<(Val, Val)>, HostError>>()?;
-        let map = HostMap::from_map(map_vec, self)?;
+        let map = HostMap::from_map_with_host(map_vec, self)?;
         let res = self.add_host_object(map);
         call_trace_env_ret!(self, res);
         res
