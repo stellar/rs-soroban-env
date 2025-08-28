@@ -499,13 +499,30 @@ impl Storage {
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
-    pub(crate) fn get_snapshot_value(
+    /// Returns `true` if the key exists in the snapshot and is live w.r.t
+    /// the current ledger sequence.
+    pub(crate) fn is_key_live_in_snapshot(
         &self,
         host: &Host,
         key: &Rc<LedgerKey>,
-    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+    ) -> Result<bool, HostError> {
         match &self.mode {
-            FootprintMode::Recording(snapshot) => snapshot.get(key),
+            FootprintMode::Recording(snapshot) => {
+                let snapshot_value = snapshot.get(key)?;
+                if let Some((_, live_until_ledger)) = snapshot_value {
+                    if let Some(live_until_ledger) = live_until_ledger {
+                        let current_ledger_sequence =
+                            host.with_ledger_info(|li| Ok(li.sequence_number))?;
+                        Ok(live_until_ledger >= current_ledger_sequence)
+                    } else {
+                        // Non-Soroban entries are always live.
+                        Ok(true)
+                    }
+                } else {
+                    // Key is not in the snapshot.
+                    Ok(false)
+                }
+            }
             FootprintMode::Enforcing => Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
