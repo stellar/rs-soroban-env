@@ -327,8 +327,8 @@ where
             host.with_debug_mode(|| {
                 // Currently we only return Object, InvalidInput error from
                 // `from_map` when the input vector is not sorted by key.
-                if !err.error.is_type(ScErrorType::Object)
-                    || !err.error.is_code(ScErrorCode::InvalidInput)
+                if err.error.is_type(ScErrorType::Object)
+                    && err.error.is_code(ScErrorCode::InvalidInput)
                 {
                     err = host.err(
                         ScErrorType::Object,
