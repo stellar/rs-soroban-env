@@ -394,12 +394,15 @@ pub(crate) trait DebugArg {
         // _while_ forming a debug argument.
         let mut val: Option<Val> = None;
         if let Ok(_guard) = host.0.events.try_borrow_mut() {
-            host.with_debug_mode(|| {
-                if let Ok(v) = Self::debug_arg_maybe_expensive_or_fallible(host, arg) {
-                    val = Some(v);
-                }
-                Ok(())
-            });
+            host.with_debug_mode_allowing_new_objects(
+                || {
+                    if let Ok(v) = Self::debug_arg_maybe_expensive_or_fallible(host, arg) {
+                        val = Some(v);
+                    }
+                    Ok(())
+                },
+                true,
+            );
             val.unwrap_or_else(|| {
                 Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError).into()
             })
@@ -463,7 +466,7 @@ macro_rules! err {
             // expression that corresponds to the number of arguments.
             let mut buf = [$(voidarg(stringify!($args))),*];
             let mut i = 0;
-            $host.with_debug_mode(||{
+            $host.with_debug_mode_allowing_new_objects(||{
                 $(
                     // Args actually get used here, where we fill in array cells..
                     buf[i] = <_ as $crate::host::error::DebugArg>::debug_arg($host, &$args);
@@ -471,7 +474,7 @@ macro_rules! err {
                     i += 1;
                 )*
                 Ok(())
-            });
+            }, true);
             <_ as $crate::ErrorHandler>::error($host, $error.into(), $msg, &buf[0..i])
         }
     };

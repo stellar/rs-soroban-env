@@ -44,6 +44,7 @@ use soroban_test_wasms::{
     NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22, SIMPLE_ACCOUNT_CONTRACT, SUM_I32,
     UPDATEABLE_CONTRACT,
 };
+use std::collections::HashSet;
 use std::rc::Rc;
 
 // It's tricky to get exactly the same instruction consumption
@@ -307,8 +308,15 @@ fn invoke_host_function_helper_with_restored_entries(
                 .unwrap()
         })
         .collect();
-
-    let module_cache = build_module_cache_for_entries(ledger_info, ledger_entries_with_ttl)?;
+    let mut restored_contracts = HashSet::new();
+    for restored_id in restored_entry_ids {
+        let key = &resources.footprint.read_write[*restored_id as usize];
+        if let LedgerKey::ContractCode(code) = key {
+            restored_contracts.insert(code.hash.clone());
+        }
+    }
+    let module_cache =
+        build_module_cache_for_entries(ledger_info, ledger_entries_with_ttl, &restored_contracts)?;
 
     let budget = Budget::default();
     budget
@@ -372,12 +380,18 @@ fn invoke_host_function_helper(
 fn build_module_cache_for_entries(
     ledger_info: &LedgerInfo,
     ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
+    restored_contracts: &HashSet<Hash>,
 ) -> Result<ModuleCache, HostError> {
     let ctx = E2eTestCompilationContext::new()?;
     let cache = ModuleCache::new(&ctx)?;
     for (e, _) in ledger_entries_with_ttl.iter() {
         if let LedgerEntryData::ContractCode(cd) = &e.data {
             let contract_id = Hash(sha256_hash_from_bytes_raw(&cd.code, ctx.as_budget())?);
+            // Restored contracts are not yet in the module cache and need to be
+            // compiled during execution.
+            if restored_contracts.contains(&contract_id) {
+                continue;
+            }
             let code_cost_inputs = match &cd.ext {
                 ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
                     wasm_bytes: cd.code.len(),
@@ -442,7 +456,7 @@ fn invoke_host_function_using_simulation_with_signers(
     host_fn: &HostFunction,
     source_account: &AccountId,
     ledger_info: &LedgerInfo,
-    ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
+    mut ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
     prng_seed: &[u8; 32],
     dummy_host: &Host,
     signers: &Vec<TestSigner>,
@@ -543,7 +557,21 @@ fn invoke_host_function_using_simulation_with_signers(
         * (1.0 + RECORDING_MODE_INSTRUCTIONS_RANGE))
         as u32;
 
-    let enforcing_result = invoke_host_function_helper(
+    let restored_live_until_ledger =
+        ledger_info.sequence_number + ledger_info.min_persistent_entry_ttl - 1;
+    for restored_id in &recording_result.restored_rw_entry_ids {
+        let key = recording_result.resources.footprint.read_write[*restored_id as usize].clone();
+        // Update TTL of the entry corresponding to the key
+        if let Some((_, ttl)) = ledger_entries_with_ttl
+            .iter_mut()
+            .find(|(le, _)| ledger_entry_to_ledger_key(le, &Budget::default()).unwrap() == key)
+        {
+            *ttl = Some(restored_live_until_ledger);
+        } else {
+            panic!("restored entry not found in the original entries");
+        }
+    }
+    let enforcing_result = invoke_host_function_helper_with_restored_entries(
         enable_diagnostics,
         host_fn,
         &recording_result.resources,
@@ -552,6 +580,7 @@ fn invoke_host_function_using_simulation_with_signers(
         ledger_info,
         ledger_entries_with_ttl,
         prng_seed,
+        recording_result.restored_rw_entry_ids.as_slice(),
     )?;
 
     assert_eq!(
@@ -2246,26 +2275,27 @@ fn test_auto_restore_with_extension_in_recording_mode() {
         &val,
         ContractDataDurability::Persistent,
     );
+    let le_with_ttl = vec![
+        (
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number - 100_000),
+        ),
+        (
+            cd.contract_entry.clone(),
+            Some(ledger_info.sequence_number - 1),
+        ),
+        (
+            persistent_data_entry.clone(),
+            Some(ledger_info.sequence_number - 10),
+        ),
+    ];
     let res = invoke_host_function_recording_helper(
         true,
         &host_fn,
         &cd.deployer,
         RecordingInvocationAuthMode::Recording(true),
         &ledger_info,
-        vec![
-            (
-                cd.wasm_entry.clone(),
-                Some(ledger_info.sequence_number - 100_000),
-            ),
-            (
-                cd.contract_entry.clone(),
-                Some(ledger_info.sequence_number - 1),
-            ),
-            (
-                persistent_data_entry.clone(),
-                Some(ledger_info.sequence_number - 10),
-            ),
-        ],
+        le_with_ttl.clone(),
         &prng_seed(),
         None,
     )
@@ -2345,11 +2375,21 @@ fn test_auto_restore_with_extension_in_recording_mode() {
                 .try_into()
                 .unwrap(),
             },
-            instructions: 1027906,
+            instructions: 1562621,
             disk_read_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
             write_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
         }
     );
+
+    let _ = invoke_host_function_using_simulation(
+        true,
+        &host_fn,
+        &cd.deployer,
+        &ledger_info,
+        le_with_ttl,
+        &prng_seed(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -2376,26 +2416,27 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
         &key,
         ContractDataDurability::Persistent,
     );
+    let le_with_ttl = vec![
+        (
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100_000),
+        ),
+        (
+            cd.contract_entry.clone(),
+            Some(ledger_info.sequence_number - 100),
+        ),
+        (
+            persistent_data_entry.clone(),
+            Some(ledger_info.sequence_number - 1),
+        ),
+    ];
     let res = invoke_host_function_recording_helper(
         true,
         &host_fn,
         &cd.deployer,
         RecordingInvocationAuthMode::Recording(true),
         &ledger_info,
-        vec![
-            (
-                cd.wasm_entry.clone(),
-                Some(ledger_info.sequence_number + 100_000),
-            ),
-            (
-                cd.contract_entry.clone(),
-                Some(ledger_info.sequence_number - 100),
-            ),
-            (
-                persistent_data_entry.clone(),
-                Some(ledger_info.sequence_number - 1),
-            ),
-        ],
+        le_with_ttl.clone(),
         &prng_seed(),
         None,
     )
@@ -2477,6 +2518,159 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
             write_bytes: data_entry_size + instance_entry_size,
         }
     );
+
+    let _ = invoke_host_function_using_simulation(
+        true,
+        &host_fn,
+        &cd.deployer,
+        &ledger_info,
+        le_with_ttl,
+        &prng_seed(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_auto_restore_with_new_entry_in_recording_mode() {
+    let cd = CreateContractData::new([111; 32], CONTRACT_STORAGE);
+    let ledger_info = default_ledger_info();
+
+    let key = symbol_sc_val("key");
+    let val = u64_sc_val(u64::MAX);
+    let host_fn = invoke_contract_host_fn(
+        &cd.contract_address,
+        "put_persistent",
+        vec![key.clone(), val.clone()],
+    );
+
+    let data_key = contract_data_key(
+        &cd.contract_address,
+        &key,
+        ContractDataDurability::Persistent,
+    );
+    let le_with_ttl = vec![
+        (
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number - 100_000),
+        ),
+        (
+            cd.contract_entry.clone(),
+            Some(ledger_info.sequence_number - 100),
+        ),
+    ];
+    let res = invoke_host_function_recording_helper(
+        true,
+        &host_fn,
+        &cd.deployer,
+        RecordingInvocationAuthMode::Recording(true),
+        &ledger_info,
+        le_with_ttl.clone(),
+        &prng_seed(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(res.invoke_result.unwrap(), ScVal::Void);
+    assert!(res.contract_events.is_empty());
+    assert_eq!(res.restored_rw_entry_ids.len(), 2);
+    assert_eq!(
+        res.resources.footprint.read_write[res.restored_rw_entry_ids[0] as usize],
+        cd.contract_key
+    );
+    assert_eq!(
+        res.resources.footprint.read_write[res.restored_rw_entry_ids[1] as usize],
+        cd.wasm_key
+    );
+
+    let expected_persistent_data_entry = contract_data_entry(
+        &cd.contract_address,
+        &key,
+        &val,
+        ContractDataDurability::Persistent,
+    );
+    let data_entry_size = expected_persistent_data_entry
+        .to_xdr(Limits::none())
+        .unwrap()
+        .len() as u32;
+    let instance_entry_size = cd.contract_entry.to_xdr(Limits::none()).unwrap().len() as u32;
+    assert_eq!(
+        res.ledger_changes,
+        vec![
+            LedgerEntryChangeHelper {
+                read_only: false,
+                key: data_key.clone(),
+                old_entry_size_bytes_for_rent: 0,
+                new_value: Some(expected_persistent_data_entry.clone()),
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&data_key),
+                    entry_type: LedgerEntryType::ContractData,
+                    durability: ContractDataDurability::Persistent,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: ledger_info.sequence_number
+                        + ledger_info.min_persistent_entry_ttl
+                        - 1,
+                }),
+            },
+            LedgerEntryChangeHelper {
+                read_only: false,
+                key: cd.contract_key.clone(),
+                old_entry_size_bytes_for_rent: 0,
+                new_value: Some(cd.contract_entry.clone()),
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&cd.contract_key),
+                    entry_type: LedgerEntryType::ContractData,
+                    durability: ContractDataDurability::Persistent,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: ledger_info.sequence_number
+                        + ledger_info.min_persistent_entry_ttl
+                        - 1,
+                }),
+            },
+            LedgerEntryChangeHelper {
+                read_only: false,
+                key: cd.wasm_key.clone(),
+                old_entry_size_bytes_for_rent: 0,
+                new_value: Some(cd.wasm_entry.clone()),
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&cd.wasm_key),
+                    entry_type: LedgerEntryType::ContractCode,
+                    durability: ContractDataDurability::Persistent,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: ledger_info.sequence_number
+                        + ledger_info.min_persistent_entry_ttl
+                        - 1,
+                }),
+            },
+        ]
+    );
+    let wasm_entry_size = cd.wasm_entry.to_xdr(Limits::none()).unwrap().len() as u32;
+    assert_eq!(
+        res.resources,
+        SorobanResources {
+            footprint: LedgerFootprint {
+                read_only: vec![].try_into().unwrap(),
+                read_write: vec![
+                    data_key.clone(),
+                    cd.contract_key.clone(),
+                    cd.wasm_key.clone(),
+                ]
+                .try_into()
+                .unwrap(),
+            },
+            instructions: 1444181,
+            disk_read_bytes: wasm_entry_size + instance_entry_size,
+            write_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
+        }
+    );
+
+    let _ = invoke_host_function_using_simulation(
+        true,
+        &host_fn,
+        &cd.deployer,
+        &ledger_info,
+        le_with_ttl,
+        &prng_seed(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -2594,7 +2788,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
                     .try_into()
                     .unwrap(),
             },
-            instructions: 1026761,
+            instructions: 1561476,
             disk_read_bytes: wasm_entry_size + instance_entry_size,
             write_bytes: wasm_entry_size + instance_entry_size,
         }
@@ -2714,7 +2908,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
                 read_only: vec![cd.contract_key.clone()].try_into().unwrap(),
                 read_write: vec![data_key, cd.wasm_key.clone()].try_into().unwrap(),
             },
-            instructions: 1028934,
+            instructions: 1563649,
             disk_read_bytes: wasm_entry_size,
             write_bytes: wasm_entry_size + temp_entry_size,
         }

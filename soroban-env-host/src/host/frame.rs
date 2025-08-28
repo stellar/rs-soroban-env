@@ -720,12 +720,13 @@ impl Host {
         //     - User invoked us with bad input, eg. calling a
         //       contract that wasn't provided in footprint/storage.
         //
-        //     - User uploaded the wasm _in this transaction_ so we
-        //       didn't cache it when starting the transaction (and
-        //       couldn't add it: additions use a shared wasmi engine
-        //       that owns all the cache entries, and that engine is
-        //       locked while we're running; uploads use a throwaway
-        //       engine for validation purposes).
+        //     - User uploaded the wasm in this ledger so we didn't
+        //       cache it when starting the ledger (and couldn't add
+        //       it: the module cache and the wasmi engine used to
+        //       build modules are both locked and shared across
+        //       threads during execution, we don't want to perturb
+        //       it even if we could; uploads use a throwaway engine
+        //       for validation purposes).
         //
         //   3. Even more pathological: the module cache was built,
         //      and contained the module, but someone _removed_ the
@@ -742,23 +743,34 @@ impl Host {
         // with a storage error.
 
         #[cfg(any(test, feature = "recording_mode"))]
-        // In recording mode: if a contract was present in the initial snapshot image, it is part of
-        // the set of contracts that would have been built into a module cache in enforcing mode;
-        // we want to suppress the cost of parsing those (simulating them as module cache hits).
-        //
-        // If a contract is _not_ in the initial snapshot image, it's because someone just uploaded
-        // it during execution. Those would be cache misses in enforcing mode, and so it is right to
-        // continue to charge for them as such (charging the parse cost on each call) in recording.
+        // In recording mode:
+        //   - We have no _real_ module cache.
+        //   - We have a choice of whether simulate a cache-hit.
+        //     - We will "simulate a hit" by doing a fresh parse but charging it
+        //       to the shadow budget, not the real budget.
+        //   - We _want_ to simulate a miss any time _would_ be a corresponding
+        //     (charged-for) miss in enforcing mode, because otherwise we're
+        //     under-charging and the tx we're simulating will fail in execution.
+        //   - One case we know for sure will cause a miss: if the module
+        //     literally isn't in the snapshot at all. This happens when someone
+        //     uploads a contract and tries running it in the same ledger.
+        //   - Other cases we're _not sure_: a module might be expired and evicted
+        //     (thus removed from module cache) between simulation time and
+        //     enforcement time.
+        //   - But we can and do make an approximation here:
+        //     - If the module is _expired_ we assume it's on its way to eviction
+        //       soon and simulate a miss, risking overcharging.
+        //     - If the module is _not expired_ we assume it'll be survive until
+        //       execution, simulate a hit, and risk undercharging.
         if self.in_storage_recording_mode()? {
             if let Some((parsed_module, wasmi_linker)) =
                 self.budget_ref().with_observable_shadow_mode(|| {
                     use crate::vm::ParsedModule;
                     let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
-                    if self
-                        .try_borrow_storage()?
-                        .get_snapshot_value(self, &wasm_key)?
-                        .is_some()
-                    {
+                    let is_key_live_in_snapshot = self
+                        .try_borrow_storage_mut()?
+                        .is_key_live_in_snapshot(self, &wasm_key)?;
+                    if is_key_live_in_snapshot {
                         let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
                         let parsed_module =
                             ParsedModule::new_with_isolated_engine(self, code.as_slice(), costs)?;
