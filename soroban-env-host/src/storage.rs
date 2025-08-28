@@ -499,13 +499,30 @@ impl Storage {
     }
 
     #[cfg(any(test, feature = "recording_mode"))]
-    pub(crate) fn get_snapshot_value(
+    /// Returns `true` if the key exists in the snapshot and is live w.r.t
+    /// the current ledger sequence.
+    pub(crate) fn is_key_live_in_snapshot(
         &self,
         host: &Host,
         key: &Rc<LedgerKey>,
-    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+    ) -> Result<bool, HostError> {
         match &self.mode {
-            FootprintMode::Recording(snapshot) => snapshot.get(key),
+            FootprintMode::Recording(snapshot) => {
+                let snapshot_value = snapshot.get(key)?;
+                if let Some((_, live_until_ledger)) = snapshot_value {
+                    if let Some(live_until_ledger) = live_until_ledger {
+                        let current_ledger_sequence =
+                            host.with_ledger_info(|li| Ok(li.sequence_number))?;
+                        Ok(live_until_ledger >= current_ledger_sequence)
+                    } else {
+                        // Non-Soroban entries are always live.
+                        Ok(true)
+                    }
+                } else {
+                    // Key is not in the snapshot.
+                    Ok(false)
+                }
+            }
             FootprintMode::Enforcing => Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
@@ -641,45 +658,49 @@ impl Host {
         key_val: Option<Val>,
     ) -> HostError {
         let mut err = err;
-        self.with_debug_mode(|| {
-            if !err.error.is_type(ScErrorType::Storage) {
-                return Ok(());
-            }
-            if !err.error.is_code(ScErrorCode::ExceededLimit)
-                && !err.error.is_code(ScErrorCode::MissingValue)
-            {
-                return Ok(());
-            }
+        self.with_debug_mode_allowing_new_objects(
+            || {
+                if !err.error.is_type(ScErrorType::Storage) {
+                    return Ok(());
+                }
+                if !err.error.is_code(ScErrorCode::ExceededLimit)
+                    && !err.error.is_code(ScErrorCode::MissingValue)
+                {
+                    return Ok(());
+                }
 
-            let key_type_str = get_key_type_string_for_error(lk);
-            // Accessing an entry outside of the footprint is a non-recoverable error, thus
-            // there is no way to observe the object pool being changed (host will continue
-            // propagating an error until there are no frames left and control is never
-            // returned to guest). This allows us to build a nicer error message.
-            // For the missing values we unfortunately can only safely use the existing `Val`s
-            // to enhance errors.
-            let can_create_new_objects = err.error.is_code(ScErrorCode::ExceededLimit);
-            let args = self
-                .get_args_for_error(lk, key_val, can_create_new_objects)
-                .unwrap_or_else(|_| vec![]);
-            if err.error.is_code(ScErrorCode::ExceededLimit) {
-                err = self.err(
-                    ScErrorType::Storage,
-                    ScErrorCode::ExceededLimit,
-                    format!("trying to access {} outside of the footprint", key_type_str).as_str(),
-                    args.as_slice(),
-                );
-            } else if err.error.is_code(ScErrorCode::MissingValue) {
-                err = self.err(
-                    ScErrorType::Storage,
-                    ScErrorCode::MissingValue,
-                    format!("trying to get non-existing value for {}", key_type_str).as_str(),
-                    args.as_slice(),
-                );
-            }
+                let key_type_str = get_key_type_string_for_error(lk);
+                // Accessing an entry outside of the footprint is a non-recoverable error, thus
+                // there is no way to observe the object pool being changed (host will continue
+                // propagating an error until there are no frames left and control is never
+                // returned to guest). This allows us to build a nicer error message.
+                // For the missing values we unfortunately can only safely use the existing `Val`s
+                // to enhance errors.
+                let can_create_new_objects = err.error.is_code(ScErrorCode::ExceededLimit);
+                let args = self
+                    .get_args_for_error(lk, key_val, can_create_new_objects)
+                    .unwrap_or_else(|_| vec![]);
+                if err.error.is_code(ScErrorCode::ExceededLimit) {
+                    err = self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::ExceededLimit,
+                        format!("trying to access {} outside of the footprint", key_type_str)
+                            .as_str(),
+                        args.as_slice(),
+                    );
+                } else if err.error.is_code(ScErrorCode::MissingValue) {
+                    err = self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::MissingValue,
+                        format!("trying to get non-existing value for {}", key_type_str).as_str(),
+                        args.as_slice(),
+                    );
+                }
 
-            Ok(())
-        });
+                Ok(())
+            },
+            true,
+        );
         err
     }
 
