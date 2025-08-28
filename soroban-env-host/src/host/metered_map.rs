@@ -315,6 +315,37 @@ where
     }
 }
 
+impl<K, V> MeteredOrdMap<K, V, Host>
+where
+    K: MeteredClone,
+    V: MeteredClone,
+    Host: AsBudget + Compare<K, Error = HostError>,
+{
+    pub(crate) fn from_map_with_host(map: Vec<(K, V)>, host: &Host) -> Result<Self, HostError> {
+        Self::from_map(map, host).map_err(|err| {
+            let mut err = err;
+            host.with_debug_mode(|| {
+                // Currently we only return Object, InvalidInput error from
+                // `from_map` when the input vector is not sorted by key.
+                if err.error.is_type(ScErrorType::Object)
+                    && err.error.is_code(ScErrorCode::InvalidInput)
+                {
+                    err = host.err(
+                        ScErrorType::Object,
+                        ScErrorCode::InvalidInput,
+                        "ScMap was not sorted by key for conversion to host object",
+                        &[],
+                    );
+                    return Ok(());
+                }
+
+                Ok(())
+            });
+            err
+        })
+    }
+}
+
 impl<K, V, Ctx> DeclaredSizeForMetering for MeteredOrdMap<K, V, Ctx>
 where
     K: DeclaredSizeForMetering,
