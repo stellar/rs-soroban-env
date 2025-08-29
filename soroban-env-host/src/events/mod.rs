@@ -225,6 +225,23 @@ impl Host {
     }
 
     #[cfg(any(test, feature = "testutils"))]
+    pub fn get_contract_events(&self) -> Result<Events, HostError> {
+        let events = self.get_events()?;
+        Ok(Events(
+            events
+                .0
+                .into_iter()
+                .filter(|e| {
+                    matches!(
+                        e.event.type_,
+                        ContractEventType::Contract | ContractEventType::System
+                    )
+                })
+                .collect(),
+        ))
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
     pub fn get_diagnostic_events(&self) -> Result<Events, HostError> {
         self.try_borrow_events()?.externalize_diagnostics(self)
     }

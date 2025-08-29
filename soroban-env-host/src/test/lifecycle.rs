@@ -1680,6 +1680,7 @@ mod cap_58_constructor {
             use crate::e2e_testutils::get_wasm_hash;
 
             use super::*;
+            use expect_test::expect;
             use pretty_assertions::assert_eq;
 
             #[test]
@@ -1775,6 +1776,7 @@ mod cap_58_constructor {
             #[test]
             fn test_constructor_with_arguments_and_auth() {
                 let host = test_host();
+                host.enable_invocation_metering();
                 let auth_contract = host.register_test_contract_wasm(AUTH_TEST_CONTRACT);
                 let auth_contract_val: ScVal = auth_contract.as_val().try_into_val(&host).unwrap();
                 let auth_contract_addr = host.scaddress_from_address(auth_contract).unwrap();
@@ -1822,6 +1824,88 @@ mod cap_58_constructor {
                     params,
                 )
                 .unwrap();
+                expect![[r#"
+                    DetailedInvocationResources {
+                        invocation: CreateContractEntryPoint,
+                        resources: SubInvocationResources {
+                            instructions: 899132,
+                            mem_bytes: 3470257,
+                            disk_read_entries: 0,
+                            memory_read_entries: 6,
+                            write_entries: 3,
+                            disk_read_bytes: 0,
+                            write_bytes: 280,
+                            contract_events_size_bytes: 0,
+                            persistent_rent_ledger_bytes: 835380,
+                            persistent_entry_rent_bumps: 2,
+                            temporary_rent_ledger_bytes: 1140,
+                            temporary_entry_rent_bumps: 1,
+                        },
+                        sub_call_resources: [
+                            DetailedInvocationResources {
+                                invocation: InvokeContract(
+                                    Contract(
+                                        ContractId(
+                                            Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e),
+                                        ),
+                                    ),
+                                    ScSymbol(
+                                        StringM(__constructor),
+                                    ),
+                                ),
+                                resources: SubInvocationResources {
+                                    instructions: 629414,
+                                    mem_bytes: 2338889,
+                                    disk_read_entries: 0,
+                                    memory_read_entries: 4,
+                                    write_entries: 2,
+                                    disk_read_bytes: 0,
+                                    write_bytes: 176,
+                                    contract_events_size_bytes: 0,
+                                    persistent_rent_ledger_bytes: 409500,
+                                    persistent_entry_rent_bumps: 1,
+                                    temporary_rent_ledger_bytes: 1140,
+                                    temporary_entry_rent_bumps: 1,
+                                },
+                                sub_call_resources: [
+                                    DetailedInvocationResources {
+                                        invocation: InvokeContract(
+                                            Contract(
+                                                ContractId(
+                                                    Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441),
+                                                ),
+                                            ),
+                                            ScSymbol(
+                                                StringM(do_auth),
+                                            ),
+                                        ),
+                                        resources: SubInvocationResources {
+                                            instructions: 348679,
+                                            mem_bytes: 1207475,
+                                            disk_read_entries: 0,
+                                            memory_read_entries: 2,
+                                            write_entries: 0,
+                                            disk_read_bytes: 0,
+                                            write_bytes: 0,
+                                            contract_events_size_bytes: 0,
+                                            persistent_rent_ledger_bytes: 0,
+                                            persistent_entry_rent_bumps: 0,
+                                            temporary_rent_ledger_bytes: 0,
+                                            temporary_entry_rent_bumps: 0,
+                                        },
+                                        sub_call_resources: [],
+                                    },
+                                ],
+                            },
+                        ],
+                    }"#]]
+                .assert_eq(
+                    format!(
+                        "{:#?}",
+                        host.get_detailed_last_invocation_resources().unwrap()
+                    )
+                    .as_str(),
+                );
                 let res: u32 = host
                     .call(
                         host.add_host_object(ScAddress::Contract(contract_id))
@@ -1838,6 +1922,7 @@ mod cap_58_constructor {
             #[test]
             fn test_constructor_with_arguments_and_auth_with_deployer() {
                 let host = test_host();
+                host.enable_invocation_metering();
                 let auth_contract = host.register_test_contract_wasm(AUTH_TEST_CONTRACT);
                 let auth_contract_val: ScVal = auth_contract.as_val().try_into_val(&host).unwrap();
                 let auth_contract_addr = host.scaddress_from_address(auth_contract).unwrap();
@@ -1888,6 +1973,125 @@ mod cap_58_constructor {
                     ],
                 )
                 .unwrap();
+                expect![[r#"
+                    DetailedInvocationResources {
+                        invocation: InvokeContract(
+                            Contract(
+                                ContractId(
+                                    Hash(2920dd889580ddcd278d3cbd1ada25ec0ab9d9f499386395dca4913ab68be212),
+                                ),
+                            ),
+                            ScSymbol(
+                                StringM(deploy_with_external_auth),
+                            ),
+                        ),
+                        resources: SubInvocationResources {
+                            instructions: 2403909,
+                            mem_bytes: 5948080,
+                            disk_read_entries: 0,
+                            memory_read_entries: 8,
+                            write_entries: 3,
+                            disk_read_bytes: 0,
+                            write_bytes: 280,
+                            contract_events_size_bytes: 0,
+                            persistent_rent_ledger_bytes: 835380,
+                            persistent_entry_rent_bumps: 2,
+                            temporary_rent_ledger_bytes: 1140,
+                            temporary_entry_rent_bumps: 1,
+                        },
+                        sub_call_resources: [
+                            DetailedInvocationResources {
+                                invocation: InvokeContract(
+                                    Contract(
+                                        ContractId(
+                                            Hash(918b3e455574ab13e00191424a3ee4ce71580d7ba1358cc86ab5d9daad1f541d),
+                                        ),
+                                    ),
+                                    ScSymbol(
+                                        StringM(__constructor),
+                                    ),
+                                ),
+                                resources: SubInvocationResources {
+                                    instructions: 913796,
+                                    mem_bytes: 2387055,
+                                    disk_read_entries: 0,
+                                    memory_read_entries: 4,
+                                    write_entries: 2,
+                                    disk_read_bytes: 0,
+                                    write_bytes: 176,
+                                    contract_events_size_bytes: 0,
+                                    persistent_rent_ledger_bytes: 409500,
+                                    persistent_entry_rent_bumps: 1,
+                                    temporary_rent_ledger_bytes: 1140,
+                                    temporary_entry_rent_bumps: 1,
+                                },
+                                sub_call_resources: [
+                                    DetailedInvocationResources {
+                                        invocation: InvokeContract(
+                                            Contract(
+                                                ContractId(
+                                                    Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441),
+                                                ),
+                                            ),
+                                            ScSymbol(
+                                                StringM(do_auth),
+                                            ),
+                                        ),
+                                        resources: SubInvocationResources {
+                                            instructions: 349975,
+                                            mem_bytes: 1207735,
+                                            disk_read_entries: 0,
+                                            memory_read_entries: 2,
+                                            write_entries: 0,
+                                            disk_read_bytes: 0,
+                                            write_bytes: 0,
+                                            contract_events_size_bytes: 0,
+                                            persistent_rent_ledger_bytes: 0,
+                                            persistent_entry_rent_bumps: 0,
+                                            temporary_rent_ledger_bytes: 0,
+                                            temporary_entry_rent_bumps: 0,
+                                        },
+                                        sub_call_resources: [],
+                                    },
+                                ],
+                            },
+                            DetailedInvocationResources {
+                                invocation: InvokeContract(
+                                    Contract(
+                                        ContractId(
+                                            Hash(918b3e455574ab13e00191424a3ee4ce71580d7ba1358cc86ab5d9daad1f541d),
+                                        ),
+                                    ),
+                                    ScSymbol(
+                                        StringM(get_data),
+                                    ),
+                                ),
+                                resources: SubInvocationResources {
+                                    instructions: 546392,
+                                    mem_bytes: 1175064,
+                                    disk_read_entries: 0,
+                                    memory_read_entries: 0,
+                                    write_entries: 0,
+                                    disk_read_bytes: 0,
+                                    write_bytes: 0,
+                                    contract_events_size_bytes: 0,
+                                    persistent_rent_ledger_bytes: 0,
+                                    persistent_entry_rent_bumps: 0,
+                                    temporary_rent_ledger_bytes: 0,
+                                    temporary_entry_rent_bumps: 0,
+                                },
+                                sub_call_resources: [],
+                            },
+                        ],
+                    }"#]]
+                .assert_eq(
+                    format!(
+                        "{:#?}",
+                        host.get_detailed_last_invocation_resources().unwrap()
+                    )
+                    .as_str(),
+                );
+
                 let res: u32 = host
                     .call(
                         host.add_host_object(contract_address).unwrap(),

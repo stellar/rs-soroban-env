@@ -291,7 +291,9 @@ impl Host {
     ) -> Result<AddressObject, HostError> {
         let _span = tracy_span!("register_test_contract_wasm_from_source_account");
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
 
         // Use source account-based auth in order to avoid using nonces which
         // won't work well with enforcing ledger footprint.

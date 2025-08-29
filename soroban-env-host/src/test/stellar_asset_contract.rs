@@ -28,6 +28,7 @@ use crate::{
     Env, EnvBase, Host, HostError, LedgerInfo, Symbol, TryFromVal, TryIntoVal, Val,
 };
 use ed25519_dalek::SigningKey;
+use expect_test::expect;
 use soroban_test_wasms::{
     ERR, INVOKE_CONTRACT, SAC_REENTRY_TEST_CONTRACT, SIMPLE_ACCOUNT_CONTRACT,
 };
@@ -627,7 +628,7 @@ fn test_transfer_with_issuer() {
         .transfer(&issuer, user.address(&test.host), 100)
         .unwrap();
     assert_eq!(
-        test.host.get_events().unwrap().0,
+        test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
             test_vec![
                 &test.host,
@@ -650,7 +651,7 @@ fn test_transfer_with_issuer() {
         .transfer(&user, user_2.address(&test.host), 50)
         .unwrap();
     assert_eq!(
-        test.host.get_events().unwrap().0,
+        test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
             test_vec![
                 &test.host,
@@ -668,7 +669,7 @@ fn test_transfer_with_issuer() {
         .transfer(&user, issuer.address(&test.host), 50)
         .unwrap();
     assert_eq!(
-        test.host.get_events().unwrap().0,
+        test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
             test_vec![
                 &test.host,
@@ -692,7 +693,7 @@ fn test_transfer_with_issuer() {
         .transfer(&issuer, issuer.address(&test.host), i64::MAX.into())
         .unwrap();
     assert_eq!(
-        test.host.get_events().unwrap().0,
+        test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
             test_vec![
                 &test.host,
@@ -740,7 +741,7 @@ fn test_cap_67_transfer_with_muxed_accounts() {
         .unwrap();
 
     assert_eq!(
-        test.host.get_events().unwrap().0,
+        test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
             test_vec![
                 &test.host,
@@ -773,7 +774,7 @@ fn test_cap_67_transfer_with_muxed_accounts() {
         .unwrap();
 
     assert_eq!(
-        test.host.get_events().unwrap().0,
+        test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
             test_vec![
                 &test.host,
@@ -800,7 +801,7 @@ fn test_cap_67_transfer_with_muxed_accounts() {
         .unwrap();
 
     assert_eq!(
-        test.host.get_events().unwrap().0,
+        test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
             test_vec![
                 &test.host,
@@ -828,7 +829,7 @@ fn test_cap_67_transfer_with_muxed_accounts() {
 
     let mint_symbol = Symbol::try_from_small_str("mint").unwrap().to_val();
     assert_eq!(
-        test.host.get_events().unwrap().0,
+        test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
             test_vec![
                 &test.host,
@@ -3366,6 +3367,8 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
 #[test]
 fn test_custom_account_auth() {
     let test = StellarAssetContractTest::setup(function_name!());
+    test.host.enable_debug().unwrap();
+    test.host.enable_invocation_metering();
     let admin_kp = generate_signing_key(&test.host);
     let account_contract_addr_obj = test
         .host
@@ -3446,6 +3449,70 @@ fn test_custom_account_auth() {
     contract
         .mint(&new_admin, user_address.clone(), 100)
         .unwrap();
+    expect![[r#"
+        DetailedInvocationResources {
+            invocation: InvokeContract(
+                Contract(
+                    ContractId(
+                        Hash(2e378f80e81a004a1aa7f910dbf45983b9cbb234805c3dbe76a3a4254625f5a9),
+                    ),
+                ),
+                ScSymbol(
+                    StringM(mint),
+                ),
+            ),
+            resources: SubInvocationResources {
+                instructions: 828505,
+                mem_bytes: 1216862,
+                disk_read_entries: 1,
+                memory_read_entries: 5,
+                write_entries: 2,
+                disk_read_bytes: 116,
+                write_bytes: 188,
+                contract_events_size_bytes: 200,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 720000,
+                temporary_entry_rent_bumps: 1,
+            },
+            sub_call_resources: [
+                DetailedInvocationResources {
+                    invocation: InvokeContract(
+                        Contract(
+                            ContractId(
+                                Hash(e5be92092cfde76cf93c2f513a1df0962d5c49d95c6977eb8a414a52855f1ce6),
+                            ),
+                        ),
+                        ScSymbol(
+                            StringM(__check_auth),
+                        ),
+                    ),
+                    resources: SubInvocationResources {
+                        instructions: 712830,
+                        mem_bytes: 1197596,
+                        disk_read_entries: 0,
+                        memory_read_entries: 3,
+                        write_entries: 0,
+                        disk_read_bytes: 0,
+                        write_bytes: 0,
+                        contract_events_size_bytes: 0,
+                        persistent_rent_ledger_bytes: 0,
+                        persistent_entry_rent_bumps: 0,
+                        temporary_rent_ledger_bytes: 0,
+                        temporary_entry_rent_bumps: 0,
+                    },
+                    sub_call_resources: [],
+                },
+            ],
+        }"#]]
+    .assert_eq(
+        format!(
+            "{:#?}",
+            test.host.get_detailed_last_invocation_resources().unwrap()
+        )
+        .as_str(),
+    );
+
     assert_eq!(contract.balance(user_address.clone()).unwrap(), 200);
 
     // And they shouldn't work with the old owner signatures.
@@ -3540,7 +3607,7 @@ fn test_recording_auth_for_stellar_asset_contract() {
 
 #[test]
 fn verify_nested_try_call_rollback() -> Result<(), HostError> {
-    // This test calls "invoke" in the ivocation contract, which then dispatches a call
+    // This test calls "invoke" in the invocation contract, which then dispatches a call
     // to "fail_after_updates". "fail_after_updates" emits an event, saves data, and does a
     // SAC token transfer before emitting an error.
 

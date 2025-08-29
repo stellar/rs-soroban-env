@@ -205,8 +205,9 @@ impl InternalEventsBuffer {
     }
 
     /// Converts the internal events into their external representation. This
-    /// should only be called either when the host is finished (via
-    /// `try_finish`), or when an error occurs.
+    /// should normally be called either when the host is finished (via
+    /// `try_finish`), or when an error occurs. However, there is no harm in
+    /// calling this multiple times for the sake of detailed metering.
     pub(crate) fn externalize(&self, host: &Host) -> Result<Events, HostError> {
         // This line is intentionally unmetered. We want to separate out
         // charging the main budget for `Contract` events (with "observable"
