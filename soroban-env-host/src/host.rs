@@ -329,6 +329,14 @@ impl_checked_borrow_helpers!(
     try_borrow_suppress_diagnostic_events_mut
 );
 
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
+    invocation_meter,
+    InvocationMeter,
+    try_borrow_invocation_meter,
+    try_borrow_invocation_meter_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -2318,6 +2326,10 @@ impl VmCallerEnv for Host {
         wasm_hash: BytesObject,
         salt: BytesObject,
     ) -> Result<AddressObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
         self.create_contract_impl(deployer, wasm_hash, salt, None)
     }
 
@@ -2329,6 +2341,10 @@ impl VmCallerEnv for Host {
         salt: BytesObject,
         constructor_args: VecObject,
     ) -> Result<AddressObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
         self.create_contract_impl(deployer, wasm_hash, salt, Some(constructor_args))
     }
 
@@ -2338,6 +2354,10 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         serialized_asset: BytesObject,
     ) -> Result<AddressObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
         let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
         let contract_id_preimage = ContractIdPreimage::Asset(asset);
         let executable = ContractExecutable::StellarAsset;
@@ -2379,7 +2399,9 @@ impl VmCallerEnv for Host {
         wasm: BytesObject,
     ) -> Result<BytesObject, HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::WasmUploadEntryPoint,
+        );
 
         let wasm_vec =
             self.visit_obj(wasm, |bytes: &ScBytes| bytes.as_vec().metered_clone(self))?;
@@ -2421,7 +2443,13 @@ impl VmCallerEnv for Host {
         args: VecObject,
     ) -> Result<Val, HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::contract_invocation_with_address_obj(
+                self,
+                contract_address,
+                func,
+            ),
+        );
 
         let argvec = self.call_args_from_obj(args)?;
         // this is the recommended path of calling a contract, with `reentry`
@@ -2451,7 +2479,13 @@ impl VmCallerEnv for Host {
         args: VecObject,
     ) -> Result<Val, HostError> {
         #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation()?;
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::contract_invocation_with_address_obj(
+                self,
+                contract_address,
+                func,
+            ),
+        );
 
         let argvec = self.call_args_from_obj(args)?;
         // this is the "loosened" path of calling a contract.
@@ -3665,8 +3699,18 @@ impl Host {
     pub fn get_last_invocation_resources(
         &self,
     ) -> Option<invocation_metering::InvocationResources> {
-        if let Ok(scope) = self.0.invocation_meter.try_borrow() {
-            scope.get_invocation_resources()
+        if let Ok(meter) = self.0.invocation_meter.try_borrow() {
+            meter.get_root_invocation_resources()
+        } else {
+            None
+        }
+    }
+
+    pub fn get_detailed_last_invocation_resources(
+        &self,
+    ) -> Option<invocation_metering::DetailedInvocationResources> {
+        if let Ok(meter) = self.0.invocation_meter.try_borrow() {
+            meter.get_detailed_invocation_resources()
         } else {
             None
         }
