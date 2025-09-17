@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_test_wasms::INVOKER_AUTH_TEST_CONTRACT;
 

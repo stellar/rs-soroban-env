@@ -53,7 +53,7 @@ regenerate-test-wasms:
 
 reobserve-tests:
 	for i in $$(seq $(MIN_PROTOCOL) $(MAX_PROTOCOL)); do \
-		TEST_PROTOCOL=$$i UPDATE_OBSERVATIONS=1 cargo test --locked -p soroban-env-host --features testutils --profile test-opt; \
+		TEST_PROTOCOL=$$i UPDATE_OBSERVATIONS=1 UPDATE_EXPECT=1 cargo test --locked -p soroban-env-host --features testutils --profile test-opt; \
 	done
 
 # Requires: `cargo install cargo-llvm-cov`

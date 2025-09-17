@@ -271,6 +271,19 @@ impl Vec {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn from_t_slice<T>(env: &Host, slice: &[T]) -> Result<Self, HostError>
+    where
+        Val: TryFromVal<Host, T>,
+        HostError: From<<Val as TryFromVal<Host, T>>::Error>,
+    {
+        let mut vec = Self::new(env)?;
+        for item in slice.iter() {
+            vec.push(item)?;
+        }
+        Ok(vec)
+    }
+
     pub(crate) fn get<T: TryFromVal<Host, Val>>(&self, i: u32) -> Result<T, HostError>
     where
         HostError: From<<T as TryFromVal<Host, Val>>::Error>,

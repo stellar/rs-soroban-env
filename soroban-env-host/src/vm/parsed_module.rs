@@ -415,6 +415,7 @@ impl ParsedModule {
                     }
                     if let Some(min_proto) = hf.min_proto {
                         if self.proto_version < min_proto || ledger_proto < min_proto {
+                            dbg!(self.proto_version, min_proto, ledger_proto);
                             return Err(host.err(
                                 ScErrorType::WasmVm,
                                 ScErrorCode::InvalidAction,

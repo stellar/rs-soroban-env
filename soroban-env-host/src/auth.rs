@@ -151,10 +151,14 @@ use std::rc::Rc;
 use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::{
-        account_contract::{check_account_authentication, check_account_contract_auth},
+        account_contract::{
+            check_account_authentication, check_account_contract_auth, convert_to_auth_context_val,
+            ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME,
+        },
         invoker_contract_auth::invoker_contract_auth_to_authorized_invocation,
     },
     host::{
+        frame::CallParams,
         metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
         metered_hash::{CountingHasher, MeteredHash},
         Frame,
@@ -162,11 +166,13 @@ use crate::{
     host_object::HostVec,
     xdr::{
         ContractDataEntry, CreateContractArgsV2, HashIdPreimage,
-        HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
-        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanCredentials,
+        HashIdPreimageSorobanAuthorization, HashIdPreimageSorobanAuthorizationWithAddress,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode,
+        ScErrorType, ScNonceKey, ScVal, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+        SorobanCredentials, SorobanDelegateSignature, VecM,
     },
-    AddressObject, Compare, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val, VecObject,
+    AddressObject, BytesObject, Compare, Env, EnvBase, Host, HostError, Symbol, TryFromVal,
+    TryIntoVal, Val, VecObject,
 };
 
 use super::xdr;
@@ -182,6 +188,9 @@ use crate::{
 use rand::Rng;
 #[cfg(any(test, feature = "recording_mode"))]
 use std::collections::BTreeMap;
+use std::hash::Hasher;
+
+pub(crate) type SignaturePayload = [u8; 32];
 
 // Authorization manager encapsulates host-based authentication & authorization
 // framework.
@@ -209,6 +218,7 @@ pub struct AuthorizationManager {
     // Call stack of relevant host function and contract invocations, moves mostly
     // in lock step with context stack in the host.
     call_stack: RefCell<Vec<AuthStackFrame>>,
+    authentication_stack: RefCell<Vec<AuthenticationFrame>>,
 }
 
 macro_rules! impl_checked_borrow_helpers {
@@ -262,6 +272,13 @@ impl_checked_borrow_helpers!(
     Vec<AuthStackFrame>,
     try_borrow_call_stack,
     try_borrow_call_stack_mut
+);
+
+impl_checked_borrow_helpers!(
+    authentication_stack,
+    Vec<AuthenticationFrame>,
+    try_borrow_authentication_stack,
+    try_borrow_authentication_stack_mut
 );
 
 // The authorization payload recorded for an address in the recording
@@ -435,12 +452,52 @@ struct InvocationTracker {
     is_fully_processed: bool,
 }
 
+#[derive(Clone)]
+pub(crate) struct DelegatedAccountAuthSignerTreeNodeSnapshot {
+    is_exhausted: bool,
+    nested_delegates: Vec<DelegatedAccountAuthSignerTreeNodeSnapshot>,
+}
+
+#[derive(Clone, Hash)]
+enum DelegatedAccountAuthSignerInfo {
+    Root,
+    Nested {
+        address: AddressObject,
+        signature: Val,
+        is_exhausted: bool,
+    },
+}
+
+#[derive(Clone, Hash)]
+pub(crate) struct DelegatedAccountAuthSignerTreeNode {
+    info: DelegatedAccountAuthSignerInfo,
+    delegate_signers: Vec<DelegatedAccountAuthSignerTreeNode>,
+}
+#[derive(Clone)]
+pub(crate) struct DelegatedAccountAuthTrackerSnapshot {
+    root_snapshot: DelegatedAccountAuthSignerTreeNodeSnapshot,
+    match_stack: Vec<usize>,
+}
+
+#[derive(Clone, Hash)]
+struct DelegatedAccountAuthTracker {
+    root: DelegatedAccountAuthSignerTreeNode,
+    match_stack: Vec<usize>,
+}
+
+#[derive(Clone)]
+struct AuthenticationFrame {
+    delegated_auth_tracker: Rc<Option<RefCell<DelegatedAccountAuthTracker>>>,
+    signature_payload: BytesObject,
+    context: Val,
+}
+
 // Stores all the authorizations that are authorized by an address.
 // In the enforcing mode this performs authentication and makes sure that only
 // pre-authorized invocations can happen on behalf of the `address`.
 // In the recording mode this will record the invocations that are authorized
 // on behalf of the address.
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub(crate) struct AccountAuthorizationTracker {
     // Tracked address.
     address: AddressObject,
@@ -463,11 +520,32 @@ pub(crate) struct AccountAuthorizationTracker {
     // The value of nonce authorized by the address with its live_until ledger.
     // Must not exist in the ledger.
     nonce: Option<(i64, u32)>,
+
+    delegated_auth_tracker: Rc<Option<RefCell<DelegatedAccountAuthTracker>>>,
+}
+
+impl std::hash::Hash for AccountAuthorizationTracker {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.address.hash(state);
+        self.invocation_tracker.hash(state);
+        self.signature.hash(state);
+        self.is_transaction_source_account.hash(state);
+        self.verified.hash(state);
+        self.nonce.hash(state);
+        if let Some(delegated_auth_tracker_cell) = self.delegated_auth_tracker.as_ref() {
+            if let Ok(delegated_auth_tracker) = delegated_auth_tracker_cell.try_borrow() {
+                delegated_auth_tracker.hash(state);
+            }
+        } else {
+            0.hash(state);
+        }
+    }
 }
 
 pub(crate) struct AccountAuthorizationTrackerSnapshot {
     invocation_tracker_root_snapshot: AuthorizedInvocationSnapshot,
     verified: bool,
+    delegated_account_auth_tracker_snapshot: Option<DelegatedAccountAuthTrackerSnapshot>,
 }
 
 // Stores all the authorizations performed by contracts at runtime.
@@ -787,6 +865,7 @@ impl AuthorizationManager {
             call_stack: RefCell::new(vec![]),
             account_trackers: RefCell::new(trackers),
             invoker_contract_trackers: RefCell::new(vec![]),
+            authentication_stack: RefCell::new(vec![]),
         })
     }
 
@@ -800,6 +879,7 @@ impl AuthorizationManager {
             call_stack: RefCell::new(vec![]),
             account_trackers: RefCell::new(vec![]),
             invoker_contract_trackers: RefCell::new(vec![]),
+            authentication_stack: RefCell::new(vec![]),
         }
     }
 
@@ -817,7 +897,110 @@ impl AuthorizationManager {
             call_stack: RefCell::new(vec![]),
             account_trackers: RefCell::new(vec![]),
             invoker_contract_trackers: RefCell::new(vec![]),
+            authentication_stack: RefCell::new(vec![]),
         }
+    }
+
+    fn with_current_authentication_frame<F, T>(&self, host: &Host, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(
+            Option<(&mut DelegatedAccountAuthTracker, BytesObject, Val)>,
+        ) -> Result<T, HostError>,
+    {
+        let stack = self.try_borrow_authentication_stack(host)?;
+        if let Some(frame) = stack.last() {
+            if let Some(tracker_refcell) = frame.delegated_auth_tracker.as_ref() {
+                let mut tracker = tracker_refcell.try_borrow_mut().map_err(|_| {
+                    host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InternalError,
+                        "failed to borrow delegated account auth tracker",
+                        &[],
+                    )
+                })?;
+                f(Some((&mut tracker, frame.signature_payload, frame.context)))
+            } else {
+                f(None)
+            }
+        } else {
+            Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "with_current_authentication_frame called with empty authentication stack",
+                &[],
+            ))
+        }
+    }
+
+    pub(crate) fn delegate_account_auth(
+        &self,
+        host: &Host,
+        address: AddressObject,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("delegate account auth");
+        let (signature_payload, signature, context) =
+            self.with_current_authentication_frame(host, |frame| {
+                let (tracker, signature_payload, context) = frame.ok_or_else(|| {
+                    host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidInput,
+                        "no delegated signers were provided, but delegate_account_auth was called for address",
+                        &[address.into()],
+                    )
+                })?;
+                let signature = tracker.try_push_delegated_auth_frame(host, &address)?;
+                Ok((signature_payload, signature, context))
+            })?;
+
+        let sc_addr = host.scaddress_from_address(address)?;
+        let _: () = match sc_addr {
+            ScAddress::Account(acc) => {
+                check_account_authentication(host, acc, signature_payload, signature)?
+            }
+            ScAddress::Contract(acc_contract) => host
+                .call_n_internal(
+                    &acc_contract,
+                    ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(host)?,
+                    &[signature_payload.into(), signature, context],
+                    CallParams::default_internal_call(),
+                )?
+                .try_into()?,
+            _ => {
+                return Err(host.err(
+                    ScErrorType::Object,
+                    ScErrorCode::InternalError,
+                    "unexpected address type in delegate_account_auth",
+                    &[address.into()],
+                ));
+            }
+        };
+
+        self.with_current_authentication_frame(host, |frame| {
+            let (tracker, _, _) = frame.ok_or_else(|| {
+                host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "unexpected missing delegated auth tracker when popping delegated auth frame",
+                    &[],
+                )
+            })?;
+            tracker.pop_delegated_auth_frame();
+            Ok(())
+        })
+    }
+
+    pub(crate) fn get_delegated_signers_for_current_auth_check(
+        &self,
+        host: &Host,
+    ) -> Result<VecObject, HostError> {
+        let _span = tracy_span!("get delegated account auth signers");
+        self.with_current_authentication_frame(host, |frame| {
+            if let Some((tracker, _, _)) = frame {
+                tracker.get_current_delegated_signer_addresses(host)
+            } else {
+                Ok(host.vec_new()?)
+            }
+        })
     }
 
     // Require the `address` to have authorized the current contract invocation
@@ -961,7 +1144,9 @@ impl AuthorizationManager {
                 if !host.compare(&tracker.address, &address)?.is_eq() {
                     continue;
                 }
-                match tracker.maybe_authorize_invocation(host, function, !has_active_tracker) {
+                let res =
+                    tracker.maybe_authorize_invocation(host, self, function, !has_active_tracker);
+                match res {
                     // If tracker doesn't have a matching invocation,
                     // just skip it (there could still be another
                     // tracker  that matches it).
@@ -1159,7 +1344,7 @@ impl AuthorizationManager {
                     )?;
                 for t in self.try_borrow_account_trackers(host)?.iter() {
                     let sp = if let Ok(tracker) = t.try_borrow() {
-                        Some(tracker.snapshot(host.as_budget())?)
+                        Some(tracker.snapshot(host)?)
                     } else {
                         // If tracker is borrowed, snapshotting it is a no-op
                         // (it can't change until we release it higher up the
@@ -1240,7 +1425,7 @@ impl AuthorizationManager {
                                     &[],
                                 )
                             })?
-                            .rollback(&tracker_snapshot)?;
+                            .rollback(host, &tracker_snapshot)?;
                     }
                 }
             }
@@ -1439,7 +1624,7 @@ impl AuthorizationManager {
     // For recording mode, emulates authentication that would normally happen in
     // the enforcing mode.
     // This helps to build a more realistic footprint and produce more correct
-    // meterting data for the recording mode.
+    // metering data for the recording mode.
     // No-op in the enforcing mode.
     // metering: covered
     #[cfg(any(test, feature = "recording_mode"))]
@@ -1450,7 +1635,7 @@ impl AuthorizationManager {
                 for tracker in self.try_borrow_account_trackers(host)?.iter() {
                     tracker
                         .try_borrow_mut_or_err()?
-                        .emulate_authentication(host)?;
+                        .emulate_authentication(host, self)?;
                 }
                 Ok(())
             }
@@ -1772,13 +1957,250 @@ impl InvocationTracker {
     }
 }
 
+impl DelegatedAccountAuthSignerTreeNode {
+    fn from_xdr(
+        host: &Host,
+        info: Option<(ScAddress, &ScVal)>,
+        nested_delegates: VecM<SorobanDelegateSignature>,
+    ) -> Result<Self, HostError> {
+        for w in nested_delegates.as_slice().windows(2) {
+            let [prev, curr] = w else {
+                return Err(host.err(
+                    ScErrorType::Object,
+                    ScErrorCode::InternalError,
+                    "bad window iterator",
+                    &[],
+                ));
+            };
+            let order = host.compare(&prev.address, &curr.address)?;
+            match order {
+                std::cmp::Ordering::Less => (),
+                std::cmp::Ordering::Equal => {
+                    return Err(host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidInput,
+                        "delegated signers contain duplicate address",
+                        &[],
+                    ));
+                }
+                std::cmp::Ordering::Greater => {
+                    return Err(host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidInput,
+                        "delegated signer addresses are not in sorted order",
+                        &[],
+                    ));
+                }
+            }
+        }
+        let node_info = if let Some((address, signature)) = info {
+            DelegatedAccountAuthSignerInfo::Nested {
+                address: host.add_host_object(address)?,
+                signature: host.to_host_val(signature)?,
+                is_exhausted: false,
+            }
+        } else {
+            DelegatedAccountAuthSignerInfo::Root
+        };
+        Ok(Self {
+            info: node_info,
+            delegate_signers: nested_delegates
+                .into_vec()
+                .into_iter()
+                .map(|d| Self::from_xdr(host, Some((d.address, &d.signature)), d.nested_delegates))
+                .metered_collect::<Result<Vec<Self>, HostError>>(host)??,
+        })
+    }
+
+    fn snapshot(
+        &self,
+        host: &Host,
+    ) -> Result<DelegatedAccountAuthSignerTreeNodeSnapshot, HostError> {
+        let nested_delegates = self
+            .delegate_signers
+            .iter()
+            .map(|d| d.snapshot(host))
+            .metered_collect::<Result<Vec<DelegatedAccountAuthSignerTreeNodeSnapshot>, HostError>>(
+                host,
+            )??;
+        Ok(DelegatedAccountAuthSignerTreeNodeSnapshot {
+            is_exhausted: if let DelegatedAccountAuthSignerInfo::Nested { is_exhausted, .. } =
+                self.info
+            {
+                is_exhausted
+            } else {
+                // Just use 'false' as a placeholder for simplicity, root node
+                // can't be exhausted.
+                false
+            },
+            nested_delegates,
+        })
+    }
+
+    fn rollback(
+        &mut self,
+        host: &Host,
+        snapshot: &DelegatedAccountAuthSignerTreeNodeSnapshot,
+    ) -> Result<(), HostError> {
+        if self.delegate_signers.len() != snapshot.nested_delegates.len() {
+            return Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "unexpected bad delegated auth signer snapshot",
+                &[],
+            ));
+        }
+        if let DelegatedAccountAuthSignerInfo::Nested { is_exhausted, .. } = &mut self.info {
+            *is_exhausted = snapshot.is_exhausted;
+        }
+        for (child_node, child_snap) in self
+            .delegate_signers
+            .iter_mut()
+            .zip(snapshot.nested_delegates.iter())
+        {
+            child_node.rollback(host, child_snap)?;
+        }
+        Ok(())
+    }
+}
+
+impl DelegatedAccountAuthTracker {
+    fn from_xdr(
+        host: &Host,
+        delegate_signatures_xdr: VecM<SorobanDelegateSignature>,
+    ) -> Result<Self, HostError> {
+        Ok(Self {
+            root: DelegatedAccountAuthSignerTreeNode::from_xdr(
+                host,
+                None,
+                delegate_signatures_xdr,
+            )?,
+            match_stack: vec![],
+        })
+    }
+
+    fn snapshot(&self, host: &Host) -> Result<DelegatedAccountAuthTrackerSnapshot, HostError> {
+        Ok(DelegatedAccountAuthTrackerSnapshot {
+            root_snapshot: self.root.snapshot(host)?,
+            match_stack: self.match_stack.metered_clone(host)?,
+        })
+    }
+
+    fn rollback(
+        &mut self,
+        host: &Host,
+        snapshot: &DelegatedAccountAuthTrackerSnapshot,
+    ) -> Result<(), HostError> {
+        self.root.rollback(host, &snapshot.root_snapshot)?;
+        self.match_stack = snapshot.match_stack.metered_clone(host)?;
+        Ok(())
+    }
+
+    fn try_push_delegated_auth_frame(
+        &mut self,
+        host: &Host,
+        address: &AddressObject,
+    ) -> Result<Val, HostError> {
+        let mut found_match = None;
+        {
+            let current_node = self.get_currently_matched_delegated_signer_node(host)?;
+            for (i, node) in current_node.delegate_signers.iter_mut().enumerate() {
+                if let DelegatedAccountAuthSignerInfo::Nested {
+                    address: node_address,
+                    signature,
+                    is_exhausted,
+                } = &mut node.info
+                {
+                    if host.compare(node_address, address)?.is_eq() {
+                        if *is_exhausted {
+                            return Err(host.err(
+                                ScErrorType::Auth,
+                                ScErrorCode::InvalidInput,
+                                "delegate_account_auth has already been called for address, but it may only be called once",
+                                &[address.into()],
+                            ));
+                        }
+                        *is_exhausted = true;
+                        found_match = Some((i, *signature));
+                        break;
+                    }
+                } else {
+                    return Err(host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InternalError,
+                        "unexpected root node in delegated auth signer list",
+                        &[],
+                    ));
+                }
+            }
+        }
+        if let Some((i, signature)) = found_match {
+            self.match_stack.push(i);
+            return Ok(signature);
+        }
+        Err(host.err(
+            ScErrorType::Auth,
+            ScErrorCode::InvalidInput,
+            "delegated signer has not provided a signature",
+            &[address.into()],
+        ))
+    }
+
+    fn pop_delegated_auth_frame(&mut self) {
+        self.match_stack.pop();
+    }
+
+    fn get_currently_matched_delegated_signer_node(
+        &mut self,
+        host: &Host,
+    ) -> Result<&mut DelegatedAccountAuthSignerTreeNode, HostError> {
+        let mut current_node = &mut self.root;
+
+        for m in &self.match_stack {
+            if let Some(node) = current_node.delegate_signers.get_mut(*m) {
+                current_node = node;
+            } else {
+                return Err(host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "invalid delegated auth match stack",
+                    &[],
+                ));
+            }
+        }
+        Ok(current_node)
+    }
+
+    fn get_current_delegated_signer_addresses(
+        &mut self,
+        host: &Host,
+    ) -> Result<VecObject, HostError> {
+        let current_node = self.get_currently_matched_delegated_signer_node(host)?;
+
+        let mut res = HostVec::new();
+        for node in &current_node.delegate_signers {
+            if let DelegatedAccountAuthSignerInfo::Nested { address, .. } = &node.info {
+                res = res.push_back(address.into(), host.budget_ref())?;
+            } else {
+                return Err(host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "unexpected root node in delegated auth signer list",
+                    &[],
+                ));
+            }
+        }
+        host.add_host_object(res)
+    }
+}
+
 impl AccountAuthorizationTracker {
     // Metering: covered by the host and components
     fn from_authorization_entry(
         host: &Host,
         auth_entry: SorobanAuthorizationEntry,
     ) -> Result<Self, HostError> {
-        let (address, nonce, signature, is_transaction_source_account) =
+        let (address, nonce, signature, is_transaction_source_account, delegated_auth_tracker) =
             match auth_entry.credentials {
                 SorobanCredentials::SourceAccount => (
                     host.source_account_address()?.ok_or_else(|| {
@@ -1792,6 +2214,7 @@ impl AccountAuthorizationTracker {
                     None,
                     Val::VOID.into(),
                     true,
+                    Rc::new(None),
                 ),
                 SorobanCredentials::Address(address_creds) => (
                     host.add_host_object(address_creds.address)?,
@@ -1801,7 +2224,24 @@ impl AccountAuthorizationTracker {
                     )),
                     host.to_host_val(&address_creds.signature)?,
                     false,
+                    Rc::new(None),
                 ),
+                SorobanCredentials::AddressWithDelegates(address_creds_with_delegates) => {
+                    let address_creds = address_creds_with_delegates.address_credentials;
+                    (
+                        host.add_host_object(address_creds.address)?,
+                        Some((
+                            address_creds.nonce,
+                            address_creds.signature_expiration_ledger,
+                        )),
+                        host.to_host_val(&address_creds.signature)?,
+                        false,
+                        Rc::new(Some(RefCell::new(DelegatedAccountAuthTracker::from_xdr(
+                            host,
+                            address_creds_with_delegates.delegates,
+                        )?))),
+                    )
+                }
             };
         Ok(Self {
             address,
@@ -1810,6 +2250,7 @@ impl AccountAuthorizationTracker {
             verified: false,
             is_transaction_source_account,
             nonce,
+            delegated_auth_tracker,
         })
     }
 
@@ -1859,6 +2300,7 @@ impl AccountAuthorizationTracker {
             verified: true,
             is_transaction_source_account,
             nonce,
+            delegated_auth_tracker: Rc::new(None),
         })
     }
 
@@ -1874,6 +2316,7 @@ impl AccountAuthorizationTracker {
     fn maybe_authorize_invocation(
         &mut self,
         host: &Host,
+        authorization_manager: &AuthorizationManager,
         function: &AuthorizedFunction,
         allow_matching_root: bool,
     ) -> Result<bool, HostError> {
@@ -1890,7 +2333,7 @@ impl AccountAuthorizationTracker {
         }
         if !self.verified {
             let authenticate_res = self
-                .authenticate(host)
+                .authenticate(host, authorization_manager)
                 .map_err(|err| {
                     // Convert any recoverable errors to auth errors so that it's
                     // not possible to confuse them for the errors of the
@@ -2027,7 +2470,7 @@ impl AccountAuthorizationTracker {
     // Computes the payload that has to be signed in order to authenticate
     // the authorized invocation tree corresponding to this tracker.
     // metering: covered by components
-    fn get_signature_payload(&self, host: &Host) -> Result<[u8; 32], HostError> {
+    fn get_signature_payload(&self, host: &Host) -> Result<SignaturePayload, HostError> {
         let (nonce, live_until_ledger) = self.nonce.ok_or_else(|| {
             host.err(
                 ScErrorType::Auth,
@@ -2036,19 +2479,36 @@ impl AccountAuthorizationTracker {
                 &[],
             )
         })?;
-        let payload_preimage =
+        let payload_preimage = if self.delegated_auth_tracker.is_none() {
             HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
                 network_id: Hash(host.with_ledger_info(|li| li.network_id.metered_clone(host))?),
                 nonce,
                 signature_expiration_ledger: live_until_ledger,
                 invocation: self.root_invocation_to_xdr(host)?,
-            });
+            })
+        } else {
+            HashIdPreimage::SorobanAuthorizationWithAddress(
+                HashIdPreimageSorobanAuthorizationWithAddress {
+                    network_id: Hash(
+                        host.with_ledger_info(|li| li.network_id.metered_clone(host))?,
+                    ),
+                    address: host.scaddress_from_address(self.address)?,
+                    nonce,
+                    signature_expiration_ledger: live_until_ledger,
+                    invocation: self.root_invocation_to_xdr(host)?,
+                },
+            )
+        };
 
         host.metered_hash_xdr(&payload_preimage)
     }
 
-    // metering: covered by the hsot
-    fn authenticate(&self, host: &Host) -> Result<(), HostError> {
+    // metering: covered by the host
+    fn authenticate(
+        &self,
+        host: &Host,
+        authorization_manager: &AuthorizationManager,
+    ) -> Result<(), HostError> {
         if self.is_transaction_source_account {
             return Ok(());
         }
@@ -2056,31 +2516,52 @@ impl AccountAuthorizationTracker {
         let sc_addr = host.scaddress_from_address(self.address)?;
         // TODO: there should also be a mode where a dummy payload is used
         // instead (for enforcing mode preflight).
-        let payload = self.get_signature_payload(host)?;
+        let signature_payload = host.bytes_new_from_slice(&self.get_signature_payload(host)?)?;
+        let context =
+            convert_to_auth_context_val(host, &self.invocation_tracker.root_authorized_invocation)?;
+        authorization_manager
+            .try_borrow_authentication_stack_mut(host)?
+            .push(AuthenticationFrame {
+                delegated_auth_tracker: Rc::clone(&self.delegated_auth_tracker),
+                signature_payload: signature_payload.clone(),
+                context,
+            });
         match sc_addr {
             ScAddress::Account(acc) => {
-                check_account_authentication(host, acc, &payload, self.signature)
+                check_account_authentication(host, acc, signature_payload, self.signature)?;
             }
-            ScAddress::Contract(acc_contract) => check_account_contract_auth(
-                host,
-                &acc_contract,
-                &payload,
-                self.signature,
-                &self.invocation_tracker.root_authorized_invocation,
-            ),
-            _ => Err(host.err(
-                ScErrorType::Object,
-                ScErrorCode::InternalError,
-                "unexpected address type in auth",
-                &[self.address.into()],
-            )),
-        }
+            ScAddress::Contract(acc_contract) => {
+                check_account_contract_auth(
+                    host,
+                    &acc_contract,
+                    signature_payload,
+                    self.signature,
+                    context,
+                )?;
+            }
+            _ => {
+                return Err(host.err(
+                    ScErrorType::Object,
+                    ScErrorCode::InternalError,
+                    "unexpected address type in auth",
+                    &[self.address.into()],
+                ))
+            }
+        };
+        authorization_manager
+            .try_borrow_authentication_stack_mut(host)?
+            .pop();
+        Ok(())
     }
 
     // Emulates authentication for the recording mode.
     // metering: covered
     #[cfg(any(test, feature = "recording_mode"))]
-    fn emulate_authentication(&mut self, host: &Host) -> Result<(), HostError> {
+    fn emulate_authentication(
+        &mut self,
+        host: &Host,
+        authorization_manager: &AuthorizationManager,
+    ) -> Result<(), HostError> {
         if self.is_transaction_source_account {
             return Ok(());
         }
@@ -2106,7 +2587,7 @@ impl AccountAuthorizationTracker {
                 // Authentication is expected to fail here after signature verification,
                 // so we suppress the error and diagnostics.
                 host.with_suppressed_diagnostic_events(|| {
-                    let _ = self.authenticate(host);
+                    let _ = self.authenticate(host, authorization_manager);
                     Ok(())
                 })?;
 
@@ -2164,9 +2645,11 @@ impl AccountAuthorizationTracker {
     }
 
     // metering: covered
-    fn snapshot(&self, budget: &Budget) -> Result<AccountAuthorizationTrackerSnapshot, HostError> {
+    fn snapshot(&self, host: &Host) -> Result<AccountAuthorizationTrackerSnapshot, HostError> {
         Ok(AccountAuthorizationTrackerSnapshot {
-            invocation_tracker_root_snapshot: self.invocation_tracker.snapshot(budget)?,
+            invocation_tracker_root_snapshot: self
+                .invocation_tracker
+                .snapshot(host.budget_ref())?,
             // The verification status can be rolled back in case
             // of a contract failure. In case if the root call has
             // failed, the nonce will get 'un-consumed' due to storage
@@ -2176,17 +2659,52 @@ impl AccountAuthorizationTracker {
             // custom account's authentication function depends on
             // some ledger state which might get modified in-between calls.
             verified: self.verified,
+            delegated_account_auth_tracker_snapshot: self
+                .delegated_auth_tracker
+                .as_ref()
+                .as_ref()
+                .map(|d| {
+                    d.try_borrow()
+                        .map_err(|_| {
+                            host.err(
+                                ScErrorType::Auth,
+                                ScErrorCode::InternalError,
+                                "failed to borrow delegated auth tracker for snapshot",
+                                &[],
+                            )
+                        })?
+                        .snapshot(host)
+                })
+                .transpose()?,
         })
     }
 
     // metering: covered
     fn rollback(
         &mut self,
+        host: &Host,
         snapshot: &AccountAuthorizationTrackerSnapshot,
     ) -> Result<(), HostError> {
         self.invocation_tracker
             .rollback(&snapshot.invocation_tracker_root_snapshot)?;
         self.verified = snapshot.verified;
+
+        if let (Some(delegated_auth_tracker), Some(snapshot)) = (
+            self.delegated_auth_tracker.as_ref().as_ref(),
+            &snapshot.delegated_account_auth_tracker_snapshot,
+        ) {
+            delegated_auth_tracker
+                .try_borrow_mut()
+                .map_err(|_| {
+                    host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InternalError,
+                        "failed to borrow delegated auth tracker for rollback",
+                        &[],
+                    )
+                })?
+                .rollback(host, &snapshot)?;
+        }
         Ok(())
     }
 
@@ -2339,9 +2857,6 @@ impl Host {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-use crate::{host::frame::CallParams, xdr::SorobanAuthorizedInvocation};
-
-#[cfg(any(test, feature = "testutils"))]
 impl Host {
     /// Invokes the reserved `__check_auth` function on a provided contract.
     ///
@@ -2359,7 +2874,6 @@ impl Host {
             ),
         );
 
-        use crate::builtin_contracts::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
         let contract_id = self.contract_id_from_address(contract)?;
         let args_vec = self.call_args_from_obj(args)?;
         let res = self.call_n_internal(
@@ -2429,7 +2943,7 @@ impl Host {
     // successful.
     pub fn get_authenticated_authorizations(
         &self,
-    ) -> Result<Vec<(ScAddress, SorobanAuthorizedInvocation)>, HostError> {
+    ) -> Result<Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)>, HostError> {
         Ok(self
             .try_borrow_previous_authorization_manager_mut()?
             .as_mut()

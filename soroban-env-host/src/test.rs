@@ -2,6 +2,7 @@ pub(crate) mod observe;
 
 mod address;
 mod auth;
+mod auth_delegation;
 mod basic;
 mod bls12_381;
 mod bn254;
