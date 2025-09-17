@@ -594,14 +594,13 @@ impl RecordedAuthPayload {
 #[cfg(any(test, feature = "recording_mode"))]
 fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
     match &mut auth_entry.credentials {
-        SorobanCredentials::Address(address_creds) => {
+        SorobanCredentials::Address(address_creds)
+        | SorobanCredentials::AddressV2(address_creds) => {
             address_creds.signature = ScVal::Void;
         }
         SorobanCredentials::SourceAccount => {}
-        // TODO: Implement CAP-0071 delegate credentials
-        #[cfg(feature = "cap_0071")]
-        SorobanCredentials::AddressWithDelegates(_) => {
-            unimplemented!("CAP-0071 AddressWithDelegates credentials")
+        SorobanCredentials::AddressWithDelegates(address_creds_with_delegates) => {
+            address_creds_with_delegates.address_credentials.signature = ScVal::Void;
         }
     }
 }

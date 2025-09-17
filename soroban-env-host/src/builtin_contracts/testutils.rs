@@ -9,7 +9,8 @@ use rand::Rng;
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, ContractId, Hash,
-    HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry,
+    HashIdPreimage, HashIdPreimageSorobanAuthorization,
+    HashIdPreimageSorobanAuthorizationWithAddress, InvokeContractArgs, LedgerEntry,
     LedgerEntryData, LedgerEntryExt, LedgerKey, Liabilities, MuxedEd25519Account, PublicKey,
     ScAddress, ScSymbol, ScVal, SequenceNumber, SignerKey, SorobanAddressCredentials,
     SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
@@ -55,40 +56,43 @@ pub(crate) fn contract_id_to_address(host: &Host, contract_id: [u8; 32]) -> Addr
     .unwrap()
 }
 
-pub(crate) enum TestSigner<'a> {
+#[derive(Clone)]
+pub(crate) enum TestSigner {
     AccountInvoker(AccountId),
     ContractInvoker(ContractId),
-    Account(AccountSigner<'a>),
-    AccountContract(AccountContractSigner<'a>),
+    Account(AccountSigner),
+    AccountContract(AccountContractSigner),
 }
 
-pub(crate) struct AccountContractSigner<'a> {
+#[derive(Clone)]
+pub(crate) struct AccountContractSigner {
     pub(crate) address: Address,
     #[allow(clippy::type_complexity)]
-    pub(crate) sign: Box<dyn Fn(&[u8]) -> Val + 'a>,
+    pub(crate) sign: Rc<dyn Fn(&[u8]) -> Val>,
 }
 
-pub(crate) struct AccountSigner<'a> {
+#[derive(Clone)]
+pub(crate) struct AccountSigner {
     pub(crate) account_id: AccountId,
-    pub(crate) signers: Vec<&'a SigningKey>,
+    pub(crate) signers: Vec<SigningKey>,
 }
 
-impl<'a> TestSigner<'a> {
-    pub(crate) fn account(kp: &'a SigningKey) -> Self {
+impl TestSigner {
+    pub(crate) fn account(kp: &SigningKey) -> Self {
         TestSigner::Account(AccountSigner {
             account_id: signing_key_to_account_id(kp),
-            signers: vec![kp],
+            signers: vec![kp.clone()],
         })
     }
 
     pub(crate) fn account_with_multisig(
         account_id: &AccountId,
-        mut signers: Vec<&'a SigningKey>,
+        mut signers: Vec<&SigningKey>,
     ) -> Self {
         signers.sort_by_key(|k| *k.verifying_key().as_bytes());
         TestSigner::Account(AccountSigner {
             account_id: account_id.clone(),
-            signers,
+            signers: signers.into_iter().cloned().collect(),
         })
     }
 
@@ -167,15 +171,21 @@ pub(crate) fn authorize_single_invocation_with_nonce(
     nonce: Option<(i64, u32)>,
 ) {
     let sc_address = signer.address(host).to_sc_address().unwrap();
+    let use_address_credential_v2 = host.with_test_prng(|rng| Ok(rng.gen::<bool>())).unwrap();
     let mut credentials = match signer {
         TestSigner::AccountInvoker(_) => SorobanCredentials::SourceAccount,
         TestSigner::Account(_) | TestSigner::AccountContract(_) => {
-            SorobanCredentials::Address(SorobanAddressCredentials {
+            let cred = SorobanAddressCredentials {
                 address: sc_address,
                 nonce: nonce.unwrap().0,
                 signature_expiration_ledger: nonce.unwrap().1,
                 signature: ScVal::Void,
-            })
+            };
+            if use_address_credential_v2 {
+                SorobanCredentials::AddressV2(cred)
+            } else {
+                SorobanCredentials::Address(cred)
+            }
         }
         TestSigner::ContractInvoker(_) => {
             // Nothing need to be authorized for contract invoker here.
@@ -192,21 +202,43 @@ pub(crate) fn authorize_single_invocation_with_nonce(
         sub_invocations: Default::default(),
     };
 
-    if let SorobanCredentials::Address(address_credentials) = &mut credentials {
-        let signature_payload_preimage =
-            HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
-                network_id: host
-                    .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
-                    .unwrap()
-                    .try_into()
-                    .unwrap(),
-                invocation: root_invocation.clone(),
-                nonce: address_credentials.nonce,
-                signature_expiration_ledger: address_credentials.signature_expiration_ledger,
-            });
-        let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
-        address_credentials.signature = signer.sign(host, &signature_payload);
+    match &mut credentials {
+        SorobanCredentials::SourceAccount => (),
+        SorobanCredentials::Address(address_credentials) => {
+            let signature_payload_preimage =
+                HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                    network_id: host
+                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                    invocation: root_invocation.clone(),
+                    nonce: address_credentials.nonce,
+                    signature_expiration_ledger: address_credentials.signature_expiration_ledger,
+                });
+            let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
+            address_credentials.signature = signer.sign(host, &signature_payload);
+        }
+        SorobanCredentials::AddressV2(address_credentials) => {
+            let signature_payload_preimage = HashIdPreimage::SorobanAuthorizationWithAddress(
+                HashIdPreimageSorobanAuthorizationWithAddress {
+                    address: address_credentials.address.clone(),
+                    network_id: host
+                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                    invocation: root_invocation.clone(),
+                    nonce: address_credentials.nonce,
+                    signature_expiration_ledger: address_credentials.signature_expiration_ledger,
+                },
+            );
+            let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
+            address_credentials.signature = signer.sign(host, &signature_payload);
+        }
+        SorobanCredentials::AddressWithDelegates(_) => unreachable!(),
     }
+
     let auth_entry = SorobanAuthorizationEntry {
         credentials,
         root_invocation,
@@ -285,7 +317,7 @@ pub(crate) fn sign_payload_for_ed25519(
 pub(crate) fn create_account(
     host: &Host,
     account_id: &AccountId,
-    signers: Vec<(&SigningKey, u32)>,
+    signers: &[(&SigningKey, u32)],
     balance: i64,
     num_sub_entries: u32,
     thresholds: [u8; 4],
@@ -302,9 +334,9 @@ pub(crate) fn create_account(
     };
     let mut acc_signers = vec![];
     for (signer, weight) in signers {
-        acc_signers.push(soroban_env_common::xdr::Signer {
+        acc_signers.push(crate::xdr::Signer {
             key: SignerKey::Ed25519(Uint256(signer.verifying_key().to_bytes())),
-            weight,
+            weight: *weight,
         });
     }
     let ext = if sponsorships.is_some() || liabilities.is_some() {

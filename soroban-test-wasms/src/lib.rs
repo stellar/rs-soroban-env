@@ -135,3 +135,7 @@ pub const CHECK_AUTH_INSTANCE_STORAGE_TEST_CONTRACT: &[u8] =
 // Protocol 26 Wasms.
 pub const CONTRACT_STORAGE_P26: &[u8] =
     include_bytes!("../wasm-workspace/opt/26/example_contract_data.wasm").as_slice();
+
+// Protocol 27 Wasms.
+pub const DELEGATED_AUTH_TEST_CONTRACT: &[u8] =
+    include_bytes!("../wasm-workspace/opt/27/test_builtin_auth_delegation.wasm").as_slice();
