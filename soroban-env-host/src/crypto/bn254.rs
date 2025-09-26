@@ -17,8 +17,8 @@ use crate::{
     budget::AsBudget,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    Bool, BytesObject, Host, HostError, TryFromVal, U256Object, U256Small, U256Val, Val, VecObject,
-    U256,
+    Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Object, U256Small, U256Val, Val,
+    VecObject, U256,
 };
 
 pub(crate) const BN254_FP_SERIALIZED_SIZE: usize = 32;
@@ -101,6 +101,34 @@ impl Host {
         Ok(pt)
     }
 
+    pub(crate) fn bn254_affine_vec_from_vecobj<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
+        &self,
+        vp: VecObject,
+        subgroup_check: bool,
+        tag: &str,
+    ) -> Result<Vec<Affine<P>>, HostError> {
+        let len: u32 = self.vec_len(vp)?.into();
+        self.charge_budget(
+            ContractCostType::MemAlloc,
+            Some(len as u64 * EXPECTED_SIZE as u64),
+        )?;
+
+        let mut points: Vec<Affine<P>> = Vec::with_capacity(len as usize);
+
+        let _ = self.visit_obj(vp, |vp: &HostVec| {
+            for p in vp.iter() {
+                let pp = self.bn254_affine_deserialize::<EXPECTED_SIZE, P>(
+                    BytesObject::try_from_val(self, p)?,
+                    subgroup_check,
+                    tag,
+                )?;
+                points.push(pp);
+            }
+            Ok(())
+        })?;
+        Ok(points)
+    }
+
     pub(crate) fn bn254_check_point_is_on_curve<P: SWCurveConfig>(
         &self,
         pt: &Affine<P>,
@@ -128,18 +156,6 @@ impl Host {
             bo,
             subgroup_check,
             "G1",
-        )
-    }
-
-    pub(crate) fn bn254_g2_affine_deserialize_from_bytesobj(
-        &self,
-        bo: BytesObject,
-        subgroup_check: bool,
-    ) -> Result<G2Affine, HostError> {
-        self.bn254_affine_deserialize::<BN254_G2_SERIALIZED_SIZE, G2Config>(
-            bo,
-            subgroup_check,
-            "G2",
         )
     }
 
@@ -197,36 +213,14 @@ impl Host {
         &self,
         vp: VecObject,
     ) -> Result<Vec<G1Affine>, HostError> {
-        let mut points: Vec<G1Affine> = Vec::new();
-        let _ = self.visit_obj(vp, |vp: &HostVec| {
-            for p in vp.iter() {
-                let pp = self.bn254_g1_affine_deserialize_from_bytesobj(
-                    BytesObject::try_from_val(self, p)?,
-                    true,
-                )?;
-                points.push(pp);
-            }
-            Ok(())
-        })?;
-        Ok(points)
+        self.bn254_affine_vec_from_vecobj::<BN254_G1_SERIALIZED_SIZE, G1Config>(vp, true, "G1")
     }
 
     pub(crate) fn bn254_checked_g2_vec_from_vecobj(
         &self,
         vp: VecObject,
     ) -> Result<Vec<G2Affine>, HostError> {
-        let mut points: Vec<G2Affine> = Vec::new();
-        let _ = self.visit_obj(vp, |vp: &HostVec| {
-            for p in vp.iter() {
-                let pp = self.bn254_g2_affine_deserialize_from_bytesobj(
-                    BytesObject::try_from_val(self, p)?,
-                    true,
-                )?;
-                points.push(pp);
-            }
-            Ok(())
-        })?;
-        Ok(points)
+        self.bn254_affine_vec_from_vecobj::<BN254_G2_SERIALIZED_SIZE, G2Config>(vp, true, "G2")
     }
 
     pub(crate) fn bn254_fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
@@ -258,7 +252,34 @@ impl Host {
                 .as_str(),
             ));
         }
+        // This calls into `bn254::multi_miller_loop`, which delegates to
+        // `ark_ec::models::bn::BnConfig::multi_miller_loop` with the
+        // parameters defined in `ark_bn254`.
+        //
+        // Panic analysis:
+        //
+        // The following potential panic conditions could exist:
+        // 1. if two input vector lengths are not equal. There is a `zip_eq`
+        // which panics if the length of the two vectors are not equal. This is
+        // weeded out up front.
+        //
+        // 2. `coeffs.next().unwrap()`. This occurs when the algorithm Loops
+        // over pairs of `(a: G1Affine, b: G2Affine)`, converting them into
+        // `Vec<(G1Prepared, G2Preared::EllCoeff<Config>)>`, the latter contains
+        // three elements of Fp2. For each pair, the coeffs.next() can at most
+        // be called twice, when the bit being looped over in `Config::X` is
+        // set. So this panic cannot happen.
+        //
+        // 3. if any of the G1Affine point is infinity. The ell() function which
+        // calls p.xy().unwrap(), which is when the point is infinity. This
+        // condition also cannot happen because when the pairs are generated,
+        // any pair containing a zero point is filtered.
+        //
+        // The above analysis is best effort to weed out panics from the source,
+        // however the algorithm is quite involved. So we cannot be 100% certain
+        // every panic condition has been excluded.
         let mlo = Bn254::multi_miller_loop(vp1, vp2);
+        // final_exponentiation returning None means the `mlo.0.is_zero()`
         Bn254::final_exponentiation(mlo).ok_or_else(|| {
             self.bn254_err_invalid_input(
                 "final_exponentiation has failed, most likely multi_miller_loop produced infinity",
