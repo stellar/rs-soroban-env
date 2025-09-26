@@ -163,6 +163,7 @@ impl Host {
         &self,
         g1: G1Projective,
     ) -> Result<G1Affine, HostError> {
+        // FIXME: Wrong charge budget
         self.charge_budget(ContractCostType::MemCmp, None)?;
         Ok(g1.into_affine())
     }
@@ -196,6 +197,7 @@ impl Host {
         p0: G1Affine,
         p1: G1Affine,
     ) -> Result<G1Projective, HostError> {
+        // FIXME: Wrong charge budget
         self.charge_budget(ContractCostType::MemCmp, None)?;
         Ok(p0.add(p1))
     }
@@ -205,6 +207,7 @@ impl Host {
         p0: G1Affine,
         scalar: Fr,
     ) -> Result<G1Projective, HostError> {
+        // FIXME: Wrong charge budget
         self.charge_budget(ContractCostType::MemCmp, None)?;
         Ok(p0.mul(scalar))
     }
@@ -224,6 +227,7 @@ impl Host {
     }
 
     pub(crate) fn bn254_fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
+        // FIXME: Wrong charge budget
         self.charge_budget(ContractCostType::MemCpy, None)?;
         let fr = if let Ok(small) = U256Small::try_from(sv) {
             Fr::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
@@ -241,7 +245,9 @@ impl Host {
         vp1: &Vec<G1Affine>,
         vp2: &Vec<G2Affine>,
     ) -> Result<PairingOutput<Bn254>, HostError> {
+        // FIXME: Wrong charge budget
         self.charge_budget(ContractCostType::MemCmp, Some(vp1.len() as u64))?;
+        // check length requirements
         if vp1.len() != vp2.len() || vp1.is_empty() {
             return Err(self.bn254_err_invalid_input(
                 format!(
