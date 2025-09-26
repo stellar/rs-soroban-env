@@ -1,7 +1,10 @@
 use std::cmp::Ordering;
 use std::ops::{Add, Mul};
 
-use ark_bn254::{Bn254, Fq, Fq12, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bn254::{
+    g1::Config as G1Config, g2::Config as G2Config, Bn254, Fq12, Fr, G1Affine, G1Projective,
+    G2Affine,
+};
 use ark_ec::{
     pairing::{Pairing, PairingOutput},
     short_weierstrass::{Affine, SWCurveConfig},
@@ -9,9 +12,9 @@ use ark_ec::{
 };
 use ark_ff::{BigInteger, Field, PrimeField};
 use ark_serialize::{CanonicalDeserialize, Compress, Validate};
-use num_traits::Zero;
 
 use crate::{
+    budget::AsBudget,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
     Bool, BytesObject, Host, HostError, TryFromVal, U256Object, U256Small, U256Val, Val, VecObject,
@@ -23,19 +26,79 @@ pub(crate) const BN254_FP2_SERIALIZED_SIZE: usize = BN254_FP_SERIALIZED_SIZE * 2
 pub(crate) const BN254_G1_SERIALIZED_SIZE: usize = BN254_FP_SERIALIZED_SIZE * 2;
 pub(crate) const BN254_G2_SERIALIZED_SIZE: usize = BN254_FP2_SERIALIZED_SIZE * 2;
 
+#[inline(always)]
+fn units_of_fp<const EXPECTED_SIZE: usize>() -> u64 {
+    EXPECTED_SIZE.div_ceil(BN254_FP_SERIALIZED_SIZE) as u64
+}
+
 impl Host {
     fn bn254_err_invalid_input(&self, msg: &str) -> HostError {
         self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, msg, &[])
     }
 
-    fn bn254_deserialize_unchecked<T: CanonicalDeserialize>(
+    // This is the internal routine performing deserialization on various
+    // element types, which can be conceptually decomposed into units of Fp
+    // (the base field element), and will be charged accordingly.
+    // Validation of the deserialized entity must be performed outside of this
+    // function, to keep budget charging isolated.
+    fn bn254_deserialize_uncompressed_no_validate<
+        const EXPECTED_SIZE: usize,
+        T: CanonicalDeserialize,
+    >(
         &self,
-        le_bytes: &[u8],
+        slice: &[u8],
         tag: &str,
     ) -> Result<T, HostError> {
-        T::deserialize_with_mode(le_bytes, Compress::No, Validate::No).map_err(|_| {
+        if EXPECTED_SIZE == 0 || slice.len() != EXPECTED_SIZE {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("bn254 {tag}: invalid input length to deserialize").as_str(),
+                &[
+                    Val::from_u32(slice.len() as u32).into(),
+                    Val::from_u32(EXPECTED_SIZE as u32).into(),
+                ],
+            ));
+        }
+
+        // FIXME: BN not bls
+        self.as_budget().bulk_charge(
+            ContractCostType::Bls12381DecodeFp,
+            units_of_fp::<EXPECTED_SIZE>(),
+            None,
+        )?;
+
+        // validation turned off here to isolate the cost of serialization.
+        // proper validation has to be performed outside of this function
+        T::deserialize_with_mode(slice, Compress::No, Validate::No).map_err(|_e| {
             self.bn254_err_invalid_input(format!("bn254: unable to deserialize {tag}").as_str())
         })
+    }
+
+    pub(crate) fn bn254_affine_deserialize<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
+        &self,
+        bo: BytesObject,
+        subgroup_check: bool,
+        tag: &str,
+    ) -> Result<Affine<P>, HostError> {
+        let pt: Affine<P> = self.visit_obj(bo, |bytes: &ScBytes| {
+            self.bn254_deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(
+                bytes.as_slice(),
+                tag,
+            )
+        })?;
+
+        if !self.bn254_check_point_is_on_curve(&pt)? {
+            return Err(
+                self.bn254_err_invalid_input(format!("bn254 {}: point not on curve", tag).as_str())
+            );
+        }
+        if subgroup_check && !self.bn254_check_point_is_in_subgroup(&pt)? {
+            self.bn254_err_invalid_input(
+                format!("bn254 {}: point not in the correct subgroup", tag).as_str(),
+            );
+        }
+        Ok(pt)
     }
 
     pub(crate) fn bn254_check_point_is_on_curve<P: SWCurveConfig>(
@@ -61,47 +124,11 @@ impl Host {
         bo: BytesObject,
         subgroup_check: bool,
     ) -> Result<G1Affine, HostError> {
-        let pt = self.visit_obj(bo, |bytes: &ScBytes| {
-            if bytes.len() != BN254_G1_SERIALIZED_SIZE {
-                return Err(self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "bn254 G1: invalid input length to deserialize",
-                    &[
-                        Val::from_u32(bytes.len() as u32).into(),
-                        Val::from_u32(BN254_G1_SERIALIZED_SIZE as u32).into(),
-                    ],
-                ));
-            }
-            if bytes.iter().all(|b| b.is_zero()) {
-                return Ok(G1Projective::zero().into_affine());
-            }
-            // Split the 64-byte big-endian encoding into 32-byte X and Y limbs.
-            let mut x_be = [0u8; BN254_FP_SERIALIZED_SIZE];
-            let mut y_be = [0u8; BN254_FP_SERIALIZED_SIZE];
-            x_be.copy_from_slice(&bytes[0..32]);
-            y_be.copy_from_slice(&bytes[32..64]);
-
-            // Convert from big-endian to little-endian, which the field deserializer expects.
-            let mut x_le = x_be;
-            let mut y_le = y_be;
-            x_le.reverse();
-            y_le.reverse();
-            // Deserialize coordinates into field elements without validating curve/subgroup membership.
-            let x: Fq = self.bn254_deserialize_unchecked(&x_le, "G1.x")?;
-            let y: Fq = self.bn254_deserialize_unchecked(&y_le, "G1.y")?;
-            // Construct the affine point without checks; on-curve and subgroup checks follow below.
-            Ok(G1Affine::new_unchecked(x, y))
-        })?;
-
-        if !self.bn254_check_point_is_on_curve(&pt)? {
-            return Err(self.bn254_err_invalid_input("bn254 G1: point not on curve"));
-        }
-
-        if subgroup_check && !self.bn254_check_point_is_in_subgroup(&pt)? {
-            return Err(self.bn254_err_invalid_input("bn254 G1: point not in the correct subgroup"));
-        }
-        Ok(pt)
+        self.bn254_affine_deserialize::<BN254_G1_SERIALIZED_SIZE, G1Config>(
+            bo,
+            subgroup_check,
+            "G1",
+        )
     }
 
     pub(crate) fn bn254_g2_affine_deserialize_from_bytesobj(
@@ -109,58 +136,11 @@ impl Host {
         bo: BytesObject,
         subgroup_check: bool,
     ) -> Result<G2Affine, HostError> {
-        let pt = self.visit_obj(bo, |bytes: &ScBytes| {
-            if bytes.len() != BN254_G2_SERIALIZED_SIZE {
-                return Err(self.err(
-                    ScErrorType::Crypto,
-                    ScErrorCode::InvalidInput,
-                    "bn254 G2: invalid input length to deserialize",
-                    &[
-                        Val::from_u32(bytes.len() as u32).into(),
-                        Val::from_u32(BN254_G2_SERIALIZED_SIZE as u32).into(),
-                    ],
-                ));
-            }
-            if bytes.iter().all(|b| b.is_zero()) {
-                return Ok(G2Projective::zero().into_affine());
-            }
-            let mut x_c1_be = [0u8; 32];
-            let mut x_c0_be = [0u8; 32];
-            let mut y_c1_be = [0u8; 32];
-            let mut y_c0_be = [0u8; 32];
-
-            x_c1_be.copy_from_slice(&bytes[0..32]);
-            x_c0_be.copy_from_slice(&bytes[32..64]);
-            y_c1_be.copy_from_slice(&bytes[64..96]);
-            y_c0_be.copy_from_slice(&bytes[96..128]);
-
-            let mut x_c1_le = x_c1_be;
-            let mut x_c0_le = x_c0_be;
-            let mut y_c1_le = y_c1_be;
-            let mut y_c0_le = y_c0_be;
-            x_c1_le.reverse();
-            x_c0_le.reverse();
-            y_c1_le.reverse();
-            y_c0_le.reverse();
-
-            let x_c1: Fq = self.bn254_deserialize_unchecked(&x_c1_le, "G2.x.c1")?;
-            let x_c0: Fq = self.bn254_deserialize_unchecked(&x_c0_le, "G2.x.c0")?;
-            let y_c1: Fq = self.bn254_deserialize_unchecked(&y_c1_le, "G2.y.c1")?;
-            let y_c0: Fq = self.bn254_deserialize_unchecked(&y_c0_le, "G2.y.c0")?;
-            let x = Fq2::new(x_c0, x_c1);
-            let y = Fq2::new(y_c0, y_c1);
-            Ok(G2Affine::new_unchecked(x, y))
-        })?;
-
-        if !self.bn254_check_point_is_on_curve(&pt)? {
-            return Err(self.bn254_err_invalid_input("bn254 G2: point not on curve"));
-        }
-
-        if subgroup_check && !self.bn254_check_point_is_in_subgroup(&pt)? {
-            return Err(self.bn254_err_invalid_input("bn254 G2: point not in the correct subgroup"));
-        }
-
-        Ok(pt)
+        self.bn254_affine_deserialize::<BN254_G2_SERIALIZED_SIZE, G2Config>(
+            bo,
+            subgroup_check,
+            "G2",
+        )
     }
 
     pub(crate) fn bn254_g1_projective_into_affine(
