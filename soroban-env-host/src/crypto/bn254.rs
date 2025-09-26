@@ -8,10 +8,10 @@ use ark_bn254::{
 use ark_ec::{
     pairing::{Pairing, PairingOutput},
     short_weierstrass::{Affine, SWCurveConfig},
-    AffineRepr, CurveGroup,
+    CurveGroup,
 };
-use ark_ff::{BigInteger, Field, PrimeField};
-use ark_serialize::{CanonicalDeserialize, Compress, Validate};
+use ark_ff::{Field, PrimeField};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 
 use crate::{
     budget::AsBudget,
@@ -156,25 +156,14 @@ impl Host {
         g1: &G1Affine,
     ) -> Result<BytesObject, HostError> {
         let mut buf = [0u8; BN254_G1_SERIALIZED_SIZE];
-        if g1.is_zero() {
-            return self.add_host_object(self.scbytes_from_slice(&buf)?);
-        }
-        let (x, y) = g1
-            .xy()
-            .ok_or_else(|| self.bn254_err_invalid_input("bn254 G1: infinity"))?;
-
-        let x_be: [u8; 32] = x
-            .into_bigint()
-            .to_bytes_be()
-            .try_into()
-            .map_err(|_| self.bn254_err_invalid_input("bn254 G1: invalid x"))?;
-        let y_be: [u8; 32] = y
-            .into_bigint()
-            .to_bytes_be()
-            .try_into()
-            .map_err(|_| self.bn254_err_invalid_input("bn254 G1: invalid y"))?;
-        buf[0..32].copy_from_slice(&x_be);
-        buf[32..64].copy_from_slice(&y_be);
+        // FIXME: Use Bn type instead of BLS
+        self.as_budget().bulk_charge(
+            ContractCostType::Bls12381EncodeFp,
+            units_of_fp::<BN254_G1_SERIALIZED_SIZE>(),
+            None,
+        )?;
+        g1.serialize_uncompressed(buf.as_mut_slice())
+            .map_err(|_e| self.bn254_err_invalid_input("bn254: unable to serialize G1"))?;
         self.add_host_object(self.scbytes_from_slice(&buf)?)
     }
 
