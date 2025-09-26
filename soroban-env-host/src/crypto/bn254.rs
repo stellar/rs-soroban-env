@@ -94,9 +94,9 @@ impl Host {
             );
         }
         if subgroup_check && !self.bn254_check_point_is_in_subgroup(&pt)? {
-            self.bn254_err_invalid_input(
+            return Err(self.bn254_err_invalid_input(
                 format!("bn254 {}: point not in the correct subgroup", tag).as_str(),
-            );
+            ));
         }
         Ok(pt)
     }
@@ -108,10 +108,10 @@ impl Host {
         tag: &str,
     ) -> Result<Vec<Affine<P>>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
-        self.charge_budget(
+        /* self.charge_budget(
             ContractCostType::MemAlloc,
             Some(len as u64 * EXPECTED_SIZE as u64),
-        )?;
+        )?; */
 
         let mut points: Vec<Affine<P>> = Vec::with_capacity(len as usize);
 
@@ -134,7 +134,7 @@ impl Host {
         pt: &Affine<P>,
     ) -> Result<bool, HostError> {
         // FIXME: Probably incorrect charge
-        self.charge_budget(ContractCostType::MemCmp, None)?;
+        //self.charge_budget(ContractCostType::MemCmp, None)?;
         Ok(pt.is_on_curve())
     }
 
@@ -143,7 +143,7 @@ impl Host {
         pt: &Affine<P>,
     ) -> Result<bool, HostError> {
         // FIXME: Probably incorrect charge
-        self.charge_budget(ContractCostType::MemCmp, None)?;
+        //self.charge_budget(ContractCostType::MemCmp, None)?;
         Ok(pt.is_in_correct_subgroup_assuming_on_curve())
     }
 
@@ -164,7 +164,7 @@ impl Host {
         g1: G1Projective,
     ) -> Result<G1Affine, HostError> {
         // FIXME: Wrong charge budget
-        self.charge_budget(ContractCostType::MemCmp, None)?;
+        //self.charge_budget(ContractCostType::MemCmp, None)?;
         Ok(g1.into_affine())
     }
 
@@ -198,7 +198,7 @@ impl Host {
         p1: G1Affine,
     ) -> Result<G1Projective, HostError> {
         // FIXME: Wrong charge budget
-        self.charge_budget(ContractCostType::MemCmp, None)?;
+        //self.charge_budget(ContractCostType::MemCmp, None)?;
         Ok(p0.add(p1))
     }
 
@@ -208,7 +208,7 @@ impl Host {
         scalar: Fr,
     ) -> Result<G1Projective, HostError> {
         // FIXME: Wrong charge budget
-        self.charge_budget(ContractCostType::MemCmp, None)?;
+        //self.charge_budget(ContractCostType::MemCmp, None)?;
         Ok(p0.mul(scalar))
     }
 
@@ -228,7 +228,7 @@ impl Host {
 
     pub(crate) fn bn254_fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
         // FIXME: Wrong charge budget
-        self.charge_budget(ContractCostType::MemCpy, None)?;
+        //self.charge_budget(ContractCostType::MemCpy, None)?;
         let fr = if let Ok(small) = U256Small::try_from(sv) {
             Fr::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
         } else {
@@ -246,7 +246,7 @@ impl Host {
         vp2: &Vec<G2Affine>,
     ) -> Result<PairingOutput<Bn254>, HostError> {
         // FIXME: Wrong charge budget
-        self.charge_budget(ContractCostType::MemCmp, Some(vp1.len() as u64))?;
+        //self.charge_budget(ContractCostType::MemCmp, Some(vp1.len() as u64))?;
         // check length requirements
         if vp1.len() != vp2.len() || vp1.is_empty() {
             return Err(self.bn254_err_invalid_input(
@@ -297,10 +297,10 @@ impl Host {
         &self,
         output: &PairingOutput<Bn254>,
     ) -> Result<Bool, HostError> {
-        self.charge_budget(
+        /* self.charge_budget(
             ContractCostType::MemCmp,
             Some(12 * BN254_FP_SERIALIZED_SIZE as u64),
-        )?;
+        )?; */
         match output.0.cmp(&Fq12::ONE) {
             Ordering::Equal => Ok(true.into()),
             _ => Ok(false.into()),
