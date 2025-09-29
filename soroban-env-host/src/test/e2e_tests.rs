@@ -21,14 +21,14 @@ use crate::{
     },
     testutils::MockSnapshotSource,
     xdr::{
-        AccountId, ContractCodeEntryExt, ContractDataDurability, ContractDataEntry, ContractEvent,
-        ContractExecutable, ContractId, ContractIdPreimage, ContractIdPreimageFromAddress,
-        CreateContractArgs, DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage,
-        HashIdPreimageSorobanAuthorization, HostFunction, InvokeContractArgs, LedgerEntry,
-        LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey, LedgerKeyContractCode,
-        LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScContractInstance, ScErrorCode,
-        ScErrorType, ScMap, ScNonceKey, ScVal, ScVec, SorobanAuthorizationEntry,
-        SorobanCredentials, SorobanResources, TtlEntry, Uint256, WriteXdr,
+        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable,
+        ContractId, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
+        DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
+        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryType,
+        LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr,
+        ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
+        SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
+        WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -213,6 +213,7 @@ struct InvokeHostFunctionHelperResult {
     budget: Budget,
 }
 
+#[derive(Debug)]
 struct InvokeHostFunctionRecordingHelperResult {
     invoke_result: Result<ScVal, HostError>,
     resources: SorobanResources,
@@ -392,13 +393,10 @@ fn build_module_cache_for_entries(
             if restored_contracts.contains(&contract_id) {
                 continue;
             }
-            let code_cost_inputs = match &cd.ext {
-                ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
-                    wasm_bytes: cd.code.len(),
-                },
-                ContractCodeEntryExt::V1(v1) => {
-                    VersionedContractCodeCostInputs::V1(v1.cost_inputs.clone())
-                }
+            // Currently module cache always uses V0 cost inputs, so the parsed
+            // module will also use them during instantiation.
+            let code_cost_inputs = VersionedContractCodeCostInputs::V0 {
+                wasm_bytes: cd.code.len(),
             };
             cache.parse_and_cache_module(
                 &ctx,
@@ -536,6 +534,11 @@ fn invoke_host_function_using_simulation_with_signers(
         let adjusted_recording_result_instructions =
             (recording_result.resources.instructions as f64
                 * (1.0 + RECORDING_MODE_INSTRUCTIONS_RANGE)) as u32;
+        dbg!(
+            recording_result.resources.instructions,
+            adjusted_recording_result_instructions,
+            recording_result_with_enforcing_auth.resources.instructions
+        );
         assert!(
             adjusted_recording_result_instructions
                 >= recording_result_with_enforcing_auth.resources.instructions
@@ -611,6 +614,7 @@ fn invoke_host_function_using_simulation_with_signers(
     } else {
         assert_eq!(recording_result.contract_events_and_return_value_size, 0);
     }
+    dbg!(enforcing_result.budget.get_cpu_insns_consumed().unwrap());
     let max_instructions = (enforcing_result.budget.get_cpu_insns_consumed().unwrap() as f64
         * (1.0 + RECORDING_MODE_INSTRUCTIONS_RANGE)) as u32;
     dbg!(initial_recording_result_instructions, max_instructions);
@@ -1189,6 +1193,24 @@ fn test_create_contract_success() {
 }
 
 #[test]
+fn test_create_contract_with_constructor_simulation() {
+    let cd = CreateContractData::new([111; 32], NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22);
+    let ledger_info = default_ledger_info();
+    let res = invoke_host_function_using_simulation(
+        true,
+        &cd.host_fn,
+        &cd.deployer,
+        &ledger_info,
+        vec![(
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100),
+        )],
+        &prng_seed(),
+    );
+    assert!(res.is_ok());
+}
+
+#[test]
 fn test_create_contract_with_no_argument_constructor_success() {
     let cd = CreateContractData::new([111; 32], NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22);
     let ledger_info = default_ledger_info();
@@ -1363,7 +1385,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 663583,
+            instructions: 639602,
             disk_read_bytes: 0,
             write_bytes: 104,
         }
@@ -1506,7 +1528,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1070741,
+            instructions: 1046760,
             disk_read_bytes: 0,
             write_bytes: 176,
         }
@@ -1568,7 +1590,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 665030,
+            instructions: 641049,
             disk_read_bytes: 0,
             write_bytes: 104,
         }
@@ -2007,7 +2029,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 898006,
+            instructions: 791047,
             disk_read_bytes: 0,
             write_bytes: 80,
         }
@@ -2076,7 +2098,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 1009860,
+            instructions: 902901,
             disk_read_bytes: 0,
             write_bytes: 0,
         }
@@ -2513,7 +2535,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
                     .try_into()
                     .unwrap(),
             },
-            instructions: 1028344,
+            instructions: 921385,
             disk_read_bytes: data_entry_size + instance_entry_size,
             write_bytes: data_entry_size + instance_entry_size,
         }
