@@ -41,7 +41,7 @@ impl Host {
     // (the base field element), and will be charged accordingly.
     // Validation of the deserialized entity must be performed outside of this
     // function, to keep budget charging isolated.
-    fn bn254_deserialize_uncompressed_no_validate<
+    pub(crate) fn bn254_deserialize_uncompressed_no_validate<
         const EXPECTED_SIZE: usize,
         T: CanonicalDeserialize,
     >(
@@ -61,9 +61,8 @@ impl Host {
             ));
         }
 
-        // FIXME: BN not bls
         self.as_budget().bulk_charge(
-            ContractCostType::Bls12381DecodeFp,
+            ContractCostType::Bn254DecodeFp,
             units_of_fp::<EXPECTED_SIZE>(),
             None,
         )?;
@@ -78,6 +77,7 @@ impl Host {
     pub(crate) fn bn254_affine_deserialize<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
         &self,
         bo: BytesObject,
+        ct_curve: ContractCostType,
         subgroup_check: bool,
         tag: &str,
     ) -> Result<Affine<P>, HostError> {
@@ -88,12 +88,12 @@ impl Host {
             )
         })?;
 
-        if !self.bn254_check_point_is_on_curve(&pt)? {
+        if !self.bn254_check_point_is_on_curve(&pt, &ct_curve)? {
             return Err(
                 self.bn254_err_invalid_input(format!("bn254 {}: point not on curve", tag).as_str())
             );
         }
-        if subgroup_check && !self.bn254_check_point_is_in_subgroup(&pt)? {
+        if subgroup_check && !self.bn254_check_g2_point_is_in_subgroup(&pt)? {
             return Err(self.bn254_err_invalid_input(
                 format!("bn254 {}: point not in the correct subgroup", tag).as_str(),
             ));
@@ -104,14 +104,15 @@ impl Host {
     pub(crate) fn bn254_affine_vec_from_vecobj<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
         &self,
         vp: VecObject,
+        ct_curve: ContractCostType,
         subgroup_check: bool,
         tag: &str,
     ) -> Result<Vec<Affine<P>>, HostError> {
         let len: u32 = self.vec_len(vp)?.into();
-        /* self.charge_budget(
+        self.charge_budget(
             ContractCostType::MemAlloc,
             Some(len as u64 * EXPECTED_SIZE as u64),
-        )?; */
+        )?;
 
         let mut points: Vec<Affine<P>> = Vec::with_capacity(len as usize);
 
@@ -119,6 +120,7 @@ impl Host {
             for p in vp.iter() {
                 let pp = self.bn254_affine_deserialize::<EXPECTED_SIZE, P>(
                     BytesObject::try_from_val(self, p)?,
+                    ct_curve,
                     subgroup_check,
                     tag,
                 )?;
@@ -132,29 +134,32 @@ impl Host {
     pub(crate) fn bn254_check_point_is_on_curve<P: SWCurveConfig>(
         &self,
         pt: &Affine<P>,
+        ty: &ContractCostType,
     ) -> Result<bool, HostError> {
-        // FIXME: Probably incorrect charge
-        //self.charge_budget(ContractCostType::MemCmp, None)?;
+        // passing ty by reference in order to make it more template friendly for cost_runner code
+        self.charge_budget(*ty, None)?;
         Ok(pt.is_on_curve())
     }
 
-    pub(crate) fn bn254_check_point_is_in_subgroup<P: SWCurveConfig>(
+    pub(crate) fn bn254_check_g2_point_is_in_subgroup<P: SWCurveConfig>(
         &self,
         pt: &Affine<P>,
     ) -> Result<bool, HostError> {
-        // FIXME: Probably incorrect charge
-        //self.charge_budget(ContractCostType::MemCmp, None)?;
+        // passing ty by reference in order to make it more template friendly for cost_runner code
+        // The check is free for G1
+
+        self.charge_budget(ContractCostType::Bn254G2CheckPointInSubgroup, None)?;
         Ok(pt.is_in_correct_subgroup_assuming_on_curve())
     }
 
     pub(crate) fn bn254_g1_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
-        subgroup_check: bool,
     ) -> Result<G1Affine, HostError> {
         self.bn254_affine_deserialize::<BN254_G1_SERIALIZED_SIZE, G1Config>(
             bo,
-            subgroup_check,
+            ContractCostType::Bn254G1CheckPointOnCurve,
+            false, // G1 subgroup check is not necessary
             "G1",
         )
     }
@@ -163,9 +168,47 @@ impl Host {
         &self,
         g1: G1Projective,
     ) -> Result<G1Affine, HostError> {
-        // FIXME: Wrong charge budget
-        //self.charge_budget(ContractCostType::MemCmp, None)?;
+        self.charge_budget(ContractCostType::Bn254G1ProjectiveToAffine, None)?;
         Ok(g1.into_affine())
+    }
+
+    // This is the internal routine performing serialization on various
+    // element types, which can be conceptually decomposed into units of Fp
+    // (the base field element), and will be charged accordingly.
+    pub(crate) fn bn254_serialize_uncompressed_into_slice<
+        const EXPECTED_SIZE: usize,
+        T: CanonicalSerialize,
+    >(
+        &self,
+        element: &T,
+        buf: &mut [u8],
+        tag: &str,
+    ) -> Result<(), HostError> {
+        if EXPECTED_SIZE == 0 || buf.len() != EXPECTED_SIZE {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("bn254 {tag}: invalid buffer length to serialize into").as_str(),
+                &[
+                    Val::from_u32(buf.len() as u32).into(),
+                    Val::from_u32(EXPECTED_SIZE as u32).into(),
+                ],
+            ));
+        }
+        self.as_budget().bulk_charge(
+            ContractCostType::Bn254EncodeFp,
+            units_of_fp::<EXPECTED_SIZE>(),
+            None,
+        )?;
+        element.serialize_uncompressed(buf).map_err(|_e| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                format!("bn254 {tag}: unable to serialize {tag}").as_str(),
+                &[],
+            )
+        })?;
+        Ok(())
     }
 
     pub(crate) fn bn254_g1_affine_serialize_uncompressed(
@@ -173,14 +216,10 @@ impl Host {
         g1: &G1Affine,
     ) -> Result<BytesObject, HostError> {
         let mut buf = [0u8; BN254_G1_SERIALIZED_SIZE];
-        // FIXME: Use Bn type instead of BLS
-        self.as_budget().bulk_charge(
-            ContractCostType::Bls12381EncodeFp,
-            units_of_fp::<BN254_G1_SERIALIZED_SIZE>(),
-            None,
+
+        self.bn254_serialize_uncompressed_into_slice::<BN254_G1_SERIALIZED_SIZE, _>(
+            g1, &mut buf, "G1",
         )?;
-        g1.serialize_uncompressed(buf.as_mut_slice())
-            .map_err(|_e| self.bn254_err_invalid_input("bn254: unable to serialize G1"))?;
         self.add_host_object(self.scbytes_from_slice(&buf)?)
     }
 
@@ -197,8 +236,7 @@ impl Host {
         p0: G1Affine,
         p1: G1Affine,
     ) -> Result<G1Projective, HostError> {
-        // FIXME: Wrong charge budget
-        //self.charge_budget(ContractCostType::MemCmp, None)?;
+        self.charge_budget(ContractCostType::Bn254G1Add, None)?;
         Ok(p0.add(p1))
     }
 
@@ -207,8 +245,7 @@ impl Host {
         p0: G1Affine,
         scalar: Fr,
     ) -> Result<G1Projective, HostError> {
-        // FIXME: Wrong charge budget
-        //self.charge_budget(ContractCostType::MemCmp, None)?;
+        self.charge_budget(ContractCostType::Bn254G1Mul, None)?;
         Ok(p0.mul(scalar))
     }
 
@@ -216,19 +253,28 @@ impl Host {
         &self,
         vp: VecObject,
     ) -> Result<Vec<G1Affine>, HostError> {
-        self.bn254_affine_vec_from_vecobj::<BN254_G1_SERIALIZED_SIZE, G1Config>(vp, true, "G1")
+        self.bn254_affine_vec_from_vecobj::<BN254_G1_SERIALIZED_SIZE, G1Config>(
+            vp,
+            ContractCostType::Bls12381G1CheckPointOnCurve,
+            false, // G1 subgroup check is not necessary
+            "G1",
+        )
     }
 
     pub(crate) fn bn254_checked_g2_vec_from_vecobj(
         &self,
         vp: VecObject,
     ) -> Result<Vec<G2Affine>, HostError> {
-        self.bn254_affine_vec_from_vecobj::<BN254_G2_SERIALIZED_SIZE, G2Config>(vp, true, "G2")
+        self.bn254_affine_vec_from_vecobj::<BN254_G2_SERIALIZED_SIZE, G2Config>(
+            vp,
+            ContractCostType::Bls12381G2CheckPointOnCurve,
+            true,
+            "G2",
+        )
     }
 
     pub(crate) fn bn254_fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
-        // FIXME: Wrong charge budget
-        //self.charge_budget(ContractCostType::MemCpy, None)?;
+        self.charge_budget(ContractCostType::Bn254FrFromU256, None)?;
         let fr = if let Ok(small) = U256Small::try_from(sv) {
             Fr::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
         } else {
@@ -245,8 +291,7 @@ impl Host {
         vp1: &Vec<G1Affine>,
         vp2: &Vec<G2Affine>,
     ) -> Result<PairingOutput<Bn254>, HostError> {
-        // FIXME: Wrong charge budget
-        //self.charge_budget(ContractCostType::MemCmp, Some(vp1.len() as u64))?;
+        self.charge_budget(ContractCostType::Bn254Pairing, Some(vp1.len() as u64))?;
         // check length requirements
         if vp1.len() != vp2.len() || vp1.is_empty() {
             return Err(self.bn254_err_invalid_input(
@@ -297,10 +342,10 @@ impl Host {
         &self,
         output: &PairingOutput<Bn254>,
     ) -> Result<Bool, HostError> {
-        /* self.charge_budget(
+        self.charge_budget(
             ContractCostType::MemCmp,
             Some(12 * BN254_FP_SERIALIZED_SIZE as u64),
-        )?; */
+        )?;
         match output.0.cmp(&Fq12::ONE) {
             Ordering::Equal => Ok(true.into()),
             _ => Ok(false.into()),

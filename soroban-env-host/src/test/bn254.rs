@@ -1,6 +1,6 @@
 use crate::{
     crypto::bn254::{BN254_G1_SERIALIZED_SIZE, BN254_G2_SERIALIZED_SIZE},
-    xdr::{ScErrorCode, ScErrorType},
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
     BytesObject, Env, EnvBase, ErrorHandler, Host, HostError, U256Val, U32Val,
 };
 use ark_bn254::{Fq, Fq2, Fr, G1Affine, G2Affine};
@@ -94,7 +94,7 @@ fn g1_generator(host: &Host) -> Result<BytesObject, HostError> {
 }
 
 fn neg_g1(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g1 = host.bn254_g1_affine_deserialize_from_bytesobj(bo, true)?;
+    let g1 = host.bn254_g1_affine_deserialize_from_bytesobj(bo)?;
     host.bn254_g1_affine_serialize_uncompressed(&-g1)
 }
 
@@ -197,13 +197,17 @@ fn test_bn254_serialization_roundtrip() -> Result<(), HostError> {
 
     let g1 = G1Affine::rand(&mut rng);
     let bytes = host.bn254_g1_affine_serialize_uncompressed(&g1)?;
-    let g1_deser = host.bn254_g1_affine_deserialize_from_bytesobj(bytes, true)?;
+    let g1_deser = host.bn254_g1_affine_deserialize_from_bytesobj(bytes)?;
     assert_eq!(g1, g1_deser);
 
     let g2 = G2Affine::rand(&mut rng);
     let bytes = bn254_g2_affine_serialize_uncompressed(&host, &g2)?;
-    let g2_deser =
-        host.bn254_affine_deserialize::<BN254_G2_SERIALIZED_SIZE, _>(bytes, true, "G2")?;
+    let g2_deser = host.bn254_affine_deserialize::<BN254_G2_SERIALIZED_SIZE, _>(
+        bytes,
+        ContractCostType::Bn254G2CheckPointOnCurve,
+        true,
+        "G2",
+    )?;
     assert_eq!(g2, g2_deser);
     Ok(())
 }

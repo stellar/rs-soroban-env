@@ -3227,8 +3227,8 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.bn254_g1_affine_deserialize_from_bytesobj(p0, false)?;
-        let p1 = self.bn254_g1_affine_deserialize_from_bytesobj(p1, false)?;
+        let p0 = self.bn254_g1_affine_deserialize_from_bytesobj(p0)?;
+        let p1 = self.bn254_g1_affine_deserialize_from_bytesobj(p1)?;
         let res = self.bn254_g1_add_internal(p0, p1)?;
         self.bn254_g1_projective_serialize_uncompressed(res)
     }
@@ -3239,7 +3239,7 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         scalar: U256Val,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.bn254_g1_affine_deserialize_from_bytesobj(p0, true)?;
+        let p0 = self.bn254_g1_affine_deserialize_from_bytesobj(p0)?;
         let scalar = self.bn254_fr_from_u256val(scalar)?;
         let res = self.bn254_g1_mul_internal(p0, scalar)?;
         self.bn254_g1_projective_serialize_uncompressed(res)
