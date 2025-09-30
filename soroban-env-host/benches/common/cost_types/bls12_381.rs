@@ -31,7 +31,7 @@ impl HostCostMeasurement for Bls12381EncodeFpMeasure {
     type Runner = Bls12381EncodeFpRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381EncodeFpSample {
-        let buf = vec![0; 1000];
+        let buf = vec![0; 48]; // FP_SERIALIZED_SIZE (the crypto module isn't exposed here)
         let fp = Fq::rand(rng);
         Bls12381EncodeFpSample(buf, fp)
     }

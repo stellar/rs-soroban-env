@@ -773,9 +773,21 @@ impl Host {
                         .try_borrow_storage_mut()?
                         .is_key_live_in_snapshot(self, &wasm_key)?;
                     if is_key_live_in_snapshot {
-                        let (code, costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
-                        let parsed_module =
-                            ParsedModule::new_with_isolated_engine(self, code.as_slice(), costs)?;
+                        let (code, _costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
+                        // Currently only v0 costs are used by the inter-ledger
+                        // module cache. Note, that when key is not in the live
+                        // snapshot, the inter-ledger cache won't be used
+                        // either, so we'll end up in the "cache miss" case
+                        // below and then correctly charge the instantiation
+                        // costs in `Vm::new_with_cost_inputs`.
+                        let costs_v0 = crate::vm::VersionedContractCodeCostInputs::V0 {
+                            wasm_bytes: code.len(),
+                        };
+                        let parsed_module = ParsedModule::new_with_isolated_engine(
+                            self,
+                            code.as_slice(),
+                            costs_v0,
+                        )?;
                         let wasmi_linker = parsed_module.make_wasmi_linker(self)?;
                         Ok(Some((parsed_module, wasmi_linker)))
                     } else {

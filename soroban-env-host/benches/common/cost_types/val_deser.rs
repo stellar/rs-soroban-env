@@ -53,7 +53,7 @@ impl HostCostMeasurement for ValDeserMeasure {
         let mut v = ScVal::U64(0);
         let mut rem = input;
         for _i in 0..MAX_DEPTH {
-            if rem == 0 {
+            if rem == 0 || rem < elem_per_level {
                 break;
             }
             let mut inner = vec![v; 1];

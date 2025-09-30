@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, Env, symbol_short, IntoVal, Address,
+use soroban_sdk::{contract, contractimpl, Env, symbol_short, IntoVal, Address, Vec,
 };
 
 #[contract]
@@ -22,5 +22,15 @@ impl SacTransfer {
                                    to,
                                    amount
                                   ).into_val(&env));
+    }
+
+    pub fn batch_transfer(env: Env, sac_address: Address, destinations: Vec<Address>) {
+        let amount = 1_i128;
+        let from = env.current_contract_address();
+
+        for dest in destinations.iter() {
+            env.invoke_contract::<()>(&sac_address, &symbol_short!("transfer"),
+                                      (from.clone(), dest, amount).into_val(&env));
+        }
     }
 }
