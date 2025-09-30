@@ -1724,6 +1724,11 @@ impl InvocationTracker {
                 &[],
             ));
         }
+        // Emulate the function comparison that happens in the enforcing mode
+        // when we're matching a `require_auth` invocation to the authorized
+        // function from XDR.
+        let function_for_comparison = AuthorizedFunction::from_xdr(host, function.to_xdr(host)?)?;
+        let _ = host.compare(&function, &function_for_comparison)?;
         if let Some(curr_invocation) = self.last_authorized_invocation_mut()? {
             curr_invocation
                 .sub_invocations
