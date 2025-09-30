@@ -601,8 +601,18 @@ fn excessive_logging() -> Result<(), HostError> {
     Bls12381FrMul                      0              0              
     Bls12381FrPow                      0              0              
     Bls12381FrInv                      0              0              
+    Bn254EncodeFp                      0              0              
+    Bn254DecodeFp                      0              0              
+    Bn254G1CheckPointOnCurve           0              0              
+    Bn254G2CheckPointOnCurve           0              0              
+    Bn254G2CheckPointInSubgroup        0              0              
+    Bn254G1ProjectiveToAffine          0              0              
+    Bn254G1Add                         0              0              
+    Bn254G1Mul                         0              0              
+    Bn254Pairing                       0              0              
+    Bn254FrFromU256                    0              0              
     =================================================================
-
+    
     "#
     ];
 
