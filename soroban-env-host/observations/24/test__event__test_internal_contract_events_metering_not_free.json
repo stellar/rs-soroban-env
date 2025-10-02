@@ -1,0 +1,4 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 end": "cpu:100, mem:10, prngs:-/9b4a753, objs:-/2@14dec679, vm:-/-, evt:1@83f8765e, store:-/-, foot:-, stk:-, auth:-/-"
+}
