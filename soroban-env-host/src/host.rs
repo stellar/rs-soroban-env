@@ -84,7 +84,7 @@ pub struct CoverageScoreboard {
     pub vm_to_vm_calls: usize,
 }
 
-// The soroban 23.x host only supports protocol 24 and later.
+// The soroban 24.x host only supports protocol 24 and later.
 pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 24;
 
 #[derive(Clone, Default)]
