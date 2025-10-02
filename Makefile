@@ -6,7 +6,7 @@ test:
 test-opt:
 	cargo hack --locked --each-feature test --profile test-opt
 
-MIN_PROTOCOL := 23
+MIN_PROTOCOL := 24
 MAX_PROTOCOL := 24
 
 test-all-protocols:
