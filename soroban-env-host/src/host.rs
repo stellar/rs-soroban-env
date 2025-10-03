@@ -3218,6 +3218,52 @@ impl VmCallerEnv for Host {
         self.fr_to_u256val(res)
     }
 
+    fn bn254_g1_add(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        p0: BytesObject,
+        p1: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let p0 = self.bn254_g1_affine_deserialize_from_bytesobj(p0)?;
+        let p1 = self.bn254_g1_affine_deserialize_from_bytesobj(p1)?;
+        let res = self.bn254_g1_add_internal(p0, p1)?;
+        self.bn254_g1_projective_serialize_uncompressed(res)
+    }
+
+    fn bn254_g1_mul(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        p0: BytesObject,
+        scalar: U256Val,
+    ) -> Result<BytesObject, HostError> {
+        let p0 = self.bn254_g1_affine_deserialize_from_bytesobj(p0)?;
+        let scalar = self.bn254_fr_from_u256val(scalar)?;
+        let res = self.bn254_g1_mul_internal(p0, scalar)?;
+        self.bn254_g1_projective_serialize_uncompressed(res)
+    }
+
+    fn bn254_multi_pairing_check(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        vp1: VecObject,
+        vp2: VecObject,
+    ) -> Result<Bool, HostError> {
+        let l1: u32 = self.vec_len(vmcaller, vp1)?.into();
+        let l2: u32 = self.vec_len(vmcaller, vp2)?.into();
+        if l1 != l2 || l1 == 0 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("multi-pairing-check: invalid input vector lengths {l1} and {l2}").as_str(),
+                &[],
+            ));
+        }
+        let vp1 = self.bn254_checked_g1_vec_from_vecobj(vp1)?;
+        let vp2 = self.bn254_checked_g2_vec_from_vecobj(vp2)?;
+        let output = self.bn254_pairing_internal(&vp1, &vp2)?;
+        self.bn254_check_pairing_output(&output)
+    }
+
     // endregion: "crypto" module functions
     // region: "test" module functions
 

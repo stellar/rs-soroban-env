@@ -620,7 +620,7 @@ fn g1_add() -> Result<(), HostError> {
         let res = host.bls12_381_g1_add(g1_zero(&host)?, p2)?;
         assert_eq!(host.obj_cmp(p2.into(), res.into())?, Ordering::Equal as i64);
     }
-    // 5. communitive a + b = b + a
+    // 5. commutative a + b = b + a
     {
         let a = sample_g1(&host, &mut rng)?;
         let b = sample_g1(&host, &mut rng)?;

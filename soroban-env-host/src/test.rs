@@ -4,6 +4,7 @@ mod address;
 mod auth;
 mod basic;
 mod bls12_381;
+mod bn254;
 mod budget_metering;
 mod bytes;
 mod complex;

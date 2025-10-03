@@ -90,6 +90,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-bn254"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a22f4561524cd949590d78d7d4c5df8f592430d221f7f3c9497bbafd8972120f"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
+]
+
+[[package]]
 name = "ark-ec"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1583,6 +1594,7 @@ version = "24.0.0"
 dependencies = [
  "arbitrary",
  "ark-bls12-381",
+ "ark-bn254",
  "ark-ec",
  "ark-ff",
  "ark-serialize",
@@ -1728,8 +1740,7 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "23.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89d2848e1694b0c8db81fd812bfab5ea71ee28073e09ccc45620ef3cf7a75a9b"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=8505f22833f4054227689c35f9cf253a6836cbac#8505f22833f4054227689c35f9cf253a6836cbac"
 dependencies = [
  "arbitrary",
  "base64 0.22.1",

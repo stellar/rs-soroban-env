@@ -48,6 +48,7 @@ sha3 = "0.10.8"
 # above used only for calibration
 curve25519-dalek = { version = ">=4.1.3", default-features = false, features = ["digest"]}
 ark-bls12-381 = { version = "0.4.0"}
+ark-bn254 = { version = "0.4.0"}
 ark-serialize = { version = "0.4.2"}
 ark-ff = { version = "0.4.2"}
 ark-ec = { version = "0.4.2"}
@@ -84,8 +85,8 @@ p256 = {version = "0.13.2", default-features = false, features = ["alloc"]}
 
 [dev-dependencies.stellar-xdr]
 version = "=23.0.0"
-# git = "https://github.com/stellar/rs-stellar-xdr"
-# rev = "1a00274ac9c93d580cc4f5eba787906e759d632a"
+git = "https://github.com/stellar/rs-stellar-xdr"
+rev = "8505f22833f4054227689c35f9cf253a6836cbac"
 default-features = false
 features = ["arbitrary"]
 

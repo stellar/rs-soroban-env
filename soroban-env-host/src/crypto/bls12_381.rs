@@ -717,7 +717,7 @@ impl Host {
         //
         // 2. `coeffs.next().unwrap()`. This occurs when the algorithm Loops
         // over pairs of `(a: G1Affine, b: G2Affine)`, converting them into
-        // `Vec<(G1Prepared, G2Preared::EllCoeff<Config>)>`, the latter contains
+        // `Vec<(G1Prepared, G2Prepared::EllCoeff<Config>)>`, the latter contains
         // three elements of Fp2. For each pair, the coeffs.next() can at most
         // be called twice, when the bit being looped over in `Config::X` is
         // set. So this panic cannot happen.

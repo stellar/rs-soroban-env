@@ -1,4 +1,5 @@
 mod bls12_381;
+mod bn254;
 mod compute_ed25519_pubkey;
 mod compute_keccak256_hash;
 mod compute_sha256_hash;
@@ -20,6 +21,7 @@ mod vm_ops;
 mod wasm_insn_exec;
 
 pub(crate) use bls12_381::*;
+pub(crate) use bn254::*;
 pub(crate) use compute_ed25519_pubkey::*;
 pub(crate) use compute_keccak256_hash::*;
 pub(crate) use compute_sha256_hash::*;
