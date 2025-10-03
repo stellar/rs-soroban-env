@@ -316,15 +316,10 @@ impl Host {
         //
         // 2. `coeffs.next().unwrap()`. This occurs when the algorithm Loops
         // over pairs of `(a: G1Affine, b: G2Affine)`, converting them into
-        // `Vec<(G1Prepared, G2Preared::EllCoeff<Config>)>`, the latter contains
+        // `Vec<(G1Prepared, G2Prepared::EllCoeff<Config>)>`, the latter contains
         // three elements of Fp2. For each pair, the coeffs.next() can at most
         // be called twice, when the bit being looped over in `Config::X` is
         // set. So this panic cannot happen.
-        //
-        // 3. if any of the G1Affine point is infinity. The ell() function which
-        // calls p.xy().unwrap(), which is when the point is infinity. This
-        // condition also cannot happen because when the pairs are generated,
-        // any pair containing a zero point is filtered.
         //
         // The above analysis is best effort to weed out panics from the source,
         // however the algorithm is quite involved. So we cannot be 100% certain
