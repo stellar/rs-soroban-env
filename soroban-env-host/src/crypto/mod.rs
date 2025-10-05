@@ -19,6 +19,8 @@ use elliptic_curve::CurveArithmetic;
 use generic_array::ArrayLength;
 pub(crate) mod bls12_381;
 pub(crate) mod bn254;
+pub(crate) mod metered_scalar;
+pub(crate) mod poseidon;
 
 impl Host {
     // Ed25519 functions

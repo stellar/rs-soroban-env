@@ -31,6 +31,8 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 use wasmi::Value;
+use ark_bls12_381::Fr as BlsScalar;
+use ark_bn254::Fr as BnScalar;
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
 // and comparison. It should be the upperbound (across various compilations and platforms) of the
@@ -258,6 +260,10 @@ impl_declared_size_type!(ScContractInstance, 64);
 impl_declared_size_type!(SorobanAuthorizationEntry, 296);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 168);
 impl_declared_size_type!(SorobanAuthorizedFunction, 144);
+
+// foreign types
+impl_declared_size_type!(BlsScalar, 32);
+impl_declared_size_type!(BnScalar, 32);
 
 // composite types
 

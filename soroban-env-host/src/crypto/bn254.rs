@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::ops::{Add, Mul};
+use std::ops::{Add, AddAssign, Mul, MulAssign};
 
 use ark_bn254::{
     g1::Config as G1Config, g2::Config as G2Config, Bn254, Fq12, Fr, G1Affine, G1Projective,
@@ -284,6 +284,20 @@ impl Host {
             })?
         };
         Ok(fr)
+    }
+
+    pub(crate) fn bn254_fr_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+        // For now, use the same cost type as BLS12-381 until BN254 specific costs are added
+        self.charge_budget(ContractCostType::Bls12381FrAddSub, None)?;
+        lhs.add_assign(rhs);
+        Ok(())
+    }
+
+    pub(crate) fn bn254_fr_mul_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+        // For now, use the same cost type as BLS12-381 until BN254 specific costs are added
+        self.charge_budget(ContractCostType::Bls12381FrMul, None)?;
+        lhs.mul_assign(rhs);
+        Ok(())
     }
 
     pub(crate) fn bn254_pairing_internal(
