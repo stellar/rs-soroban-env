@@ -23,37 +23,6 @@ impl<S: PrimeField> Poseidon<S> {
         assert_eq!(input.len(), t);
 
         let mut current_state = input.to_owned();
-        for r in 0..self.params.rounds_f_beginning {
-            current_state = self.add_rc(&current_state, &self.params.round_constants[r]);
-            current_state = self.sbox(&current_state);
-            current_state = self.matmul(&current_state, &self.params.mds);
-        }
-        let p_end = self.params.rounds_f_beginning + self.params.rounds_p;
-        current_state = self.add_rc(&current_state, &self.params.opt_round_constants[0]);
-        current_state = self.matmul(&current_state, &self.params.m_i);
-
-        for r in self.params.rounds_f_beginning..p_end {
-            current_state[0] = self.sbox_p(&current_state[0]);
-            if r < p_end - 1 {
-                current_state[0].add_assign(
-                    &self.params.opt_round_constants[r + 1 - self.params.rounds_f_beginning][0],
-                );
-            }
-            current_state = self.cheap_matmul(&current_state, p_end - r - 1);
-        }
-        for r in p_end..self.params.rounds {
-            current_state = self.add_rc(&current_state, &self.params.round_constants[r]);
-            current_state = self.sbox(&current_state);
-            current_state = self.matmul(&current_state, &self.params.mds);
-        }
-        current_state
-    }
-
-    pub fn permutation_not_opt(&self, input: &[S]) -> Vec<S> {
-        let t = self.params.t;
-        assert_eq!(input.len(), t);
-
-        let mut current_state = input.to_owned();
 
         for r in 0..self.params.rounds_f_beginning {
             current_state = self.add_rc(&current_state, &self.params.round_constants[r]);
@@ -105,28 +74,6 @@ impl<S: PrimeField> Poseidon<S> {
                 panic!()
             }
         }
-    }
-
-    fn cheap_matmul(&self, input: &[S], r: usize) -> Vec<S> {
-        let v = &self.params.v[r];
-        let w_hat = &self.params.w_hat[r];
-        let t = self.params.t;
-
-        let mut new_state = vec![S::zero(); t];
-        new_state[0] = self.params.mds[0][0];
-        new_state[0].mul_assign(&input[0]);
-        for i in 1..t {
-            let mut tmp = w_hat[i - 1];
-            tmp.mul_assign(&input[i]);
-            new_state[0].add_assign(&tmp);
-        }
-        for i in 1..t {
-            new_state[i] = input[0];
-            new_state[i].mul_assign(&v[i - 1]);
-            new_state[i].add_assign(&input[i]);
-        }
-
-        new_state
     }
 
     fn matmul(&self, input: &[S], mat: &[Vec<S>]) -> Vec<S> {
