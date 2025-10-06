@@ -300,6 +300,13 @@ impl Host {
         Ok(())
     }
 
+    pub(crate) fn bn254_fr_pow_internal(&self, lhs: &Fr, rhs: &u64) -> Result<Fr, HostError> {
+        // TODO: For now, use the same cost type as BLS12-381 until BN254 specific costs are added
+        self.charge_budget(ContractCostType::Bls12381FrPow, Some(*rhs))?;
+        use ark_ff::Field;
+        Ok(lhs.pow([*rhs]))
+    }
+
     pub(crate) fn bn254_pairing_internal(
         &self,
         vp1: &Vec<G1Affine>,

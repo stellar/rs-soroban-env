@@ -3,6 +3,7 @@ use crate::{
 };
 use ark_bls12_381::Fr as BlsScalar;
 use ark_bn254::Fr as BnScalar;
+use ark_ff::PrimeField;
 
 /// A trait for scalar field elements that can perform metered arithmetic operations.
 /// These operations charge the budget for computational costs and are fallible when
@@ -12,18 +13,70 @@ pub trait MeteredScalar: PrimeField + Sized + Clone + PartialEq + MeteredClone {
     /// Modifies `self` by adding `other` to it.
     fn metered_add_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError>;
     
+    /// Performs metered subtraction assignment, charging the budget for the operation.
+    /// Modifies `self` by subtracting `other` from it.
+    fn metered_sub_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError>;
+    
     /// Performs metered multiplication assignment, charging the budget for the operation.
     /// Modifies `self` by multiplying it with `other`.
     fn metered_mul_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError>;
+    
+    /// Performs metered squaring in place, charging the budget for the operation.
+    /// Modifies `self` by squaring it.
+    fn metered_square_in_place(&mut self, host: &Host) -> Result<(), HostError>;
+    
+    /// Performs metered doubling in place, charging the budget for the operation.
+    /// Modifies `self` by doubling it.
+    fn metered_double_in_place(&mut self, host: &Host) -> Result<(), HostError>;
+    
+    /// Performs metered exponentiation, charging the budget for the operation.
+    /// Returns a new element that is `self` raised to the power of `exp`.
+    fn metered_pow(&self, exp: &u64, host: &Host) -> Result<Self, HostError>;
+
+    /// Performs metered addition, charging the budget for the operation.
+    /// Returns a new element that is the sum of `self` and `other`.
+    fn metered_add(&self, other: &Self, host: &Host) -> Result<Self, HostError> {
+        let mut result = self.clone();
+        result.metered_add_assign(other, host)?;
+        Ok(result)
+    }
+    
+    /// Performs metered multiplication, charging the budget for the operation.
+    /// Returns a new element that is the product of `self` and `other`.
+    fn metered_mul(&self, other: &Self, host: &Host) -> Result<Self, HostError> {
+        let mut result = self.clone();
+        result.metered_mul_assign(other, host)?;
+        Ok(result)
+    }
 }
 
 impl MeteredScalar for BlsScalar {
     fn metered_add_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
         host.fr_add_internal(self, other)
     }
+    
+    fn metered_sub_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
+        host.fr_sub_internal(self, other)
+    }
 
     fn metered_mul_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
         host.fr_mul_internal(self, other)
+    }
+    
+    fn metered_square_in_place(&mut self, host: &Host) -> Result<(), HostError> {
+        // Square is essentially multiply by self
+        let temp = *self;
+        host.fr_mul_internal(self, &temp)
+    }
+    
+    fn metered_double_in_place(&mut self, host: &Host) -> Result<(), HostError> {
+        // Double is essentially add self to self
+        let temp = *self;
+        host.fr_add_internal(self, &temp)
+    }
+    
+    fn metered_pow(&self, exp: &u64, host: &Host) -> Result<Self, HostError> {
+        host.fr_pow_internal(self, exp)
     }
 }
 
@@ -31,9 +84,32 @@ impl MeteredScalar for BnScalar {
     fn metered_add_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
         host.bn254_fr_add_internal(self, other)
     }
+    
+    fn metered_sub_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
+        // For now, use the same cost type as BLS12-381 until BN254 specific costs are added
+        host.charge_budget(crate::xdr::ContractCostType::Bls12381FrAddSub, None)?;
+        *self -= *other;
+        Ok(())
+    }
 
     fn metered_mul_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
         host.bn254_fr_mul_internal(self, other)
+    }
+    
+    fn metered_square_in_place(&mut self, host: &Host) -> Result<(), HostError> {
+        // Square is essentially multiply by self
+        let temp = *self;
+        host.bn254_fr_mul_internal(self, &temp)
+    }
+    
+    fn metered_double_in_place(&mut self, host: &Host) -> Result<(), HostError> {
+        // Double is essentially add self to self
+        let temp = *self;
+        host.bn254_fr_add_internal(self, &temp)
+    }
+    
+    fn metered_pow(&self, exp: &u64, host: &Host) -> Result<Self, HostError> {
+        host.bn254_fr_pow_internal(self, exp)
     }
 }
 

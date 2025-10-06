@@ -26,7 +26,7 @@ use crate::{
 mod comparison;
 mod conversion;
 mod data_helper;
-mod declared_size;
+pub(crate) mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 #[cfg(any(test, feature = "testutils"))]
