@@ -515,16 +515,16 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bls12381FrMul                      1              None           332            0              332                 0                   0                   0                   
         Bls12381FrPow                      1              Some(1)        1273           1              691                 74558               0                   128                 
         Bls12381FrInv                      1              None           35421          0              35421               0                   0                   0                   
-        Bn254EncodeFp                      0              None           0              0              17                  0                   0                   0                   
-        Bn254DecodeFp                      0              None           0              0              2658                0                   0                   0                   
-        Bn254G1CheckPointOnCurve           0              None           0              0              2970                0                   0                   0                   
-        Bn254G2CheckPointOnCurve           0              None           0              0              11324               0                   0                   0                   
-        Bn254G2CheckPointInSubgroup        0              None           0              0              2316368             0                   0                   0                   
-        Bn254G1ProjectiveToAffine          0              None           0              0              4670                0                   0                   0                   
-        Bn254G1Add                         0              None           0              0              4927                0                   0                   0                   
-        Bn254G1Mul                         0              None           0              0              741024              0                   0                   0                   
-        Bn254Pairing                       0              Some(0)        0              0              4565140             313281112           1821                6232546             
-        Bn254FrFromU256                    0              None           0              0              1595                0                   0                   0                   
+        Bn254EncodeFp                      0              None           0              0              345                 0                   0                   0                   
+        Bn254DecodeFp                      0              None           0              0              433                 0                   0                   0                   
+        Bn254G1CheckPointOnCurve           0              None           0              0              858                 0                   0                   0                   
+        Bn254G2CheckPointOnCurve           0              None           0              0              2642                0                   0                   0                   
+        Bn254G2CheckPointInSubgroup        0              None           0              0              2930793             0                   0                   0                   
+        Bn254G1ProjectiveToAffine          0              None           0              0              63                  0                   0                   0                   
+        Bn254G1Add                         0              None           0              0              3465                0                   0                   0                   
+        Bn254G1Mul                         0              None           0              0              1034667             0                   0                   0                   
+        Bn254Pairing                       0              Some(0)        0              0              5263357             391912693           1833                6231032             
+        Bn254FrFromU256                    0              None           0              0              1940                0                   0                   0                   
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 70

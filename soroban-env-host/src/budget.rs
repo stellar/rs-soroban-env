@@ -618,43 +618,43 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254EncodeFp => {
-                    cpu.const_term = 17;
+                    cpu.const_term = 345;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254DecodeFp => {
-                    cpu.const_term = 2658;
+                    cpu.const_term = 433;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1CheckPointOnCurve => {
-                    cpu.const_term = 2970;
+                    cpu.const_term = 858;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G2CheckPointOnCurve => {
-                    cpu.const_term = 11324;
+                    cpu.const_term = 2642;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G2CheckPointInSubgroup => {
-                    cpu.const_term = 2316368;
+                    cpu.const_term = 2930793;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1ProjectiveToAffine => {
-                    cpu.const_term = 4670;
+                    cpu.const_term = 63;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1Add => {
-                    cpu.const_term = 4927;
+                    cpu.const_term = 3465;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1Mul => {
-                    cpu.const_term = 741024;
+                    cpu.const_term = 1034667;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254Pairing => {
-                    cpu.const_term = 4565140;
-                    cpu.lin_term = ScaledU64(313281112);
+                    cpu.const_term = 5263357;
+                    cpu.lin_term = ScaledU64(391912693);
                 }
                 ContractCostType::Bn254FrFromU256 => {
-                    cpu.const_term = 1595;
+                    cpu.const_term = 1940;
                     cpu.lin_term = ScaledU64(0);
                 }
             }
@@ -982,8 +982,8 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254Pairing => {
-                    mem.const_term = 1821;
-                    mem.lin_term = ScaledU64(6232546);
+                    mem.const_term = 1833;
+                    mem.lin_term = ScaledU64(6231032);
                 }
                 ContractCostType::Bn254FrFromU256 => {
                     mem.const_term = 0;
