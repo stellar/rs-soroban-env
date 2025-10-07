@@ -139,15 +139,10 @@ impl HostCostMeasurement for Bn254PairingMeasure {
     type Runner = Bn254PairingRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bn254PairingSample {
+        let i = input.max(2);
         Bn254PairingSample(
-            (0..input)
-                .into_iter()
-                .map(|_| G1Affine::rand(rng))
-                .collect(),
-            (0..input)
-                .into_iter()
-                .map(|_| G2Affine::rand(rng))
-                .collect(),
+            (1..i).into_iter().map(|_| G1Affine::rand(rng)).collect(),
+            (1..i).into_iter().map(|_| G2Affine::rand(rng)).collect(),
         )
     }
 }
