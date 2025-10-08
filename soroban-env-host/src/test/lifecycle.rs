@@ -2644,7 +2644,7 @@ mod cap_68_executable_getter {
     fn get_account_executable() {
         let host = observe_host!(Host::test_host_with_recording_footprint());
         let account_id = AccountId(PublicKey::PublicKeyTypeEd25519([0; 32].into()));
-        create_account(&host, &account_id, vec![], 0, 0, [0; 4], None, None, 0);
+        create_account(&host, &account_id, &[], 0, 0, [0; 4], None, None, 0);
         let account_address = host
             .add_host_object(ScAddress::Account(account_id))
             .unwrap();

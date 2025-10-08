@@ -55,40 +55,40 @@ pub(crate) fn contract_id_to_address(host: &Host, contract_id: [u8; 32]) -> Addr
     .unwrap()
 }
 
-pub(crate) enum TestSigner<'a> {
+pub(crate) enum TestSigner {
     AccountInvoker(AccountId),
     ContractInvoker(ContractId),
-    Account(AccountSigner<'a>),
-    AccountContract(AccountContractSigner<'a>),
+    Account(AccountSigner),
+    AccountContract(AccountContractSigner),
 }
 
-pub(crate) struct AccountContractSigner<'a> {
+pub(crate) struct AccountContractSigner {
     pub(crate) address: Address,
     #[allow(clippy::type_complexity)]
-    pub(crate) sign: Box<dyn Fn(&[u8]) -> Val + 'a>,
+    pub(crate) sign: Box<dyn Fn(&[u8]) -> Val>,
 }
 
-pub(crate) struct AccountSigner<'a> {
+pub(crate) struct AccountSigner {
     pub(crate) account_id: AccountId,
-    pub(crate) signers: Vec<&'a SigningKey>,
+    pub(crate) signers: Vec<SigningKey>,
 }
 
-impl<'a> TestSigner<'a> {
-    pub(crate) fn account(kp: &'a SigningKey) -> Self {
+impl TestSigner {
+    pub(crate) fn account(kp: &SigningKey) -> Self {
         TestSigner::Account(AccountSigner {
             account_id: signing_key_to_account_id(kp),
-            signers: vec![kp],
+            signers: vec![kp.clone()],
         })
     }
 
     pub(crate) fn account_with_multisig(
         account_id: &AccountId,
-        mut signers: Vec<&'a SigningKey>,
+        mut signers: Vec<&SigningKey>,
     ) -> Self {
         signers.sort_by_key(|k| *k.verifying_key().as_bytes());
         TestSigner::Account(AccountSigner {
             account_id: account_id.clone(),
-            signers,
+            signers: signers.into_iter().cloned().collect(),
         })
     }
 
@@ -285,7 +285,7 @@ pub(crate) fn sign_payload_for_ed25519(
 pub(crate) fn create_account(
     host: &Host,
     account_id: &AccountId,
-    signers: Vec<(&SigningKey, u32)>,
+    signers: &[(&SigningKey, u32)],
     balance: i64,
     num_sub_entries: u32,
     thresholds: [u8; 4],
@@ -302,9 +302,9 @@ pub(crate) fn create_account(
     };
     let mut acc_signers = vec![];
     for (signer, weight) in signers {
-        acc_signers.push(soroban_env_common::xdr::Signer {
+        acc_signers.push(crate::xdr::Signer {
             key: SignerKey::Ed25519(Uint256(signer.verifying_key().to_bytes())),
-            weight,
+            weight: *weight,
         });
     }
     let ext = if sponsorships.is_some() || liabilities.is_some() {

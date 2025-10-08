@@ -132,7 +132,7 @@ impl AuthTest {
             create_account(
                 &host,
                 &signing_key_to_account_id(signing_key),
-                vec![(&signing_key, 1)],
+                &[(&signing_key, 1)],
                 100_000_000,
                 1,
                 [1, 0, 0, 0],

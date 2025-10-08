@@ -375,7 +375,7 @@ impl Host {
             create_account(
                 &host,
                 &signing_key_to_account_id(signing_key),
-                vec![(&signing_key, 1)],
+                &[(&signing_key, 1)],
                 100_000_000,
                 1,
                 [1, 0, 0, 0],
@@ -1148,10 +1148,9 @@ pub(crate) mod wasm {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn simple_account_sign_fn<'a>(
-    host: &'a Host,
-    kp: &'a SigningKey,
-) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
+pub fn simple_account_sign_fn(host: &Host, kp: &SigningKey) -> Box<dyn Fn(&[u8]) -> Val> {
     use crate::builtin_contracts::testutils::sign_payload_for_ed25519;
-    Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
+    let host = host.clone();
+    let kp = kp.clone();
+    Box::new(move |payload: &[u8]| -> Val { sign_payload_for_ed25519(&host, &kp, payload).into() })
 }
