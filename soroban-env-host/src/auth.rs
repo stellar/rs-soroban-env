@@ -218,6 +218,8 @@ pub struct AuthorizationManager {
     // Call stack of relevant host function and contract invocations, moves mostly
     // in lock step with context stack in the host.
     call_stack: RefCell<Vec<AuthStackFrame>>,
+    // Stack of authentication frames, i.e `authenticate` calls of
+    // `AccountAuthorizationTracker`.
     authentication_stack: RefCell<Vec<AuthenticationFrame>>,
 }
 
@@ -458,6 +460,11 @@ pub(crate) struct DelegatedAccountAuthSignerTreeNodeSnapshot {
     nested_delegates: Vec<DelegatedAccountAuthSignerTreeNodeSnapshot>,
 }
 
+/// Information about a single signer in the delegated account auth tree, or
+/// the root of the tree.
+/// This is introduced for the sake of uniform processing of the tree,
+/// as the root node is not a delegated signer itself (it's built from the
+/// account credentials), but it also has children like any inner node.
 #[derive(Clone, Hash)]
 enum DelegatedAccountAuthSignerInfo {
     Root,
@@ -468,27 +475,60 @@ enum DelegatedAccountAuthSignerInfo {
     },
 }
 
+/// Node in the tree of the account's delegated auth signers.
 #[derive(Clone, Hash)]
 pub(crate) struct DelegatedAccountAuthSignerTreeNode {
     info: DelegatedAccountAuthSignerInfo,
     delegate_signers: Vec<DelegatedAccountAuthSignerTreeNode>,
 }
+
 #[derive(Clone)]
 pub(crate) struct DelegatedAccountAuthTrackerSnapshot {
     root_snapshot: DelegatedAccountAuthSignerTreeNodeSnapshot,
     match_stack: Vec<usize>,
 }
 
+/// Tracks the state of authentication delegation while processing
+/// authentication logic for an account contract.
+/// Delegation mechanism allows an account to forward its signature payload
+/// and authorization context to the authentication routine of another
+/// `Address` (i.e. `__check_auth` for a contract, or the builtin-in
+/// authentcation for G-addresses).
+/// The tracker always belongs to the respective [`AccountAuthorizationTracker`]
+/// and is initialized from the account's credentials in the enforcing auth
+/// mode. Delegation is not supported in the recording auth mode, i.e. the
+/// tracker is never initialized in that mode.
+/// This is similar to [`InvocationTracker`], but is much simpler due to simpler
+/// matching rules and much more limited scope (used only during authentication,
+/// in the enforcing auth mode etc.).
+/// The tracker matches happen when `delegate_account_auth` is called for an
+/// address within a `__check_auth` function of an account contract. We search a
+/// non-exhausted address in the `delegate_signers` of the currently matched
+/// node (identified by `match_stack`), put the found index into `match_stack`
+/// and perform authentication for the delegate address while deriving the
+/// signature payload and auth context from the original account.
 #[derive(Clone, Hash)]
 struct DelegatedAccountAuthTracker {
+    /// The tree of the delegated signers to use for matching the delegation
+    /// requests.
     root: DelegatedAccountAuthSignerTreeNode,
+    /// Stack of the indices of the matched nodes in the `root` tree.
     match_stack: Vec<usize>,
 }
 
+/// Stack frame for specifically the account authentication calls (i.e.
+/// `authenticate` calls of [`AccountAuthorizationTracker`]).
+/// This is necessary for correctly attributing the delegated authentication
+/// calls to the correct account tracker.
 #[derive(Clone)]
 struct AuthenticationFrame {
+    /// Delegated auth tracker to use in this frame.
     delegated_auth_tracker: Rc<Option<RefCell<DelegatedAccountAuthTracker>>>,
+    /// Signature payload used for authentication of the current account and
+    /// its delegates.
     signature_payload: BytesObject,
+    /// Auth context used for authentication of the current account and its
+    /// delegates.
     context: Val,
 }
 
@@ -521,6 +561,9 @@ pub(crate) struct AccountAuthorizationTracker {
     // Must not exist in the ledger.
     nonce: Option<(i64, u32)>,
 
+    // Tracker for the delegated authentication. This is `Some` when this
+    // tracker is built from the XDR with credentials of type
+    // `SorobanCredentials::AddressWithDelegates`
     delegated_auth_tracker: Rc<Option<RefCell<DelegatedAccountAuthTracker>>>,
 }
 
