@@ -91,10 +91,10 @@ mod poseidon_tests_bls12 {
 }
 
 #[cfg(test)]
-mod poseidon_tests_bn256 {
+mod poseidon_tests_bn254 {
     use super::*;
     use crate::testutils::crypto::{from_hex, random_scalar};
-    use super::super::poseidon_instance_bn256::POSEIDON_BN_PARAMS;
+    use super::super::poseidon_instance_bn254::POSEIDON_BN_PARAMS;
 
     type Scalar = BnScalar;
 

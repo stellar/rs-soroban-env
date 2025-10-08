@@ -92,9 +92,9 @@ mod poseidon2_tests_bls12 {
 }
 
 #[cfg(test)]
-mod poseidon2_tests_bn256 {
+mod poseidon2_tests_bn254 {
     use super::*;
-    use super::super::poseidon2_instance_bn256::POSEIDON2_BN256_PARAMS;
+    use super::super::poseidon2_instance_bn254::POSEIDON2_BN254_PARAMS;
 
     type Scalar = BnScalar;
 
@@ -104,7 +104,7 @@ mod poseidon2_tests_bn256 {
     fn consistent_perm() {
         let host = Host::test_host();
         let mut rng = StdRng::from_seed([0xff; 32]);
-        let poseidon2 = Poseidon2::new((**POSEIDON2_BN256_PARAMS).clone());
+        let poseidon2 = Poseidon2::new((**POSEIDON2_BN254_PARAMS).clone());
         let t = poseidon2.params.t;
         for _ in 0..TESTRUNS {
             let input1: Vec<Scalar> = (0..t).map(|_| random_scalar(&mut rng)).collect();
@@ -128,7 +128,7 @@ mod poseidon2_tests_bn256 {
     #[test]
     fn kats() {
         let host = Host::test_host();
-        let poseidon2 = Poseidon2::new((**POSEIDON2_BN256_PARAMS).clone());
+        let poseidon2 = Poseidon2::new((**POSEIDON2_BN254_PARAMS).clone());
         let mut input: Vec<Scalar> = vec![];
         for i in 0..poseidon2.params.t {
             input.push(Scalar::from(i as u64));
