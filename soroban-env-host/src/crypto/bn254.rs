@@ -256,7 +256,7 @@ impl Host {
     ) -> Result<Vec<G1Affine>, HostError> {
         self.bn254_affine_vec_from_vecobj::<BN254_G1_SERIALIZED_SIZE, G1Config>(
             vp,
-            ContractCostType::Bls12381G1CheckPointOnCurve,
+            ContractCostType::Bn254G1CheckPointOnCurve,
             false, // G1 subgroup check is not necessary
             "G1",
         )
@@ -268,7 +268,7 @@ impl Host {
     ) -> Result<Vec<G2Affine>, HostError> {
         self.bn254_affine_vec_from_vecobj::<BN254_G2_SERIALIZED_SIZE, G2Config>(
             vp,
-            ContractCostType::Bls12381G2CheckPointOnCurve,
+            ContractCostType::Bn254G2CheckPointOnCurve,
             true,
             "G2",
         )
@@ -279,22 +279,19 @@ impl Host {
     }
 
     pub(crate) fn bn254_fr_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
-        // For now, use the same cost type as BLS12-381 until BN254 specific costs are added
-        self.charge_budget(ContractCostType::Bls12381FrAddSub, None)?;
+        self.charge_budget(ContractCostType::Bn254FrAddSub, None)?;
         lhs.add_assign(rhs);
         Ok(())
     }
 
     pub(crate) fn bn254_fr_mul_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
-        // For now, use the same cost type as BLS12-381 until BN254 specific costs are added
-        self.charge_budget(ContractCostType::Bls12381FrMul, None)?;
+        self.charge_budget(ContractCostType::Bn254FrMul, None)?;
         lhs.mul_assign(rhs);
         Ok(())
     }
 
     pub(crate) fn bn254_fr_pow_internal(&self, lhs: &Fr, rhs: &u64) -> Result<Fr, HostError> {
-        // TODO: For now, use the same cost type as BLS12-381 until BN254 specific costs are added
-        self.charge_budget(ContractCostType::Bls12381FrPow, Some(*rhs))?;
+        self.charge_budget(ContractCostType::Bn254FrPow, Some(*rhs))?;
         use ark_ff::Field;
         Ok(lhs.pow([*rhs]))
     }

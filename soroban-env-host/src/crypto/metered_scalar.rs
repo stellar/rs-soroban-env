@@ -13,17 +13,9 @@ pub trait MeteredScalar: PrimeField + Sized + Clone + PartialEq + MeteredClone {
     /// Modifies `self` by adding `other` to it.
     fn metered_add_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError>;
     
-    /// Performs metered subtraction assignment, charging the budget for the operation.
-    /// Modifies `self` by subtracting `other` from it.
-    fn metered_sub_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError>;
-    
     /// Performs metered multiplication assignment, charging the budget for the operation.
     /// Modifies `self` by multiplying it with `other`.
     fn metered_mul_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError>;
-    
-    /// Performs metered squaring in place, charging the budget for the operation.
-    /// Modifies `self` by squaring it.
-    fn metered_square_in_place(&mut self, host: &Host) -> Result<(), HostError>;
     
     /// Performs metered doubling in place, charging the budget for the operation.
     /// Modifies `self` by doubling it.
@@ -40,14 +32,6 @@ pub trait MeteredScalar: PrimeField + Sized + Clone + PartialEq + MeteredClone {
         result.metered_add_assign(other, host)?;
         Ok(result)
     }
-    
-    /// Performs metered multiplication, charging the budget for the operation.
-    /// Returns a new element that is the product of `self` and `other`.
-    fn metered_mul(&self, other: &Self, host: &Host) -> Result<Self, HostError> {
-        let mut result = self.clone();
-        result.metered_mul_assign(other, host)?;
-        Ok(result)
-    }
 
     fn from_u256val(host: &Host, sv: U256Val) -> Result<Self, HostError>;
 
@@ -59,18 +43,8 @@ impl MeteredScalar for BlsScalar {
         host.fr_add_internal(self, other)
     }
     
-    fn metered_sub_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
-        host.fr_sub_internal(self, other)
-    }
-
     fn metered_mul_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
         host.fr_mul_internal(self, other)
-    }
-    
-    fn metered_square_in_place(&mut self, host: &Host) -> Result<(), HostError> {
-        // Square is essentially multiply by self
-        let temp = *self;
-        host.fr_mul_internal(self, &temp)
     }
     
     fn metered_double_in_place(&mut self, host: &Host) -> Result<(), HostError> {
@@ -118,21 +92,8 @@ impl MeteredScalar for BnScalar {
         host.bn254_fr_add_internal(self, other)
     }
     
-    fn metered_sub_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
-        // For now, use the same cost type as BLS12-381 until BN254 specific costs are added
-        host.charge_budget(crate::xdr::ContractCostType::Bls12381FrAddSub, None)?;
-        *self -= *other;
-        Ok(())
-    }
-
     fn metered_mul_assign(&mut self, other: &Self, host: &Host) -> Result<(), HostError> {
         host.bn254_fr_mul_internal(self, other)
-    }
-    
-    fn metered_square_in_place(&mut self, host: &Host) -> Result<(), HostError> {
-        // Square is essentially multiply by self
-        let temp = *self;
-        host.bn254_fr_mul_internal(self, &temp)
     }
     
     fn metered_double_in_place(&mut self, host: &Host) -> Result<(), HostError> {
@@ -159,8 +120,7 @@ impl MeteredScalar for BnScalar {
     }
 
     fn to_u256val(self, host: &Host) -> Result<U256Val, HostError> {
-        // TODO: use proper Bn type
-        host.charge_budget(ContractCostType::Bls12381FrToU256, None)?;
+        host.charge_budget(ContractCostType::Bn254FrToU256, None)?;
         // The `into_bigint` carries the majority of the cost. It performs the
         // Montgomery reduction on the internal representation, which is doing a
         // number of wrapping arithmetics on each u64 word (`Fr` contains 4

@@ -15,10 +15,6 @@ impl<S: MeteredScalar> Poseidon<S> {
         }
     }
 
-    pub fn get_t(&self) -> usize {
-        self.params.t
-    }
-
     pub fn permutation(&self, input: &Vec<S>, host: &Host) -> Result<Vec<S>, HostError> {
         let t = self.params.t;
         if input.len() != t {
