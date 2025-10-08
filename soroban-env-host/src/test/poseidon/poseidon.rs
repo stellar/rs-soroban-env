@@ -20,6 +20,7 @@ use super::poseidon_instance_bls12::{
 mod poseidon_tests_bls12 {
     use super::*;
     use crate::testutils::crypto::{from_hex, random_scalar};
+    use super::super::poseidon_instance_hadeshash_bls12::{POSEIDONPERM_X5_255_3, POSEIDONPERM_X5_255_5};
 
     type Scalar = BlsScalar;
 
@@ -88,6 +89,70 @@ mod poseidon_tests_bls12 {
             from_hex("0x2eae6736db3c086ad29938869dedbf969dd9804a58aa228ec467b7d5a08dc765")
         );
     }
+
+    #[test]
+    fn hadeshash_x5_255_3_test_cases() {
+        let host = Host::test_host();
+        // poseidonperm_x5_255_3
+        let poseidon = Poseidon::new((**POSEIDONPERM_X5_255_3).clone());
+        
+        // Input
+        let input: Vec<Scalar> = vec![
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000000"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000001"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000002"),
+        ];
+        
+        // Expected output
+        let expected_output: Vec<Scalar> = vec![
+            from_hex("0x28ce19420fc246a05553ad1e8c98f5c9d67166be2c18e9e4cb4b4e317dd2a78a"),
+            from_hex("0x51f3e312c95343a896cfd8945ea82ba956c1118ce9b9859b6ea56637b4b1ddc4"),
+            from_hex("0x3b2b69139b235626a0bfb56c9527ae66a7bf486ad8c11c14d1da0c69bbe0f79a"),
+        ];
+        
+        // Run the permutation
+        let result = poseidon.permutation(&input, &host).unwrap();
+        
+        // Verify the output matches expected values
+        assert_eq!(result.len(), expected_output.len());
+        for (i, (actual, expected)) in result.iter().zip(expected_output.iter()).enumerate() {
+            assert_eq!(actual, expected, "Mismatch at index {}: got {:?}, expected {:?}", i, actual, expected);
+        }
+    }
+
+    #[test]
+    fn hadeshash_x5_255_5_test_cases() {
+        let host = Host::test_host();
+        // poseidonperm_x5_255_5
+        let poseidon = Poseidon::new((**POSEIDONPERM_X5_255_5).clone());
+        
+        // Input
+        let input: Vec<Scalar> = vec![
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000000"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000001"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000002"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000003"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000004"),
+        ];
+        
+        // Expected output
+        let expected_output: Vec<Scalar> = vec![
+            from_hex("0x2a918b9c9f9bd7bb509331c81e297b5707f6fc7393dcee1b13901a0b22202e18"),
+            from_hex("0x65ebf8671739eeb11fb217f2d5c5bf4a0c3f210e3f3cd3b08b5db75675d797f7"),
+            from_hex("0x2cc176fc26bc70737a696a9dfd1b636ce360ee76926d182390cdb7459cf585ce"),
+            from_hex("0x4dc4e29d283afd2a491fe6aef122b9a968e74eff05341f3cc23fda1781dcb566"),
+            from_hex("0x03ff622da276830b9451b88b85e6184fd6ae15c8ab3ee25a5667be8592cce3b1"),
+        ];
+        
+        // Run the permutation
+        let result = poseidon.permutation(&input, &host).unwrap();
+        
+        // Verify the output matches expected values
+        assert_eq!(result.len(), expected_output.len());
+        for (i, (actual, expected)) in result.iter().zip(expected_output.iter()).enumerate() {
+            assert_eq!(actual, expected, "Mismatch at index {}: got {:?}, expected {:?}", i, actual, expected);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -95,6 +160,7 @@ mod poseidon_tests_bn254 {
     use super::*;
     use crate::testutils::crypto::{from_hex, random_scalar};
     use super::super::poseidon_instance_bn254::POSEIDON_BN_PARAMS;
+    use super::super::poseidon_instance_hadeshash_bn254::{POSEIDONPERM_X5_254_3, POSEIDONPERM_X5_254_5};
 
     type Scalar = BnScalar;
 
@@ -143,5 +209,69 @@ mod poseidon_tests_bn254 {
             perm[2],
             from_hex("0x008f8e7c73ff20b6a141c48cef73215860acc749b14f0a7887f74950215169c6")
         );
+    }
+
+    #[test]
+    fn hadeshash_x5_254_3() {
+        let host = Host::test_host();
+        // poseidonperm_x5_254_3
+        let poseidon = Poseidon::new((**POSEIDONPERM_X5_254_3).clone());
+        
+        // Input
+        let input: Vec<Scalar> = vec![
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000000"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000001"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000002"),
+        ];
+        
+        // Expected output
+        let expected_output: Vec<Scalar> = vec![
+            from_hex("0x115cc0f5e7d690413df64c6b9662e9cf2a3617f2743245519e19607a4417189a"),
+            from_hex("0x0fca49b798923ab0239de1c9e7a4a9a2210312b6a2f616d18b5a87f9b628ae29"),
+            from_hex("0x0e7ae82e40091e63cbd4f16a6d16310b3729d4b6e138fcf54110e2867045a30c"),
+        ];
+        
+        // Run the permutation
+        let result = poseidon.permutation(&input, &host).unwrap();
+        
+        // Verify the output matches expected values
+        assert_eq!(result.len(), expected_output.len());
+        for (i, (actual, expected)) in result.iter().zip(expected_output.iter()).enumerate() {
+            assert_eq!(actual, expected, "Mismatch at index {}: got {:?}, expected {:?}", i, actual, expected);
+        }
+    }
+
+    #[test]
+    fn hadeshash_x5_254_5() {
+        let host = Host::test_host();
+        // poseidonperm_x5_254_5
+        let poseidon = Poseidon::new((**POSEIDONPERM_X5_254_5).clone());
+        
+        // Input
+        let input: Vec<Scalar> = vec![
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000000"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000001"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000002"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000003"),
+            from_hex("0x0000000000000000000000000000000000000000000000000000000000000004"),
+        ];
+        
+        // Expected output
+        let expected_output: Vec<Scalar> = vec![
+            from_hex("0x299c867db6c1fdd79dcefa40e4510b9837e60ebb1ce0663dbaa525df65250465"),
+            from_hex("0x1148aaef609aa338b27dafd89bb98862d8bb2b429aceac47d86206154ffe053d"),
+            from_hex("0x24febb87fed7462e23f6665ff9a0111f4044c38ee1672c1ac6b0637d34f24907"),
+            from_hex("0x0eb08f6d809668a981c186beaf6110060707059576406b248e5d9cf6e78b3d3e"),
+            from_hex("0x07748bc6877c9b82c8b98666ee9d0626ec7f5be4205f79ee8528ef1c4a376fc7"),
+        ];
+        
+        // Run the permutation
+        let result = poseidon.permutation(&input, &host).unwrap();
+        
+        // Verify the output matches expected values
+        assert_eq!(result.len(), expected_output.len());
+        for (i, (actual, expected)) in result.iter().zip(expected_output.iter()).enumerate() {
+            assert_eq!(actual, expected, "Mismatch at index {}: got {:?}, expected {:?}", i, actual, expected);
+        }
     }
 }
