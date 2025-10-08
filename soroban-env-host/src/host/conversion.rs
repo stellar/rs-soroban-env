@@ -16,7 +16,7 @@ use crate::{
         UInt256Parts, Uint256, VecM,
     },
     AddressObject, BytesObject, Convert, Host, HostError, Object, ScValObjRef, ScValObject, Symbol,
-    SymbolObject, TryFromVal, TryIntoVal, U32Val, Val, VecObject,
+    SymbolObject, TryFromVal, TryIntoVal, U32Val, Val, VecObject, crypto::metered_scalar::MeteredScalar, U256Val
 };
 
 use super::ErrorHandler;
@@ -286,6 +286,85 @@ impl Host {
         }
         Ok(ScMap(self.map_err(mv.try_into())?))
     }
+
+    /// Convert a VecObject of U256Val elements to a Vec of MeteredScalar
+    pub(crate) fn metered_scalar_vec_from_vecobj<S>(
+        &self,
+        vp: VecObject,
+    ) -> Result<Vec<S>, HostError>
+    where
+        S: MeteredScalar,
+    {
+        self.visit_obj(vp, |hv: &HostVec| {
+            let len = hv.len();
+            Vec::<S>::charge_bulk_init_cpy(len as u64, self)?;
+            let mut scalars: Vec<S> = Vec::with_capacity(len);
+            for val in hv.iter() {
+                let u256_val = U256Val::try_from(val.clone()).map_err(|_| {
+                    self.err(
+                        ScErrorType::Crypto,
+                        ScErrorCode::InvalidInput,
+                        "element must be U256Val",
+                        &[val.clone()],
+                    )
+                })?;
+                let scalar = S::from_u256val(self, u256_val)?;
+                scalars.push(scalar);
+            }
+            Ok(scalars)
+        })
+    }   
+
+    /// Convert a Vec of MeteredScalar to a VecObject of U256Val elements
+    pub(crate) fn metered_scalar_vec_to_vecobj<S>(
+        &self,
+        scalars: Vec<S>,
+    ) -> Result<VecObject, HostError>
+    where
+        S: MeteredScalar,
+    {
+        let vals = scalars
+            .into_iter()
+            .map(|s| {
+                s.to_u256val(self)
+            })
+            .metered_collect::<Result<Vec<_>, HostError>>(self)??;
+
+        let host_vec = HostVec::from_exact_iter(
+            vals.into_iter().map(|v| v.to_val()),
+            self.budget_ref(),
+        )?;
+
+        self.add_host_object(host_vec)
+    }
+
+    /// Convert a VecObject representing a HostVec<HostVec<U256Val>> elements to a Vec<Vec<MeteredScalar>>
+    pub(crate) fn metered_scalar_vec_of_vec_from_vecobj<S>(
+        &self,
+        vp: VecObject,
+    ) -> Result<Vec<Vec<S>>, HostError>
+    where
+        S: MeteredScalar,
+    {
+        self.visit_obj(vp, |hv: &HostVec| {
+            let n_rows = hv.len();
+            let mut result = Vec::with_metered_capacity(n_rows, self)?;
+            for row_val in hv.iter() {
+                let row_obj = crate::VecObject::try_from(row_val.clone()).map_err(|_| {
+                    self.err(
+                        ScErrorType::Crypto,
+                        ScErrorCode::InvalidInput,
+                        "poseidon_permutation: row must be a vector",
+                        &[row_val.clone()],
+                    )
+                })?;       
+
+                let row_vec = self.metered_scalar_vec_from_vecobj::<S>(row_obj)?;
+                result.push(row_vec);
+            }
+            Ok(result)
+        })
+    }       
 }
 
 impl Convert<&Object, ScValObject> for Host {

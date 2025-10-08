@@ -82,11 +82,12 @@ rustversion = "1.0"
 wycheproof = "0.5.1"
 k256 = {version = "0.13.1", default-features = false, features = ["alloc"]}
 p256 = {version = "0.13.2", default-features = false, features = ["alloc"]}
+lazy_static = "1.5.0"
 
 [dev-dependencies.stellar-xdr]
 version = "=23.0.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "8505f22833f4054227689c35f9cf253a6836cbac"
+rev = "abcfb947e8c8551ae52604f6d57b43895e2bd76d"
 default-features = false
 features = ["arbitrary"]
 

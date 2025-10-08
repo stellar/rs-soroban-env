@@ -16,6 +16,8 @@ macro_rules! arity_helper {
     { ($a0:ident , $a1:ident, $a2:ident, $a3:ident) } => { 4 };
     { ($a0:ident , $a1:ident, $a2:ident, $a3:ident, $a4:ident) } => { 5 };
     { ($a0:ident , $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident) } => { 6 };
+    { ($a0:ident , $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident) } => { 7 };
+    { ($a0:ident , $a1:ident, $a2:ident, $a3:ident, $a4:ident, $a5:ident, $a6:ident, $a7:ident) } => { 8 };
 }
 
 macro_rules! generate_call_emitter_functions {

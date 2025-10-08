@@ -1,10 +1,10 @@
-use crate::host::metered_clone::MeteredContainer;
-use crate::host::prng::SEED_BYTES;
 use crate::{
+    host::{prng::SEED_BYTES, metered_clone::MeteredContainer},
     budget::AsBudget,
     err,
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Error, Host, HostError, U32Val, Val,
+    BytesObject, Error, Host, HostError, U32Val, Val, VecObject, 
+    crypto::{metered_scalar::MeteredScalar, poseidon::{PoseidonParams, Poseidon, Poseidon2Params, Poseidon2}}
 };
 use elliptic_curve::scalar::IsHigh;
 use hex_literal::hex;
@@ -19,6 +19,8 @@ use elliptic_curve::CurveArithmetic;
 use generic_array::ArrayLength;
 pub(crate) mod bls12_381;
 pub(crate) mod bn254;
+pub(crate) mod metered_scalar;
+pub(crate) mod poseidon;
 
 impl Host {
     // Ed25519 functions
@@ -302,6 +304,80 @@ impl Host {
             }
             Ok(hash)
         })
+    }
+
+    /// Generic implementation of Poseidon permutation for any field type
+    pub(crate) fn poseidon_permutation_impl<S>(
+        &self,
+        input: VecObject,
+        t: usize,
+        d: usize,
+        rounds_f: usize,
+        rounds_p: usize,
+        mds: VecObject,
+        round_constants: VecObject,
+    ) -> Result<VecObject, HostError>
+    where
+        S: MeteredScalar,
+    {
+        // Parse input vector
+        let input_vec = self.metered_scalar_vec_from_vecobj::<S>(
+            input,
+        )?;
+
+        // Parse MDS matrix (t x t), size checking is done in the Poseidon library
+        let mds_matrix = self.metered_scalar_vec_of_vec_from_vecobj::<S>(mds)?;
+
+        // Parse round constants ((rounds_f + rounds_p) x t), size checking is done in the Poseidon library
+        let round_constants_matrix =
+            self.metered_scalar_vec_of_vec_from_vecobj::<S>(round_constants)?;
+
+        // Create PoseidonParams
+        let params = PoseidonParams::new(t, d, rounds_f, rounds_p, mds_matrix, round_constants_matrix)?;
+
+        // Create Poseidon instance and run permutation
+        let poseidon = Poseidon::new(params);
+        let output = poseidon.permutation(&input_vec, self)?;
+
+        // Convert output back to VecObject
+        self.metered_scalar_vec_to_vecobj(output)
+    }
+
+    /// Generic implementation of Poseidon2 permutation for any field type
+    pub(crate) fn poseidon2_permutation_impl<S>(
+        &self,
+        input: VecObject,
+        t: usize,
+        d: usize,
+        rounds_f: usize,
+        rounds_p: usize,
+        mat_internal_diag_m_1: VecObject,
+        round_constants: VecObject,
+    ) -> Result<VecObject, HostError>
+    where
+        S: MeteredScalar,
+    {
+        // Parse input vector
+        let input_vec = self.metered_scalar_vec_from_vecobj::<S>(
+            input,
+        )?;
+
+        // Parse mat_internal_diag_m_1 (Vec of length t), size checking is done in the Poseidon2 library
+        let mat_internal_diag_m_1_vec = self.metered_scalar_vec_from_vecobj::<S>(mat_internal_diag_m_1)?;
+
+        // Parse round constants ((rounds_f + rounds_p) x t), size checking is done in the Poseidon2 library
+        let round_constants_matrix =
+            self.metered_scalar_vec_of_vec_from_vecobj::<S>(round_constants)?;
+
+        // Create Poseidon2Params
+        let params = Poseidon2Params::new(t, d, rounds_f, rounds_p, mat_internal_diag_m_1_vec, round_constants_matrix)?;
+
+        // Create Poseidon2 instance and run permutation
+        let poseidon2 = Poseidon2::new(params);
+        let output = poseidon2.permutation(&input_vec, self)?;
+
+        // Convert output back to VecObject
+        self.metered_scalar_vec_to_vecobj(output)
     }
 }
 

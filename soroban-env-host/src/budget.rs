@@ -150,6 +150,11 @@ impl Default for BudgetTracker {
                 ContractCostType::Bn254G1Mul => (),
                 ContractCostType::Bn254Pairing => init_input(),
                 ContractCostType::Bn254FrFromU256 => (),
+                ContractCostType::Bn254FrToU256 => (),
+                ContractCostType::Bn254FrAddSub => (),
+                ContractCostType::Bn254FrMul => (),
+                ContractCostType::Bn254FrPow => init_input(), // input is number of bits in the u64 exponent excluding leading zeros
+                ContractCostType::Bn254FrInv => (),                
             }
         }
         mt
@@ -657,6 +662,27 @@ impl Default for BudgetImpl {
                     cpu.const_term = 1940;
                     cpu.lin_term = ScaledU64(0);
                 }
+                // TODO: calibration needed for below
+                ContractCostType::Bn254FrToU256 => {
+                    cpu.const_term = 1155;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bn254FrAddSub => {
+                    cpu.const_term = 74;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bn254FrMul => {
+                    cpu.const_term = 332;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bn254FrPow => {
+                    cpu.const_term = 691;
+                    cpu.lin_term = ScaledU64(74558);
+                }
+                ContractCostType::Bn254FrInv => {
+                    cpu.const_term = 35421;
+                    cpu.lin_term = ScaledU64(0);
+                }
             }
 
             // define the memory cost model parameters
@@ -989,6 +1015,27 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
+                // TODO: calibration needed for below
+                ContractCostType::Bn254FrToU256 => {
+                    mem.const_term = 248;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bn254FrAddSub => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bn254FrMul => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bn254FrPow => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(128);
+                }
+                ContractCostType::Bn254FrInv => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }                
             }
         }
 

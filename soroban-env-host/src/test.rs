@@ -17,6 +17,7 @@ mod finish;
 mod frame;
 mod host;
 mod hostile;
+mod poseidon;
 #[cfg(opt_build)]
 mod hostile_opt;
 mod invocation;

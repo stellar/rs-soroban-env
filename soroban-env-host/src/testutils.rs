@@ -1155,3 +1155,19 @@ pub fn simple_account_sign_fn<'a>(
     use crate::builtin_contracts::testutils::sign_payload_for_ed25519;
     Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
 }
+
+#[cfg(test)]
+pub(crate) mod crypto {
+    use ark_ff::PrimeField;
+    use rand::rngs::StdRng;
+    use hex::FromHex;
+    
+    pub fn from_hex<F: PrimeField>(s: &str) -> F {
+        let a = Vec::from_hex(&s[2..]).expect("Invalid Hex String");
+        F::from_be_bytes_mod_order(&a as &[u8])
+    }
+    
+    pub fn random_scalar<F: PrimeField>(rng: &mut StdRng) -> F {
+        F::rand(rng)
+    }
+}
