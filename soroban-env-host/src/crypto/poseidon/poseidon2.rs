@@ -5,13 +5,13 @@ use crate::{host::metered_clone::MeteredClone, xdr::{ScErrorCode, ScErrorType}, 
 
 #[derive(Clone, Debug)]
 pub struct Poseidon2<F: MeteredScalar> {
-    pub(crate) params: Arc<Poseidon2Params<F>>,
+    pub(crate) params: Poseidon2Params<F>,
 }
 
 impl<F: MeteredScalar> Poseidon2<F> {
-    pub fn new(params: &Arc<Poseidon2Params<F>>) -> Self {
+    pub fn new(params: Poseidon2Params<F>) -> Self {
         Poseidon2 {
-            params: Arc::clone(params),
+            params,
         }
     }
 
