@@ -1,9 +1,5 @@
 use crate::{
-    budget::AsBudget,
-    host_object::HostVec,
-    xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    Bool, BytesObject, ConversionError, Env, ErrorHandler, Host, HostError, TryFromVal, U256Object,
-    U256Small, U256Val, Val, VecObject, U256,
+    budget::AsBudget, crypto::metered_scalar::MeteredScalar, host_object::HostVec, xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType}, Bool, BytesObject, ConversionError, Env, ErrorHandler, Host, HostError, TryFromVal, U256Val, Val, VecObject, U256
 };
 use ark_bls12_381::{
     g1::Config as G1Config, g2::Config as G2Config, Bls12_381, Fq, Fq12, Fq2, Fr, G1Affine,
@@ -329,16 +325,7 @@ impl Host {
     }
 
     pub(crate) fn fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
-        self.charge_budget(ContractCostType::Bls12381FrFromU256, None)?;
-        let fr = if let Ok(small) = U256Small::try_from(sv) {
-            Fr::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
-        } else {
-            let obj: U256Object = sv.try_into()?;
-            self.visit_obj(obj, |u: &U256| {
-                Ok(Fr::from_le_bytes_mod_order(&u.to_le_bytes()))
-            })?
-        };
-        Ok(fr)
+        <Fr as MeteredScalar>::from_u256val(self, sv)
     }
 
     pub(crate) fn fr_to_u256val(&self, scalar: Fr) -> Result<U256Val, HostError> {

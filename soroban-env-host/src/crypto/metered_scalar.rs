@@ -1,9 +1,9 @@
 use crate::{
-    host::metered_clone::MeteredClone, Host, HostError
+    host::metered_clone::MeteredClone, Host, HostError, U256Val, xdr::ContractCostType, U256Small, U256Object, U256, ConversionError, TryFromVal, ErrorHandler
 };
 use ark_bls12_381::Fr as BlsScalar;
 use ark_bn254::Fr as BnScalar;
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, BigInteger};
 
 /// A trait for scalar field elements that can perform metered arithmetic operations.
 /// These operations charge the budget for computational costs and are fallible when
@@ -48,6 +48,10 @@ pub trait MeteredScalar: PrimeField + Sized + Clone + PartialEq + MeteredClone {
         result.metered_mul_assign(other, host)?;
         Ok(result)
     }
+
+    fn from_u256val(host: &Host, sv: U256Val) -> Result<Self, HostError>;
+
+    fn to_u256val(self, host: &Host) -> Result<U256Val, HostError>;
 }
 
 impl MeteredScalar for BlsScalar {
@@ -77,6 +81,35 @@ impl MeteredScalar for BlsScalar {
     
     fn metered_pow(&self, exp: &u64, host: &Host) -> Result<Self, HostError> {
         host.fr_pow_internal(self, exp)
+    }
+    
+    fn from_u256val(host: &Host, sv: U256Val) -> Result<Self, HostError> {
+        host.charge_budget(ContractCostType::Bls12381FrFromU256, None)?;
+        let fr = if let Ok(small) = U256Small::try_from(sv) {
+            Self::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
+        } else {
+            let obj: U256Object = sv.try_into()?;
+            host.visit_obj(obj, |u: &U256| {
+                Ok(Self::from_le_bytes_mod_order(&u.to_le_bytes()))
+            })?
+        };
+        Ok(fr)    
+    }
+
+    fn to_u256val(self, host: &Host) -> Result<U256Val, HostError> {
+        host.charge_budget(ContractCostType::Bls12381FrToU256, None)?;
+        // The `into_bigint` carries the majority of the cost. It performs the
+        // Montgomery reduction on the internal representation, which is doing a
+        // number of wrapping arithmetics on each u64 word (`Fr` contains 4
+        // words). The core routine is in `ark_ff::MontConfig::into_bigint`,
+        // this cannot panic.
+        let bytes: [u8; 32] = self
+            .into_bigint()
+            .to_bytes_be()
+            .try_into()
+            .map_err(|_| HostError::from(ConversionError))?;
+        let u = U256::from_be_bytes(bytes);
+        host.map_err(U256Val::try_from_val(host, &u))
     }
 }
 
@@ -111,6 +144,36 @@ impl MeteredScalar for BnScalar {
     fn metered_pow(&self, exp: &u64, host: &Host) -> Result<Self, HostError> {
         host.bn254_fr_pow_internal(self, exp)
     }
+    
+    fn from_u256val(host: &Host, sv: U256Val) -> Result<Self, HostError> {
+        host.charge_budget(ContractCostType::Bn254FrFromU256, None)?;
+        let fr = if let Ok(small) = U256Small::try_from(sv) {
+            Self::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
+        } else {
+            let obj: U256Object = sv.try_into()?;
+            host.visit_obj(obj, |u: &U256| {
+                Ok(Self::from_le_bytes_mod_order(&u.to_le_bytes()))
+            })?
+        };
+        Ok(fr)
+    }
+
+    fn to_u256val(self, host: &Host) -> Result<U256Val, HostError> {
+        // TODO: use proper Bn type
+        host.charge_budget(ContractCostType::Bls12381FrToU256, None)?;
+        // The `into_bigint` carries the majority of the cost. It performs the
+        // Montgomery reduction on the internal representation, which is doing a
+        // number of wrapping arithmetics on each u64 word (`Fr` contains 4
+        // words). The core routine is in `ark_ff::MontConfig::into_bigint`,
+        // this cannot panic.
+        let bytes: [u8; 32] = self
+            .into_bigint()
+            .to_bytes_be()
+            .try_into()
+            .map_err(|_| HostError::from(ConversionError))?;
+        let u = U256::from_be_bytes(bytes);
+        host.map_err(U256Val::try_from_val(host, &u))
+    }    
 }
 
 #[cfg(test)]

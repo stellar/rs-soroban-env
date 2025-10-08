@@ -87,6 +87,15 @@ macro_rules! homogenize_tuple {
     ($u:ident, ($_a:expr, $_b:expr, $_c:expr, $_d:expr, $_e:expr)) => {
         &[&$u.0, &$u.1, &$u.2, &$u.3, &$u.4]
     };
+    ($u:ident, ($_a:expr, $_b:expr, $_c:expr, $_d:expr, $_e:expr, $_f:expr)) => {
+        &[&$u.0, &$u.1, &$u.2, &$u.3, &$u.4, &$u.5]
+    };
+    ($u:ident, ($_a:expr, $_b:expr, $_c:expr, $_d:expr, $_e:expr, $_f:expr, $_g:expr)) => {
+        &[&$u.0, &$u.1, &$u.2, &$u.3, &$u.4, &$u.5, &$u.6]
+    };
+    ($u:ident, ($_a:expr, $_b:expr, $_c:expr, $_d:expr, $_e:expr, $_f:expr, $_g:expr, $_h:expr)) => {
+        &[&$u.0, &$u.1, &$u.2, &$u.3, &$u.4, &$u.5, &$u.6, &$u.7]
+    };
 }
 
 // Define a relative-to-absolute impl for any type that is (a) mentioned

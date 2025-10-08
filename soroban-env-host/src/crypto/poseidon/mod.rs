@@ -1,5 +1,5 @@
 // Poseidon hash function implementations
-// 
+//
 // This module contains implementations of both Poseidon and Poseidon2 hash functions
 // for use in cryptographic operations within the Soroban environment.
 
