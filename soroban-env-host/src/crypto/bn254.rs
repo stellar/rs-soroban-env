@@ -255,7 +255,7 @@ impl Host {
     ) -> Result<Vec<G1Affine>, HostError> {
         self.bn254_affine_vec_from_vecobj::<BN254_G1_SERIALIZED_SIZE, G1Config>(
             vp,
-            ContractCostType::Bls12381G1CheckPointOnCurve,
+            ContractCostType::Bn254G1CheckPointOnCurve,
             false, // G1 subgroup check is not necessary
             "G1",
         )
@@ -267,7 +267,7 @@ impl Host {
     ) -> Result<Vec<G2Affine>, HostError> {
         self.bn254_affine_vec_from_vecobj::<BN254_G2_SERIALIZED_SIZE, G2Config>(
             vp,
-            ContractCostType::Bls12381G2CheckPointOnCurve,
+            ContractCostType::Bn254G2CheckPointOnCurve,
             true,
             "G2",
         )
