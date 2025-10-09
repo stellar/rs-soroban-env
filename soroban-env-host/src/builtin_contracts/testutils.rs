@@ -55,6 +55,7 @@ pub(crate) fn contract_id_to_address(host: &Host, contract_id: [u8; 32]) -> Addr
     .unwrap()
 }
 
+#[derive(Clone)]
 pub(crate) enum TestSigner {
     AccountInvoker(AccountId),
     ContractInvoker(ContractId),
@@ -62,12 +63,14 @@ pub(crate) enum TestSigner {
     AccountContract(AccountContractSigner),
 }
 
+#[derive(Clone)]
 pub(crate) struct AccountContractSigner {
     pub(crate) address: Address,
     #[allow(clippy::type_complexity)]
-    pub(crate) sign: Box<dyn Fn(&[u8]) -> Val>,
+    pub(crate) sign: Rc<dyn Fn(&[u8]) -> Val>,
 }
 
+#[derive(Clone)]
 pub(crate) struct AccountSigner {
     pub(crate) account_id: AccountId,
     pub(crate) signers: Vec<SigningKey>,

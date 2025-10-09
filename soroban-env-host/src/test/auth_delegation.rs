@@ -1,3 +1,4 @@
+use ed25519_dalek::SigningKey;
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use soroban_builtin_sdk_macros::contracttype;
@@ -8,6 +9,9 @@ use crate::builtin_contracts::account_contract::{
     AuthorizationContext, ContractAuthorizationContext,
 };
 use crate::builtin_contracts::base_types::{BytesN, Vec as HostVec};
+use crate::builtin_contracts::testutils::{
+    account_to_address, create_account, signing_key_to_account_id, TestSigner,
+};
 use crate::{
     builtin_contracts::base_types::Address,
     xdr::{
@@ -139,6 +143,23 @@ impl AuthBuilder {
                 });
                 auth_entries.extend_from_slice(&nested_auth);
                 Signature::BuiltinDelegated(auth_builder.address.clone())
+            }));
+        self
+    }
+
+    fn sign_builtin_delegated_with_signer(mut self, signer: &TestSigner) -> Self {
+        let signer = signer.clone();
+        self.has_builtin_delegated_signers = true;
+        self.signatures
+            .push(Box::new(move |host, payload, _, delegates| {
+                let signature = signer.sign(host, payload);
+                delegates.push(SorobanDelegateSignature {
+                    address: signer.sc_address(),
+                    signature,
+                    nested_delegates: vec![].try_into().unwrap(),
+                });
+                let address: Address = signer.sc_address().try_into_val(host).unwrap();
+                Signature::BuiltinDelegated(address)
             }));
         self
     }
@@ -371,7 +392,6 @@ impl DelegatedAuthTest {
         let mut seed = [0u8; 32];
         thread_rng().fill(&mut seed);
         let host = Host::test_host_with_recording_footprint();
-        dbg!(&host.get_ledger_protocol_version());
         host.set_base_prng_seed(seed).unwrap();
         host.enable_invocation_metering();
         host.enable_debug().unwrap();
@@ -396,16 +416,24 @@ impl DelegatedAuthTest {
     }
 
     fn update_delegated_signers(&self, contract_id: usize, delegated_signers: &[usize]) {
-        let delegated = delegated_signers
+        let delegated_signers = delegated_signers
             .iter()
             .map(|i| self.contracts[*i].clone())
             .collect::<Vec<_>>();
-        let delegated = HostVec::from_t_slice(&self.host, &delegated).unwrap();
+        self.update_delegated_signers_addresses(contract_id, &delegated_signers);
+    }
+
+    fn update_delegated_signers_addresses(
+        &self,
+        contract_id: usize,
+        delegated_signers: &[Address],
+    ) {
+        let delegated_signers = HostVec::from_t_slice(&self.host, delegated_signers).unwrap();
         self.host
             .call(
                 self.contracts[contract_id].as_object(),
                 Symbol::try_from_val(&self.host, &"update_signers").unwrap(),
-                test_vec![&self.host, delegated].into(),
+                test_vec![&self.host, delegated_signers].into(),
             )
             .unwrap();
     }
@@ -988,6 +1016,32 @@ fn test_delegate_account_auth_is_not_reused() {
 }
 
 #[test]
+fn test_builtin_delegate_can_be_repeated_at_different_levels() {
+    let test = DelegatedAuthTest::setup(5);
+    test.update_delegated_signers(1, &[2, 3, 4]);
+    test.update_delegated_signers(2, &[3, 4]);
+    test.update_delegated_signers(3, &[4]);
+
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(1)
+                .sign_builtin_delegated(
+                    test.new_auth_builder(2)
+                        .sign_builtin_delegated(test.new_auth_builder(3).sign_builtin_delegated(
+                            test.new_auth_builder(4).expect_valid_payload()
+                        ))
+                        .sign_builtin_delegated(test.new_auth_builder(4).expect_valid_payload())
+                )
+                .sign_builtin_delegated(
+                    test.new_auth_builder(3)
+                        .sign_builtin_delegated(test.new_auth_builder(4).expect_valid_payload())
+                )
+                .sign_builtin_delegated(test.new_auth_builder(4).expect_valid_payload())
+        )
+        .is_ok());
+}
+
+#[test]
 fn test_delegated_signers_getter() {
     let test = DelegatedAuthTest::setup(12);
     test.update_delegated_signers(1, &[2, 3, 4]);
@@ -1382,4 +1436,265 @@ fn test_builtin_delegates_within_nested_auth_and_rollbacks() {
             )
         )
         .is_ok());
+}
+
+#[test]
+fn test_builtin_delegated_signer_with_classic_accounts() {
+    let test = DelegatedAuthTest::setup(3);
+    let mut rng = thread_rng();
+    let keys = (0..5)
+        .map(|_| SigningKey::generate(&mut rng))
+        .collect::<Vec<_>>();
+
+    let single_signer_account = signing_key_to_account_id(&keys[0]);
+    let multisig_account = signing_key_to_account_id(&keys[1]);
+    let single_signer_account_address =
+        account_to_address(&test.host, single_signer_account.clone());
+    let multisig_account_address = account_to_address(&test.host, multisig_account.clone());
+
+    test.update_delegated_signers_addresses(
+        0,
+        &[
+            test.contracts[1].clone(),
+            single_signer_account_address.clone(),
+            multisig_account_address.clone(),
+        ],
+    );
+    test.update_delegated_signers_addresses(
+        1,
+        &[
+            test.contracts[2].clone(),
+            single_signer_account_address.clone(),
+            multisig_account_address.clone(),
+        ],
+    );
+    test.update_delegated_signers_addresses(
+        2,
+        &[
+            single_signer_account_address.clone(),
+            multisig_account_address.clone(),
+        ],
+    );
+
+    // Single signer account
+    create_account(
+        &test.host,
+        &single_signer_account,
+        &[(&keys[0], 100)],
+        100_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+    // Multisig account with 4 signers
+    create_account(
+        &test.host,
+        &multisig_account,
+        &[(&keys[2], 100), (&keys[3], 60), (&keys[4], 59)],
+        100_000_000,
+        3,
+        [40, 10, 100, 150],
+        None,
+        None,
+        0,
+    );
+
+    let single_sig_account_signer = TestSigner::account(&keys[0]);
+    let valid_multisig_signer_1 =
+        TestSigner::account_with_multisig(&multisig_account, vec![&keys[1], &keys[3]]);
+    let valid_multisig_signer_2 =
+        TestSigner::account_with_multisig(&multisig_account, vec![&keys[2]]);
+    let valid_multisig_signer_3 =
+        TestSigner::account_with_multisig(&multisig_account, vec![&keys[4], &keys[3]]);
+    let valid_multisig_signers = [
+        valid_multisig_signer_1.clone(),
+        valid_multisig_signer_2.clone(),
+        valid_multisig_signer_3.clone(),
+    ];
+
+    // Directly delegate to single signer account
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(0)
+                .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+        )
+        .is_ok());
+    // Indirectly delegate to single signer account from a contract
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(0).sign_builtin_delegated(
+                test.new_auth_builder(1)
+                    .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+            )
+        )
+        .is_ok());
+    // Indirectly delegate to single signer account from every contract in the
+    // chain
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(0)
+                .sign_builtin_delegated(
+                    test.new_auth_builder(1)
+                        .sign_builtin_delegated(
+                            test.new_auth_builder(2)
+                                .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+                        )
+                        .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+                )
+                .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+        )
+        .is_ok());
+
+    // Repeat scenarios above for various valid multisig signer sets
+    for signer in &valid_multisig_signers {
+        assert!(test
+            .call_auth_fn(
+                test.new_auth_builder(0)
+                    .sign_builtin_delegated_with_signer(signer)
+                    .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+            )
+            .is_ok());
+        assert!(test
+            .call_auth_fn(
+                test.new_auth_builder(0).sign_builtin_delegated(
+                    test.new_auth_builder(1)
+                        .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+                        .sign_builtin_delegated_with_signer(signer)
+                )
+            )
+            .is_ok());
+        assert!(test
+            .call_auth_fn(
+                test.new_auth_builder(0)
+                    .sign_builtin_delegated(
+                        test.new_auth_builder(1)
+                            .sign_builtin_delegated(
+                                test.new_auth_builder(2)
+                                    .sign_builtin_delegated_with_signer(signer)
+                            )
+                            .sign_builtin_delegated_with_signer(signer)
+                    )
+                    .sign_builtin_delegated_with_signer(signer)
+            )
+            .is_ok());
+    }
+    // Use different valid delegated signer sets at different levels
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(0)
+                .sign_builtin_delegated(
+                    test.new_auth_builder(1)
+                        .sign_builtin_delegated(
+                            test.new_auth_builder(2)
+                                .sign_builtin_delegated_with_signer(&valid_multisig_signer_1)
+                        )
+                        .sign_builtin_delegated_with_signer(&valid_multisig_signer_2)
+                )
+                .sign_builtin_delegated_with_signer(&valid_multisig_signer_3)
+        )
+        .is_ok());
+
+    // Use indirect delegation to a contract that then delegates to a
+    // single-signer account
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(0).sign_direct_delegated(
+                test.new_auth_builder(1)
+                    .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+                    .expect_valid_payload()
+            )
+        )
+        .is_ok());
+    // Use indirect delegation via a contract call that then delegates to a
+    // multisig account
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(0).sign_try_indirect_delegated(
+                test.new_auth_builder(1)
+                    .sign_builtin_delegated_with_signer(&valid_multisig_signer_1)
+                    .expect_valid_payload(),
+                true
+            )
+        )
+        .is_ok());
+    // Use built-in delegation to a multisig account within built-in delegate
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(0).sign_builtin_delegated(
+                test.new_auth_builder(1)
+                    .sign_direct_delegated(
+                        test.new_auth_builder(2)
+                            .sign_builtin_delegated_with_signer(&valid_multisig_signer_2)
+                            .expect_valid_payload()
+                    )
+                    .expect_valid_payload()
+            )
+        )
+        .is_ok());
+
+    // Failure scenarios
+    let invalid_single_sig_account_signer = TestSigner::account(&keys[1]);
+    let invalid_multisig_signers = [
+        // Not enough weight
+        TestSigner::account_with_multisig(&multisig_account, vec![&keys[1], &keys[4]]),
+        // No overlap with the actual signers
+        TestSigner::account_with_multisig(&multisig_account, vec![&keys[0], &keys[1]]),
+        // Valid signers but duplicated
+        TestSigner::account_with_multisig(&multisig_account, vec![&keys[3], &keys[3]]),
+    ];
+
+    // Directly delegate to single signer account with wrong signature
+    assert!(HostError::result_matches_err(
+        test.call_auth_fn(
+            test.new_auth_builder(0)
+                .sign_builtin_delegated_with_signer(&invalid_single_sig_account_signer)
+        ),
+        (ScErrorType::Auth, ScErrorCode::InvalidAction)
+    ));
+    // Delegate to single signer account with wrong signature at deeper level
+    assert!(HostError::result_matches_err(
+        test.call_auth_fn(
+            test.new_auth_builder(0).sign_builtin_delegated(
+                test.new_auth_builder(1)
+                    .sign_builtin_delegated_with_signer(&invalid_single_sig_account_signer)
+            )
+        ),
+        (ScErrorType::Auth, ScErrorCode::InvalidAction)
+    ));
+    // Delegate to various invalid multisig signature sets
+    for invalid_signer in &invalid_multisig_signers {
+        assert!(HostError::result_matches_err(
+            test.call_auth_fn(
+                test.new_auth_builder(0)
+                    .sign_builtin_delegated_with_signer(invalid_signer)
+            ),
+            (ScErrorType::Auth, ScErrorCode::InvalidAction)
+        ));
+        assert!(HostError::result_matches_err(
+            test.call_auth_fn(
+                test.new_auth_builder(0).sign_builtin_delegated(
+                    test.new_auth_builder(1)
+                        .sign_builtin_delegated_with_signer(invalid_signer)
+                )
+            ),
+            (ScErrorType::Auth, ScErrorCode::InvalidAction)
+        ));
+        assert!(HostError::result_matches_err(
+            test.call_auth_fn(
+                test.new_auth_builder(0)
+                    .sign_builtin_delegated(
+                        test.new_auth_builder(1)
+                            .sign_builtin_delegated(
+                                test.new_auth_builder(2)
+                                    .sign_builtin_delegated_with_signer(invalid_signer)
+                            )
+                            .sign_builtin_delegated_with_signer(&single_sig_account_signer)
+                    )
+                    .sign_builtin_delegated_with_signer(&valid_multisig_signer_1)
+            ),
+            (ScErrorType::Auth, ScErrorCode::InvalidAction)
+        ));
+    }
 }

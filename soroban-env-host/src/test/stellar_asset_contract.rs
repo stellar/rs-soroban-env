@@ -2504,7 +2504,7 @@ fn test_auth_rejected_for_bad_signature_type() {
     // Use incorrectly typed value for the signature.
     let admin_bad_val_signer = TestSigner::AccountContract(AccountContractSigner {
         address: admin.address(&test.host),
-        sign: Box::new(|_| Val::VOID.into()),
+        sign: Rc::new(|_| Val::VOID.into()),
     });
     authorize_single_invocation(
         &test.host,
@@ -3706,7 +3706,7 @@ fn test_sac_reentry_is_not_allowed() {
 
     let account_signer = TestSigner::AccountContract(AccountContractSigner {
         address: account_contract_addr.clone(),
-        sign: Box::new(|_| Val::VOID.into()),
+        sign: Rc::new(|_| Val::VOID.into()),
     });
     test.host
         .call(

@@ -1148,9 +1148,9 @@ pub(crate) mod wasm {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn simple_account_sign_fn(host: &Host, kp: &SigningKey) -> Box<dyn Fn(&[u8]) -> Val> {
+pub fn simple_account_sign_fn(host: &Host, kp: &SigningKey) -> Rc<dyn Fn(&[u8]) -> Val> {
     use crate::builtin_contracts::testutils::sign_payload_for_ed25519;
     let host = host.clone();
     let kp = kp.clone();
-    Box::new(move |payload: &[u8]| -> Val { sign_payload_for_ed25519(&host, &kp, payload).into() })
+    Rc::new(move |payload: &[u8]| -> Val { sign_payload_for_ed25519(&host, &kp, payload).into() })
 }
