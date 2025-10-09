@@ -16,7 +16,7 @@ ifeq ($(PROTOCOL_VERSION),)
 endif
 
 regenerate-test-wasms:
-	for i in $(wildcard */Cargo.toml); do \
+	for i in builtin_auth_delegation/Cargo.toml; do \
 		(cd $$(dirname $$i) && cargo rustc \
 			--target wasm32v1-none \
 			--release \

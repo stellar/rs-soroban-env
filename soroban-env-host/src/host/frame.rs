@@ -1,6 +1,7 @@
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
+    builtin_contracts::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME,
     err,
     host::{
         metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
@@ -1150,6 +1151,45 @@ impl Host {
             let key = self.contract_instance_ledger_key(&contract_id)?;
 
             self.store_contract_instance(None, updated_instance_storage, contract_id, &key)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn ensure_check_auth_frame(&self, context_host_fn: &str) -> Result<(), HostError> {
+        let fn_name = self.with_current_frame(|f| {
+            let fn_name = match f {
+                Frame::ContractVM { fn_name, .. } => fn_name,
+                Frame::HostFunction(_) => {
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "ensure_auth_check_frame is not suppported for host fns",
+                        &[],
+                    ));
+                }
+                Frame::StellarAssetContract(..) => {
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "ensure_auth_check_frame is not suppported for stellar asset contract",
+                        &[],
+                    ));
+                }
+                #[cfg(any(test, feature = "testutils"))]
+                Frame::TestContract(c) => &c.func,
+            };
+            fn_name.metered_clone(self)
+        })?;
+        if !self.symbol_matches(ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.as_bytes(), fn_name)? {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InvalidAction,
+                &format!(
+                    "{} host function can only be called from within `__check_auth`, but was called within a different contract function",
+                    context_host_fn,
+                ),
+                &[fn_name.into()],
+            ));
         }
         Ok(())
     }

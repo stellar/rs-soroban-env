@@ -261,6 +261,7 @@ impl MeteredClone for u64 {}
 impl MeteredClone for i64 {}
 impl MeteredClone for u128 {}
 impl MeteredClone for i128 {}
+impl MeteredClone for usize {}
 // endregion: primitive types
 
 // region: Val-wrapping types

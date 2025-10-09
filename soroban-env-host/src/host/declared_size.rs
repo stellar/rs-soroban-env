@@ -1,7 +1,9 @@
 use crate::{
     auth::{
         AccountAuthorizationTracker, AccountAuthorizationTrackerSnapshot, AuthorizedInvocation,
-        AuthorizedInvocationSnapshot, ContractInvocation, InvokerContractAuthorizationTracker,
+        AuthorizedInvocationSnapshot, ContractInvocation, DelegatedAccountAuthSignerTreeNode,
+        DelegatedAccountAuthSignerTreeNodeSnapshot, DelegatedAccountAuthTrackerSnapshot,
+        InvokerContractAuthorizationTracker,
     },
     builtin_contracts::base_types::Address,
     events::{
@@ -126,8 +128,11 @@ impl_declared_size_type!(EventError, 1);
 impl_declared_size_type!(ContractInvocation, 16);
 impl_declared_size_type!(AuthorizedInvocation, 176);
 impl_declared_size_type!(AuthorizedInvocationSnapshot, 32);
-impl_declared_size_type!(AccountAuthorizationTracker, 280);
-impl_declared_size_type!(AccountAuthorizationTrackerSnapshot, 40);
+impl_declared_size_type!(AccountAuthorizationTracker, 320);
+impl_declared_size_type!(AccountAuthorizationTrackerSnapshot, 96);
+impl_declared_size_type!(DelegatedAccountAuthSignerTreeNode, 48);
+impl_declared_size_type!(DelegatedAccountAuthSignerTreeNodeSnapshot, 32);
+impl_declared_size_type!(DelegatedAccountAuthTrackerSnapshot, 48);
 impl_declared_size_type!(InvokerContractAuthorizationTracker, 232);
 impl_declared_size_type!(InternalDiagnosticArg, 64);
 impl_declared_size_type!(InternalDiagnosticEvent, 88);
@@ -255,7 +260,7 @@ impl_declared_size_type!(ContractDataDurability, 4);
 impl_declared_size_type!(ExtensionPoint, 0);
 
 impl_declared_size_type!(ScContractInstance, 64);
-impl_declared_size_type!(SorobanAuthorizationEntry, 296);
+impl_declared_size_type!(SorobanAuthorizationEntry, 320);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 168);
 impl_declared_size_type!(SorobanAuthorizedFunction, 144);
 
@@ -462,18 +467,33 @@ mod test {
                 .to_string()
                 .as_str(),
         );
-        expect!["272"].assert_eq(
+        expect!["280"].assert_eq(
             size_of::<AccountAuthorizationTracker>()
                 .to_string()
                 .as_str(),
         );
-        expect!["40"].assert_eq(
+        expect!["96"].assert_eq(
             size_of::<AccountAuthorizationTrackerSnapshot>()
                 .to_string()
                 .as_str(),
         );
         expect!["232"].assert_eq(
             size_of::<InvokerContractAuthorizationTracker>()
+                .to_string()
+                .as_str(),
+        );
+        expect!["48"].assert_eq(
+            size_of::<DelegatedAccountAuthSignerTreeNode>()
+                .to_string()
+                .as_str(),
+        );
+        expect!["32"].assert_eq(
+            size_of::<DelegatedAccountAuthSignerTreeNodeSnapshot>()
+                .to_string()
+                .as_str(),
+        );
+        expect!["56"].assert_eq(
+            size_of::<DelegatedAccountAuthTrackerSnapshot>()
                 .to_string()
                 .as_str(),
         );
@@ -543,7 +563,7 @@ mod test {
         expect!["4"].assert_eq(size_of::<ContractDataDurability>().to_string().as_str());
         expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ScContractInstance>().to_string().as_str());
-        expect!["296"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
+        expect!["320"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
         expect!["168"].assert_eq(
             size_of::<SorobanAuthorizedInvocation>()
                 .to_string()

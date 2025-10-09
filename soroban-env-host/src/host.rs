@@ -3323,6 +3323,27 @@ impl VmCallerEnv for Host {
             .into())
     }
 
+    fn delegate_account_auth(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        address: AddressObject,
+    ) -> Result<Void, Self::Error> {
+        self.ensure_check_auth_frame("delegate_account_auth")?;
+        Ok(self
+            .try_borrow_authorization_manager()?
+            .delegate_account_auth(self, address)?
+            .into())
+    }
+
+    fn get_delegated_signers_for_current_auth_check(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+    ) -> Result<VecObject, Self::Error> {
+        self.ensure_check_auth_frame("get_delegated_signers_for_current_auth_check")?;
+        self.try_borrow_authorization_manager()?
+            .get_delegated_signers_for_current_auth_check(self)
+    }
+
     fn authorize_as_curr_contract(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,

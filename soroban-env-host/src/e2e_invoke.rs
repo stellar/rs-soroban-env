@@ -587,6 +587,9 @@ fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
             address_creds.signature = ScVal::Void;
         }
         SorobanCredentials::SourceAccount => {}
+        SorobanCredentials::AddressWithDelegates(address_creds_with_delegates) => {
+            address_creds_with_delegates.address_credentials.signature = ScVal::Void;
+        }
     }
 }
 
