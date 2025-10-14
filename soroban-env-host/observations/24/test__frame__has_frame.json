@@ -1,0 +1,16 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_new()": "cpu:14930, mem:80, objs:-/1@6e27cef",
+  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:15433, mem:160, objs:-/2@19dff6ca",
+  "   3 call symbol_new_from_slice(13)": "cpu:36979, mem:2038, objs:-/3@52e71cc, store:-/2@7bc024e1, foot:2@d6be0e71",
+  "   4 ret symbol_new_from_slice -> Ok(Symbol(obj#7))": "cpu:37989, mem:2147, objs:-/4@d72f5dc1",
+  "   5 push TEST:   0:sym#7()": "cpu:48533, mem:3291, objs:-/5@af7c85bb, stk:1@8e5c3d6a, auth:1@8b9c58a5/-",
+  "   6 call symbol_new_from_slice(13)": "",
+  "   7 ret symbol_new_from_slice -> Ok(Symbol(obj#11))": "cpu:49543, mem:3400, objs:-/6@6c5fdc1a",
+  "   8 call obj_cmp(Symbol(obj#11), Symbol(obj#7))": "",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:49832",
+  "  10 pop TEST:   0:sym#7 -> Ok(Void)": "",
+  "  11 push TEST:   0:()": "cpu:54601, mem:4360, objs:-/7@e5e0c6fc, stk:1@bee58c5, auth:1@2014a68d/-",
+  "  12 pop TEST:   0: -> Ok(Void)": "",
+  "  13 end": "cpu:54601, mem:4360, prngs:-/9b4a753, objs:-/7@e5e0c6fc, vm:-/-, evt:-, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+}

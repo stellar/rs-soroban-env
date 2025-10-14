@@ -84,9 +84,8 @@ pub struct CoverageScoreboard {
     pub vm_to_vm_calls: usize,
 }
 
-// The soroban 23.x host only supports protocol 23 and later, having adopted a
-// new module caching strategy, it cannot accurately replay earlier contracts.
-// Earlier protocols must run on Soroban 22.x or earlier.
+// The soroban 24.x host supports protocols 23 and 24 -- 24 is an
+// core release that has no soroban changes relative to 23.
 
 pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 23;
 

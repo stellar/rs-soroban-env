@@ -1,0 +1,14 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call string_new_from_slice(26)": "",
+  "   2 ret string_new_from_slice -> Ok(String(obj#1))": "cpu:969, mem:122, objs:-/1@2e65bfdf",
+  "   3 call string_to_bytes(String(obj#1))": "",
+  "   4 ret string_to_bytes -> Ok(Bytes(obj#3))": "cpu:2121, mem:244, objs:-/2@c53bb02f",
+  "   5 call bytes_copy_to_slice(Bytes(obj#3), U32(0), 26)": "",
+  "   6 ret bytes_copy_to_slice -> Ok(())": "cpu:2227",
+  "   7 call bytes_to_string(Bytes(obj#3))": "",
+  "   8 ret bytes_to_string -> Ok(String(obj#5))": "cpu:3379, mem:366, objs:-/3@3dc130b",
+  "   9 call string_copy_to_slice(String(obj#5), U32(0), 26)": "",
+  "  10 ret string_copy_to_slice -> Ok(())": "cpu:3485",
+  "  11 end": "cpu:3485, mem:366, prngs:-/-, objs:-/3@3dc130b, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
