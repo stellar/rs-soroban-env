@@ -3268,7 +3268,7 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         input: VecObject,
-        field: U32Val,
+        field: Symbol,
         t: U32Val,
         d: U32Val,
         rounds_f: U32Val,
@@ -3279,43 +3279,38 @@ impl VmCallerEnv for Host {
         use ark_bls12_381::Fr as BlsScalar;
         use ark_bn254::Fr as BnScalar;
 
-        let field_val: u32 = field.into();
         let t_val: u32 = t.into();
         let d_val: u32 = d.into();
         let rounds_f_val: u32 = rounds_f.into();
         let rounds_p_val: u32 = rounds_p.into();
-
-        match field_val {
-            0 => {
-                // BLS12-381 Fr
-                self.poseidon_permutation_impl::<BlsScalar>(
-                    input,
-                    t_val as usize,
-                    d_val as usize,
-                    rounds_f_val as usize,
-                    rounds_p_val as usize,
-                    mds,
-                    round_constants,
-                )
-            }
-            1 => {
-                // BN254 Fr
-                self.poseidon_permutation_impl::<BnScalar>(
-                    input,
-                    t_val as usize,
-                    d_val as usize,
-                    rounds_f_val as usize,
-                    rounds_p_val as usize,
-                    mds,
-                    round_constants,
-                )
-            }
-            _ => Err(self.err(
+        
+        if self.symbol_matches("BLS12_381".as_bytes(), field)? {
+            self.poseidon_permutation_impl::<BlsScalar>(
+                input,
+                t_val,
+                d_val,
+                rounds_f_val,
+                rounds_p_val,
+                mds,
+                round_constants,
+            )
+        } else if self.symbol_matches("BN254".as_bytes(), field)? {
+            self.poseidon_permutation_impl::<BnScalar>(
+                input,
+                t_val,
+                d_val,
+                rounds_f_val,
+                rounds_p_val,
+                mds,
+                round_constants,
+            )
+        } else {
+            Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                "poseidon_permutation: invalid field type, must be 0 (BLS12-381) or 1 (BN254)",
+                "poseidon_permutation: invalid field symbol, must be 'BLS12_381' or 'BN254'",
                 &[field.to_val()],
-            )),
+            ))
         }
     }
 
@@ -3323,7 +3318,7 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         input: VecObject,
-        field: U32Val,
+        field: Symbol,
         t: U32Val,
         d: U32Val,
         rounds_f: U32Val,
@@ -3334,43 +3329,38 @@ impl VmCallerEnv for Host {
         use ark_bls12_381::Fr as BlsScalar;
         use ark_bn254::Fr as BnScalar;
 
-        let field_val: u32 = field.into();
         let t_val: u32 = t.into();
         let d_val: u32 = d.into();
         let rounds_f_val: u32 = rounds_f.into();
         let rounds_p_val: u32 = rounds_p.into();
 
-        match field_val {
-            0 => {
-                // BLS12-381 Fr
-                self.poseidon2_permutation_impl::<BlsScalar>(
-                    input,
-                    t_val as usize,
-                    d_val as usize,
-                    rounds_f_val as usize,
-                    rounds_p_val as usize,
-                    mat_internal_diag_m_1,
-                    round_constants,
-                )
-            }
-            1 => {
-                // BN254 Fr
-                self.poseidon2_permutation_impl::<BnScalar>(
-                    input,
-                    t_val as usize,
-                    d_val as usize,
-                    rounds_f_val as usize,
-                    rounds_p_val as usize,
-                    mat_internal_diag_m_1,
-                    round_constants,
-                )
-            }
-            _ => Err(self.err(
+        if self.symbol_matches("BLS12_381".as_bytes(), field)? {
+            self.poseidon2_permutation_impl::<BlsScalar>(
+                input,
+                t_val as usize,
+                d_val as usize,
+                rounds_f_val as usize,
+                rounds_p_val as usize,
+                mat_internal_diag_m_1,
+                round_constants,
+            )
+        } else if self.symbol_matches("BN254".as_bytes(), field)? {
+            self.poseidon2_permutation_impl::<BnScalar>(
+                input,
+                t_val as usize,
+                d_val as usize,
+                rounds_f_val as usize,
+                rounds_p_val as usize,
+                mat_internal_diag_m_1,
+                round_constants,
+            )
+        } else {
+            Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
                 "poseidon2_permutation: invalid field type, must be 0 (BLS12-381) or 1 (BN254)",
                 &[field.to_val()],
-            )),
+            ))
         }
     }
 
