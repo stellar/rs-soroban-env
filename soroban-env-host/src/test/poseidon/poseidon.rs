@@ -49,9 +49,9 @@ mod poseidon_tests_bls12 {
                     }
                 }
 
-                let perm1 = instance.permutation(&input1, &host).unwrap();
-                let perm2 = instance.permutation(&input1, &host).unwrap();
-                let perm3 = instance.permutation(&input2, &host).unwrap();
+                let perm1 = instance.permutation(&host, &input1).unwrap();
+                let perm2 = instance.permutation(&host, &input1).unwrap();
+                let perm3 = instance.permutation(&host, &input2).unwrap();
                 assert_eq!(perm1, perm2);
                 assert_ne!(perm1, perm3);
             }
@@ -63,7 +63,7 @@ mod poseidon_tests_bls12 {
         let host = Host::test_host();
         let poseidon_2 = Poseidon::new((**POSEIDON_BLS_2_PARAMS).clone());
         let input_2: Vec<Scalar> = vec![Scalar::from(0), Scalar::from(1),];
-        let perm_2 = poseidon_2.permutation(&input_2, &host).unwrap();
+        let perm_2 = poseidon_2.permutation(&host, &input_2).unwrap();
         assert_eq!(
             perm_2[0],
             from_hex("0x1dc37ce34aeee058292bb73bff9acffce73a8a92f3d6d1daa8b77d9516b5c837")
@@ -75,7 +75,7 @@ mod poseidon_tests_bls12 {
 
         let poseidon_3 = Poseidon::new((**POSEIDON_BLS_3_PARAMS).clone());
         let input_3: Vec<Scalar> = vec![Scalar::from(0), Scalar::from(1), Scalar::from(2)];
-        let perm_3 = poseidon_3.permutation(&input_3, &host).unwrap();
+        let perm_3 = poseidon_3.permutation(&host, &input_3).unwrap();
         assert_eq!(
             perm_3[0],
             from_hex("0x200e6982ac00df8fa65cef1fde9f21373fdbbfd98f2df1eb5fa04f3302ab0397")
@@ -111,7 +111,7 @@ mod poseidon_tests_bls12 {
         ];
         
         // Run the permutation
-        let result = poseidon.permutation(&input, &host).unwrap();
+        let result = poseidon.permutation(&host, &input).unwrap();
         
         // Verify the output matches expected values
         assert_eq!(result.len(), expected_output.len());
@@ -145,7 +145,7 @@ mod poseidon_tests_bls12 {
         ];
         
         // Run the permutation
-        let result = poseidon.permutation(&input, &host).unwrap();
+        let result = poseidon.permutation(&host, &input).unwrap();
         
         // Verify the output matches expected values
         assert_eq!(result.len(), expected_output.len());
@@ -183,9 +183,9 @@ mod poseidon_tests_bn254 {
                 }
             }
 
-            let perm1 = poseidon.permutation(&input1, &host).unwrap();
-            let perm2 = poseidon.permutation(&input1, &host).unwrap();
-            let perm3 = poseidon.permutation(&input2, &host).unwrap();
+            let perm1 = poseidon.permutation(&host, &input1).unwrap();
+            let perm2 = poseidon.permutation(&host, &input1).unwrap();
+            let perm3 = poseidon.permutation(&host, &input2).unwrap();
             assert_eq!(perm1, perm2);
             assert_ne!(perm1, perm3);
         }
@@ -196,7 +196,7 @@ mod poseidon_tests_bn254 {
         let host = Host::test_host();
         let poseidon = Poseidon::new((**POSEIDON_BN_PARAMS).clone());
         let input: Vec<Scalar> = vec![Scalar::from(0), Scalar::from(1), Scalar::from(2)];
-        let perm = poseidon.permutation(&input, &host).unwrap();
+        let perm = poseidon.permutation(&host, &input).unwrap();
         assert_eq!(
             perm[0],
             from_hex("0x2677d68d9cfa91f197bf5148b50afac461b6b8340ff119a5217794770baade5f")
@@ -232,7 +232,7 @@ mod poseidon_tests_bn254 {
         ];
         
         // Run the permutation
-        let result = poseidon.permutation(&input, &host).unwrap();
+        let result = poseidon.permutation(&host, &input).unwrap();
         
         // Verify the output matches expected values
         assert_eq!(result.len(), expected_output.len());
@@ -266,7 +266,7 @@ mod poseidon_tests_bn254 {
         ];
         
         // Run the permutation
-        let result = poseidon.permutation(&input, &host).unwrap();
+        let result = poseidon.permutation(&host, &input).unwrap();
         
         // Verify the output matches expected values
         assert_eq!(result.len(), expected_output.len());

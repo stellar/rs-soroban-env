@@ -13,3 +13,7 @@ pub use poseidon::Poseidon;
 pub use poseidon2::Poseidon2;
 pub use poseidon_params::PoseidonParams;
 pub use poseidon2_params::Poseidon2Params;
+
+// Both BLS12-381 and BN254 require sbox degree to be 5, and these are the only
+// two fields we currently support.
+pub(crate) const SUPPORTED_SBOX_DEGREES: [u32; 1] = [5];

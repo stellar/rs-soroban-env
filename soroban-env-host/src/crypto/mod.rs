@@ -310,10 +310,10 @@ impl Host {
     pub(crate) fn poseidon_permutation_impl<S>(
         &self,
         input: VecObject,
-        t: usize,
-        d: usize,
-        rounds_f: usize,
-        rounds_p: usize,
+        t: u32,
+        d: u32,
+        rounds_f: u32,
+        rounds_p: u32,
         mds: VecObject,
         round_constants: VecObject,
     ) -> Result<VecObject, HostError>
@@ -333,11 +333,11 @@ impl Host {
             self.metered_scalar_vec_of_vec_from_vecobj::<S>(round_constants)?;
 
         // Create PoseidonParams
-        let params = PoseidonParams::new(t, d, rounds_f, rounds_p, mds_matrix, round_constants_matrix)?;
+        let params = PoseidonParams::new(self, t, d, rounds_f, rounds_p, mds_matrix, round_constants_matrix)?;
 
         // Create Poseidon instance and run permutation
         let poseidon = Poseidon::new(params);
-        let output = poseidon.permutation(&input_vec, self)?;
+        let output = poseidon.permutation(self, &input_vec)?;
 
         // Convert output back to VecObject
         self.metered_scalar_vec_to_vecobj(output)

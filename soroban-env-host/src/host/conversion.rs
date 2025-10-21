@@ -296,9 +296,7 @@ impl Host {
         S: MeteredScalar,
     {
         self.visit_obj(vp, |hv: &HostVec| {
-            let len = hv.len();
-            Vec::<S>::charge_bulk_init_cpy(len as u64, self)?;
-            let mut scalars: Vec<S> = Vec::with_capacity(len);
+            let mut scalars: Vec<S> = Vec::with_metered_capacity(hv.len(), self)?;
             for val in hv.iter() {
                 let u256_val = U256Val::try_from(val.clone()).map_err(|_| {
                     self.err(
@@ -350,7 +348,7 @@ impl Host {
             let n_rows = hv.len();
             let mut result = Vec::with_metered_capacity(n_rows, self)?;
             for row_val in hv.iter() {
-                let row_obj = crate::VecObject::try_from(row_val.clone()).map_err(|_| {
+                let row_obj = VecObject::try_from(row_val.clone()).map_err(|_| {
                     self.err(
                         ScErrorType::Crypto,
                         ScErrorCode::InvalidInput,

@@ -278,7 +278,7 @@ lazy_static::lazy_static!  {
     ],
     ];
 
-    pub static ref POSEIDON_BN_PARAMS: Arc<PoseidonParams<Scalar>> = Arc::new(PoseidonParams::new(
+    pub static ref POSEIDON_BN_PARAMS: Arc<PoseidonParams<Scalar>> = Arc::new(PoseidonParams::new_unchecked(
         3, 5, 8, 56, MDS3.clone(), RC3.clone()
-    ).unwrap());
+    ));
 }

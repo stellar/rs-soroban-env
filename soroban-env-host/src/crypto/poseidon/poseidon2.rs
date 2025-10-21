@@ -27,21 +27,21 @@ impl<F: MeteredScalar> Poseidon2<F> {
         self.matmul_external(&mut current_state, host)?;
 
         for r in 0..self.params.rounds_f_beginning {
-            current_state = utils::add_rc(&current_state, &self.params.round_constants[r], host)?;
-            current_state = utils::sbox(&current_state, self.params.d, host)?;
+            current_state = utils::add_rc(host, &current_state, &self.params.round_constants[r])?;
+            current_state = utils::sbox(host, &current_state, self.params.d)?;
             self.matmul_external(&mut current_state, host)?;
         }
 
         let p_end = self.params.rounds_f_beginning + self.params.rounds_p;
         for r in self.params.rounds_f_beginning..p_end {
             current_state[0].metered_add_assign(&self.params.round_constants[r][0], host)?;
-            current_state[0] = utils::sbox_p(&current_state[0], self.params.d, host)?;
+            current_state[0] = utils::sbox_p(host, &current_state[0], self.params.d)?;
             self.matmul_internal(&mut current_state, &self.params.mat_internal_diag_m_1, host)?;
         }
         
         for r in p_end..self.params.rounds {
-            current_state = utils::add_rc(&current_state, &self.params.round_constants[r], host)?;
-            current_state = utils::sbox(&current_state, self.params.d, host)?;
+            current_state = utils::add_rc(host, &current_state, &self.params.round_constants[r])?;
+            current_state = utils::sbox(host, &current_state, self.params.d)?;
             self.matmul_external(&mut current_state, host)?;
         }
         Ok(current_state)

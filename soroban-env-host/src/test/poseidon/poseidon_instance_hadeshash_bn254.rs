@@ -145,11 +145,11 @@ vec![from_hex("0x0fe0af7858e49859e2a54d6f1ad945b1316aa24bfbdd23ae40a6d0cb70c3eab
     vec![from_hex("0x2036efb6f9830965eb3d7a068bd087c9f5adf251ba62052c652738e63ff8b3af"), from_hex("0x0c712a975b74dc9d766b639a029969ca30be4f75a753f854b00fa4f1b4f4ee9b"), from_hex("0x08014dab3cd1667e27afc99bfac1e6807afdff6456492ca3375731d387539699"), from_hex("0x198d07192db4fac2a82a4a79839d6a2b97c4dd4d37b4e8f3b53009f79b34e6a4"), from_hex("0x29eb1de42a3ad381b23b4131426897a32709b29d53bb946dfd15784d1f63e572")]];
 
     pub static ref POSEIDONPERM_X5_254_3: Arc<PoseidonParams<Scalar>> = Arc::new(
-        PoseidonParams::new(3, 5, 8, 57, MDS3.clone(), RC3.clone()).unwrap()
+        PoseidonParams::new_unchecked(3, 5, 8, 57, MDS3.clone(), RC3.clone())
     );
 
     pub static ref POSEIDONPERM_X5_254_5: Arc<PoseidonParams<Scalar>> = Arc::new(
-        PoseidonParams::new(5, 5, 8, 60, MDS5.clone(), RC5.clone()).unwrap()
+        PoseidonParams::new_unchecked(5, 5, 8, 60, MDS5.clone(), RC5.clone())
     );
 }
 
