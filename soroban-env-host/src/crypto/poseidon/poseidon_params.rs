@@ -1,5 +1,6 @@
-use crate::{crypto::poseidon::SUPPORTED_SBOX_DEGREES, xdr::{ScErrorCode, ScErrorType}, Host, HostError, Val};
+use crate::{crypto::poseidon::SUPPORTED_SBOX_DEGREES, Host, HostError, Val, ErrorHandler};
 use super::super::metered_scalar::MeteredScalar;
+use super::INVALID_INPUT;
 
 #[derive(Clone, Debug)]
 pub struct PoseidonParams<S: MeteredScalar> {
@@ -25,18 +26,18 @@ impl<S: MeteredScalar> PoseidonParams<S> {
         round_constants: Vec<Vec<S>>,
     ) -> Result<Self, HostError> {
         if !SUPPORTED_SBOX_DEGREES.contains(&d) {
-            return Err(host.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "Unsupported s-box degree", &[Val::from_u32(d).into()]));
+            return Err(host.error(INVALID_INPUT, "Unsupported s-box degree", &[Val::from_u32(d).into()]));
         }
         if mds.len() != t as usize {
-            return Err(host.err(ScErrorType::Crypto, ScErrorCode::InvalidInput , "mds matrix length does not match `t`", &[Val::from_u32(mds.len() as u32).into(), Val::from_u32(t).into()]));
+            return Err(host.error(INVALID_INPUT, "mds matrix length does not match `t`", &[Val::from_u32(mds.len() as u32).into(), Val::from_u32(t).into()]));
         }
         if rounds_f % 2 != 0 {
-            return Err(host.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "`round_f` must be even", &[Val::from_u32(rounds_f).into()]));
+            return Err(host.error(INVALID_INPUT, "`round_f` must be even", &[Val::from_u32(rounds_f).into()]));
         }
         let r = rounds_f / 2;
         let rounds = rounds_f + rounds_p;
         if round_constants.len() != rounds as usize {
-            return Err(host.err(ScErrorType::Crypto, ScErrorCode::InvalidInput , "round constants length does not match No. of rounds (rounds_f + rounds_p)", &[Val::from_u32(round_constants.len() as u32).into(), Val::from_u32(rounds).into()]));
+            return Err(host.error(INVALID_INPUT, "round constants length does not match No. of rounds (rounds_f + rounds_p)", &[Val::from_u32(round_constants.len() as u32).into(), Val::from_u32(rounds).into()]));
         }
 
         Ok(PoseidonParams {

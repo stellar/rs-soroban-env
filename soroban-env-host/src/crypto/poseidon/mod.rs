@@ -17,3 +17,7 @@ pub use poseidon2_params::Poseidon2Params;
 // Both BLS12-381 and BN254 require sbox degree to be 5, and these are the only
 // two fields we currently support.
 pub(crate) const SUPPORTED_SBOX_DEGREES: [u32; 1] = [5];
+
+use crate::{xdr::{ScErrorType, ScErrorCode}, Error};
+pub(crate) const VEC_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
+pub(crate) const INVALID_INPUT: Error = Error::from_type_and_code(ScErrorType::Crypto, ScErrorCode::InvalidInput);

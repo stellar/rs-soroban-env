@@ -1,9 +1,9 @@
 use super::poseidon_params::PoseidonParams;
 use super::super::metered_scalar::MeteredScalar;
 use super::utils;
-use crate::{host::metered_clone::{MeteredClone, MeteredContainer}, xdr::{ScErrorCode, ScErrorType}, Host, HostError, Val, Error};
+use super::{VEC_OOB, INVALID_INPUT};
+use crate::{host::metered_clone::{MeteredClone, MeteredContainer}, Host, HostError, Val, ErrorHandler};
 
-const VEC_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
 #[derive(Clone, Debug)]
 pub struct Poseidon<S: MeteredScalar> {
@@ -20,25 +20,38 @@ impl<S: MeteredScalar> Poseidon<S> {
     pub fn permutation(&self, host: &Host, input: &Vec<S>) -> Result<Vec<S>, HostError> {
         let t = self.params.t;
         if input.len() != t {
-            return Err(host.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "poseidon::permutation input length does not match `t`", &[Val::from_u32(input.len() as u32).into(), Val::from_u32(t as u32).into()]));
+            return Err(host.error(INVALID_INPUT, "poseidon::permutation input length does not match `t`", &[Val::from_u32(input.len() as u32).into(), Val::from_u32(t as u32).into()]));
         }
 
         let mut current_state = input.metered_clone(host)?;
 
         for r in 0..self.params.rounds_f_beginning {
-            current_state = utils::add_rc(host, &current_state, self.params.round_constants.get(r).ok_or_else(|| HostError::from(VEC_OOB))?)?;
+            let rc = self.params.round_constants.get(r).ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon: round constant index out of bounds", &[])
+            })?;
+            current_state = utils::add_rc(host, &current_state, rc)?;
             current_state = utils::sbox(host, &current_state, self.params.d)?;
             current_state = self.matmul(host, &current_state, &self.params.mds)?;
         }
+        
         let p_end = self.params.rounds_f_beginning + self.params.rounds_p;
         for r in self.params.rounds_f_beginning..p_end {
-            current_state = utils::add_rc(host, &current_state, self.params.round_constants.get(r).ok_or_else(|| HostError::from(VEC_OOB))?)?;
-            let first = current_state.first_mut().ok_or_else(|| HostError::from(VEC_OOB))?;
+            let rc = self.params.round_constants.get(r).ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon: round constant index out of bounds", &[])
+            })?;
+            current_state = utils::add_rc(host, &current_state, rc)?;
+            let first = current_state.first_mut().ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon: current_state is empty", &[])
+            })?;
             *first = utils::sbox_p(host, first, self.params.d)?;
             current_state = self.matmul(host, &current_state, &self.params.mds)?;
         }
+        
         for r in p_end..self.params.rounds {
-            current_state = utils::add_rc(host, &current_state, self.params.round_constants.get(r).ok_or_else(|| HostError::from(VEC_OOB))?)?;
+            let rc = self.params.round_constants.get(r).ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon: round constant index out of bounds", &[])
+            })?;
+            current_state = utils::add_rc(host, &current_state, rc)?;
             current_state = utils::sbox(host, &current_state, self.params.d)?;
             current_state = self.matmul(host, &current_state, &self.params.mds)?;
         }
@@ -50,9 +63,8 @@ impl<S: MeteredScalar> Poseidon<S> {
 
         // Validate input length matches matrix dimension
         if mat.len() != t {
-            return Err(host.err(
-                ScErrorType::Crypto, 
-                ScErrorCode::InvalidInput, 
+            return Err(host.error(
+                INVALID_INPUT, 
                 "poseidon::matmul: matrix dimension does not match the input length", 
                 &[Val::from_u32(mat.len() as u32).into(), Val::from_u32(t as u32).into()]
             ));
@@ -65,10 +77,9 @@ impl<S: MeteredScalar> Poseidon<S> {
         // Perform matrix-vector multiplication: out[i] = sum(mat[i][j] * input[j])
         for (out_element, matrix_row) in out.iter_mut().zip(mat.iter()) {
             if matrix_row.len() != t {
-                return Err(host.err(
-                    ScErrorType::Crypto, 
-                    ScErrorCode::InvalidInput, 
-                    "poseidon::matmul: matrix row length does not match input length)", 
+                return Err(host.error(
+                    INVALID_INPUT, 
+                    "poseidon::matmul: matrix row length does not match input length", 
                     &[Val::from_u32(matrix_row.len() as u32).into(), Val::from_u32(t as u32).into()]
                 ));
             }

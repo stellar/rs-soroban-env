@@ -1,7 +1,8 @@
 use super::poseidon2_params::Poseidon2Params;
 use super::super::metered_scalar::MeteredScalar;
 use super::utils;
-use crate::{host::metered_clone::MeteredClone, xdr::{ScErrorCode, ScErrorType}, Host, HostError};
+use super::{VEC_OOB, INVALID_INPUT};
+use crate::{host::metered_clone::MeteredClone, Host, HostError, Val, ErrorHandler};
 
 #[derive(Clone, Debug)]
 pub struct Poseidon2<F: MeteredScalar> {
@@ -15,40 +16,58 @@ impl<F: MeteredScalar> Poseidon2<F> {
         }
     }
 
-    pub fn permutation(&self, input: &Vec<F>, host: &Host) -> Result<Vec<F>, HostError> {
+    pub fn permutation(&self, host: &Host, input: &Vec<F>) -> Result<Vec<F>, HostError> {
         let t = self.params.t;
         if input.len() != t {
-            return Err(host.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "poseidon2::permutation input length mismatch", &[]));
+            return Err(host.error(INVALID_INPUT, "poseidon2::permutation input length does not match `t`", &[Val::from_u32(input.len() as u32).into(), Val::from_u32(t as u32).into()]));
         }
 
         let mut current_state = input.metered_clone(host)?;
 
         // Linear layer at beginning
-        self.matmul_external(&mut current_state, host)?;
+        self.matmul_external(host, &mut current_state)?;
 
         for r in 0..self.params.rounds_f_beginning {
-            current_state = utils::add_rc(host, &current_state, &self.params.round_constants[r])?;
+            let rc = self.params.round_constants.get(r).ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon2: round constant index out of bounds", &[])
+            })?;
+            current_state = utils::add_rc(host, &current_state, rc)?;
             current_state = utils::sbox(host, &current_state, self.params.d)?;
-            self.matmul_external(&mut current_state, host)?;
+            self.matmul_external(host, &mut current_state)?;
         }
 
         let p_end = self.params.rounds_f_beginning + self.params.rounds_p;
         for r in self.params.rounds_f_beginning..p_end {
-            current_state[0].metered_add_assign(&self.params.round_constants[r][0], host)?;
-            current_state[0] = utils::sbox_p(host, &current_state[0], self.params.d)?;
-            self.matmul_internal(&mut current_state, &self.params.mat_internal_diag_m_1, host)?;
+            let rc = self.params.round_constants.get(r).ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon2: round constant index out of bounds", &[])
+            })?;
+            let rc_first = rc.first().ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon2: round constant vector is empty", &[])
+            })?;
+            let first = current_state.first_mut().ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon2: current_state is empty", &[])
+            })?;
+            first.metered_add_assign(rc_first, host)?;
+            *first = utils::sbox_p(host, first, self.params.d)?;
+            self.matmul_internal(host, &mut current_state, &self.params.mat_internal_diag_m_1)?;
         }
         
         for r in p_end..self.params.rounds {
-            current_state = utils::add_rc(host, &current_state, &self.params.round_constants[r])?;
+            let rc = self.params.round_constants.get(r).ok_or_else(|| {
+                host.error(VEC_OOB, "poseidon2: round constant index out of bounds", &[])
+            })?;
+            current_state = utils::add_rc(host, &current_state, rc)?;
             current_state = utils::sbox(host, &current_state, self.params.d)?;
-            self.matmul_external(&mut current_state, host)?;
+            self.matmul_external(host, &mut current_state)?;
         }
         Ok(current_state)
     }
 
-    fn matmul_m4(&self, input: &mut[F], host: &Host) -> Result<(), HostError> {
+    fn matmul_m4(&self, host: &Host, input: &mut[F]) -> Result<(), HostError> {
         let t = self.params.t;
+        if t % 4 != 0{
+            // TODO: emit host error (Crypto, InternalError) with a message
+        }
         let t4 = t / 4;
         for i in 0..t4 {
             let start_index = i * 4;
@@ -82,7 +101,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
         Ok(())
     }
 
-    fn matmul_external(&self, input: &mut[F], host: &Host) -> Result<(), HostError> {
+    fn matmul_external(&self, host: &Host, input: &mut[F]) -> Result<(), HostError> {
         let t = self.params.t;
         match t {
             2 => {
@@ -103,11 +122,11 @@ impl<F: MeteredScalar> Poseidon2<F> {
             }
             4 => {
                 // Applying cheap 4x4 MDS matrix to each 4-element part of the state
-                self.matmul_m4(input, host)?;
+                self.matmul_m4(host, input)?;
             }
             8 | 12 | 16 | 20 | 24 => {
                 // Applying cheap 4x4 MDS matrix to each 4-element part of the state
-                self.matmul_m4(input, host)?;
+                self.matmul_m4(host, input)?;
 
                 // Applying second cheap matrix for t > 4
                 let t4 = t / 4;
@@ -123,13 +142,13 @@ impl<F: MeteredScalar> Poseidon2<F> {
                 }
             }
             _ => {
-                return Err(host.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "poseidon2::matmul_external unsupported state size", &[]));
+                return Err(host.error(INVALID_INPUT, "poseidon2::matmul_external unsupported state size", &[]));
             }
         }
         Ok(())
     }
 
-    fn matmul_internal(&self, input: &mut[F], mat_internal_diag_m_1: &[F], host: &Host) -> Result<(), HostError> {
+    fn matmul_internal(&self, host: &Host, input: &mut[F], mat_internal_diag_m_1: &[F]) -> Result<(), HostError> {
         let t = self.params.t;
 
         match t {
@@ -167,7 +186,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
                 }
             }
             _ => {
-                return Err(host.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, "poseidon2::matmul_internal unsupported state size", &[]));
+                return Err(host.error(INVALID_INPUT, "poseidon2::matmul_internal unsupported state size", &[]));
             }
         }
         Ok(())

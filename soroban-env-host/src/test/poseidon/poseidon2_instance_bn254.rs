@@ -285,5 +285,5 @@ lazy_static::lazy_static! {
     ],
     ];
     
-    pub static ref POSEIDON2_BN254_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new(3, 5, 8, 56, MAT_DIAG3_M_1.clone(), RC3.clone()).unwrap());
+    pub static ref POSEIDON2_BN254_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(3, 5, 8, 56, MAT_DIAG3_M_1.clone(), RC3.clone()));
 }

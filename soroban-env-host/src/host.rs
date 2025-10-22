@@ -3337,20 +3337,20 @@ impl VmCallerEnv for Host {
         if self.symbol_matches("BLS12_381".as_bytes(), field)? {
             self.poseidon2_permutation_impl::<BlsScalar>(
                 input,
-                t_val as usize,
-                d_val as usize,
-                rounds_f_val as usize,
-                rounds_p_val as usize,
+                t_val,
+                d_val,
+                rounds_f_val,
+                rounds_p_val,
                 mat_internal_diag_m_1,
                 round_constants,
             )
         } else if self.symbol_matches("BN254".as_bytes(), field)? {
             self.poseidon2_permutation_impl::<BnScalar>(
                 input,
-                t_val as usize,
-                d_val as usize,
-                rounds_f_val as usize,
-                rounds_p_val as usize,
+                t_val,
+                d_val,
+                rounds_f_val,
+                rounds_p_val,
                 mat_internal_diag_m_1,
                 round_constants,
             )

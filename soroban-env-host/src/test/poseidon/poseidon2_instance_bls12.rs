@@ -1522,11 +1522,11 @@ lazy_static::lazy_static! {
     ],
     ];
 
-    pub static ref POSEIDON2_BLS_2_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new(2, 5, 8, 56, MAT_DIAG2_M_1.clone(), RC2.clone()).unwrap());
+    pub static ref POSEIDON2_BLS_2_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(2, 5, 8, 56, MAT_DIAG2_M_1.clone(), RC2.clone()));
     
-    pub static ref POSEIDON2_BLS_3_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new(3, 5, 8, 56, MAT_DIAG3_M_1.clone(), RC3.clone()).unwrap());
+    pub static ref POSEIDON2_BLS_3_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(3, 5, 8, 56, MAT_DIAG3_M_1.clone(), RC3.clone()));
 
-    pub static ref POSEIDON2_BLS_4_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new(4, 5, 8, 56, MAT_DIAG4_M_1.clone(), RC4.clone()).unwrap());
+    pub static ref POSEIDON2_BLS_4_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(4, 5, 8, 56, MAT_DIAG4_M_1.clone(), RC4.clone()));
 
-    pub static ref POSEIDON2_BLS_8_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new(8, 5, 8, 57, MAT_DIAG8_M_1.clone(), RC8.clone()).unwrap());
+    pub static ref POSEIDON2_BLS_8_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(8, 5, 8, 57, MAT_DIAG8_M_1.clone(), RC8.clone()));
 }
