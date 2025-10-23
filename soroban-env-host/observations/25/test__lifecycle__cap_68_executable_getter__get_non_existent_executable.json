@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call get_address_executable(Address(obj#1))": "cpu:15372, mem:160, objs:-/2@c09ca13a",
+  "   2 ret get_address_executable -> Ok(Void)": "cpu:18074, mem:421, store:-/1@cb9f9e1f, foot:1@33ea0ec6",
+  "   3 call get_address_executable(Address(obj#3))": "",
+  "   4 ret get_address_executable -> Ok(Void)": "cpu:20671, mem:775, store:-/2@2d2ec08a, foot:2@1cdf65a1",
+  "   5 end": "cpu:20671, mem:775, prngs:-/9b4a753, objs:-/2@c09ca13a, vm:-/-, evt:-, store:-/2@2d2ec08a, foot:2@1cdf65a1, stk:-, auth:-/-"
+}

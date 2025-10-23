@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_binary_search(Vec(obj#1), U32(7))": "cpu:975, mem:144, objs:-/1@522d50d5",
+  "   2 ret vec_binary_search -> Ok(4294967300)": "cpu:1143",
+  "   3 call vec_binary_search(Vec(obj#1), U32(4))": "",
+  "   4 ret vec_binary_search -> Ok(4294967298)": "cpu:1311",
+  "   5 call vec_binary_search(Vec(obj#1), U32(3))": "",
+  "   6 ret vec_binary_search -> Ok(2)": "cpu:1479",
+  "   7 call vec_binary_search(Vec(obj#1), U32(6))": "",
+  "   8 ret vec_binary_search -> Ok(4)": "cpu:1647",
+  "   9 end": "cpu:1647, mem:144, prngs:-/-, objs:-/1@522d50d5, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

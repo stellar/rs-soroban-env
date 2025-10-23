@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call get_address_executable(Address(obj#1))": "cpu:16823, mem:341, objs:-/1@c16ada7c, store:-/1@45b76afe, foot:1@b6c34bc1",
+  "   2 call vec_new_from_slice(1)": "cpu:18145, mem:477",
+  "   3 ret vec_new_from_slice -> Ok(Vec(obj#3))": "cpu:19110, mem:581, objs:-/2@8a500691",
+  "   4 ret get_address_executable -> Ok(Vec(obj#3))": "cpu:19171",
+  "   5 call vec_get(Vec(obj#3), U32(0))": "",
+  "   6 ret vec_get -> Ok(Symbol(Account))": "cpu:19336",
+  "   7 call symbol_index_in_strs(Symbol(Account), 3)": "",
+  "   8 ret symbol_index_in_strs -> Ok(U32(2))": "cpu:19468",
+  "   9 end": "cpu:19468, mem:581, prngs:-/9b4a753, objs:-/2@8a500691, vm:-/-, evt:-, store:-/1@45b76afe, foot:1@b6c34bc1, stk:-, auth:-/-"
+}
