@@ -1,5 +1,5 @@
 use crate::{
-    budget::AsBudget, crypto::metered_scalar::MeteredScalar, host_object::HostVec, xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType}, Bool, BytesObject, ConversionError, Env, ErrorHandler, Host, HostError, TryFromVal, U256Val, Val, VecObject, U256
+    budget::AsBudget, crypto::metered_scalar::MeteredScalar, host_object::HostVec, xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType}, Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Val, Val, VecObject
 };
 use ark_bls12_381::{
     g1::Config as G1Config, g2::Config as G2Config, Bls12_381, Fq, Fq12, Fq2, Fr, G1Affine,
@@ -16,7 +16,7 @@ use ark_ec::{
     short_weierstrass::{Affine, Projective, SWCurveConfig},
     AffineRepr, CurveConfig, CurveGroup,
 };
-use ark_ff::{field_hashers::DefaultFieldHasher, BigInteger, Field, PrimeField};
+use ark_ff::{field_hashers::DefaultFieldHasher, Field};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use num_traits::Zero;
 use sha2::Sha256;
@@ -329,19 +329,7 @@ impl Host {
     }
 
     pub(crate) fn fr_to_u256val(&self, scalar: Fr) -> Result<U256Val, HostError> {
-        self.charge_budget(ContractCostType::Bls12381FrToU256, None)?;
-        // The `into_bigint` carries the majority of the cost. It performs the
-        // Montgomery reduction on the internal representation, which is doing a
-        // number of wrapping arithmetics on each u64 word (`Fr` contains 4
-        // words). The core routine is in `ark_ff::MontConfig::into_bigint`,
-        // this cannot panic.
-        let bytes: [u8; 32] = scalar
-            .into_bigint()
-            .to_bytes_be()
-            .try_into()
-            .map_err(|_| HostError::from(ConversionError))?;
-        let u = U256::from_be_bytes(bytes);
-        self.map_err(U256Val::try_from_val(self, &u))
+        scalar.to_u256val(self)
     }
 
     pub(crate) fn field_element_deserialize<const EXPECTED_SIZE: usize, T: CanonicalDeserialize>(

@@ -7,7 +7,8 @@ use crate::{
     impl_const_cost_runner_for_bls_consume_sample, impl_const_cost_runner_for_bls_deref_sample,
     impl_lin_cost_runner_for_bls_deref_sample,
     xdr::ContractCostType::{
-        self, Bn254DecodeFp, Bn254EncodeFp, Bn254FrFromU256, Bn254G1Add, Bn254G1CheckPointOnCurve,
+        self, Bn254DecodeFp, Bn254EncodeFp, Bn254FrAddSub, Bn254FrFromU256, Bn254FrInv,
+        Bn254FrMul, Bn254FrPow, Bn254FrToU256, Bn254G1Add, Bn254G1CheckPointOnCurve,
         Bn254G1Mul, Bn254G1ProjectiveToAffine, Bn254G2CheckPointInSubgroup,
         Bn254G2CheckPointOnCurve, Bn254Pairing,
     },
@@ -25,6 +26,12 @@ pub struct Bn254G1AddRun;
 pub struct Bn254G1MulRun;
 pub struct Bn254PairingRun;
 pub struct Bn254FrFromU256Run;
+pub struct Bn254FrToU256Run;
+pub struct Bn254FrAddRun;
+pub struct Bn254FrSubRun;
+pub struct Bn254FrMulRun;
+pub struct Bn254FrPowRun;
+pub struct Bn254FrInvRun;
 
 #[derive(Clone)]
 pub struct Bn254G1ProjectiveToAffineSample(pub G1Projective);
@@ -46,6 +53,14 @@ pub struct Bn254G2CheckPointOnCurveSample(pub G2Affine, pub ContractCostType);
 pub struct Bn254G2CheckPointInSubgroupSample(pub G2Affine);
 #[derive(Clone)]
 pub struct Bn254FrFromU256Sample(pub U256Val);
+#[derive(Clone)]
+pub struct Bn254FrToU256Sample(pub Fr);
+#[derive(Clone)]
+pub struct Bn254FrAddSubMulSample(pub Fr, pub Fr);
+#[derive(Clone)]
+pub struct Bn254FrPowSample(pub Fr, pub u64);
+#[derive(Clone)]
+pub struct Bn254FrInvSample(pub Fr);
 
 impl_const_cost_runner_for_bls_consume_sample!(
     Bn254G1ProjectiveToAffineRun,
@@ -179,4 +194,60 @@ impl_const_cost_runner_for_bls_deref_sample!(
     Bn254G2CheckPointInSubgroupSample,
     bool,
     pt
+);
+
+// fr arith
+
+impl_const_cost_runner_for_bls_consume_sample!(
+    Bn254FrToU256Run,
+    Bn254FrToU256,
+    bn254_fr_to_u256val,
+    Bn254FrToU256Sample,
+    U256Val,
+    fr
+);
+
+impl_const_cost_runner_for_bls_deref_sample!(
+    Bn254FrAddRun,
+    Bn254FrAddSub,
+    bn254_fr_add_internal,
+    Bn254FrAddSubMulSample,
+    (),
+    lhs,
+    rhs
+);
+impl_const_cost_runner_for_bls_deref_sample!(
+    Bn254FrSubRun,
+    Bn254FrAddSub,
+    bn254_fr_add_internal,
+    Bn254FrAddSubMulSample,
+    (),
+    lhs,
+    rhs
+);
+impl_const_cost_runner_for_bls_deref_sample!(
+    Bn254FrMulRun,
+    Bn254FrMul,
+    bn254_fr_mul_internal,
+    Bn254FrAddSubMulSample,
+    (),
+    lhs,
+    rhs
+);
+impl_const_cost_runner_for_bls_deref_sample!(
+    Bn254FrInvRun,
+    Bn254FrInv,
+    bn254_fr_inv_internal,
+    Bn254FrInvSample,
+    Fr,
+    lhs
+);
+impl_lin_cost_runner_for_bls_deref_sample!(
+    Bn254FrPowRun,
+    Bn254FrPow,
+    bn254_fr_pow_internal,
+    Bn254FrPowSample,
+    Fr,
+    lhs,
+    rhs
 );

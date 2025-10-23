@@ -278,6 +278,11 @@ impl Host {
         <Fr as MeteredScalar>::from_u256val(self, sv)
     }
 
+    #[cfg(feature = "bench")]
+    pub(crate) fn bn254_fr_to_u256val(&self, fr: Fr) -> Result<U256Val, HostError> {
+        fr.to_u256val(self)
+    }
+
     pub(crate) fn bn254_fr_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
         self.charge_budget(ContractCostType::Bn254FrAddSub, None)?;
         lhs.add_assign(rhs);
@@ -294,6 +299,20 @@ impl Host {
         self.charge_budget(ContractCostType::Bn254FrPow, Some(*rhs))?;
         use ark_ff::Field;
         Ok(lhs.pow([*rhs]))
+    }
+
+    #[cfg(feature = "bench")]
+    pub(crate) fn bn254_fr_inv_internal(&self, lhs: &Fr) -> Result<Fr, HostError> {
+        self.charge_budget(ContractCostType::Bn254FrInv, None)?;
+        use ark_ff::Field;
+        lhs.inverse().ok_or_else(|| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "bn254 fr_inv: field element has no inverse",
+                &[],
+            )
+        })
     }
 
     pub(crate) fn bn254_pairing_internal(
