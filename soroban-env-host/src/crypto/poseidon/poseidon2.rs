@@ -2,7 +2,7 @@ use super::poseidon2_params::Poseidon2Params;
 use super::super::metered_scalar::MeteredScalar;
 use super::utils;
 use super::{VEC_OOB, INVALID_INPUT};
-use crate::{host::metered_clone::MeteredClone, Host, HostError, Val, ErrorHandler};
+use crate::{host::metered_clone::{MeteredClone, MeteredContainer}, Host, HostError, Val, ErrorHandler};
 
 #[derive(Clone, Debug)]
 pub struct Poseidon2<F: MeteredScalar> {
@@ -65,11 +65,16 @@ impl<F: MeteredScalar> Poseidon2<F> {
 
     fn matmul_m4(&self, host: &Host, input: &mut[F]) -> Result<(), HostError> {
         let t = self.params.t;
-        if t % 4 != 0{
-            // TODO: emit host error (Crypto, InternalError) with a message
+        if t % 4 != 0 {
+            return Err(host.error(INVALID_INPUT, "poseidon2::matmul_m4 state size must be divisible by 4", &[]));
         }
+        if input.len() != t {
+            return Err(host.error(INVALID_INPUT, "poseidon2::permutation input length does not match `t`", &[Val::from_u32(input.len() as u32).into(), Val::from_u32(t as u32).into()]));
+        }
+ 
         let t4 = t / 4;
         for i in 0..t4 {
+            // we've already asserted above t is a multiple of 4, so indexing below should be safe
             let start_index = i * 4;
             let mut t_0 = input[start_index];
             t_0.metered_add_assign(&input[start_index + 1], host)?;
@@ -103,9 +108,13 @@ impl<F: MeteredScalar> Poseidon2<F> {
 
     fn matmul_external(&self, host: &Host, input: &mut[F]) -> Result<(), HostError> {
         let t = self.params.t;
+        if input.len() != t {
+            return Err(host.error(INVALID_INPUT, "poseidon2::permutation input length does not match `t`", &[Val::from_u32(input.len() as u32).into(), Val::from_u32(t as u32).into()]));
+        }
         match t {
             2 => {
                 // Matrix circ(2, 1)
+                // t == 2, so indexing below is safe
                 let mut sum = input[0];
                 sum.metered_add_assign(&input[1], host)?;
                 input[0].metered_add_assign(&sum, host)?;
@@ -113,6 +122,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
             }
             3 => {
                 // Matrix circ(2, 1, 1)
+                // t == 3, so indexing below is safe
                 let mut sum = input[0];
                 sum.metered_add_assign(&input[1], host)?;
                 sum.metered_add_assign(&input[2], host)?;
@@ -130,19 +140,23 @@ impl<F: MeteredScalar> Poseidon2<F> {
 
                 // Applying second cheap matrix for t > 4
                 let t4 = t / 4;
+                Vec::<F>::charge_bulk_init_cpy(4, host)?;
                 let mut stored = [F::zero(); 4];
                 for l in 0..4 {
+                    // input length is greater than 4 (min. 8), indexing is safe
                     stored[l] = input[l];
                     for j in 1..t4 {
+                        // input length is a multiple of 4 (min. 8), so the indexing here is safe
                         stored[l].metered_add_assign(&input[4 * j + l], host)?;
                     }
                 }
                 for i in 0..input.len() {
+                    // stored is a array of size 4, indexing is safe
                     input[i].metered_add_assign(&stored[i % 4], host)?;
                 }
             }
             _ => {
-                return Err(host.error(INVALID_INPUT, "poseidon2::matmul_external unsupported state size", &[]));
+                return Err(host.error(INVALID_INPUT, "poseidon2::matmul_external unsupported state size", &[Val::from(t as u32).into()]));
             }
         }
         Ok(())
@@ -150,11 +164,17 @@ impl<F: MeteredScalar> Poseidon2<F> {
 
     fn matmul_internal(&self, host: &Host, input: &mut[F], mat_internal_diag_m_1: &[F]) -> Result<(), HostError> {
         let t = self.params.t;
+        if t != input.len() || t != mat_internal_diag_m_1.len() {
+            return Err(host.error(INVALID_INPUT, "poseidon2::matmul_internal length mismatch between `t`, input length and/or matrix length", 
+                &[Val::from_u32(t as u32).into(), Val::from_u32(input.len() as u32).into(), Val::from_u32(mat_internal_diag_m_1.len() as u32).into(), ]
+            ));
+        }
 
         match t {
             2 => {
                 // [2, 1]
                 // [1, 3]
+                // t == 2, so indexing below is safe
                 let mut sum = input[0];
                 sum.metered_add_assign(&input[1], host)?;
                 input[0].metered_add_assign(&sum, host)?;
@@ -165,6 +185,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
                 // [2, 1, 1]
                 // [1, 2, 1]
                 // [1, 1, 3]
+                // t == 3, so indexing below is safe
                 let mut sum = input[0];
                 sum.metered_add_assign(&input[1], host)?;
                 sum.metered_add_assign(&input[2], host)?;
@@ -181,6 +202,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
                 }
                 // Add sum + diag entry * element to each element
                 for i in 0..input.len() {
+                    // input and mat_internal_diag_m_1 have the same length, indexing is safe
                     input[i].metered_mul_assign(&mat_internal_diag_m_1[i], host)?;
                     input[i].metered_add_assign(&sum, host)?;
                 }
