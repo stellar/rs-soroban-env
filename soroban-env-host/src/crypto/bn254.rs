@@ -296,15 +296,16 @@ impl Host {
     }
 
     pub(crate) fn bn254_fr_pow_internal(&self, lhs: &Fr, rhs: &u64) -> Result<Fr, HostError> {
-        self.charge_budget(ContractCostType::Bn254FrPow, Some(*rhs))?;
-        use ark_ff::Field;
-        Ok(lhs.pow([*rhs]))
+        self.charge_budget(
+            ContractCostType::Bn254FrPow,
+            Some(64 - rhs.leading_zeros() as u64),
+        )?;        
+        Ok(lhs.pow(&[*rhs]))
     }
 
     #[cfg(feature = "bench")]
     pub(crate) fn bn254_fr_inv_internal(&self, lhs: &Fr) -> Result<Fr, HostError> {
         self.charge_budget(ContractCostType::Bn254FrInv, None)?;
-        use ark_ff::Field;
         lhs.inverse().ok_or_else(|| {
             self.err(
                 ScErrorType::Crypto,
