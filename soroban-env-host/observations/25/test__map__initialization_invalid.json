@@ -1,0 +1,10 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call map_new_from_slices(2)": "",
+  "   2 call map_new_from_slices(2)": "cpu:581, mem:64",
+  "   3 call map_new_from_slices(1)": "cpu:2133, mem:256, objs:-/1@a2458e4e",
+  "   4 call symbol_new_from_slice(34)": "cpu:2660, mem:296",
+  "   5 call map_new_from_slices(5)": "cpu:1754200, mem:7000442, objs:-/2@e05b5022",
+  "   6 ret map_new_from_slices -> Ok(Map(obj#5))": "cpu:1755555, mem:7000658, objs:-/3@48538ad5",
+  "   7 end": "cpu:9634222, mem:42001394, prngs:-/-, objs:-/3@48538ad5, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
