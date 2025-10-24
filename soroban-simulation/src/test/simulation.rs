@@ -314,7 +314,7 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    let expected_instructions = 2374206;
+    let expected_instructions = 2374398;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -332,7 +332,7 @@ fn test_simulate_create_contract() {
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 1187102);
+    assert_eq!(res.simulated_memory, 1187198);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -457,7 +457,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 39114574;
+    let expected_instructions = 39724686;
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -486,11 +486,11 @@ fn test_simulate_invoke_contract_with_auth() {
                 disk_read_bytes: 144,
                 write_bytes: 76,
             },
-            resource_fee: 114058,
+            resource_fee: 114668,
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 19557271);
+    assert_eq!(res.simulated_memory, 19862327);
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -557,7 +557,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 10998010;
+    let expected_instructions = 10998202;
     let wasm_entry_size = contracts[0]
         .wasm_entry
         .to_xdr(Limits::none())
@@ -593,7 +593,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
         })
     );
     assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 5498994);
+    assert_eq!(res.simulated_memory, 5499090);
     assert_eq!(
         res.modified_entries,
         vec![
@@ -1147,7 +1147,7 @@ fn test_simulate_successful_sac_call() {
                         .try_into()
                         .unwrap()
                 },
-                instructions: 3443303,
+                instructions: 3443495,
                 disk_read_bytes: 116,
                 write_bytes: 116,
             },

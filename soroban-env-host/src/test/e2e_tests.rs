@@ -24,9 +24,10 @@ use crate::{
         AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable,
         ContractId, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
         DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryType,
-        LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr,
-        ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
+        HashIdPreimageSorobanAuthorizationWithAddress, HostFunction, InvokeContractArgs,
+        LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
+        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
         SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
         WriteXdr,
     },
@@ -133,6 +134,28 @@ fn sign_auth_entry(
                 .unwrap();
             creds.signature = signer.sign(&dummy_host, &signature_payload);
             creds.signature_expiration_ledger =
+                ledger_info.sequence_number + ledger_info.max_entry_ttl - 1;
+        }
+        SorobanCredentials::AddressWithDelegates(creds) => {
+            let signature_payload_preimage = HashIdPreimage::SorobanAuthorizationWithAddress(
+                HashIdPreimageSorobanAuthorizationWithAddress {
+                    network_id: ledger_info.network_id.try_into().unwrap(),
+                    address: creds.address_credentials.address.clone(),
+                    invocation: out.root_invocation.clone(),
+                    nonce: creds.address_credentials.nonce,
+                    signature_expiration_ledger: ledger_info.sequence_number
+                        + ledger_info.max_entry_ttl
+                        - 1,
+                },
+            );
+            let signature_payload: [u8; 32] =
+                Sha256::digest(&signature_payload_preimage.to_xdr(Limits::none()).unwrap()).into();
+            let signer = signers
+                .iter()
+                .find(|s| s.sc_address() == creds.address_credentials.address)
+                .unwrap();
+            creds.address_credentials.signature = signer.sign(&dummy_host, &signature_payload);
+            creds.address_credentials.signature_expiration_ledger =
                 ledger_info.sequence_number + ledger_info.max_entry_ttl - 1;
         }
     }
@@ -1385,7 +1408,7 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 639602,
+            instructions: 639618,
             disk_read_bytes: 0,
             write_bytes: 104,
         }
@@ -1528,7 +1551,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1046760,
+            instructions: 1046776,
             disk_read_bytes: 0,
             write_bytes: 176,
         }
@@ -1590,7 +1613,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 641049,
+            instructions: 641079,
             disk_read_bytes: 0,
             write_bytes: 104,
         }

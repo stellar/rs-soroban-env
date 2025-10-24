@@ -1740,7 +1740,6 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "23.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=8505f22833f4054227689c35f9cf253a6836cbac#8505f22833f4054227689c35f9cf253a6836cbac"
 dependencies = [
  "arbitrary",
  "base64 0.22.1",
@@ -2220,9 +2219,9 @@ dependencies = [
 
 [[package]]
 name = "windows-link"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45e46c0661abb7180e7b9c281db115305d49ca1709ab8242adf09666d2173c65"
+checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
 
 [[package]]
 name = "windows-result"
