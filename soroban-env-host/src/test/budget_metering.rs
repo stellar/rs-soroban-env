@@ -525,7 +525,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bn254G1Mul                         0              None           0              0              1150435             0                   0                   0                   
         Bn254Pairing                       0              Some(0)        0              0              10117409            609283036           2204                9340474             
         Bn254FrFromU256                    0              None           0              0              2052                0                   0                   0                   
-        Bn254FrToU256                      0              None           0              0              1133                0                   248                 0                   
+        Bn254FrToU256                      0              None           0              0              1133                0                   312                 0                   
         Bn254FrAddSub                      0              None           0              0              74                  0                   0                   0                   
         Bn254FrMul                         0              None           0              0              332                 0                   0                   0                   
         Bn254FrPow                         0              Some(0)        0              0              755                 68930               0                   0                   

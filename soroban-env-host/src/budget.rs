@@ -1014,9 +1014,8 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                // TODO: calibration needed for below
                 ContractCostType::Bn254FrToU256 => {
-                    mem.const_term = 248;
+                    mem.const_term = 312;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254FrAddSub => {
