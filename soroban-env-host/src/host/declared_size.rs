@@ -29,6 +29,8 @@ use crate::{
     U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val,
     VecObject, Void, I256, U256,
 };
+use ark_bls12_381::Fr as BlsScalar;
+use ark_bn254::Fr as BnScalar;
 use std::{cell::RefCell, rc::Rc};
 use wasmi::Value;
 
@@ -258,6 +260,10 @@ impl_declared_size_type!(ScContractInstance, 64);
 impl_declared_size_type!(SorobanAuthorizationEntry, 296);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 168);
 impl_declared_size_type!(SorobanAuthorizedFunction, 144);
+
+// foreign types
+impl_declared_size_type!(BlsScalar, 32);
+impl_declared_size_type!(BnScalar, 32);
 
 // composite types
 

@@ -6,7 +6,9 @@ use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{
     cost_runner::{
         Bn254DecodeFpRun, Bn254DecodeFpSample, Bn254EncodeFpRun, Bn254EncodeFpSample,
-        Bn254FrFromU256Run, Bn254FrFromU256Sample, Bn254G1AddRun, Bn254G1AddSample,
+        Bn254FrAddRun, Bn254FrAddSubMulSample, Bn254FrFromU256Run, Bn254FrFromU256Sample,
+        Bn254FrInvRun, Bn254FrInvSample, Bn254FrMulRun, Bn254FrPowRun, Bn254FrPowSample,
+        Bn254FrSubRun, Bn254FrToU256Run, Bn254FrToU256Sample, Bn254G1AddRun, Bn254G1AddSample,
         Bn254G1CheckPointOnCurveRun, Bn254G1CheckPointOnCurveSample, Bn254G1MulRun,
         Bn254G1MulSample, Bn254G1ProjectiveToAffineRun, Bn254G1ProjectiveToAffineSample,
         Bn254G2CheckPointInSubgroupRun, Bn254G2CheckPointInSubgroupSample,
@@ -144,5 +146,65 @@ impl HostCostMeasurement for Bn254PairingMeasure {
             (1..i).into_iter().map(|_| G1Affine::rand(rng)).collect(),
             (1..i).into_iter().map(|_| G2Affine::rand(rng)).collect(),
         )
+    }
+}
+
+pub(crate) struct Bn254FrToU256Measure;
+impl HostCostMeasurement for Bn254FrToU256Measure {
+    type Runner = Bn254FrToU256Run;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bn254FrToU256Sample {
+        Bn254FrToU256Sample(Fr::rand(rng))
+    }
+}
+
+pub(crate) struct Bn254FrAddMeasure;
+impl HostCostMeasurement for Bn254FrAddMeasure {
+    type Runner = Bn254FrAddRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bn254FrAddSubMulSample {
+        Bn254FrAddSubMulSample(Fr::rand(rng), Fr::rand(rng))
+    }
+}
+
+pub(crate) struct Bn254FrSubMeasure;
+impl HostCostMeasurement for Bn254FrSubMeasure {
+    type Runner = Bn254FrSubRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bn254FrAddSubMulSample {
+        Bn254FrAddSubMulSample(Fr::rand(rng), Fr::rand(rng))
+    }
+}
+
+pub(crate) struct Bn254FrMulMeasure;
+impl HostCostMeasurement for Bn254FrMulMeasure {
+    type Runner = Bn254FrMulRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bn254FrAddSubMulSample {
+        Bn254FrAddSubMulSample(Fr::rand(rng), Fr::rand(rng))
+    }
+}
+
+pub(crate) struct Bn254FrPowMeasure;
+impl HostCostMeasurement for Bn254FrPowMeasure {
+    type Runner = Bn254FrPowRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bn254FrPowSample {
+        assert!(input <= 64);
+        let rhs = if input == 64 {
+            u64::MAX
+        } else {
+            (1 << input) - 1
+        };
+        Bn254FrPowSample(Fr::rand(rng), rhs)
+    }
+}
+
+pub(crate) struct Bn254FrInvMeasure;
+impl HostCostMeasurement for Bn254FrInvMeasure {
+    type Runner = Bn254FrInvRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bn254FrInvSample {
+        Bn254FrInvSample(Fr::rand(rng))
     }
 }

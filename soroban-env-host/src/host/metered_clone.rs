@@ -16,6 +16,8 @@
 //! pointers. The rest of each struct is considered its "shallow" part and
 //! charged based on its declared size (see [`DeclaredSizeForMetering`]).
 
+use ark_bls12_381::Fr as BlsScalar;
+use ark_bn254::Fr as BnScalar;
 use std::{cell::RefCell, mem, rc::Rc};
 
 use crate::{
@@ -341,6 +343,10 @@ impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
 impl MeteredClone for Asset {}
 // endregion: xdr types with no substructure
+
+// region: foreigh types
+impl MeteredClone for BlsScalar {}
+impl MeteredClone for BnScalar {}
 
 // region: Rust standard composite types
 

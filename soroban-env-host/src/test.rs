@@ -29,6 +29,7 @@ mod map;
 #[cfg(feature = "testutils")]
 mod metering_benchmark;
 mod num;
+mod poseidon;
 mod post_mvp;
 mod prng;
 mod protocol_gate;

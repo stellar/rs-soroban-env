@@ -95,11 +95,13 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
 
             if docs.is_empty() {
                 quote! {
+                    #[allow(clippy::too_many_arguments)]
                     { #export, #min_proto, #max_proto, fn #name(#(#args),*) -> #r#return }
                 }
             } else {
                 quote! {
                     #[doc = #docs]
+                    #[allow(clippy::too_many_arguments)]
                     { #export, #min_proto, #max_proto, fn #name(#(#args),*) -> #r#return }
                 }
             }
