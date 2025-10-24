@@ -310,6 +310,7 @@ impl Host {
     }
 
     /// Generic implementation of Poseidon permutation for any field type
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn poseidon_permutation_impl<S>(
         &self,
         input: VecObject,
@@ -353,6 +354,7 @@ impl Host {
     }
 
     /// Generic implementation of Poseidon2 permutation for any field type
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn poseidon2_permutation_impl<S>(
         &self,
         input: VecObject,

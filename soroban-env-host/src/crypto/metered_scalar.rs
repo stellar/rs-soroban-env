@@ -29,7 +29,7 @@ pub trait MeteredScalar: PrimeField + Sized + Clone + PartialEq + MeteredClone {
     /// Performs metered addition, charging the budget for the operation.
     /// Returns a new element that is the sum of `self` and `other`.
     fn metered_add(&self, other: &Self, host: &Host) -> Result<Self, HostError> {
-        let mut result = self.clone();
+        let mut result = *self;
         result.metered_add_assign(other, host)?;
         Ok(result)
     }

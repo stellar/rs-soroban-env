@@ -197,7 +197,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
                 return Err(host.error(
                     INVALID_INPUT,
                     "poseidon2::matmul_external unsupported state size",
-                    &[Val::from(t as u32).into()],
+                    &[Val::from(t as u32)],
                 ));
             }
         }

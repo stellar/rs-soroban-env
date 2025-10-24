@@ -299,12 +299,12 @@ impl Host {
         self.visit_obj(vp, |hv: &HostVec| {
             let mut scalars: Vec<S> = Vec::with_metered_capacity(hv.len(), self)?;
             for val in hv.iter() {
-                let u256_val = U256Val::try_from(val.clone()).map_err(|_| {
+                let u256_val = U256Val::try_from(*val).map_err(|_| {
                     self.err(
                         ScErrorType::Crypto,
                         ScErrorCode::InvalidInput,
                         "element must be U256Val",
-                        &[val.clone()],
+                        std::slice::from_ref(val),
                     )
                 })?;
                 let scalar = S::from_u256val(self, u256_val)?;
@@ -345,12 +345,12 @@ impl Host {
             let n_rows = hv.len();
             let mut result = Vec::with_metered_capacity(n_rows, self)?;
             for row_val in hv.iter() {
-                let row_obj = VecObject::try_from(row_val.clone()).map_err(|_| {
+                let row_obj = VecObject::try_from(*row_val).map_err(|_| {
                     self.err(
                         ScErrorType::Crypto,
                         ScErrorCode::InvalidInput,
                         "poseidon_permutation: row must be a vector",
-                        &[row_val.clone()],
+                        std::slice::from_ref(row_val),
                     )
                 })?;
 
