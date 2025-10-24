@@ -1,6 +1,6 @@
-use ark_bls12_381::Fr as Scalar;
-use crate::testutils::crypto::from_hex;
 use crate::crypto::poseidon::Poseidon2Params;
+use crate::testutils::crypto::from_hex;
+use ark_bls12_381::Fr as Scalar;
 use std::sync::Arc;
 
 lazy_static::lazy_static! {
@@ -1523,7 +1523,7 @@ lazy_static::lazy_static! {
     ];
 
     pub static ref POSEIDON2_BLS_2_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(2, 5, 8, 56, MAT_DIAG2_M_1.clone(), RC2.clone()));
-    
+
     pub static ref POSEIDON2_BLS_3_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(3, 5, 8, 56, MAT_DIAG3_M_1.clone(), RC3.clone()));
 
     pub static ref POSEIDON2_BLS_4_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(4, 5, 8, 56, MAT_DIAG4_M_1.clone(), RC4.clone()));

@@ -3283,7 +3283,7 @@ impl VmCallerEnv for Host {
         let d_val: u32 = d.into();
         let rounds_f_val: u32 = rounds_f.into();
         let rounds_p_val: u32 = rounds_p.into();
-        
+
         if self.symbol_matches("BLS12_381".as_bytes(), field)? {
             self.poseidon_permutation_impl::<BlsScalar>(
                 input,

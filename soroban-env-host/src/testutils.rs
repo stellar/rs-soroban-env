@@ -1159,14 +1159,14 @@ pub fn simple_account_sign_fn<'a>(
 #[cfg(test)]
 pub(crate) mod crypto {
     use ark_ff::PrimeField;
-    use rand::rngs::StdRng;
     use hex::FromHex;
-    
+    use rand::rngs::StdRng;
+
     pub fn from_hex<F: PrimeField>(s: &str) -> F {
         let a = Vec::from_hex(&s[2..]).expect("Invalid Hex String");
         F::from_be_bytes_mod_order(&a as &[u8])
     }
-    
+
     pub fn random_scalar<F: PrimeField>(rng: &mut StdRng) -> F {
         F::rand(rng)
     }

@@ -1,6 +1,6 @@
-use ark_bn254::Fr as Scalar;
-use crate::testutils::crypto::from_hex;
 use crate::crypto::poseidon::Poseidon2Params;
+use crate::testutils::crypto::from_hex;
+use ark_bn254::Fr as Scalar;
 use std::sync::Arc;
 
 lazy_static::lazy_static! {
@@ -25,7 +25,7 @@ lazy_static::lazy_static! {
     from_hex("0x0000000000000000000000000000000000000000000000000000000000000003"),
     ],
     ];
-    
+
     pub static ref RC3: Vec<Vec<Scalar>> = vec![
     vec![from_hex("0x1d066a255517b7fd8bddd3a93f7804ef7f8fcde48bb4c37a59a09a1a97052816"),
     from_hex("0x29daefb55f6f2dc6ac3f089cebcc6120b7c6fef31367b68eb7238547d32c1610"),
@@ -284,6 +284,6 @@ lazy_static::lazy_static! {
     from_hex("0x0fc1bbceba0590f5abbdffa6d3b35e3297c021a3a409926d0e2d54dc1c84fda6"),
     ],
     ];
-    
+
     pub static ref POSEIDON2_BN254_PARAMS: Arc<Poseidon2Params<Scalar>> = Arc::new(Poseidon2Params::new_unchecked(3, 5, 8, 56, MAT_DIAG3_M_1.clone(), RC3.clone()));
 }

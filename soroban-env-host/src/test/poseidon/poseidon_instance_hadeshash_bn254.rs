@@ -1,9 +1,9 @@
-use ark_bn254::Fr as Scalar;
-use crate::testutils::crypto::from_hex;
 use crate::crypto::poseidon::PoseidonParams;
+use crate::testutils::crypto::from_hex;
+use ark_bn254::Fr as Scalar;
 use std::sync::Arc;
 
-lazy_static::lazy_static!  {
+lazy_static::lazy_static! {
     pub static ref MDS3: Vec<Vec<Scalar>> = vec![vec![from_hex("0x109b7f411ba0e4c9b2b70caf5c36a7b194be7c11ad24378bfedb68592ba8118b"), from_hex("0x16ed41e13bb9c0c66ae119424fddbcbc9314dc9fdbdeea55d6c64543dc4903e0"), from_hex("0x2b90bba00fca0589f617e7dcbfe82e0df706ab640ceb247b791a93b74e36736d")],vec![from_hex("0x2969f27eed31a480b9c36c764379dbca2cc8fdd1415c3dded62940bcde0bd771"), from_hex("0x2e2419f9ec02ec394c9871c832963dc1b89d743c8c7b964029b2311687b1fe23"), from_hex("0x101071f0032379b697315876690f053d148d4e109f5fb065c8aacc55a0f89bfa")],vec![from_hex("0x143021ec686a3f330d5f9e654638065ce6cd79e28c5b3753326244ee65a1b1a7"), from_hex("0x176cc029695ad02582a70eff08a6fd99d057e12e58e7d7b6b16cdfabc8ee2911"), from_hex("0x19a3fc0a56702bf417ba7fee3802593fa644470307043f7773279cd71d25d5e0")]];
 
     pub static ref RC3: Vec<Vec<Scalar>> = vec![
@@ -152,4 +152,3 @@ vec![from_hex("0x0fe0af7858e49859e2a54d6f1ad945b1316aa24bfbdd23ae40a6d0cb70c3eab
         PoseidonParams::new_unchecked(5, 5, 8, 60, MDS5.clone(), RC5.clone())
     );
 }
-

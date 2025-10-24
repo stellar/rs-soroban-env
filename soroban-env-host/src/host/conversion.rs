@@ -3,6 +3,7 @@ use std::rc::Rc;
 use crate::host_object::{MemHostObjectType, MuxedScAddress};
 use crate::{
     budget::{AsBudget, DepthLimiter},
+    crypto::metered_scalar::MeteredScalar,
     err,
     host::metered_clone::{
         charge_shallow_copy, MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator,
@@ -16,7 +17,7 @@ use crate::{
         UInt256Parts, Uint256, VecM,
     },
     AddressObject, BytesObject, Convert, Host, HostError, Object, ScValObjRef, ScValObject, Symbol,
-    SymbolObject, TryFromVal, TryIntoVal, U32Val, Val, VecObject, crypto::metered_scalar::MeteredScalar, U256Val
+    SymbolObject, TryFromVal, TryIntoVal, U256Val, U32Val, Val, VecObject,
 };
 
 use super::ErrorHandler;
@@ -311,7 +312,7 @@ impl Host {
             }
             Ok(scalars)
         })
-    }   
+    }
 
     /// Convert a Vec of MeteredScalar to a VecObject of U256Val elements
     pub(crate) fn metered_scalar_vec_to_vecobj<S>(
@@ -323,15 +324,11 @@ impl Host {
     {
         let vals = scalars
             .into_iter()
-            .map(|s| {
-                s.to_u256val(self)
-            })
+            .map(|s| s.to_u256val(self))
             .metered_collect::<Result<Vec<_>, HostError>>(self)??;
 
-        let host_vec = HostVec::from_exact_iter(
-            vals.into_iter().map(|v| v.to_val()),
-            self.budget_ref(),
-        )?;
+        let host_vec =
+            HostVec::from_exact_iter(vals.into_iter().map(|v| v.to_val()), self.budget_ref())?;
 
         self.add_host_object(host_vec)
     }
@@ -355,14 +352,14 @@ impl Host {
                         "poseidon_permutation: row must be a vector",
                         &[row_val.clone()],
                     )
-                })?;       
+                })?;
 
                 let row_vec = self.metered_scalar_vec_from_vecobj::<S>(row_obj)?;
                 result.push(row_vec);
             }
             Ok(result)
         })
-    }       
+    }
 }
 
 impl Convert<&Object, ScValObject> for Host {

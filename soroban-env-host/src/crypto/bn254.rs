@@ -18,8 +18,7 @@ use crate::{
     budget::AsBudget,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Val, Val,
-    VecObject,
+    Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Val, Val, VecObject,
 };
 
 pub(crate) const BN254_FP_SERIALIZED_SIZE: usize = 32;
@@ -299,7 +298,7 @@ impl Host {
         self.charge_budget(
             ContractCostType::Bn254FrPow,
             Some(64 - rhs.leading_zeros() as u64),
-        )?;        
+        )?;
         Ok(lhs.pow(&[*rhs]))
     }
 

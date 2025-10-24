@@ -1,6 +1,6 @@
-use ark_bls12_381::Fr as Scalar;
-use crate::testutils::crypto::from_hex;
 use crate::crypto::poseidon::PoseidonParams;
+use crate::testutils::crypto::from_hex;
+use ark_bls12_381::Fr as Scalar;
 use std::sync::Arc;
 
 lazy_static::lazy_static! {
@@ -1507,5 +1507,5 @@ lazy_static::lazy_static! {
         PoseidonParams::new_unchecked(8, 5, 8, 57, MDS8.clone(), RC8.clone())
     );
 
-    
+
 }

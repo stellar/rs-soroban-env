@@ -29,10 +29,10 @@ use crate::{
     U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val,
     VecObject, Void, I256, U256,
 };
-use std::{cell::RefCell, rc::Rc};
-use wasmi::Value;
 use ark_bls12_381::Fr as BlsScalar;
 use ark_bn254::Fr as BnScalar;
+use std::{cell::RefCell, rc::Rc};
+use wasmi::Value;
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
 // and comparison. It should be the upperbound (across various compilations and platforms) of the

@@ -154,7 +154,7 @@ impl Default for BudgetTracker {
                 ContractCostType::Bn254FrAddSub => (),
                 ContractCostType::Bn254FrMul => (),
                 ContractCostType::Bn254FrPow => init_input(), // input is number of bits in the u64 exponent excluding leading zeros
-                ContractCostType::Bn254FrInv => (),                
+                ContractCostType::Bn254FrInv => (),
             }
         }
         mt
@@ -1034,7 +1034,7 @@ impl Default for BudgetImpl {
                 ContractCostType::Bn254FrInv => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
-                }                
+                }
             }
         }
 

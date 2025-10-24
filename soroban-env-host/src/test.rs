@@ -17,7 +17,6 @@ mod finish;
 mod frame;
 mod host;
 mod hostile;
-mod poseidon;
 #[cfg(opt_build)]
 mod hostile_opt;
 mod invocation;
@@ -30,6 +29,7 @@ mod map;
 #[cfg(feature = "testutils")]
 mod metering_benchmark;
 mod num;
+mod poseidon;
 mod post_mvp;
 mod prng;
 mod protocol_gate;

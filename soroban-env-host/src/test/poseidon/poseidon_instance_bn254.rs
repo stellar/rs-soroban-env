@@ -1,9 +1,9 @@
-use ark_bn254::Fr as Scalar;
-use crate::testutils::crypto::from_hex;
 use crate::crypto::poseidon::PoseidonParams;
+use crate::testutils::crypto::from_hex;
+use ark_bn254::Fr as Scalar;
 use std::sync::Arc;
 
-lazy_static::lazy_static!  {
+lazy_static::lazy_static! {
     pub static ref MDS3: Vec<Vec<Scalar>> = vec![
     vec![from_hex("0x0bfff43619e8a576c8772f52d1e0adde3356bd099fba04b007144c032cff4f57"),
     from_hex("0x016bedd74d82ed159be3305d15b9a1ddc4b6568cd4bd7603f598a8c1f4f84169"),

@@ -1,5 +1,9 @@
 use crate::{
-    budget::AsBudget, crypto::metered_scalar::MeteredScalar, host_object::HostVec, xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType}, Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Val, Val, VecObject
+    budget::AsBudget,
+    crypto::metered_scalar::MeteredScalar,
+    host_object::HostVec,
+    xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
+    Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Val, Val, VecObject,
 };
 use ark_bls12_381::{
     g1::Config as G1Config, g2::Config as G2Config, Bls12_381, Fq, Fq12, Fq2, Fr, G1Affine,

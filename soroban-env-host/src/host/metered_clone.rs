@@ -16,9 +16,9 @@
 //! pointers. The rest of each struct is considered its "shallow" part and
 //! charged based on its declared size (see [`DeclaredSizeForMetering`]).
 
-use std::{cell::RefCell, mem, rc::Rc};
 use ark_bls12_381::Fr as BlsScalar;
 use ark_bn254::Fr as BnScalar;
+use std::{cell::RefCell, mem, rc::Rc};
 
 use crate::{
     budget::{AsBudget, DepthLimiter},

@@ -7,10 +7,10 @@ use crate::{
     impl_const_cost_runner_for_bls_consume_sample, impl_const_cost_runner_for_bls_deref_sample,
     impl_lin_cost_runner_for_bls_deref_sample,
     xdr::ContractCostType::{
-        self, Bn254DecodeFp, Bn254EncodeFp, Bn254FrAddSub, Bn254FrFromU256, Bn254FrInv,
-        Bn254FrMul, Bn254FrPow, Bn254FrToU256, Bn254G1Add, Bn254G1CheckPointOnCurve,
-        Bn254G1Mul, Bn254G1ProjectiveToAffine, Bn254G2CheckPointInSubgroup,
-        Bn254G2CheckPointOnCurve, Bn254Pairing,
+        self, Bn254DecodeFp, Bn254EncodeFp, Bn254FrAddSub, Bn254FrFromU256, Bn254FrInv, Bn254FrMul,
+        Bn254FrPow, Bn254FrToU256, Bn254G1Add, Bn254G1CheckPointOnCurve, Bn254G1Mul,
+        Bn254G1ProjectiveToAffine, Bn254G2CheckPointInSubgroup, Bn254G2CheckPointOnCurve,
+        Bn254Pairing,
     },
     Host, U256Val,
 };

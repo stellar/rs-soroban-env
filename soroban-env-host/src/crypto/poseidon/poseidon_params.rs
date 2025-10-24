@@ -1,6 +1,6 @@
-use crate::{crypto::poseidon::SUPPORTED_SBOX_DEGREES, Host, HostError, Val, ErrorHandler};
 use super::super::metered_scalar::MeteredScalar;
 use super::INVALID_INPUT;
+use crate::{crypto::poseidon::SUPPORTED_SBOX_DEGREES, ErrorHandler, Host, HostError, Val};
 
 #[derive(Clone, Debug)]
 pub struct PoseidonParams<S: MeteredScalar> {
@@ -26,18 +26,40 @@ impl<S: MeteredScalar> PoseidonParams<S> {
         round_constants: Vec<Vec<S>>,
     ) -> Result<Self, HostError> {
         if !SUPPORTED_SBOX_DEGREES.contains(&d) {
-            return Err(host.error(INVALID_INPUT, "Unsupported s-box degree", &[Val::from_u32(d).into()]));
+            return Err(host.error(
+                INVALID_INPUT,
+                "Unsupported s-box degree",
+                &[Val::from_u32(d).into()],
+            ));
         }
         if mds.len() != t as usize {
-            return Err(host.error(INVALID_INPUT, "mds matrix length does not match `t`", &[Val::from_u32(mds.len() as u32).into(), Val::from_u32(t).into()]));
+            return Err(host.error(
+                INVALID_INPUT,
+                "mds matrix length does not match `t`",
+                &[
+                    Val::from_u32(mds.len() as u32).into(),
+                    Val::from_u32(t).into(),
+                ],
+            ));
         }
         if rounds_f % 2 != 0 {
-            return Err(host.error(INVALID_INPUT, "`round_f` must be even", &[Val::from_u32(rounds_f).into()]));
+            return Err(host.error(
+                INVALID_INPUT,
+                "`round_f` must be even",
+                &[Val::from_u32(rounds_f).into()],
+            ));
         }
         let r = rounds_f / 2;
         let rounds = rounds_f + rounds_p;
         if round_constants.len() != rounds as usize {
-            return Err(host.error(INVALID_INPUT, "round constants length does not match No. of rounds (rounds_f + rounds_p)", &[Val::from_u32(round_constants.len() as u32).into(), Val::from_u32(rounds).into()]));
+            return Err(host.error(
+                INVALID_INPUT,
+                "round constants length does not match No. of rounds (rounds_f + rounds_p)",
+                &[
+                    Val::from_u32(round_constants.len() as u32).into(),
+                    Val::from_u32(rounds).into(),
+                ],
+            ));
         }
 
         Ok(PoseidonParams {
@@ -64,14 +86,29 @@ impl<S: MeteredScalar> PoseidonParams<S> {
         round_constants: Vec<Vec<S>>,
     ) -> Self {
         // Basic compile-time validations (will panic if violated)
-        assert!(SUPPORTED_SBOX_DEGREES.contains(&d), "Unsupported s-box degree: {}", d);
-        assert_eq!(mds.len(), t as usize, "mds matrix length {} does not match t={}", mds.len(), t);
+        assert!(
+            SUPPORTED_SBOX_DEGREES.contains(&d),
+            "Unsupported s-box degree: {}",
+            d
+        );
+        assert_eq!(
+            mds.len(),
+            t as usize,
+            "mds matrix length {} does not match t={}",
+            mds.len(),
+            t
+        );
         assert_eq!(rounds_f % 2, 0, "rounds_f must be even, got {}", rounds_f);
-        
+
         let r = rounds_f / 2;
         let rounds = rounds_f + rounds_p;
-        assert_eq!(round_constants.len(), rounds as usize, 
-            "round constants length {} does not match rounds={}", round_constants.len(), rounds);
+        assert_eq!(
+            round_constants.len(),
+            rounds as usize,
+            "round constants length {} does not match rounds={}",
+            round_constants.len(),
+            rounds
+        );
 
         PoseidonParams {
             t: t as usize,
