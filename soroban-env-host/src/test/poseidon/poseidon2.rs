@@ -1,18 +1,461 @@
 use crate::{
     crypto::poseidon::poseidon2::Poseidon2,
-    testutils::crypto::{from_hex, random_scalar},
-    Host,
+    testutils::crypto::{from_hex, random_scalar, vec_of_vec_to_vecobj},
+    xdr::{ScErrorCode, ScErrorType},
+    Env, Host, HostError, Symbol, U32Val, VecObject,
 };
 use ark_bls12_381::Fr as BlsScalar;
 use ark_bn254::Fr as BnScalar;
 use rand::{rngs::StdRng, SeedableRng};
+use std::cmp::Ordering;
 
-use super::poseidon2_instance_bls12::{
-    POSEIDON2_BLS_2_PARAMS, POSEIDON2_BLS_3_PARAMS, POSEIDON2_BLS_4_PARAMS, POSEIDON2_BLS_8_PARAMS,
-};
+#[test]
+fn test_poseidon2_bn254_hostfn_success() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Use the BN254 3-element Poseidon2 parameters
+    use super::poseidon2_instance_bn254::POSEIDON2_BN254_PARAMS;
+    let params = &**POSEIDON2_BN254_PARAMS;
+
+    // Create test input
+    let input: Vec<BnScalar> = vec![BnScalar::from(0), BnScalar::from(1), BnScalar::from(2)];
+    // Convert inputs to host expected format
+    let input_vecobj = host.metered_scalar_vec_to_vecobj(input)?;
+    let mat_internal_diag_m_1_vecobj =
+        host.metered_scalar_vec_to_vecobj(params.mat_internal_diag_m_1.clone())?;
+    let rc_vecobj = vec_of_vec_to_vecobj(&host, &params.round_constants)?;
+
+    // Call the host function
+    // Note: full rounds are applied at both the beginning and the end, thus `rounds_f = 2 * rounds_f_beginning`
+    let field_symbol = Symbol::try_from_small_str("BN254")?;
+    let result = host.poseidon2_permutation(
+        input_vecobj,
+        field_symbol,
+        U32Val::from(params.t as u32),
+        U32Val::from(params.d as u32),
+        U32Val::from((params.rounds_f_beginning * 2) as u32),
+        U32Val::from(params.rounds_p as u32),
+        mat_internal_diag_m_1_vecobj,
+        rc_vecobj,
+    )?;
+
+    let expected: Vec<BnScalar> = vec![
+        from_hex("0x0bb61d24daca55eebcb1929a82650f328134334da98ea4f847f760054f4a3033"),
+        from_hex("0x303b6f7c86d043bfcbcc80214f26a30277a15d3f74ca654992defe7ff8d03570"),
+        from_hex("0x1ed25194542b12eef8617361c3ba7c52e660b145994427cc86296242cf766ec8"),
+    ];
+    let expected = host.metered_scalar_vec_to_vecobj(expected)?;
+    assert_eq!(
+        host.obj_cmp(result.into(), expected.into())?,
+        Ordering::Equal as i64
+    );
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_bls12_381_hostfn_success() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Use the BLS12-381 3-element Poseidon2 parameters
+    use super::poseidon2_instance_bls12::POSEIDON2_BLS_3_PARAMS;
+    let params = &**POSEIDON2_BLS_3_PARAMS;
+
+    // Create test input
+    let input: Vec<BlsScalar> = vec![BlsScalar::from(0), BlsScalar::from(1), BlsScalar::from(2)];
+    // Convert inputs to host expected format
+    let input_vecobj = host.metered_scalar_vec_to_vecobj(input)?;
+    let mat_internal_diag_m_1_vecobj =
+        host.metered_scalar_vec_to_vecobj(params.mat_internal_diag_m_1.clone())?;
+    let rc_vecobj = vec_of_vec_to_vecobj(&host, &params.round_constants)?;
+
+    // Call the host function
+    // Note: full rounds are applied at both the beginning and the end, thus `rounds_f = 2 * rounds_f_beginning`
+    let field_symbol = Symbol::try_from_small_str("BLS12_381")?;
+    let result = host.poseidon2_permutation(
+        input_vecobj,
+        field_symbol,
+        U32Val::from(params.t as u32),
+        U32Val::from(params.d as u32),
+        U32Val::from((params.rounds_f_beginning * 2) as u32),
+        U32Val::from(params.rounds_p as u32),
+        mat_internal_diag_m_1_vecobj,
+        rc_vecobj,
+    )?;
+
+    let expected: Vec<BlsScalar> = vec![
+        from_hex("0x1b152349b1950b6a8ca75ee4407b6e26ca5cca5650534e56ef3fd45761fbf5f0"),
+        from_hex("0x4c5793c87d51bdc2c08a32108437dc0000bd0275868f09ebc5f36919af5b3891"),
+        from_hex("0x1fc8ed171e67902ca49863159fe5ba6325318843d13976143b8125f08b50dc6b"),
+    ];
+    let expected = host.metered_scalar_vec_to_vecobj(expected)?;
+    assert_eq!(
+        host.obj_cmp(result.into(), expected.into())?,
+        Ordering::Equal as i64
+    );
+    Ok(())
+}
+
+// Helper function for testing invalid inputs - returns the error for validation
+fn test_poseidon2_invalid<F>(host: &Host, modify_fn: F) -> Result<VecObject, HostError>
+where
+    F: FnOnce(
+        &Host,
+        &mut VecObject,
+        &mut Symbol,
+        &mut U32Val,
+        &mut U32Val,
+        &mut U32Val,
+        &mut U32Val,
+        &mut VecObject,
+        &mut VecObject,
+    ) -> Result<(), HostError>,
+{
+    use super::poseidon2_instance_bn254::POSEIDON2_BN254_PARAMS;
+    let params = &**POSEIDON2_BN254_PARAMS;
+
+    // Set up default valid inputs
+    let input: Vec<BnScalar> = vec![BnScalar::from(0), BnScalar::from(1), BnScalar::from(2)];
+    let mut input_vecobj = host.metered_scalar_vec_to_vecobj(input)?;
+    let mut mat_internal_diag_m_1_vecobj =
+        host.metered_scalar_vec_to_vecobj(params.mat_internal_diag_m_1.clone())?;
+    let mut rc_vecobj = vec_of_vec_to_vecobj(host, &params.round_constants)?;
+
+    let mut field_symbol = Symbol::try_from_small_str("BN254")?;
+    let mut t = U32Val::from(params.t as u32);
+    let mut d = U32Val::from(params.d as u32);
+    let mut rounds_f = U32Val::from((params.rounds_f_beginning * 2) as u32);
+    let mut rounds_p = U32Val::from(params.rounds_p as u32);
+
+    // Apply modifications
+    modify_fn(
+        host,
+        &mut input_vecobj,
+        &mut field_symbol,
+        &mut t,
+        &mut d,
+        &mut rounds_f,
+        &mut rounds_p,
+        &mut mat_internal_diag_m_1_vecobj,
+        &mut rc_vecobj,
+    )?;
+
+    // Call the host function
+    host.poseidon2_permutation(
+        input_vecobj,
+        field_symbol,
+        t,
+        d,
+        rounds_f,
+        rounds_p,
+        mat_internal_diag_m_1_vecobj,
+        rc_vecobj,
+    )
+}
+
+#[test]
+fn test_poseidon2_invalid_field_symbol() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    let result = test_poseidon2_invalid(
+        &host,
+        |_host, _input, field, _t, _d, _rounds_f, _rounds_p, _mat, _rc| {
+            *field = Symbol::try_from_small_str("INVALID")?;
+            Ok(())
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_input_length_mismatch() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    let result = test_poseidon2_invalid(
+        &host,
+        |host, input, _field, _t, _d, _rounds_f, _rounds_p, _mat, _rc| {
+            // Create input with wrong length (2 instead of 3)
+            let wrong_input: Vec<BnScalar> = vec![BnScalar::from(0), BnScalar::from(1)];
+            *input = host.metered_scalar_vec_to_vecobj(wrong_input)?;
+            Ok(())
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_mat_internal_diag_m_1_dimension_mismatch() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    let result = test_poseidon2_invalid(
+        &host,
+        |host, _input, _field, t, _d, _rounds_f, _rounds_p, mat, _rc| {
+            // Create mat_internal_diag_m_1 with wrong length
+            let wrong_mat: Vec<BnScalar> = vec![BnScalar::from(1), BnScalar::from(2)];
+            *mat = host.metered_scalar_vec_to_vecobj(wrong_mat)?;
+            *t = U32Val::from(2);
+            Ok(())
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_round_constants_wrong_dimensions() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    let result = test_poseidon2_invalid(
+        &host,
+        |host, _input, _field, _t, _d, _rounds_f, _rounds_p, _mat, rc| {
+            // Create round constants with wrong dimensions (2x3 instead of correct size)
+            let wrong_rc: Vec<Vec<BnScalar>> = vec![
+                vec![BnScalar::from(1), BnScalar::from(2), BnScalar::from(3)],
+                vec![BnScalar::from(4), BnScalar::from(5), BnScalar::from(6)],
+            ];
+            *rc = vec_of_vec_to_vecobj(host, &wrong_rc)?;
+            Ok(())
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_round_constants_rows_different_sizes() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    let result = test_poseidon2_invalid(
+        &host,
+        |host, _input, _field, _t, _d, _rounds_f, _rounds_p, _mat, rc| {
+            // Create round constants with rows of different sizes
+            let wrong_rc: Vec<Vec<BnScalar>> = vec![
+                vec![BnScalar::from(1), BnScalar::from(2), BnScalar::from(3)],
+                vec![BnScalar::from(4), BnScalar::from(5)], // Wrong size
+                vec![BnScalar::from(6), BnScalar::from(7), BnScalar::from(8)],
+            ];
+            *rc = vec_of_vec_to_vecobj(host, &wrong_rc)?;
+            Ok(())
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_rounds_inconsistent_with_round_constants() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    use super::poseidon2_instance_bn254::POSEIDON2_BN254_PARAMS;
+    let params = &**POSEIDON2_BN254_PARAMS;
+    let original_rounds_f = (params.rounds_f_beginning * 2) as u32;
+    let original_rounds_p = params.rounds_p as u32;
+
+    // Test case 1: rounds_f decreased by 2
+    let result = test_poseidon2_invalid(
+        &host,
+        |_host, _input, _field, _t, _d, rounds_f, _rounds_p, _mat, _rc| {
+            *rounds_f = U32Val::from(original_rounds_f - 2);
+            Ok(())
+        },
+    );
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+
+    // Test case 2: rounds_f increased by 2
+    let result = test_poseidon2_invalid(
+        &host,
+        |_host, _input, _field, _t, _d, rounds_f, _rounds_p, _mat, _rc| {
+            *rounds_f = U32Val::from(original_rounds_f + 2);
+            Ok(())
+        },
+    );
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+
+    // Test case 3: rounds_p decreased by 2
+    let result = test_poseidon2_invalid(
+        &host,
+        |_host, _input, _field, _t, _d, _rounds_f, rounds_p, _mat, _rc| {
+            *rounds_p = U32Val::from(original_rounds_p - 2);
+            Ok(())
+        },
+    );
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+
+    // Test case 4: rounds_p increased by 2
+    let result = test_poseidon2_invalid(
+        &host,
+        |_host, _input, _field, _t, _d, _rounds_f, rounds_p, _mat, _rc| {
+            *rounds_p = U32Val::from(original_rounds_p + 2);
+            Ok(())
+        },
+    );
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+
+    // Test case 5: rounds_f decreased by 1 and rounds_p increased by 1
+    // This should trigger the rounds_f not even condition
+    let result = test_poseidon2_invalid(
+        &host,
+        |_host, _input, _field, _t, _d, rounds_f, rounds_p, _mat, _rc| {
+            *rounds_f = U32Val::from(original_rounds_f - 1);
+            *rounds_p = U32Val::from(original_rounds_p + 1);
+            Ok(())
+        },
+    );
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_invalid_degree() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    let result = test_poseidon2_invalid(
+        &host,
+        |_host, _input, _field, _t, d, _rounds_f, _rounds_p, _mat, _rc| {
+            // Use an invalid s-box degree (not in SUPPORTED_SBOX_DEGREES)
+            *d = U32Val::from(7);
+            Ok(())
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_invalid_t() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    let result = test_poseidon2_invalid(
+        &host,
+        |_host, _input, _field, t, _d, _rounds_f, _rounds_p, _mat, _rc| {
+            // Set t to 0 or some invalid value
+            *t = U32Val::from(0);
+            Ok(())
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_poseidon2_mismatching_field_types() -> Result<(), HostError> {
+    let host = Host::test_host();
+
+    // Use BN254 parameters
+    use super::poseidon2_instance_bn254::POSEIDON2_BN254_PARAMS;
+    let bn_params = &**POSEIDON2_BN254_PARAMS;
+
+    // Create input that can be interpreted in both fields (small values)
+    let input_bn: Vec<BnScalar> = vec![BnScalar::from(1), BnScalar::from(2), BnScalar::from(3)];
+    let input_bls: Vec<BlsScalar> =
+        vec![BlsScalar::from(1), BlsScalar::from(2), BlsScalar::from(3)];
+
+    // Run Poseidon2 with BN254 field
+    let input_vecobj_bn = host.metered_scalar_vec_to_vecobj(input_bn)?;
+    let mat_vecobj = host.metered_scalar_vec_to_vecobj(bn_params.mat_internal_diag_m_1.clone())?;
+    let rc_vecobj = vec_of_vec_to_vecobj(&host, &bn_params.round_constants)?;
+
+    let result_bn = host.poseidon2_permutation(
+        input_vecobj_bn,
+        Symbol::try_from_small_str("BN254")?,
+        U32Val::from(bn_params.t as u32),
+        U32Val::from(bn_params.d as u32),
+        U32Val::from((bn_params.rounds_f_beginning * 2) as u32),
+        U32Val::from(bn_params.rounds_p as u32),
+        mat_vecobj,
+        rc_vecobj,
+    )?;
+
+    // Run Poseidon2 with BLS12_381 field using the SAME constants
+    let input_vecobj_bls = host.metered_scalar_vec_to_vecobj(input_bls)?;
+    let mat_vecobj_bls =
+        host.metered_scalar_vec_to_vecobj(bn_params.mat_internal_diag_m_1.clone())?;
+    let rc_vecobj_bls = vec_of_vec_to_vecobj(&host, &bn_params.round_constants)?;
+
+    let result_bls = host.poseidon2_permutation(
+        input_vecobj_bls,
+        Symbol::try_from_small_str("BLS12_381")?,
+        U32Val::from(bn_params.t as u32),
+        U32Val::from(bn_params.d as u32),
+        U32Val::from((bn_params.rounds_f_beginning * 2) as u32),
+        U32Val::from(bn_params.rounds_p as u32),
+        mat_vecobj_bls,
+        rc_vecobj_bls,
+    )?;
+
+    // The results should NOT be equal because the field modulus operations are different
+    assert_ne!(
+        host.obj_cmp(result_bn.into(), result_bls.into())?,
+        Ordering::Equal as i64,
+        "Poseidon2 results should differ when using different field types with same constants"
+    );
+
+    Ok(())
+}
 
 #[cfg(test)]
 mod poseidon2_tests_bls12 {
+    use super::super::poseidon2_instance_bls12::{
+        POSEIDON2_BLS_2_PARAMS, POSEIDON2_BLS_3_PARAMS, POSEIDON2_BLS_4_PARAMS,
+        POSEIDON2_BLS_8_PARAMS,
+    };
     use super::*;
 
     type Scalar = BlsScalar;

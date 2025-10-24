@@ -1158,6 +1158,7 @@ pub fn simple_account_sign_fn<'a>(
 
 #[cfg(test)]
 pub(crate) mod crypto {
+    use crate::{crypto::metered_scalar::MeteredScalar, EnvBase, Host, HostError, VecObject};
     use ark_ff::PrimeField;
     use hex::FromHex;
     use rand::rngs::StdRng;
@@ -1169,5 +1170,18 @@ pub(crate) mod crypto {
 
     pub fn random_scalar<F: PrimeField>(rng: &mut StdRng) -> F {
         F::rand(rng)
+    }
+
+    // Helper function to convert Vec<Vec<S>> to VecObject for nested matrices
+    pub fn vec_of_vec_to_vecobj<S: MeteredScalar>(
+        host: &Host,
+        matrix: &[Vec<S>],
+    ) -> Result<VecObject, HostError> {
+        let mut row_objects = Vec::with_capacity(matrix.len());
+        for row in matrix.iter() {
+            let row_obj = host.metered_scalar_vec_to_vecobj(row.clone())?;
+            row_objects.push(row_obj.to_val());
+        }
+        host.vec_new_from_slice(&row_objects)
     }
 }
