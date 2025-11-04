@@ -29,14 +29,14 @@ pub trait MeteredScalar: PrimeField + Sized + Clone + PartialEq + MeteredClone {
     /// Performs metered addition, charging the budget for the operation.
     /// Returns a new element that is the sum of `self` and `other`.
     fn metered_add(&self, other: &Self, host: &Host) -> Result<Self, HostError> {
-        let mut result = *self;
+        let mut result = self.metered_clone(host)?;
         result.metered_add_assign(other, host)?;
         Ok(result)
     }
 
     fn from_u256val(host: &Host, sv: U256Val) -> Result<Self, HostError>;
 
-    fn to_u256val(self, host: &Host) -> Result<U256Val, HostError>;
+    fn into_u256val(self, host: &Host) -> Result<U256Val, HostError>;
 }
 
 impl MeteredScalar for BlsScalar {
@@ -71,7 +71,7 @@ impl MeteredScalar for BlsScalar {
         Ok(fr)
     }
 
-    fn to_u256val(self, host: &Host) -> Result<U256Val, HostError> {
+    fn into_u256val(self, host: &Host) -> Result<U256Val, HostError> {
         host.charge_budget(ContractCostType::Bls12381FrToU256, None)?;
         // The `into_bigint` carries the majority of the cost. It performs the
         // Montgomery reduction on the internal representation, which is doing a
@@ -120,7 +120,7 @@ impl MeteredScalar for BnScalar {
         Ok(fr)
     }
 
-    fn to_u256val(self, host: &Host) -> Result<U256Val, HostError> {
+    fn into_u256val(self, host: &Host) -> Result<U256Val, HostError> {
         host.charge_budget(ContractCostType::Bn254FrToU256, None)?;
         // The `into_bigint` carries the majority of the cost. It performs the
         // Montgomery reduction on the internal representation, which is doing a

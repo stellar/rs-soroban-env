@@ -279,7 +279,7 @@ impl Host {
 
     #[cfg(feature = "bench")]
     pub(crate) fn bn254_fr_to_u256val(&self, fr: Fr) -> Result<U256Val, HostError> {
-        fr.to_u256val(self)
+        fr.into_u256val(self)
     }
 
     pub(crate) fn bn254_fr_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {

@@ -1,8 +1,8 @@
-use super::super::metered_scalar::MeteredScalar;
-use super::poseidon2_params::Poseidon2Params;
-use super::utils;
-use super::{INVALID_INPUT, VEC_OOB};
 use crate::{
+    crypto::{
+        metered_scalar::MeteredScalar,
+        poseidon::{poseidon2_params::Poseidon2Params, utils, INVALID_INPUT, VEC_OOB},
+    },
     host::metered_clone::{MeteredClone, MeteredContainer},
     ErrorHandler, Host, HostError, Val,
 };
@@ -22,7 +22,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
         if input.len() != t {
             return Err(host.error(
                 INVALID_INPUT,
-                "poseidon2::permutation input length does not match `t`",
+                "Poseidon2: permutation input length does not match `t`",
                 &[
                     Val::from_u32(input.len() as u32).into(),
                     Val::from_u32(t as u32).into(),
@@ -39,7 +39,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
             let rc = self.params.round_constants.get(r).ok_or_else(|| {
                 host.error(
                     VEC_OOB,
-                    "poseidon2: round constant index out of bounds",
+                    "Poseidon2: round constant index out of bounds",
                     &[],
                 )
             })?;
@@ -53,16 +53,16 @@ impl<F: MeteredScalar> Poseidon2<F> {
             let rc = self.params.round_constants.get(r).ok_or_else(|| {
                 host.error(
                     VEC_OOB,
-                    "poseidon2: round constant index out of bounds",
+                    "Poseidon2: round constant index out of bounds",
                     &[],
                 )
             })?;
             let rc_first = rc.first().ok_or_else(|| {
-                host.error(VEC_OOB, "poseidon2: round constant vector is empty", &[])
+                host.error(VEC_OOB, "Poseidon2: round constant vector is empty", &[])
             })?;
             let first = current_state
                 .first_mut()
-                .ok_or_else(|| host.error(VEC_OOB, "poseidon2: current_state is empty", &[]))?;
+                .ok_or_else(|| host.error(VEC_OOB, "Poseidon2: current_state is empty", &[]))?;
             first.metered_add_assign(rc_first, host)?;
             *first = utils::sbox_p(host, first, self.params.d)?;
             self.matmul_internal(host, &mut current_state, &self.params.mat_internal_diag_m_1)?;
@@ -72,7 +72,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
             let rc = self.params.round_constants.get(r).ok_or_else(|| {
                 host.error(
                     VEC_OOB,
-                    "poseidon2: round constant index out of bounds",
+                    "Poseidon2: round constant index out of bounds",
                     &[],
                 )
             })?;
@@ -83,19 +83,23 @@ impl<F: MeteredScalar> Poseidon2<F> {
         Ok(current_state)
     }
 
+    /// Applies the 4x4 MDS matrix to each 4-element chunk.
+    ///
+    /// Reference: Section 5.1 of the Poseidon2 paper
+    /// (https://eprint.iacr.org/2023/323)
     fn matmul_m4(&self, host: &Host, input: &mut [F]) -> Result<(), HostError> {
         let t = self.params.t;
         if t % 4 != 0 {
             return Err(host.error(
                 INVALID_INPUT,
-                "poseidon2::matmul_m4 state size must be divisible by 4",
+                "Poseidon2: matmul_m4 state size must be divisible by 4",
                 &[],
             ));
         }
         if input.len() != t {
             return Err(host.error(
                 INVALID_INPUT,
-                "poseidon2::permutation input length does not match `t`",
+                "Poseidon2: matmul_m4 input length does not match `t`",
                 &[
                     Val::from_u32(input.len() as u32).into(),
                     Val::from_u32(t as u32).into(),
@@ -137,12 +141,19 @@ impl<F: MeteredScalar> Poseidon2<F> {
         Ok(())
     }
 
+    /// Applies the external round matrix multiplication.
+    ///
+    /// The external matrix is used in the full S-box rounds (beginning and end of the permutation).
+    /// Different state sizes use different optimized matrix constructions
+    ///
+    /// Reference: Section 5.1 of the Poseidon2 paper
+    /// (https://eprint.iacr.org/2023/323)
     fn matmul_external(&self, host: &Host, input: &mut [F]) -> Result<(), HostError> {
         let t = self.params.t;
         if input.len() != t {
             return Err(host.error(
                 INVALID_INPUT,
-                "poseidon2::permutation input length does not match `t`",
+                "Poseidon2: matmul_external input length does not match `t`",
                 &[
                     Val::from_u32(input.len() as u32).into(),
                     Val::from_u32(t as u32).into(),
@@ -196,7 +207,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
             _ => {
                 return Err(host.error(
                     INVALID_INPUT,
-                    "poseidon2::matmul_external unsupported state size",
+                    "Poseidon2: matmul_external unsupported state size",
                     &[Val::from(t as u32)],
                 ));
             }
@@ -204,6 +215,13 @@ impl<F: MeteredScalar> Poseidon2<F> {
         Ok(())
     }
 
+    /// Applies the internal round matrix multiplication.
+    ///
+    /// The internal matrix is used during the partial S-box rounds
+    /// where only the first state element goes through the S-box.
+    ///
+    /// Reference: Section 5.2 of the Poseidon2 paper
+    /// (https://eprint.iacr.org/2023/323)
     fn matmul_internal(
         &self,
         host: &Host,
@@ -212,7 +230,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
     ) -> Result<(), HostError> {
         let t = self.params.t;
         if t != input.len() || t != mat_internal_diag_m_1.len() {
-            return Err(host.error(INVALID_INPUT, "poseidon2::matmul_internal length mismatch between `t`, input length and/or matrix length", 
+            return Err(host.error(INVALID_INPUT, "Poseidon2: matmul_internal length mismatch between `t`, input length and/or matrix length", 
                 &[Val::from_u32(t as u32).into(), Val::from_u32(input.len() as u32).into(), Val::from_u32(mat_internal_diag_m_1.len() as u32).into(), ]
             ));
         }
@@ -257,7 +275,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
             _ => {
                 return Err(host.error(
                     INVALID_INPUT,
-                    "poseidon2::matmul_internal unsupported state size",
+                    "Poseidon2: matmul_internal unsupported state size",
                     &[],
                 ));
             }

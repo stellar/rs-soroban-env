@@ -452,11 +452,11 @@ fn test_poseidon2_mismatching_field_types() -> Result<(), HostError> {
 
 #[cfg(test)]
 mod poseidon2_tests_bls12 {
-    use super::super::poseidon2_instance_bls12::{
+    use super::*;
+    use crate::test::poseidon::poseidon2_instance_bls12::{
         POSEIDON2_BLS_2_PARAMS, POSEIDON2_BLS_3_PARAMS, POSEIDON2_BLS_4_PARAMS,
         POSEIDON2_BLS_8_PARAMS,
     };
-    use super::*;
 
     type Scalar = BlsScalar;
 
@@ -558,8 +558,8 @@ mod poseidon2_tests_bls12 {
 
 #[cfg(test)]
 mod poseidon2_tests_bn254 {
-    use super::super::poseidon2_instance_bn254::POSEIDON2_BN254_PARAMS;
     use super::*;
+    use crate::test::poseidon::poseidon2_instance_bn254::POSEIDON2_BN254_PARAMS;
 
     type Scalar = BnScalar;
 

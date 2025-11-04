@@ -1,6 +1,10 @@
-use super::super::metered_scalar::MeteredScalar;
-use super::INVALID_INPUT;
-use crate::{crypto::poseidon::SUPPORTED_SBOX_DEGREES, ErrorHandler, Host, HostError, Val};
+use crate::{
+    crypto::{
+        metered_scalar::MeteredScalar,
+        poseidon::{INVALID_INPUT, SUPPORTED_SBOX_DEGREES},
+    },
+    ErrorHandler, Host, HostError, Val,
+};
 
 #[derive(Clone, Debug)]
 pub struct Poseidon2Params<F: MeteredScalar> {
@@ -28,14 +32,14 @@ impl<F: MeteredScalar> Poseidon2Params<F> {
         if !SUPPORTED_SBOX_DEGREES.contains(&d) {
             return Err(host.error(
                 INVALID_INPUT,
-                "Unsupported s-box degree",
+                "Poseidon2: unsupported s-box degree",
                 &[Val::from_u32(d).into()],
             ));
         }
         if mat_internal_diag_m_1.len() != t as usize {
             return Err(host.error(
                 INVALID_INPUT,
-                "mat_internal_diag_m_1 length does not match `t`",
+                "Poseidon2: mat_internal_diag_m_1 length does not match `t`",
                 &[
                     Val::from_u32(mat_internal_diag_m_1.len() as u32).into(),
                     Val::from_u32(t).into(),
@@ -45,7 +49,7 @@ impl<F: MeteredScalar> Poseidon2Params<F> {
         if rounds_f % 2 != 0 {
             return Err(host.error(
                 INVALID_INPUT,
-                "`rounds_f` must be even",
+                "Poseidon2: `rounds_f` must be even",
                 &[Val::from_u32(rounds_f).into()],
             ));
         }
@@ -54,7 +58,7 @@ impl<F: MeteredScalar> Poseidon2Params<F> {
         if round_constants.len() != rounds as usize {
             return Err(host.error(
                 INVALID_INPUT,
-                "round constants length does not match No. of rounds (rounds_f + rounds_p)",
+                "Poseidon2: round constants length does not match No. of rounds (rounds_f + rounds_p)",
                 &[
                     Val::from_u32(round_constants.len() as u32).into(),
                     Val::from_u32(rounds).into(),

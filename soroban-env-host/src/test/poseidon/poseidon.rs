@@ -457,14 +457,14 @@ fn test_poseidon_mismatching_field_types() -> Result<(), HostError> {
 // The modules below tests reference test vectors for correctness
 #[cfg(test)]
 mod poseidon_tests_bls12 {
-    use super::super::poseidon_instance_bls12::{
-        POSEIDON_BLS_2_PARAMS, POSEIDON_BLS_3_PARAMS, POSEIDON_BLS_4_PARAMS, POSEIDON_BLS_8_PARAMS,
-    };
-    use super::super::poseidon_instance_hadeshash_bls12::{
-        POSEIDONPERM_X5_255_3, POSEIDONPERM_X5_255_5,
-    };
     use super::*;
-
+    use crate::test::poseidon::{
+        poseidon_instance_bls12::{
+            POSEIDON_BLS_2_PARAMS, POSEIDON_BLS_3_PARAMS, POSEIDON_BLS_4_PARAMS,
+            POSEIDON_BLS_8_PARAMS,
+        },
+        poseidon_instance_hadeshash_bls12::{POSEIDONPERM_X5_255_3, POSEIDONPERM_X5_255_5},
+    };
     type Scalar = BlsScalar;
 
     static TESTRUNS: usize = 5;
@@ -557,14 +557,7 @@ mod poseidon_tests_bls12 {
         let result = poseidon.permutation(&host, &input).unwrap();
 
         // Verify the output matches expected values
-        assert_eq!(result.len(), expected_output.len());
-        for (i, (actual, expected)) in result.iter().zip(expected_output.iter()).enumerate() {
-            assert_eq!(
-                actual, expected,
-                "Mismatch at index {}: got {:?}, expected {:?}",
-                i, actual, expected
-            );
-        }
+        assert_eq!(result, expected_output);
     }
 
     #[test]
@@ -595,25 +588,17 @@ mod poseidon_tests_bls12 {
         let result = poseidon.permutation(&host, &input).unwrap();
 
         // Verify the output matches expected values
-        assert_eq!(result.len(), expected_output.len());
-        for (i, (actual, expected)) in result.iter().zip(expected_output.iter()).enumerate() {
-            assert_eq!(
-                actual, expected,
-                "Mismatch at index {}: got {:?}, expected {:?}",
-                i, actual, expected
-            );
-        }
+        assert_eq!(result, expected_output);
     }
 }
 
 #[cfg(test)]
 mod poseidon_tests_bn254 {
-    use super::super::poseidon_instance_bn254::POSEIDON_BN_PARAMS;
-    use super::super::poseidon_instance_hadeshash_bn254::{
-        POSEIDONPERM_X5_254_3, POSEIDONPERM_X5_254_5,
-    };
     use super::*;
-
+    use crate::test::poseidon::{
+        poseidon_instance_bn254::POSEIDON_BN_PARAMS,
+        poseidon_instance_hadeshash_bn254::{POSEIDONPERM_X5_254_3, POSEIDONPERM_X5_254_5},
+    };
     type Scalar = BnScalar;
 
     static TESTRUNS: usize = 5;
@@ -687,14 +672,7 @@ mod poseidon_tests_bn254 {
         let result = poseidon.permutation(&host, &input).unwrap();
 
         // Verify the output matches expected values
-        assert_eq!(result.len(), expected_output.len());
-        for (i, (actual, expected)) in result.iter().zip(expected_output.iter()).enumerate() {
-            assert_eq!(
-                actual, expected,
-                "Mismatch at index {}: got {:?}, expected {:?}",
-                i, actual, expected
-            );
-        }
+        assert_eq!(result, expected_output);
     }
 
     #[test]
@@ -725,13 +703,6 @@ mod poseidon_tests_bn254 {
         let result = poseidon.permutation(&host, &input).unwrap();
 
         // Verify the output matches expected values
-        assert_eq!(result.len(), expected_output.len());
-        for (i, (actual, expected)) in result.iter().zip(expected_output.iter()).enumerate() {
-            assert_eq!(
-                actual, expected,
-                "Mismatch at index {}: got {:?}, expected {:?}",
-                i, actual, expected
-            );
-        }
+        assert_eq!(result, expected_output);
     }
 }

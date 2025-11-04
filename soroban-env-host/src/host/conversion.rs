@@ -324,7 +324,7 @@ impl Host {
     {
         let vals = scalars
             .into_iter()
-            .map(|s| s.to_u256val(self))
+            .map(|s| s.into_u256val(self))
             .metered_collect::<Result<Vec<_>, HostError>>(self)??;
 
         let host_vec =

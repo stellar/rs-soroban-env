@@ -333,7 +333,7 @@ impl Host {
     }
 
     pub(crate) fn fr_to_u256val(&self, scalar: Fr) -> Result<U256Val, HostError> {
-        scalar.to_u256val(self)
+        scalar.into_u256val(self)
     }
 
     pub(crate) fn field_element_deserialize<const EXPECTED_SIZE: usize, T: CanonicalDeserialize>(

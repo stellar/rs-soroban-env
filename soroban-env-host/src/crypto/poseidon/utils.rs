@@ -1,5 +1,5 @@
-use super::super::metered_scalar::MeteredScalar;
 use crate::{
+    crypto::metered_scalar::MeteredScalar,
     host::metered_clone::MeteredIterator,
     xdr::{ScErrorCode, ScErrorType},
     Host, HostError, Val,
