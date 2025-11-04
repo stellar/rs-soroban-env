@@ -50,8 +50,7 @@ impl MeteredScalar for BlsScalar {
 
     fn metered_double_in_place(&mut self, host: &Host) -> Result<(), HostError> {
         // Double is essentially add self to self
-        let temp = *self;
-        host.fr_add_internal(self, &temp)
+        host.fr_add_internal(self, &self.metered_clone(host)?)
     }
 
     fn metered_pow(&self, exp: &u64, host: &Host) -> Result<Self, HostError> {
@@ -99,8 +98,7 @@ impl MeteredScalar for BnScalar {
 
     fn metered_double_in_place(&mut self, host: &Host) -> Result<(), HostError> {
         // Double is essentially add self to self
-        let temp = *self;
-        host.bn254_fr_add_internal(self, &temp)
+        host.bn254_fr_add_internal(self, &self.metered_clone(host)?)
     }
 
     fn metered_pow(&self, exp: &u64, host: &Host) -> Result<Self, HostError> {
