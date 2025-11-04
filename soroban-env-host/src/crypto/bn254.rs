@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::ops::{Add, Mul};
+use std::ops::{Add, AddAssign, Mul, MulAssign};
 
 use ark_bn254::{
     g1::Config as G1Config, g2::Config as G2Config, Bn254, Fq12, Fr, G1Affine, G1Projective,
@@ -10,15 +10,15 @@ use ark_ec::{
     short_weierstrass::{Affine, SWCurveConfig},
     CurveGroup,
 };
-use ark_ff::{Field, PrimeField};
+use ark_ff::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 
+use crate::crypto::metered_scalar::MeteredScalar;
 use crate::{
     budget::AsBudget,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Object, U256Small, U256Val, Val,
-    VecObject, U256,
+    Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Val, Val, VecObject,
 };
 
 pub(crate) const BN254_FP_SERIALIZED_SIZE: usize = 32;
@@ -274,16 +274,45 @@ impl Host {
     }
 
     pub(crate) fn bn254_fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
-        self.charge_budget(ContractCostType::Bn254FrFromU256, None)?;
-        let fr = if let Ok(small) = U256Small::try_from(sv) {
-            Fr::from_le_bytes_mod_order(&u64::from(small).to_le_bytes())
-        } else {
-            let obj: U256Object = sv.try_into()?;
-            self.visit_obj(obj, |u: &U256| {
-                Ok(Fr::from_le_bytes_mod_order(&u.to_le_bytes()))
-            })?
-        };
-        Ok(fr)
+        <Fr as MeteredScalar>::from_u256val(self, sv)
+    }
+
+    #[cfg(feature = "bench")]
+    pub(crate) fn bn254_fr_to_u256val(&self, fr: Fr) -> Result<U256Val, HostError> {
+        fr.into_u256val(self)
+    }
+
+    pub(crate) fn bn254_fr_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+        self.charge_budget(ContractCostType::Bn254FrAddSub, None)?;
+        lhs.add_assign(rhs);
+        Ok(())
+    }
+
+    pub(crate) fn bn254_fr_mul_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+        self.charge_budget(ContractCostType::Bn254FrMul, None)?;
+        lhs.mul_assign(rhs);
+        Ok(())
+    }
+
+    pub(crate) fn bn254_fr_pow_internal(&self, lhs: &Fr, rhs: &u64) -> Result<Fr, HostError> {
+        self.charge_budget(
+            ContractCostType::Bn254FrPow,
+            Some(64 - rhs.leading_zeros() as u64),
+        )?;
+        Ok(lhs.pow(&[*rhs]))
+    }
+
+    #[cfg(feature = "bench")]
+    pub(crate) fn bn254_fr_inv_internal(&self, lhs: &Fr) -> Result<Fr, HostError> {
+        self.charge_budget(ContractCostType::Bn254FrInv, None)?;
+        lhs.inverse().ok_or_else(|| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "bn254 fr_inv: field element has no inverse",
+                &[],
+            )
+        })
     }
 
     pub(crate) fn bn254_pairing_internal(

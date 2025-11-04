@@ -611,6 +611,11 @@ fn excessive_logging() -> Result<(), HostError> {
     Bn254G1Mul                         0              0              
     Bn254Pairing                       0              0              
     Bn254FrFromU256                    0              0              
+    Bn254FrToU256                      0              0              
+    Bn254FrAddSub                      0              0              
+    Bn254FrMul                         0              0              
+    Bn254FrPow                         0              0              
+    Bn254FrInv                         0              0              
     =================================================================
     
     "#

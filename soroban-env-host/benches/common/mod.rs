@@ -155,7 +155,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, Bls12381FrPowMeasure>(&mut params)?;
     call_bench::<B, Bls12381FrInvMeasure>(&mut params)?;
 
-    // P24 cost types
+    // P25 cost types
     call_bench::<B, Bn254EncodeFpMeasure>(&mut params)?;
     call_bench::<B, Bn254DecodeFpMeasure>(&mut params)?;
     call_bench::<B, Bn254G1CheckPointOnCurveMeasure>(&mut params)?;
@@ -166,6 +166,12 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, Bn254G1MulMeasure>(&mut params)?;
     call_bench::<B, Bn254PairingMeasure>(&mut params)?;
     call_bench::<B, Bn254FrFromU256Measure>(&mut params)?;
+    call_bench::<B, Bn254FrToU256Measure>(&mut params)?;
+    call_bench::<B, Bn254FrAddMeasure>(&mut params)?;
+    call_bench::<B, Bn254FrSubMeasure>(&mut params)?;
+    call_bench::<B, Bn254FrMulMeasure>(&mut params)?;
+    call_bench::<B, Bn254FrPowMeasure>(&mut params)?;
+    call_bench::<B, Bn254FrInvMeasure>(&mut params)?;
 
     // These three mem ones are derived analytically, we do not calibrate them typically
     if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {
