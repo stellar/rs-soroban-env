@@ -87,7 +87,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
     ///
     /// Reference: Section 5.1 of the Poseidon2 paper
     /// (https://eprint.iacr.org/2023/323)
-    fn matmul_m4(&self, host: &Host, input: &mut [F]) -> Result<(), HostError> {
+    fn matmul_m4(&self, host: &Host, state: &mut [F]) -> Result<(), HostError> {
         let t = self.params.t;
         if t % 4 != 0 {
             return Err(host.error(
@@ -96,12 +96,12 @@ impl<F: MeteredScalar> Poseidon2<F> {
                 &[],
             ));
         }
-        if input.len() != t {
+        if state.len() != t {
             return Err(host.error(
                 INVALID_INPUT,
                 "Poseidon2: matmul_m4 input length does not match `t`",
                 &[
-                    Val::from_u32(input.len() as u32).into(),
+                    Val::from_u32(state.len() as u32).into(),
                     Val::from_u32(t as u32).into(),
                 ],
             ));
@@ -111,14 +111,14 @@ impl<F: MeteredScalar> Poseidon2<F> {
         for i in 0..t4 {
             // we've already asserted above t is a multiple of 4, so indexing below should be safe
             let start_index = i * 4;
-            let mut t_0 = input[start_index];
-            t_0.metered_add_assign(&input[start_index + 1], host)?;
-            let mut t_1 = input[start_index + 2];
-            t_1.metered_add_assign(&input[start_index + 3], host)?;
-            let mut t_2 = input[start_index + 1];
+            let mut t_0 = state[start_index];
+            t_0.metered_add_assign(&state[start_index + 1], host)?;
+            let mut t_1 = state[start_index + 2];
+            t_1.metered_add_assign(&state[start_index + 3], host)?;
+            let mut t_2 = state[start_index + 1];
             t_2.metered_double_in_place(host)?;
             t_2.metered_add_assign(&t_1, host)?;
-            let mut t_3 = input[start_index + 3];
+            let mut t_3 = state[start_index + 3];
             t_3.metered_double_in_place(host)?;
             t_3.metered_add_assign(&t_0, host)?;
             let mut t_4 = t_1;
@@ -133,10 +133,10 @@ impl<F: MeteredScalar> Poseidon2<F> {
             t_6.metered_add_assign(&t_5, host)?;
             let mut t_7 = t_2;
             t_7.metered_add_assign(&t_4, host)?;
-            input[start_index] = t_6;
-            input[start_index + 1] = t_5;
-            input[start_index + 2] = t_7;
-            input[start_index + 3] = t_4;
+            state[start_index] = t_6;
+            state[start_index + 1] = t_5;
+            state[start_index + 2] = t_7;
+            state[start_index + 3] = t_4;
         }
         Ok(())
     }
@@ -148,14 +148,14 @@ impl<F: MeteredScalar> Poseidon2<F> {
     ///
     /// Reference: Section 5.1 of the Poseidon2 paper
     /// (https://eprint.iacr.org/2023/323)
-    fn matmul_external(&self, host: &Host, input: &mut [F]) -> Result<(), HostError> {
+    fn matmul_external(&self, host: &Host, state: &mut [F]) -> Result<(), HostError> {
         let t = self.params.t;
-        if input.len() != t {
+        if state.len() != t {
             return Err(host.error(
                 INVALID_INPUT,
                 "Poseidon2: matmul_external input length does not match `t`",
                 &[
-                    Val::from_u32(input.len() as u32).into(),
+                    Val::from_u32(state.len() as u32).into(),
                     Val::from_u32(t as u32).into(),
                 ],
             ));
@@ -164,28 +164,28 @@ impl<F: MeteredScalar> Poseidon2<F> {
             2 => {
                 // Matrix circ(2, 1)
                 // t == 2, so indexing below is safe
-                let mut sum = input[0];
-                sum.metered_add_assign(&input[1], host)?;
-                input[0].metered_add_assign(&sum, host)?;
-                input[1].metered_add_assign(&sum, host)?;
+                let mut sum = state[0];
+                sum.metered_add_assign(&state[1], host)?;
+                state[0].metered_add_assign(&sum, host)?;
+                state[1].metered_add_assign(&sum, host)?;
             }
             3 => {
                 // Matrix circ(2, 1, 1)
                 // t == 3, so indexing below is safe
-                let mut sum = input[0];
-                sum.metered_add_assign(&input[1], host)?;
-                sum.metered_add_assign(&input[2], host)?;
-                input[0].metered_add_assign(&sum, host)?;
-                input[1].metered_add_assign(&sum, host)?;
-                input[2].metered_add_assign(&sum, host)?;
+                let mut sum = state[0];
+                sum.metered_add_assign(&state[1], host)?;
+                sum.metered_add_assign(&state[2], host)?;
+                state[0].metered_add_assign(&sum, host)?;
+                state[1].metered_add_assign(&sum, host)?;
+                state[2].metered_add_assign(&sum, host)?;
             }
             4 => {
                 // Applying cheap 4x4 MDS matrix to each 4-element part of the state
-                self.matmul_m4(host, input)?;
+                self.matmul_m4(host, state)?;
             }
             8 | 12 | 16 | 20 | 24 => {
                 // Applying cheap 4x4 MDS matrix to each 4-element part of the state
-                self.matmul_m4(host, input)?;
+                self.matmul_m4(host, state)?;
 
                 // Applying second cheap matrix for t > 4
                 let t4 = t / 4;
@@ -193,15 +193,15 @@ impl<F: MeteredScalar> Poseidon2<F> {
                 let mut stored = [F::zero(); 4];
                 for l in 0..4 {
                     // input length is greater than 4 (min. 8), indexing is safe
-                    stored[l] = input[l];
+                    stored[l] = state[l];
                     for j in 1..t4 {
                         // input length is a multiple of 4 (min. 8), so the indexing here is safe
-                        stored[l].metered_add_assign(&input[4 * j + l], host)?;
+                        stored[l].metered_add_assign(&state[4 * j + l], host)?;
                     }
                 }
-                for i in 0..input.len() {
+                for i in 0..state.len() {
                     // stored is a array of size 4, indexing is safe
-                    input[i].metered_add_assign(&stored[i % 4], host)?;
+                    state[i].metered_add_assign(&stored[i % 4], host)?;
                 }
             }
             _ => {
@@ -225,13 +225,13 @@ impl<F: MeteredScalar> Poseidon2<F> {
     fn matmul_internal(
         &self,
         host: &Host,
-        input: &mut [F],
+        state: &mut [F],
         mat_internal_diag_m_1: &[F],
     ) -> Result<(), HostError> {
         let t = self.params.t;
-        if t != input.len() || t != mat_internal_diag_m_1.len() {
+        if t != state.len() || t != mat_internal_diag_m_1.len() {
             return Err(host.error(INVALID_INPUT, "Poseidon2: matmul_internal length mismatch between `t`, input length and/or matrix length", 
-                &[Val::from_u32(t as u32).into(), Val::from_u32(input.len() as u32).into(), Val::from_u32(mat_internal_diag_m_1.len() as u32).into(), ]
+                &[Val::from_u32(t as u32).into(), Val::from_u32(state.len() as u32).into(), Val::from_u32(mat_internal_diag_m_1.len() as u32).into(), ]
             ));
         }
 
@@ -240,36 +240,36 @@ impl<F: MeteredScalar> Poseidon2<F> {
                 // [2, 1]
                 // [1, 3]
                 // t == 2, so indexing below is safe
-                let mut sum = input[0];
-                sum.metered_add_assign(&input[1], host)?;
-                input[0].metered_add_assign(&sum, host)?;
-                input[1].metered_double_in_place(host)?;
-                input[1].metered_add_assign(&sum, host)?;
+                let mut sum = state[0];
+                sum.metered_add_assign(&state[1], host)?;
+                state[0].metered_add_assign(&sum, host)?;
+                state[1].metered_double_in_place(host)?;
+                state[1].metered_add_assign(&sum, host)?;
             }
             3 => {
                 // [2, 1, 1]
                 // [1, 2, 1]
                 // [1, 1, 3]
                 // t == 3, so indexing below is safe
-                let mut sum = input[0];
-                sum.metered_add_assign(&input[1], host)?;
-                sum.metered_add_assign(&input[2], host)?;
-                input[0].metered_add_assign(&sum, host)?;
-                input[1].metered_add_assign(&sum, host)?;
-                input[2].metered_double_in_place(host)?;
-                input[2].metered_add_assign(&sum, host)?;
+                let mut sum = state[0];
+                sum.metered_add_assign(&state[1], host)?;
+                sum.metered_add_assign(&state[2], host)?;
+                state[0].metered_add_assign(&sum, host)?;
+                state[1].metered_add_assign(&sum, host)?;
+                state[2].metered_double_in_place(host)?;
+                state[2].metered_add_assign(&sum, host)?;
             }
             4 | 8 | 12 | 16 | 20 | 24 => {
                 // Compute input sum
-                let mut sum = input[0];
-                for el in input.iter().skip(1).take(t - 1) {
+                let mut sum = state[0];
+                for el in state.iter().skip(1).take(t - 1) {
                     sum.metered_add_assign(el, host)?;
                 }
                 // Add sum + diag entry * element to each element
-                for i in 0..input.len() {
+                for i in 0..state.len() {
                     // input and mat_internal_diag_m_1 have the same length, indexing is safe
-                    input[i].metered_mul_assign(&mat_internal_diag_m_1[i], host)?;
-                    input[i].metered_add_assign(&sum, host)?;
+                    state[i].metered_mul_assign(&mat_internal_diag_m_1[i], host)?;
+                    state[i].metered_add_assign(&sum, host)?;
                 }
             }
             _ => {
