@@ -655,8 +655,8 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254Pairing => {
-                    cpu.const_term = 10117409;
-                    cpu.lin_term = ScaledU64(609283036);
+                    cpu.const_term = 5263916;
+                    cpu.lin_term = ScaledU64(392472814);
                 }
                 ContractCostType::Bn254FrFromU256 => {
                     cpu.const_term = 2052;
@@ -1007,8 +1007,8 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254Pairing => {
-                    mem.const_term = 2204;
-                    mem.lin_term = ScaledU64(9340474);
+                    mem.const_term = 1821;
+                    mem.lin_term = ScaledU64(6232546);
                 }
                 ContractCostType::Bn254FrFromU256 => {
                     mem.const_term = 0;

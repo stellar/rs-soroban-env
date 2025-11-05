@@ -339,15 +339,10 @@ impl HostCostMeasurement for Bls12381PairingMeasure {
     type Runner = Bls12381PairingRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bls12381PairingSample {
+        let i = input.max(1);
         Bls12381PairingSample(
-            (0..input)
-                .into_iter()
-                .map(|_| G1Affine::rand(rng))
-                .collect(),
-            (0..input)
-                .into_iter()
-                .map(|_| G2Affine::rand(rng))
-                .collect(),
+            (0..i).into_iter().map(|_| G1Affine::rand(rng)).collect(),
+            (0..i).into_iter().map(|_| G2Affine::rand(rng)).collect(),
         )
     }
 }
