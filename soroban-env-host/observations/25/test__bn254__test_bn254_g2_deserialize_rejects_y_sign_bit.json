@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(128)": "cpu:1376",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:2371, mem:224, objs:-/1@4a50f3a2",
+  "   3 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "",
+  "   4 ret bytes_copy_to_slice -> Ok(())": "cpu:2490",
+  "   5 end": "cpu:3546, mem:448, prngs:-/-, objs:-/2@72bbc3f0, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
