@@ -80,7 +80,13 @@ fn negative_g1(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> 
             // infinity
             continue;
         }
-        if g1.y <= -g1.y {
+        if g1.y > -g1.y {
+            // check that the Y-sign bit is indeed set in arkworks by retrieving
+            // the MSB (the last byte in little-endian serialized buffer) and
+            // asserting on the flag bit
+            let mut buf = [0u8; BN254_G1_SERIALIZED_SIZE];
+            g1.serialize_uncompressed(&mut buf[..]).unwrap(); // this is little-endian
+            assert!(buf[BN254_G1_SERIALIZED_SIZE - 1] & 0b1000_0000 != 0u8);
             // we get our point
             return host.bn254_g1_affine_serialize_uncompressed(&g1);
         }
@@ -176,7 +182,13 @@ fn negative_g2(host: &Host, rng: &mut StdRng) -> Result<BytesObject, HostError> 
             // infinity
             continue;
         }
-        if g2.y <= -g2.y {
+        if g2.y > -g2.y {
+            // check that the Y-sign bit is indeed set in arkworks by retrieving
+            // the MSB (the last byte in little-endian serialized buffer) and
+            // asserting on the flag bit
+            let mut buf = [0u8; BN254_G2_SERIALIZED_SIZE];
+            g2.serialize_uncompressed(&mut buf[..]).unwrap(); // this is little-endian
+            assert!(buf[BN254_G2_SERIALIZED_SIZE - 1] & 0b1000_0000 != 0u8);
             // we get our point
             return host.bn254_g2_affine_serialize_uncompressed(&g2);
         }
@@ -811,30 +823,31 @@ fn test_bn254_g1_deserialize_rejects_y_sign_bit() -> Result<(), HostError> {
     host.enable_debug()?;
     let mut rng = StdRng::from_seed([0u8; 32]);
 
-    // This is a negative g1 point serialized by us, it should not set the y-sign bit
-    let g1_bytes_obj = negative_g1(&host, &mut rng)?;
+    for _ in 0..10 {
+        // This is a negative g1 point serialized by us, it should not set the y-sign bit
+        let g1_bytes_obj = negative_g1(&host, &mut rng)?;
 
-    // Get the bytes and verify the y-sign bit is NOT set
-    let mut g1_bytes = vec![0u8; BN254_G1_SERIALIZED_SIZE];
-    host.bytes_copy_to_slice(g1_bytes_obj, U32Val::from(0), &mut g1_bytes)?;
-    assert_eq!(
-        g1_bytes[0] & 0b1000_0000,
-        0,
-        "Y-sign bit should not be set even for negative y"
-    );
+        // Get the bytes and verify the y-sign bit is NOT set
+        let mut g1_bytes = vec![0u8; BN254_G1_SERIALIZED_SIZE];
+        host.bytes_copy_to_slice(g1_bytes_obj, U32Val::from(0), &mut g1_bytes)?;
+        assert_eq!(
+            g1_bytes[0] & 0b1000_0000,
+            0,
+            "Y-sign bit should not be set even for negative y"
+        );
 
-    // Now manually set the y-sign bit (bit 0, which is 0x80 in the MSB)
-    g1_bytes[0] |= 0b1000_0000;
+        // Now manually set the y-sign bit (bit 0, which is 0x80 in the MSB)
+        g1_bytes[0] |= 0b1000_0000;
 
-    // Try to deserialize - should fail
-    let g1_bytes_obj_modified = host.test_bin_obj(&g1_bytes)?;
-    let result = host.bn254_g1_affine_deserialize(g1_bytes_obj_modified);
+        // Try to deserialize - should fail
+        let g1_bytes_obj_modified = host.test_bin_obj(&g1_bytes)?;
+        let result = host.bn254_g1_affine_deserialize(g1_bytes_obj_modified);
 
-    assert!(HostError::result_matches_err(
-        result,
-        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-    ));
-
+        assert!(HostError::result_matches_err(
+            result,
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
     Ok(())
 }
 
@@ -876,30 +889,31 @@ fn test_bn254_g2_deserialize_rejects_y_sign_bit() -> Result<(), HostError> {
     host.enable_debug()?;
     let mut rng = StdRng::from_seed([0u8; 32]);
 
-    // This is a negative g1 point serialized by us, it should not set the y-sign bit
+    // This is a negative G1 point serialized by us, it should not set the y-sign bit
     let g2_bytes_obj = negative_g2(&host, &mut rng)?;
 
-    // Get the bytes and verify the y-sign bit is NOT set
-    let mut g2_bytes = vec![0u8; BN254_G2_SERIALIZED_SIZE];
-    host.bytes_copy_to_slice(g2_bytes_obj, U32Val::from(0), &mut g2_bytes)?;
-    assert_eq!(
-        g2_bytes[0] & 0b1000_0000,
-        0,
-        "Y-sign bit should not be set even for negative y"
-    );
+    for _ in 0..10 {
+        // Get the bytes and verify the y-sign bit is NOT set
+        let mut g2_bytes = vec![0u8; BN254_G2_SERIALIZED_SIZE];
+        host.bytes_copy_to_slice(g2_bytes_obj, U32Val::from(0), &mut g2_bytes)?;
+        assert_eq!(
+            g2_bytes[0] & 0b1000_0000,
+            0,
+            "Y-sign bit should not be set even for negative y"
+        );
 
-    // Now manually set the y-sign bit (bit 0, which is 0x80 in the MSB)
-    g2_bytes[0] |= 0b1000_0000;
+        // Now manually set the y-sign bit (bit 0, which is 0x80 in the MSB)
+        g2_bytes[0] |= 0b1000_0000;
 
-    // Try to deserialize - should fail
-    let g2_bytes_obj_modified = host.test_bin_obj(&g2_bytes)?;
-    let result = host.bn254_g2_affine_deserialize(g2_bytes_obj_modified);
+        // Try to deserialize - should fail
+        let g2_bytes_obj_modified = host.test_bin_obj(&g2_bytes)?;
+        let result = host.bn254_g2_affine_deserialize(g2_bytes_obj_modified);
 
-    assert!(HostError::result_matches_err(
-        result,
-        (ScErrorType::Crypto, ScErrorCode::InvalidInput)
-    ));
-
+        assert!(HostError::result_matches_err(
+            result,
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
     Ok(())
 }
 

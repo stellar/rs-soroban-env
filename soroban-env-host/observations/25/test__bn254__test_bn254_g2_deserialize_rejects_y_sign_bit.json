@@ -1,8 +1,26 @@
 {
   "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call bytes_new_from_slice(128)": "cpu:1376",
-  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:2371, mem:224, objs:-/1@4a50f3a2",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:2371, mem:224, objs:-/1@62ecc3ea",
   "   3 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "",
   "   4 ret bytes_copy_to_slice -> Ok(())": "cpu:2490",
-  "   5 end": "cpu:3546, mem:448, prngs:-/-, objs:-/2@72bbc3f0, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "   5 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:3546, mem:448, objs:-/2@72f8d01b",
+  "   6 ret bytes_copy_to_slice -> Ok(())": "cpu:3665",
+  "   7 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:4721, mem:672, objs:-/3@e68bd088",
+  "   8 ret bytes_copy_to_slice -> Ok(())": "cpu:4840",
+  "   9 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:5896, mem:896, objs:-/4@8a54f28",
+  "  10 ret bytes_copy_to_slice -> Ok(())": "cpu:6015",
+  "  11 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:7071, mem:1120, objs:-/5@3a682175",
+  "  12 ret bytes_copy_to_slice -> Ok(())": "cpu:7190",
+  "  13 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:8246, mem:1344, objs:-/6@8dda692d",
+  "  14 ret bytes_copy_to_slice -> Ok(())": "cpu:8365",
+  "  15 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:9421, mem:1568, objs:-/7@e3cc5f61",
+  "  16 ret bytes_copy_to_slice -> Ok(())": "cpu:9540",
+  "  17 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:10596, mem:1792, objs:-/8@fd6b01b1",
+  "  18 ret bytes_copy_to_slice -> Ok(())": "cpu:10715",
+  "  19 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:11771, mem:2016, objs:-/9@b5ec8a9e",
+  "  20 ret bytes_copy_to_slice -> Ok(())": "cpu:11890",
+  "  21 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 128)": "cpu:12946, mem:2240, objs:-/10@b0a16390",
+  "  22 ret bytes_copy_to_slice -> Ok(())": "cpu:13065",
+  "  23 end": "cpu:14121, mem:2464, prngs:-/-, objs:-/11@5ca70dcd, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

@@ -45,8 +45,6 @@ impl Host {
     // (the base field element), and will be charged accordingly.
     // Validation of the deserialized entity must be performed outside of this
     // function, to keep budget charging isolated.
-
-    // TODO: this function has to be moved into curve_utils because it is used by both
     pub(crate) fn deserialize_uncompressed_no_validate<
         const EXPECTED_SIZE: usize,
         T: CanonicalDeserialize,
