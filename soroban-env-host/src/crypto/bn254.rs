@@ -39,8 +39,9 @@ impl Host {
 
     // Arkworks and ethereum differ in terms of how flags are handled.
     //
-    // - In arkworks, the two free bits are reserved for flags: the MSB is the
-    //   Y-sign flag, and the 2nd MSB is the infinity flag
+    // - In arkworks, the two free bits are reserved for flags: the
+    //   most-significant-bit is the Y-sign flag, and the 2nd
+    //   most-significant-bit is the infinity flag
     // - In ethereum, the two free bits are always unset.
     //
     // Since encoding/decoding is in uncompressed mode (Y is included), there is
@@ -65,6 +66,11 @@ impl Host {
             ));
         }
 
+        // The incoming bytes is in big-endian, the sign bits are contained in
+        // the first byte (for G1Affine that's the MSB of the y-coordinate (Fp),
+        // for G2Affine that's the MSB of the c1 (Fp) part of the Y-coordinate
+        // (Fp2)). The highest bit (0x80) is the y-sign flag, the 2nd highest
+        // bit (0x40) is the infinity flag. We ensure both are unset.
         let flags = 0b1100_0000 & bytes[0];
         if flags != 0b0000_0000 {
             return Err(self.err(
