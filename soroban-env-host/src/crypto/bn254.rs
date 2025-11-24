@@ -208,8 +208,19 @@ impl Host {
             }
             let mut x = [0u8; BN254_FP_SERIALIZED_SIZE];
             let mut y = [0u8; BN254_FP_SERIALIZED_SIZE];
-            x.copy_from_slice(&bytes[0..BN254_FP_SERIALIZED_SIZE]);
-            y.copy_from_slice(&bytes[BN254_FP_SERIALIZED_SIZE..]);
+            // Size already validated by bn254_validate_flags_and_check_infinity
+            // These slices are guaranteed to be in bounds due to the size check,
+            // but we use explicit checks for defense in depth
+            x.copy_from_slice(
+                bytes
+                    .get(0..BN254_FP_SERIALIZED_SIZE)
+                    .ok_or_else(|| self.bn254_err_invalid_input("G1 X coordinate out of bounds"))?,
+            );
+            y.copy_from_slice(
+                bytes
+                    .get(BN254_FP_SERIALIZED_SIZE..BN254_G1_SERIALIZED_SIZE)
+                    .ok_or_else(|| self.bn254_err_invalid_input("G1 Y coordinate out of bounds"))?,
+            );
             let fp_x = self
                 .bn254_field_element_deserialize::<BN254_FP_SERIALIZED_SIZE, Fp>(&x, "bn254 Fp")?;
             let fp_y = self
@@ -236,8 +247,19 @@ impl Host {
             }
             let mut x = [0u8; BN254_FP2_SERIALIZED_SIZE];
             let mut y = [0u8; BN254_FP2_SERIALIZED_SIZE];
-            x.copy_from_slice(&bytes[0..BN254_FP2_SERIALIZED_SIZE]);
-            y.copy_from_slice(&bytes[BN254_FP2_SERIALIZED_SIZE..]);
+            // Size already validated by bn254_validate_flags_and_check_infinity
+            // These slices are guaranteed to be in bounds due to the size check,
+            // but we use explicit checks for defense in depth
+            x.copy_from_slice(
+                bytes
+                    .get(0..BN254_FP2_SERIALIZED_SIZE)
+                    .ok_or_else(|| self.bn254_err_invalid_input("G2 X coordinate out of bounds"))?,
+            );
+            y.copy_from_slice(
+                bytes
+                    .get(BN254_FP2_SERIALIZED_SIZE..BN254_G2_SERIALIZED_SIZE)
+                    .ok_or_else(|| self.bn254_err_invalid_input("G2 Y coordinate out of bounds"))?,
+            );
             let fp2_x = self.bn254_field_element_deserialize::<BN254_FP2_SERIALIZED_SIZE, Fp2>(
                 &x,
                 "bn254 Fp2",
