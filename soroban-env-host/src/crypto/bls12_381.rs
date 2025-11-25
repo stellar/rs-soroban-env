@@ -21,7 +21,7 @@ use ark_ec::{
     AffineRepr, CurveConfig, CurveGroup,
 };
 use ark_ff::{field_hashers::DefaultFieldHasher, Field};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use num_traits::Zero;
 use sha2::Sha256;
 use std::cmp::Ordering;
@@ -71,7 +71,7 @@ impl Host {
         )?;
         // validation turned off here to isolate the cost of serialization.
         // proper validation has to be performed outside of this function
-        T::deserialize_with_mode(slice, Compress::No, Validate::No).map_err(|_e| {
+        T::deserialize_uncompressed_unchecked(slice).map_err(|_e| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,

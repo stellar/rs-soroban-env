@@ -1,17 +1,16 @@
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Mul, MulAssign};
 
-use ark_bn254::{
-    g1::Config as G1Config, g2::Config as G2Config, Bn254, Fq12, Fr, G1Affine, G1Projective,
-    G2Affine,
-};
+use ark_bn254::{Bn254, Fq as Fp, Fq12, Fq2 as Fp2, Fr, G1Affine, G1Projective, G2Affine};
+use ark_ec::AffineRepr;
 use ark_ec::{
     pairing::{Pairing, PairingOutput},
     short_weierstrass::{Affine, SWCurveConfig},
     CurveGroup,
 };
 use ark_ff::Field;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use soroban_env_common::EnvBase;
 
 use crate::crypto::metered_scalar::MeteredScalar;
 use crate::{
@@ -26,6 +25,8 @@ pub(crate) const BN254_FP2_SERIALIZED_SIZE: usize = BN254_FP_SERIALIZED_SIZE * 2
 pub(crate) const BN254_G1_SERIALIZED_SIZE: usize = BN254_FP_SERIALIZED_SIZE * 2;
 pub(crate) const BN254_G2_SERIALIZED_SIZE: usize = BN254_FP2_SERIALIZED_SIZE * 2;
 
+// The expected size in terms of number of `Fp`, this is a helper for budget
+// charging E.g. `Fp2` will be charged as 2 units of `Fp` for encoding/decoding.
 #[inline(always)]
 fn units_of_fp<const EXPECTED_SIZE: usize>() -> u64 {
     EXPECTED_SIZE.div_ceil(BN254_FP_SERIALIZED_SIZE) as u64
@@ -36,30 +37,95 @@ impl Host {
         self.err(ScErrorType::Crypto, ScErrorCode::InvalidInput, msg, &[])
     }
 
-    // This is the internal routine performing deserialization on various
-    // element types, which can be conceptually decomposed into units of Fp
-    // (the base field element), and will be charged accordingly.
-    // Validation of the deserialized entity must be performed outside of this
-    // function, to keep budget charging isolated.
-    pub(crate) fn bn254_deserialize_uncompressed_no_validate<
-        const EXPECTED_SIZE: usize,
-        T: CanonicalDeserialize,
-    >(
+    // Arkworks and ethereum differ in terms of how flags are handled.
+    //
+    // - In arkworks, the two free bits are reserved for flags: the
+    //   most-significant-bit is the Y-sign flag, and the 2nd
+    //   most-significant-bit is the infinity flag
+    // - In ethereum, the two free bits are always unset.
+    //
+    // Since encoding/decoding is in uncompressed mode (Y is included), there is
+    // no disambiguity. But we need to make sure to stick to our
+    // specification (which is modeled after Ethereum). That means during
+    // decoding, we make sure the incoming bytes have the two "flag bits" remain
+    // unset.
+    fn bn254_validate_flags_and_check_infinity<const EXPECTED_SIZE: usize>(
         &self,
-        slice: &[u8],
+        bytes: &[u8],
         tag: &str,
-    ) -> Result<T, HostError> {
-        if EXPECTED_SIZE == 0 || slice.len() != EXPECTED_SIZE {
+    ) -> Result<bool, HostError> {
+        if bytes.len() != EXPECTED_SIZE {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
-                format!("bn254 {tag}: invalid input length to deserialize").as_str(),
+                format!("bn254 {}: invalid input length to deserialize", tag).as_str(),
                 &[
-                    Val::from_u32(slice.len() as u32).into(),
+                    Val::from_u32(bytes.len() as u32).into(),
                     Val::from_u32(EXPECTED_SIZE as u32).into(),
                 ],
             ));
         }
+
+        // The incoming bytes is in big-endian, the sign bits are contained in
+        // the first byte (for G1Affine that's the MSB of the y-coordinate (Fp),
+        // for G2Affine that's the MSB of the c1 (Fp) part of the Y-coordinate
+        // (Fp2)). The highest bit (0x80) is the y-sign flag, the 2nd highest
+        // bit (0x40) is the infinity flag. We ensure both are unset.
+        let flags = 0b1100_0000 & bytes[0];
+        if flags != 0b0000_0000 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("bn254 {} deserialize: the two flag bits must be unset", tag).as_str(),
+                &[],
+            ));
+        }
+        // infinity point is represented as (0,0), which in encoded form (with
+        // no flags set), is just an array of all zeros, we checked the flags
+        // above, here we check if all bytes are zero
+        let inf = bytes.iter().all(|b| *b == 0u8);
+        return Ok(inf);
+    }
+
+    // Arkwork's the encoding/decoding rules for field elements (Fp and Fp2)
+    // differ from Ethereum's (which is same as ours)
+    //
+    // (Notation: An Fp2 is an element in the quadratic extension field that can
+    // be written as `c0 + c1 * i` `c0` is the real component, `c1` is the
+    // imaginary component, both are of `Fp` type. and we use `||` to denote
+    // concatenation)
+    //
+    // - In arkworks, `Fp` is serialized in little-endian, and `Fp2` is
+    // serialized as `c0 || c1`, where each component is in little-endian
+    // - In ethereum, `Fp` is serialized in big-endian, and `Fp2` is `c1 || c0`
+    // where each component is big-endian encoded
+    //
+    // Therefore, on the decoding path, from an ethereum compatible bytes buffer
+    // to arkwork's Fp/Fp2, reversing the buffer will do the trick (for both
+    // `Fp` and `Fp2`).
+    pub(crate) fn bn254_field_element_deserialize<
+        const EXPECTED_SIZE: usize,
+        T: CanonicalDeserialize,
+    >(
+        &self,
+        input: &[u8],
+        tag: &str,
+    ) -> Result<T, HostError> {
+        if EXPECTED_SIZE == 0 || input.len() != EXPECTED_SIZE {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("field element {}: invalid input length to deserialize", tag).as_str(),
+                &[
+                    Val::from_u32(input.len() as u32).into(),
+                    Val::from_u32(EXPECTED_SIZE as u32).into(),
+                ],
+            ));
+        }
+        self.charge_budget(ContractCostType::MemCpy, Some(EXPECTED_SIZE as u64))?;
+        let mut buf = [0u8; EXPECTED_SIZE];
+        buf.copy_from_slice(input);
+        buf.reverse();
 
         self.as_budget().bulk_charge(
             ContractCostType::Bn254DecodeFp,
@@ -69,66 +135,200 @@ impl Host {
 
         // validation turned off here to isolate the cost of serialization.
         // proper validation has to be performed outside of this function
-        T::deserialize_with_mode(slice, Compress::No, Validate::No).map_err(|_e| {
-            self.bn254_err_invalid_input(format!("bn254: unable to deserialize {tag}").as_str())
+        T::deserialize_uncompressed_unchecked(buf.as_slice()).map_err(|_e| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("bn254: unable to deserialize {tag}").as_str(),
+                &[],
+            )
         })
     }
 
-    pub(crate) fn bn254_affine_deserialize<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
+    pub(crate) fn bn254_field_element_serialize<
+        const EXPECTED_SIZE: usize,
+        T: CanonicalSerialize,
+    >(
         &self,
-        bo: BytesObject,
-        ct_curve: ContractCostType,
-        subgroup_check: bool,
+        elem: T,
+        buf: &mut [u8],
         tag: &str,
-    ) -> Result<Affine<P>, HostError> {
-        let pt: Affine<P> = self.visit_obj(bo, |bytes: &ScBytes| {
-            self.bn254_deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(
-                bytes.as_slice(),
-                tag,
+    ) -> Result<(), HostError> {
+        if EXPECTED_SIZE == 0 || buf.len() != EXPECTED_SIZE {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                format!("field element {tag}: invalid buffer length to serialize into").as_str(),
+                &[
+                    Val::from_u32(buf.len() as u32).into(),
+                    Val::from_u32(EXPECTED_SIZE as u32).into(),
+                ],
+            ));
+        }
+
+        self.as_budget().bulk_charge(
+            ContractCostType::Bn254EncodeFp,
+            units_of_fp::<EXPECTED_SIZE>(),
+            None,
+        )?;
+
+        elem.serialize_uncompressed(&mut *buf).map_err(|_e| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                format!("field element {tag}: unable to serialize").as_str(),
+                &[],
             )
         })?;
 
-        if !self.bn254_check_point_is_on_curve(&pt, &ct_curve)? {
-            return Err(
-                self.bn254_err_invalid_input(format!("bn254 {}: point not on curve", tag).as_str())
-            );
-        }
-        if subgroup_check && !self.bn254_check_g2_point_is_in_subgroup(&pt)? {
-            return Err(self.bn254_err_invalid_input(
-                format!("bn254 {}: point not in the correct subgroup", tag).as_str(),
-            ));
-        }
-        Ok(pt)
+        // the reverse here works for the same reason explained above
+        buf.reverse();
+        Ok(())
     }
 
-    pub(crate) fn bn254_affine_vec_from_vecobj<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
+    // Arkworks and Ethereum both encode/decode the point coordinates in the
+    // same order, first X, then Y. However, how they decode the element types
+    // (Fp/Fp2) and how they assume the two free bits differ in important and
+    // subtle ways. See `bn254_validate_flags_and_check_infinity` for flags
+    // explanation and see `bn254_field_element_deserialize` for the element
+    // explanation.
+    //
+    // Due to these differences, we cannot rely on the type's own
+    // `CanonicalDeserialization`. Instead we break it down into:
+    // - handle flags and point-at-infinity special case
+    // - divide the buffer into two equal halves: X and Y, decode them
+    //   individually
+    // - construct the point back from (X, Y), perform additional checks
+    pub(crate) fn bn254_g1_affine_deserialize(
         &self,
-        vp: VecObject,
-        ct_curve: ContractCostType,
-        subgroup_check: bool,
-        tag: &str,
-    ) -> Result<Vec<Affine<P>>, HostError> {
-        let len: u32 = self.vec_len(vp)?.into();
-        self.charge_budget(
-            ContractCostType::MemAlloc,
-            Some(len as u64 * EXPECTED_SIZE as u64),
-        )?;
-
-        let mut points: Vec<Affine<P>> = Vec::with_capacity(len as usize);
-
-        let _ = self.visit_obj(vp, |vp: &HostVec| {
-            for p in vp.iter() {
-                let pp = self.bn254_affine_deserialize::<EXPECTED_SIZE, P>(
-                    BytesObject::try_from_val(self, p)?,
-                    ct_curve,
-                    subgroup_check,
-                    tag,
-                )?;
-                points.push(pp);
+        bo: BytesObject,
+    ) -> Result<G1Affine, HostError> {
+        self.visit_obj(bo, |bytes: &ScBytes| {
+            if self
+                .bn254_validate_flags_and_check_infinity::<BN254_G1_SERIALIZED_SIZE>(bytes, "G1")?
+            {
+                return Ok(G1Affine::zero());
             }
-            Ok(())
-        })?;
-        Ok(points)
+            let mut x = [0u8; BN254_FP_SERIALIZED_SIZE];
+            let mut y = [0u8; BN254_FP_SERIALIZED_SIZE];
+            // Size already validated by bn254_validate_flags_and_check_infinity
+            // These slices are guaranteed to be in bounds due to the size check,
+            // but we use explicit checks for defense in depth
+            x.copy_from_slice(
+                bytes
+                    .get(0..BN254_FP_SERIALIZED_SIZE)
+                    .ok_or_else(|| self.bn254_err_invalid_input("G1 X coordinate out of bounds"))?,
+            );
+            y.copy_from_slice(
+                bytes
+                    .get(BN254_FP_SERIALIZED_SIZE..BN254_G1_SERIALIZED_SIZE)
+                    .ok_or_else(|| self.bn254_err_invalid_input("G1 Y coordinate out of bounds"))?,
+            );
+            let fp_x = self
+                .bn254_field_element_deserialize::<BN254_FP_SERIALIZED_SIZE, Fp>(&x, "bn254 Fp")?;
+            let fp_y = self
+                .bn254_field_element_deserialize::<BN254_FP_SERIALIZED_SIZE, Fp>(&y, "bn254 Fp")?;
+            let pt = G1Affine::new_unchecked(fp_x, fp_y);
+            // check point is on curve
+            if !self.check_point_is_on_curve(&pt, &ContractCostType::Bn254G1CheckPointOnCurve)? {
+                return Err(self.bn254_err_invalid_input("bn254 G1: point not on curve"));
+            }
+            // G1 point does not require subgroup check, if it is on the curve
+            Ok(pt)
+        })
+    }
+
+    pub(crate) fn bn254_g2_affine_deserialize(
+        &self,
+        bo: BytesObject,
+    ) -> Result<G2Affine, HostError> {
+        self.visit_obj(bo, |bytes: &ScBytes| {
+            if self
+                .bn254_validate_flags_and_check_infinity::<BN254_G2_SERIALIZED_SIZE>(bytes, "G2")?
+            {
+                return Ok(G2Affine::zero());
+            }
+            let mut x = [0u8; BN254_FP2_SERIALIZED_SIZE];
+            let mut y = [0u8; BN254_FP2_SERIALIZED_SIZE];
+            // Size already validated by bn254_validate_flags_and_check_infinity
+            // These slices are guaranteed to be in bounds due to the size check,
+            // but we use explicit checks for defense in depth
+            x.copy_from_slice(
+                bytes
+                    .get(0..BN254_FP2_SERIALIZED_SIZE)
+                    .ok_or_else(|| self.bn254_err_invalid_input("G2 X coordinate out of bounds"))?,
+            );
+            y.copy_from_slice(
+                bytes
+                    .get(BN254_FP2_SERIALIZED_SIZE..BN254_G2_SERIALIZED_SIZE)
+                    .ok_or_else(|| self.bn254_err_invalid_input("G2 Y coordinate out of bounds"))?,
+            );
+            let fp2_x = self.bn254_field_element_deserialize::<BN254_FP2_SERIALIZED_SIZE, Fp2>(
+                &x,
+                "bn254 Fp2",
+            )?;
+            let fp2_y = self.bn254_field_element_deserialize::<BN254_FP2_SERIALIZED_SIZE, Fp2>(
+                &y,
+                "bn254 Fp2",
+            )?;
+            let pt = G2Affine::new_unchecked(fp2_x, fp2_y);
+            // check point is on curve
+            if !self
+                .bn254_check_point_is_on_curve(&pt, &ContractCostType::Bn254G2CheckPointOnCurve)?
+            {
+                return Err(self.bn254_err_invalid_input("bn254 G2: point not on curve"));
+            }
+            // G2 point needs subgroup check
+            if !self.bn254_check_g2_point_is_in_subgroup(&pt)? {
+                return Err(
+                    self.bn254_err_invalid_input("bn254 G2: point not in the correct subgroup")
+                );
+            }
+            Ok(pt)
+        })
+    }
+
+    pub(crate) fn bn254_g1_affine_serialize_uncompressed(
+        &self,
+        g1: &G1Affine,
+    ) -> Result<BytesObject, HostError> {
+        // we do not need to special handle flags on the serialization path,
+        // since we are serializing each element directly which does not carry
+        // flags, i.e. `Fp<P, N>::serialize_with_mode` just uses `EmptyFlags`.
+        let mut buf = [0u8; BN254_G1_SERIALIZED_SIZE];
+        self.bn254_field_element_serialize::<BN254_FP_SERIALIZED_SIZE, Fp>(
+            g1.x,
+            &mut buf[0..BN254_FP_SERIALIZED_SIZE],
+            "BN254 Fp",
+        )?;
+        self.bn254_field_element_serialize::<BN254_FP_SERIALIZED_SIZE, Fp>(
+            g1.y,
+            &mut buf[BN254_FP_SERIALIZED_SIZE..],
+            "BN254 Fp",
+        )?;
+        self.bytes_new_from_slice(&buf)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn bn254_g2_affine_serialize_uncompressed(
+        &self,
+        g2: &G2Affine,
+    ) -> Result<BytesObject, HostError> {
+        // we do not need to special handle flags on the serialization path,
+        // since we are serializing each element directly which does not carry
+        // flags, i.e. `Fp<P, N>::serialize_with_mode` just uses `EmptyFlags`.
+        let mut buf = [0u8; BN254_G2_SERIALIZED_SIZE];
+        self.bn254_field_element_serialize::<BN254_FP2_SERIALIZED_SIZE, Fp2>(
+            g2.x,
+            &mut buf[0..BN254_FP2_SERIALIZED_SIZE],
+            "BN254 Fp2",
+        )?;
+        self.bn254_field_element_serialize::<BN254_FP2_SERIALIZED_SIZE, Fp2>(
+            g2.y,
+            &mut buf[BN254_FP2_SERIALIZED_SIZE..],
+            "BN254 Fp2",
+        )?;
+        self.bytes_new_from_slice(&buf)
     }
 
     pub(crate) fn bn254_check_point_is_on_curve<P: SWCurveConfig>(
@@ -152,75 +352,12 @@ impl Host {
         Ok(pt.is_in_correct_subgroup_assuming_on_curve())
     }
 
-    pub(crate) fn bn254_g1_affine_deserialize_from_bytesobj(
-        &self,
-        bo: BytesObject,
-    ) -> Result<G1Affine, HostError> {
-        self.bn254_affine_deserialize::<BN254_G1_SERIALIZED_SIZE, G1Config>(
-            bo,
-            ContractCostType::Bn254G1CheckPointOnCurve,
-            false, // G1 subgroup check is not necessary
-            "G1",
-        )
-    }
-
     pub(crate) fn bn254_g1_projective_into_affine(
         &self,
         g1: G1Projective,
     ) -> Result<G1Affine, HostError> {
         self.charge_budget(ContractCostType::Bn254G1ProjectiveToAffine, None)?;
         Ok(g1.into_affine())
-    }
-
-    // This is the internal routine performing serialization on various
-    // element types, which can be conceptually decomposed into units of Fp
-    // (the base field element), and will be charged accordingly.
-    pub(crate) fn bn254_serialize_uncompressed_into_slice<
-        const EXPECTED_SIZE: usize,
-        T: CanonicalSerialize,
-    >(
-        &self,
-        element: &T,
-        buf: &mut [u8],
-        tag: &str,
-    ) -> Result<(), HostError> {
-        if EXPECTED_SIZE == 0 || buf.len() != EXPECTED_SIZE {
-            return Err(self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                format!("bn254 {tag}: invalid buffer length to serialize into").as_str(),
-                &[
-                    Val::from_u32(buf.len() as u32).into(),
-                    Val::from_u32(EXPECTED_SIZE as u32).into(),
-                ],
-            ));
-        }
-        self.as_budget().bulk_charge(
-            ContractCostType::Bn254EncodeFp,
-            units_of_fp::<EXPECTED_SIZE>(),
-            None,
-        )?;
-        element.serialize_uncompressed(buf).map_err(|_e| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                format!("bn254 {tag}: unable to serialize {tag}").as_str(),
-                &[],
-            )
-        })?;
-        Ok(())
-    }
-
-    pub(crate) fn bn254_g1_affine_serialize_uncompressed(
-        &self,
-        g1: &G1Affine,
-    ) -> Result<BytesObject, HostError> {
-        let mut buf = [0u8; BN254_G1_SERIALIZED_SIZE];
-
-        self.bn254_serialize_uncompressed_into_slice::<BN254_G1_SERIALIZED_SIZE, _>(
-            g1, &mut buf, "G1",
-        )?;
-        self.add_host_object(self.scbytes_from_slice(&buf)?)
     }
 
     pub(crate) fn bn254_g1_projective_serialize_uncompressed(
@@ -253,24 +390,42 @@ impl Host {
         &self,
         vp: VecObject,
     ) -> Result<Vec<G1Affine>, HostError> {
-        self.bn254_affine_vec_from_vecobj::<BN254_G1_SERIALIZED_SIZE, G1Config>(
-            vp,
-            ContractCostType::Bn254G1CheckPointOnCurve,
-            false, // G1 subgroup check is not necessary
-            "G1",
-        )
+        let len: u32 = self.vec_len(vp)?.into();
+        self.charge_budget(
+            ContractCostType::MemAlloc,
+            Some(len as u64 * BN254_G1_SERIALIZED_SIZE as u64),
+        )?;
+
+        let mut points: Vec<G1Affine> = Vec::with_capacity(len as usize);
+        let _ = self.visit_obj(vp, |vp: &HostVec| {
+            for p in vp.iter() {
+                let pp = self.bn254_g1_affine_deserialize(BytesObject::try_from_val(self, p)?)?;
+                points.push(pp);
+            }
+            Ok(())
+        })?;
+        Ok(points)
     }
 
     pub(crate) fn bn254_checked_g2_vec_from_vecobj(
         &self,
         vp: VecObject,
     ) -> Result<Vec<G2Affine>, HostError> {
-        self.bn254_affine_vec_from_vecobj::<BN254_G2_SERIALIZED_SIZE, G2Config>(
-            vp,
-            ContractCostType::Bn254G2CheckPointOnCurve,
-            true,
-            "G2",
-        )
+        let len: u32 = self.vec_len(vp)?.into();
+        self.charge_budget(
+            ContractCostType::MemAlloc,
+            Some(len as u64 * BN254_G2_SERIALIZED_SIZE as u64),
+        )?;
+
+        let mut points: Vec<G2Affine> = Vec::with_capacity(len as usize);
+        let _ = self.visit_obj(vp, |vp: &HostVec| {
+            for p in vp.iter() {
+                let pp = self.bn254_g2_affine_deserialize(BytesObject::try_from_val(self, p)?)?;
+                points.push(pp);
+            }
+            Ok(())
+        })?;
+        Ok(points)
     }
 
     pub(crate) fn bn254_fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
