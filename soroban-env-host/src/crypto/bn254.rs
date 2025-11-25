@@ -45,7 +45,7 @@ impl Host {
     // - In ethereum, the two free bits are always unset.
     //
     // Since encoding/decoding is in uncompressed mode (Y is included), there is
-    // no disambiguity. But we need to make sure to stick to the our
+    // no disambiguity. But we need to make sure to stick to our
     // specification (which is modeled after Ethereum). That means during
     // decoding, we make sure the incoming bytes have the two "flag bits" remain
     // unset.
@@ -80,12 +80,15 @@ impl Host {
                 &[],
             ));
         }
+        // infinity point is represented as (0,0), which in encoded form (with
+        // no flags set), is just an array of all zeros, we checked the flags
+        // above, here we check if all bytes are zero
         let inf = bytes.iter().all(|b| *b == 0u8);
         return Ok(inf);
     }
 
-    // The encoding/decoding of field elements (Fp and Fp2) differs from
-    // arkworks and ethereum
+    // Arkwork's the encoding/decoding rules for field elements (Fp and Fp2)
+    // differ from Ethereum's (which is same as ours)
     //
     // (Notation: An Fp2 is an element in the quadratic extension field that can
     // be written as `c0 + c1 * i` `c0` is the real component, `c1` is the
