@@ -530,7 +530,7 @@ impl Host {
                     // If we did persist instance storage, we may need to reload
                     // it into the re-entrant parent frames.
                     if persisted {
-                        // Simlarly to above, if reloading instance storage, if
+                        // Similarly to above, if reloading instance storage, if
                         // this fails we need to roll back everything.
                         if let Err(e) = self.maybe_reload_instance_storage_on_frame_pop() {
                             res = Err(e);
