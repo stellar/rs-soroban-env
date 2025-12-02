@@ -51,7 +51,8 @@ members = [
     "constructor_with_result",
     "custom_account_context",
     "try_call_sac",
-    "invoker_auth"
+    "invoker_auth",
+    "check_auth_instance_storage"
 ]
 [profile.release]
 opt-level = "z"
