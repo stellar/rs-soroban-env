@@ -1175,6 +1175,8 @@ impl Host {
 
     // Make the in-memory instance storage persist into the `Storage` by writing
     // its updated contents into corresponding `ContractData` ledger entry.
+    // Returns `true` if instance storage was persisted, `false` otherwise (i.e.
+    // when there are no changes to persist).
     fn persist_instance_storage(&self) -> Result<bool, HostError> {
         let updated_instance_storage = self.with_current_context_mut(|ctx| {
             if let Some(storage) = &ctx.storage {
