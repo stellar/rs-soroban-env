@@ -10,12 +10,15 @@
 use std::rc::Rc;
 
 use crate::budget::AsBudget;
-use crate::host::metered_clone::MeteredClone;
+use crate::host::metered_clone::{MeteredClone, MeteredIterator};
 use crate::{
     budget::Budget,
     host::metered_map::MeteredOrdMap,
     ledger_info::get_key_durability,
-    xdr::{ContractDataDurability, LedgerEntry, LedgerKey, ScErrorCode, ScErrorType, ScVal},
+    xdr::{
+        ContractDataDurability, LedgerEntry, LedgerKey, ScContractInstance, ScErrorCode,
+        ScErrorType, ScVal,
+    },
     Env, Error, Host, HostError, Val,
 };
 
@@ -38,6 +41,28 @@ impl InstanceStorageMap {
             map: MeteredOrdMap::from_map(map, host)?,
             is_modified: false,
         })
+    }
+
+    pub(crate) fn from_instance_xdr(
+        instance: &ScContractInstance,
+        host: &Host,
+    ) -> Result<Self, HostError> {
+        Self::from_map(
+            instance.storage.as_ref().map_or_else(
+                || Ok(vec![]),
+                |m| {
+                    m.iter()
+                        .map(|i| {
+                            Ok((
+                                host.to_valid_host_val(&i.key)?,
+                                host.to_valid_host_val(&i.val)?,
+                            ))
+                        })
+                        .metered_collect::<Result<Vec<(Val, Val)>, HostError>>(host)?
+                },
+            )?,
+            host,
+        )
     }
 }
 

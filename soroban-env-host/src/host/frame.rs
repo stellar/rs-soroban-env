@@ -3,7 +3,7 @@ use crate::{
     budget::AsBudget,
     err,
     host::{
-        metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
+        metered_clone::{MeteredClone, MeteredContainer},
         prng::Prng,
     },
     storage::{InstanceStorageMap, StorageMap},
@@ -524,8 +524,22 @@ impl Host {
         // fallible in a variety of ways, and if it fails we want to roll back
         // everything else.
         if res.is_ok() {
-            if let Err(e) = self.persist_instance_storage() {
-                res = Err(e)
+            let instance_storage_persisted = self.persist_instance_storage();
+            match instance_storage_persisted {
+                Ok(persisted) => {
+                    // If we did persist instance storage, we may need to reload
+                    // it into the re-entrant parent frames.
+                    if persisted {
+                        // Similarly to above, if reloading instance storage, if
+                        // this fails we need to roll back everything.
+                        if let Err(e) = self.maybe_reload_instance_storage_on_frame_pop() {
+                            res = Err(e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    res = Err(e);
+                }
             }
         }
         {
@@ -869,9 +883,13 @@ impl Host {
                 // Non-reentrant calls, or calls in Allowed mode,
                 // or immediate-reentry calls in SelfAllowed mode
                 // are all acceptable.
-                (_, None)
-                | (ContractReentryMode::Allowed, _)
-                | (ContractReentryMode::SelfAllowed, Some(0)) => (),
+                (_, None) | (ContractReentryMode::Allowed, _) => (),
+                (ContractReentryMode::SelfAllowed, Some(0)) => {
+                    // Persist the instance storage before making a re-entrant
+                    // call in order to allow the re-entered call to see the
+                    // instance storage changes made so far in the current call.
+                    self.persist_instance_storage()?;
+                }
 
                 // But any non-immediate-reentry in SelfAllowed mode,
                 // or any reentry at all in Prohibited mode, are errors.
@@ -1103,7 +1121,6 @@ impl Host {
         if ctx.storage.is_some() {
             return Ok(());
         }
-
         let Some(instance) = ctx.frame.instance() else {
             return Err(self.err(
                 ScErrorType::Context,
@@ -1112,29 +1129,55 @@ impl Host {
                 &[],
             ));
         };
+        ctx.storage = Some(InstanceStorageMap::from_instance_xdr(instance, self)?);
+        Ok(())
+    }
 
-        ctx.storage = Some(InstanceStorageMap::from_map(
-            instance.storage.as_ref().map_or_else(
-                || Ok(vec![]),
-                |m| {
-                    m.iter()
-                        .map(|i| {
-                            Ok((
-                                self.to_valid_host_val(&i.key)?,
-                                self.to_valid_host_val(&i.val)?,
-                            ))
-                        })
-                        .metered_collect::<Result<Vec<(Val, Val)>, HostError>>(self)?
-                },
-            )?,
-            self,
-        )?);
+    fn reload_instance_storage(&self, ctx: &mut Context) -> Result<(), HostError> {
+        let Some(contract_id) = ctx.frame.contract_id() else {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "access to instance storage in frame without contract ID",
+                &[],
+            ));
+        };
+        let instance_key = self.contract_instance_ledger_key(&contract_id)?;
+        let instance = self.retrieve_contract_instance_from_storage(&instance_key)?;
+        ctx.storage = Some(InstanceStorageMap::from_instance_xdr(&instance, self)?);
+        Ok(())
+    }
+
+    fn maybe_reload_instance_storage_on_frame_pop(&self) -> Result<(), HostError> {
+        let mut contexts = self.try_borrow_context_stack_mut()?;
+        let contexts_len = contexts.len();
+        let Some(curr_contract_id) = contexts.last().and_then(|ctx| {
+            // The clone is unmetered for simplicity, this operation is rare.
+            ctx.frame.contract_id().cloned()
+        }) else {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "no contract in current frame during instance storage reload",
+                &[],
+            ));
+        };
+
+        // Iterate all the contexts besides the top-most (which
+        // is being popped now).
+        for ctx in contexts.iter_mut().take(contexts_len - 1) {
+            if ctx.frame.contract_id() == Some(&curr_contract_id) {
+                self.reload_instance_storage(ctx)?;
+            }
+        }
         Ok(())
     }
 
     // Make the in-memory instance storage persist into the `Storage` by writing
     // its updated contents into corresponding `ContractData` ledger entry.
-    fn persist_instance_storage(&self) -> Result<(), HostError> {
+    // Returns `true` if instance storage was persisted, `false` otherwise (i.e.
+    // when there are no changes to persist).
+    fn persist_instance_storage(&self) -> Result<bool, HostError> {
         let updated_instance_storage = self.with_current_context_mut(|ctx| {
             if let Some(storage) = &ctx.storage {
                 if !storage.is_modified {
@@ -1150,7 +1193,9 @@ impl Host {
             let key = self.contract_instance_ledger_key(&contract_id)?;
 
             self.store_contract_instance(None, updated_instance_storage, contract_id, &key)?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 }

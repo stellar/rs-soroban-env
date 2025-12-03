@@ -9,7 +9,8 @@ use soroban_env_common::xdr::{
     SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
 };
 use soroban_test_wasms::{
-    AUTH_TEST_CONTRACT, CONDITIONAL_ACCOUNT_TEST_CONTRACT, DELEGATED_ACCOUNT_TEST_CONTRACT,
+    AUTH_TEST_CONTRACT, CHECK_AUTH_INSTANCE_STORAGE_TEST_CONTRACT,
+    CONDITIONAL_ACCOUNT_TEST_CONTRACT, DELEGATED_ACCOUNT_TEST_CONTRACT,
 };
 
 use crate::auth::RecordedAuthPayload;
@@ -3498,4 +3499,90 @@ fn test_rollback_with_conditional_custom_account_auth() {
     assert_eq!(test.read_nonce_live_until(&account, 555), Some(1000));
     // Third call still can't succeed and won't consume nonce.
     assert_eq!(test.read_nonce_live_until(&account, 666), None);
+}
+
+#[test]
+fn test_instance_storage_in_check_auth_with_reentrance() {
+    let test = AuthTest::setup(0, 0);
+    let account_obj = test
+        .host
+        .register_test_contract_wasm(CHECK_AUTH_INSTANCE_STORAGE_TEST_CONTRACT);
+    let account = Address::try_from_val(&test.host, &account_obj).unwrap();
+    let auth_entry_prototype = SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address: account.to_sc_address().unwrap(),
+            nonce: 0,
+            signature: ScVal::Void,
+            signature_expiration_ledger: 1000,
+        }),
+        root_invocation: SorobanAuthorizedInvocation {
+            function: Default::default(),
+            sub_invocations: Default::default(),
+        },
+    };
+    let mut nonce = 1234;
+    let mut create_auth_entry = |fn_name: &str, auth_val: u32| {
+        let mut entry = auth_entry_prototype.clone();
+        if let SorobanCredentials::Address(creds) = &mut entry.credentials {
+            entry.root_invocation.function =
+                SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: account.to_sc_address().unwrap(),
+                    function_name: fn_name.try_into().unwrap(),
+                    args: vec![ScVal::U32(auth_val)].try_into().unwrap(),
+                });
+            creds.nonce = nonce;
+            nonce += 1;
+        } else {
+            unreachable!();
+        };
+        entry
+    };
+
+    let mut do_call = |fn_name: &str, auth_calls: u32| {
+        let mut auth_entries = vec![];
+        for i in 0..auth_calls {
+            auth_entries.push(create_auth_entry(fn_name, i));
+        }
+        test.host.set_authorization_entries(auth_entries).unwrap();
+        test.host.call(
+            account_obj,
+            Symbol::try_from_val(&test.host, &fn_name).unwrap(),
+            test_vec![&test.host, auth_calls].into(),
+        )
+    };
+
+    let mut last_key_val = 0_u32;
+    let mut get_key_increase = || -> u32 {
+        let new_val = test
+            .host
+            .call(
+                account_obj,
+                Symbol::try_from_val(&test.host, &"get_key").unwrap(),
+                test_vec![&test.host].into(),
+            )
+            .unwrap()
+            .try_into_val(&test.host)
+            .unwrap();
+        let res = new_val - last_key_val;
+        last_key_val = new_val;
+        res
+    };
+
+    // `pre_auth`/`post_auth` calls increase the value for key by 2 for every
+    // auth call (once in the respective function and once in `__check_auth`),
+    // `pre_post` by 3 (twice in the function pre/post auth, and once in
+    // `__check_auth`).
+    do_call("pre_auth", 1).unwrap();
+    assert_eq!(get_key_increase(), 2);
+    do_call("post_auth", 1).unwrap();
+    assert_eq!(get_key_increase(), 2);
+    do_call("pre_post", 1).unwrap();
+    assert_eq!(get_key_increase(), 3);
+
+    do_call("pre_auth", 2).unwrap();
+    assert_eq!(get_key_increase(), 4);
+    do_call("post_auth", 3).unwrap();
+    assert_eq!(get_key_increase(), 6);
+    do_call("pre_post", 4).unwrap();
+    assert_eq!(get_key_increase(), 12);
 }
