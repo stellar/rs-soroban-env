@@ -3568,7 +3568,7 @@ fn test_instance_storage_in_check_auth_with_reentrance() {
         res
     };
 
-    // `pre_auth`/`post_auth`` calls increase the value for key by 2 for every
+    // `pre_auth`/`post_auth` calls increase the value for key by 2 for every
     // auth call (once in the respective function and once in `__check_auth`),
     // `pre_post` by 3 (twice in the function pre/post auth, and once in
     // `__check_auth`).
