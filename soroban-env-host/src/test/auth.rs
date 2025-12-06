@@ -3607,7 +3607,7 @@ fn test_instance_storage_in_check_auth_with_reentrance() {
     do_call("pre_post", 4, true);
     assert_eq!(get_key_increase(), 12);
 
-    // // Now test rollbacks - fail at different points in the process.
+    // Now test rollbacks - fail at different points in the process.
     fail_after(0);
     do_call("pre_auth", 1, false);
     fail_after(1);
