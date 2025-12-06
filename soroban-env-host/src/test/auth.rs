@@ -3538,23 +3538,8 @@ fn test_instance_storage_in_check_auth_with_reentrance() {
         entry
     };
 
-    let mut do_call = |fn_name: &str, auth_calls: u32| {
-        let mut auth_entries = vec![];
-        for i in 0..auth_calls {
-            auth_entries.push(create_auth_entry(fn_name, i));
-        }
-        test.host.set_authorization_entries(auth_entries).unwrap();
-        test.host.call(
-            account_obj,
-            Symbol::try_from_val(&test.host, &fn_name).unwrap(),
-            test_vec![&test.host, auth_calls].into(),
-        )
-    };
-
-    let mut last_key_val = 0_u32;
-    let mut get_key_increase = || -> u32 {
-        let new_val = test
-            .host
+    let get_val = || -> u32 {
+        test.host
             .call(
                 account_obj,
                 Symbol::try_from_val(&test.host, &"get_key").unwrap(),
@@ -3562,27 +3547,97 @@ fn test_instance_storage_in_check_auth_with_reentrance() {
             )
             .unwrap()
             .try_into_val(&test.host)
-            .unwrap();
+            .unwrap()
+    };
+
+    let mut do_call = |fn_name: &str, auth_calls: u32, expect_success: bool| {
+        let curr_val = get_val();
+        let mut auth_entries = vec![];
+        for i in 0..auth_calls {
+            auth_entries.push(create_auth_entry(fn_name, i));
+        }
+        test.host.set_authorization_entries(auth_entries).unwrap();
+        let res = test.host.call(
+            account_obj,
+            Symbol::try_from_val(&test.host, &fn_name).unwrap(),
+            test_vec![&test.host, auth_calls].into(),
+        );
+        if !expect_success {
+            assert!(res.is_err());
+            assert_eq!(get_val(), curr_val);
+        } else {
+            res.unwrap();
+        }
+    };
+
+    let mut last_key_val = 0_u32;
+    let mut get_key_increase = || -> u32 {
+        let new_val = get_val();
         let res = new_val - last_key_val;
         last_key_val = new_val;
         res
+    };
+
+    let fail_after = |bump_count: u32| {
+        let fail_at = get_val() + bump_count;
+        test.host
+            .call(
+                account_obj,
+                Symbol::try_from_val(&test.host, &"fail_at").unwrap(),
+                test_vec![&test.host, fail_at].into(),
+            )
+            .unwrap();
     };
 
     // `pre_auth`/`post_auth` calls increase the value for key by 2 for every
     // auth call (once in the respective function and once in `__check_auth`),
     // `pre_post` by 3 (twice in the function pre/post auth, and once in
     // `__check_auth`).
-    do_call("pre_auth", 1).unwrap();
+    do_call("pre_auth", 1, true);
     assert_eq!(get_key_increase(), 2);
-    do_call("post_auth", 1).unwrap();
+    do_call("post_auth", 1, true);
     assert_eq!(get_key_increase(), 2);
-    do_call("pre_post", 1).unwrap();
+    do_call("pre_post", 1, true);
     assert_eq!(get_key_increase(), 3);
 
-    do_call("pre_auth", 2).unwrap();
+    do_call("pre_auth", 2, true);
     assert_eq!(get_key_increase(), 4);
-    do_call("post_auth", 3).unwrap();
+    do_call("post_auth", 3, true);
     assert_eq!(get_key_increase(), 6);
-    do_call("pre_post", 4).unwrap();
+    do_call("pre_post", 4, true);
     assert_eq!(get_key_increase(), 12);
+
+    // // Now test rollbacks - fail at different points in the process.
+    fail_after(0);
+    do_call("pre_auth", 1, false);
+    fail_after(1);
+    do_call("pre_auth", 1, false);
+    fail_after(4);
+    do_call("pre_auth", 5, false);
+
+    fail_after(0);
+    do_call("post_auth", 1, false);
+    fail_after(1);
+    do_call("post_auth", 1, false);
+    fail_after(6);
+    do_call("post_auth", 6, false);
+
+    fail_after(0);
+    do_call("pre_post", 1, false);
+    fail_after(1);
+    do_call("pre_post", 1, false);
+    fail_after(2);
+    do_call("pre_post", 1, false);
+    fail_after(8);
+    do_call("pre_post", 4, false);
+
+    // Make sure that after failed attempts we can still do successful calls.
+    // Set fail trigger to the value that won't be reached.
+    fail_after(1000);
+    do_call("pre_auth", 1, true);
+    assert_eq!(get_key_increase(), 2);
+    do_call("post_auth", 1, true);
+    assert_eq!(get_key_increase(), 2);
+    do_call("pre_post", 1, true);
+    assert_eq!(get_key_increase(), 3);
 }
