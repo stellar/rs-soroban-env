@@ -534,12 +534,16 @@ impl Drop for InvocationMeterScope<'_> {
     fn drop(&mut self) {
         if let Ok(mut meter) = self.host.try_borrow_invocation_meter_mut() {
             // If pop_invocation returns an error (e.g., limit exceeded), we need to handle it.
-            // Since we're in a Drop impl, we can't return the error, so we panic in cfg(test)
-            // to fail the test.
+            // Since we're in a Drop impl, we can't return the error.
             if let Err(e) = meter.pop_invocation(self.host) {
                 #[cfg(any(test, feature = "testutils"))]
                 {
-                    // In tests, panic to make the test fail when limits are exceeded
+                    // In tests, we intentionally panic to make the test fail loudly when
+                    // stellar-core limits are exceeded. This is the desired behavior:
+                    // developers should immediately know during testing if their contract
+                    // would exceed limits on testnet/mainnet, rather than discovering it
+                    // after deployment. The panic provides clear diagnostics via the
+                    // error message and event log.
                     panic!("{}", e);
                 }
             }
