@@ -129,12 +129,24 @@ fn test_load_config_from_snapshot() {
         config_entry(ConfigSettingEntry::ContractCostParamsMemoryBytes(
             memory_cost_params.clone(),
         )),
+        config_entry(ConfigSettingEntry::LiveSorobanStateSizeWindow(
+            vec![
+                150_000_000_000_000,
+                100_000_000_000_000,
+                200_000_000_000_000,
+            ]
+            .try_into()
+            .unwrap(),
+        )),
     ])
     .unwrap();
 
-    let network_config =
-        NetworkConfig::load_from_snapshot(&snapshot_source, 150_000_000_000_000).unwrap();
-    // From tests/resources `test_compute_write_fee`
+    #[cfg(not(feature = "unstable-next-api"))]
+    let network_config = NetworkConfig::load_from_snapshot(&snapshot_source, 0).unwrap();
+    #[cfg(feature = "unstable-next-api")]
+    let network_config = NetworkConfig::load_from_snapshot(&snapshot_source).unwrap();
+
+    // From tests/resources `test_compute_rent_write_fee`
     let rent_fee_per_1kb = 1_000_000_000 + 50 * (1_000_000_000_i64 - 1_000_000) / 2;
     assert_eq!(
         network_config,

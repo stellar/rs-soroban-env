@@ -65,6 +65,20 @@ macro_rules! load_setting {
     };
 }
 
+fn load_bucket_list_size_from_snapshot(snapshot: &impl SnapshotSource) -> Result<u64> {
+    let window = load_setting!(snapshot, LiveSorobanStateSizeWindow);
+    let mut size_sum = 0_u64;
+    for size in window.iter() {
+        // This is just a sanity check, as both the number of the snapshots
+        // and the value of every snapshotted size are rather small.
+        size_sum = size_sum.saturating_add(*size);
+    }
+    if window.is_empty() {
+        bail!("live Soroban state size window is empty");
+    }
+    Ok(size_sum / window.len() as u64)
+}
+
 impl NetworkConfig {
     /// Loads configuration from the ledger snapshot.
     ///
@@ -72,7 +86,7 @@ impl NetworkConfig {
     /// all the necessary entries or when these entries are mis-configured.
     pub fn load_from_snapshot(
         snapshot: &impl SnapshotSource,
-        bucket_list_size: u64,
+        #[cfg(not(feature = "unstable-next-api"))] _bucket_list_size: u64,
     ) -> Result<Self> {
         let compute = load_setting!(snapshot, ContractComputeV0);
         let ledger_cost = load_setting!(snapshot, ContractLedgerCostV0);
@@ -90,7 +104,7 @@ impl NetworkConfig {
             rent_fee_1kb_state_size_high: ledger_cost.rent_fee1_kb_soroban_state_size_high,
             state_size_rent_fee_growth_factor: ledger_cost.soroban_state_rent_fee_growth_factor,
         };
-        let bucket_list_size: i64 = bucket_list_size
+        let bucket_list_size: i64 = load_bucket_list_size_from_snapshot(snapshot)?
             .try_into()
             .context("bucket list size exceeds i64::MAX")?;
         let rent_fee_per_1kb =
