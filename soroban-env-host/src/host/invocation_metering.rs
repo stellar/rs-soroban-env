@@ -15,6 +15,36 @@ use crate::{
 
 use super::{metered_xdr::metered_write_xdr, Host, HostError};
 
+/// Stellar-core transaction limits that should be enforced during testing.
+/// These values are taken from the latest pubnet configuration
+/// (stellar-core/soroban-settings/pubnet_phase7.json).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StellarCoreLimits {
+    /// Maximum number of ledger entries that can be read in a transaction.
+    pub tx_max_read_ledger_entries: u32,
+    /// Maximum number of ledger entries that can be written in a transaction.
+    pub tx_max_write_ledger_entries: u32,
+    /// Maximum number of bytes that can be read from ledger entries in a transaction.
+    pub tx_max_read_bytes: u32,
+    /// Maximum number of bytes that can be written to ledger entries in a transaction.
+    pub tx_max_write_bytes: u32,
+    /// Maximum total size of contract events that can be emitted in a transaction.
+    pub tx_max_contract_events_size_bytes: u32,
+}
+
+impl Default for StellarCoreLimits {
+    /// Returns the default limits from pubnet_phase7.json.
+    fn default() -> Self {
+        Self {
+            tx_max_read_ledger_entries: 100,
+            tx_max_write_ledger_entries: 50,
+            tx_max_read_bytes: 200_000,
+            tx_max_write_bytes: 132_096,
+            tx_max_contract_events_size_bytes: 16_384,
+        }
+    }
+}
+
 /// Represents the resources measured during an invocation.
 ///
 /// This resembles the resources necessary to build a Soroban transaction and
@@ -391,6 +421,9 @@ pub(crate) struct InvocationMeter {
     stack_depth: u32,
     storage_snapshot: Storage,
     detailed_invocation_resources: Option<DetailedInvocationResources>,
+    /// Optional stellar-core limits to enforce during testing.
+    /// When set, the meter will check that invocation resources don't exceed these limits.
+    enforce_limits: Option<StellarCoreLimits>,
 }
 
 /// Identifies the type of invocation being metered.
@@ -500,8 +533,16 @@ impl<'a> InvocationMeterScope<'a> {
 impl Drop for InvocationMeterScope<'_> {
     fn drop(&mut self) {
         if let Ok(mut meter) = self.host.try_borrow_invocation_meter_mut() {
-            let _res = meter.pop_invocation(self.host);
-            _res.unwrap();
+            // If pop_invocation returns an error (e.g., limit exceeded), we need to handle it.
+            // Since we're in a Drop impl, we can't return the error, so we panic in cfg(test)
+            // to fail the test.
+            if let Err(e) = meter.pop_invocation(self.host) {
+                #[cfg(any(test, feature = "testutils"))]
+                {
+                    // In tests, panic to make the test fail when limits are exceeded
+                    panic!("{}", e);
+                }
+            }
         }
     }
 }
@@ -625,21 +666,111 @@ impl InvocationMeter {
             .snapshot_current_resources(&self.storage_snapshot)
             .subtract(&current_invocation_resources.resources);
 
-        // If we're popping the root invocation in test environment, we need to
-        // emulate the write-back to the module cache (typically done by the
-        // embedding environment) of any new contracts added during the
-        // invocation.
-        #[cfg(any(test, feature = "testutils"))]
+        // If we're popping the root invocation, check stellar-core limits if enforcement is enabled.
         if self.stack_depth == 1 {
-            // Subtle: we use `with_shadow_mode` instead of `with_debug_mode`
-            // here because this needs to happen even if debug mode is off and
-            // also because we need to have some side effects that are not
-            // desired in debug mode.
-            host.budget_ref()
-                .with_shadow_mode(|| host.ensure_module_cache_contains_host_storage_contracts());
+            if let Some(limits) = &self.enforce_limits {
+                self.check_stellar_core_limits(host, limits)?;
+            }
+
+            // In test environment, we need to emulate the write-back to the module cache
+            // (typically done by the embedding environment) of any new contracts added
+            // during the invocation.
+            #[cfg(any(test, feature = "testutils"))]
+            {
+                // Subtle: we use `with_shadow_mode` instead of `with_debug_mode`
+                // here because this needs to happen even if debug mode is off and
+                // also because we need to have some side effects that are not
+                // desired in debug mode.
+                host.budget_ref().with_shadow_mode(|| {
+                    host.ensure_module_cache_contains_host_storage_contracts()
+                });
+            }
         }
 
         self.stack_depth -= 1;
+        Ok(())
+    }
+
+    /// Checks if the invocation resources exceed the stellar-core limits.
+    /// Returns an error if any limit is exceeded.
+    fn check_stellar_core_limits(
+        &self,
+        host: &Host,
+        limits: &StellarCoreLimits,
+    ) -> Result<(), HostError> {
+        let resources = self.get_root_invocation_resources().ok_or_else(|| {
+            host.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "missing invocation resources when checking limits",
+                &[],
+            )
+        })?;
+
+        // Check read entries limit (disk + memory reads)
+        let total_read_entries = resources.disk_read_entries + resources.memory_read_entries;
+        if total_read_entries > limits.tx_max_read_ledger_entries {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExceededLimit,
+                "transaction exceeded max read ledger entries",
+                &[
+                    total_read_entries.into(),
+                    limits.tx_max_read_ledger_entries.into(),
+                ],
+            ));
+        }
+
+        // Check write entries limit
+        if resources.write_entries > limits.tx_max_write_ledger_entries {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExceededLimit,
+                "transaction exceeded max write ledger entries",
+                &[
+                    resources.write_entries.into(),
+                    limits.tx_max_write_ledger_entries.into(),
+                ],
+            ));
+        }
+
+        // Check read bytes limit (disk + memory, though memory reads are typically 0 or small)
+        let total_read_bytes = resources.disk_read_bytes;
+        if total_read_bytes > limits.tx_max_read_bytes {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExceededLimit,
+                "transaction exceeded max read bytes",
+                &[total_read_bytes.into(), limits.tx_max_read_bytes.into()],
+            ));
+        }
+
+        // Check write bytes limit
+        if resources.write_bytes > limits.tx_max_write_bytes {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExceededLimit,
+                "transaction exceeded max write bytes",
+                &[
+                    resources.write_bytes.into(),
+                    limits.tx_max_write_bytes.into(),
+                ],
+            ));
+        }
+
+        // Check contract events size limit
+        if resources.contract_events_size_bytes > limits.tx_max_contract_events_size_bytes {
+            return Err(host.err(
+                ScErrorType::Events,
+                ScErrorCode::ExceededLimit,
+                "transaction exceeded max contract events size",
+                &[
+                    resources.contract_events_size_bytes.into(),
+                    limits.tx_max_contract_events_size_bytes.into(),
+                ],
+            ));
+        }
+
         Ok(())
     }
 }
@@ -681,6 +812,33 @@ impl Host {
         self.enable_debug().unwrap();
         if let Ok(mut meter) = self.0.invocation_meter.try_borrow_mut() {
             meter.enabled = true;
+        }
+    }
+
+    /// Enables enforcement of stellar-core transaction limits during testing.
+    ///
+    /// When enabled, the host will check that invocations don't exceed the limits
+    /// for read entries, write entries, read bytes, write bytes, and contract events
+    /// that are enforced in stellar-core.
+    ///
+    /// This is useful for contract developers to ensure their contracts will work
+    /// on testnet/mainnet before deployment.
+    ///
+    /// The default limits are taken from the latest pubnet configuration
+    /// (stellar-core/soroban-settings/pubnet_phase7.json).
+    pub fn enable_stellar_core_limits_enforcement(&self) {
+        self.enable_stellar_core_limits_enforcement_with_limits(StellarCoreLimits::default());
+    }
+
+    /// Enables enforcement of stellar-core transaction limits with custom limits.
+    ///
+    /// This allows testing with different limit configurations (e.g., for testing
+    /// behavior at different protocol versions or network configurations).
+    pub fn enable_stellar_core_limits_enforcement_with_limits(&self, limits: StellarCoreLimits) {
+        // Automatically enable invocation metering if not already enabled
+        self.enable_invocation_metering();
+        if let Ok(mut meter) = self.0.invocation_meter.try_borrow_mut() {
+            meter.enforce_limits = Some(limits);
         }
     }
 

@@ -34,6 +34,8 @@ mod post_mvp;
 mod prng;
 mod protocol_gate;
 mod stellar_asset_contract;
+#[cfg(feature = "testutils")]
+mod stellar_core_limits;
 mod storage;
 mod str;
 mod symbol;
