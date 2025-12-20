@@ -631,7 +631,7 @@ impl Drop for InvocationMeterScope<'_> {
         if let Ok(mut meter) = self.host.try_borrow_invocation_meter_mut() {
             let _res = meter.pop_invocation(self.host);
             // This should normally never fail, but we gate the unwrap by
-            // testutils just in case (for no this module can not be used
+            // testutils just in case (for now this module can not be used
             // outside of the test mode, but that may change in the future).
             #[cfg(any(test, feature = "testutils"))]
             _res.unwrap();
