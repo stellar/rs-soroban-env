@@ -439,7 +439,7 @@ impl InvocationResources {
             // stderr as well.
             eprintln!("Invocation exceeded the transaction resource limits, it's likely going to fail when executed in a real network. The following limits are exceeded:\n{} \nSee diagnostic events for invocation trace.", exceeded.join("\n"));
 
-            // We still want to panic though, and it's a easier to figure
+            // We still want to panic though, and it's easier to figure
             // out *which* invocation has failed by looking at the diagnostic
             // events instead of the raw backtrace. Hopefully, the error above
             // provides enough context to interpret the event trace
