@@ -147,9 +147,9 @@ pub struct InvocationResourceLimits {
     pub instructions: i64,
     /// Maximum size of modelled memory in bytes.
     pub mem_bytes: i64,
-    /// Maximum total number of bytes that need to be read from disk.
+    /// Maximum number of entries that need to be read from disk.
     ///
-    /// This accounts for the total size of restored Soroban ledger entries and
+    /// This accounts for the total number of restored Soroban ledger entries and
     /// non-Soroban entries (such as 'classic' account balances).
     pub disk_read_entries: u32,
     /// Maximum number of entries that need to be written to the ledger due to
