@@ -15,46 +15,11 @@ use crate::{
 
 use super::{metered_xdr::metered_write_xdr, Host, HostError};
 
-/// Network transaction limits that should be enforced during testing.
-/// These values are taken from the latest pubnet configuration
-/// (stellar-core/soroban-settings/pubnet_phase7.json).
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NetworkLimits {
-    /// Maximum number of ledger entries that can be read from disk in a transaction.
-    pub tx_max_disk_read_ledger_entries: u32,
-    /// Maximum number of ledger entries that can be written in a transaction.
-    pub tx_max_write_ledger_entries: u32,
-    /// Maximum number of bytes that can be read from disk in a transaction.
-    pub tx_max_disk_read_bytes: u32,
-    /// Maximum number of bytes that can be written to ledger entries in a transaction.
-    pub tx_max_write_bytes: u32,
-    /// Maximum total size of contract events that can be emitted in a transaction.
-    pub tx_max_contract_events_size_bytes: u32,
-}
-
-impl Default for NetworkLimits {
-    /// Returns the default limits from pubnet_phase7.json.
-    fn default() -> Self {
-        Self {
-            tx_max_disk_read_ledger_entries: 100,
-            tx_max_write_ledger_entries: 50,
-            tx_max_disk_read_bytes: 200_000,
-            tx_max_write_bytes: 132_096,
-            tx_max_contract_events_size_bytes: 16_384,
-        }
-    }
-}
-
 /// Represents the resources measured during an invocation.
 ///
 /// This resembles the resources necessary to build a Soroban transaction and
 /// compute its fee with a few exceptions (specifically, the transaction size
 /// and the return value size).
-///
-/// This is almost the same as `InvocationResources`, but uses signed types
-/// everywhere because sub-invocations may actually have 'negative' resource
-/// consumption (e.g. if a contract call reduces the size of the entry that has
-/// previously been modified to a larger size).
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct InvocationResources {
     /// Number of modelled CPU instructions.
@@ -114,6 +79,11 @@ pub struct InvocationResources {
 /// This resembles the resources necessary to build a Soroban transaction and
 /// compute its fee with a few exceptions (specifically, the transaction size
 /// and the return value size).
+///
+/// This is almost the same as `InvocationResources`, but uses signed types
+/// everywhere because sub-invocations may actually have 'negative' resource
+/// consumption (e.g. if a contract call reduces the size of the entry that has
+/// previously been modified to a larger size).
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct SubInvocationResources {
     /// Number of modelled CPU instructions.
@@ -166,6 +136,38 @@ pub struct SubInvocationResources {
     pub temporary_rent_ledger_bytes: i64,
     /// Number of temporary entries that had their rent bumped.
     pub temporary_entry_rent_bumps: i32,
+}
+
+/// Resource limits that should be enforced during testing.
+///
+/// These should correspond to the respective network transaction-level limits.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvocationResourceLimits {
+    /// Maximum Number of modelled CPU instructions.
+    pub instructions: i64,
+    /// Maximum size of modelled memory in bytes.
+    pub mem_bytes: i64,
+    /// Maximum total number of bytes that need to be read from disk.
+    ///
+    /// This accounts for the total size of restored Soroban ledger entries and
+    /// non-Soroban entries (such as 'classic' account balances).
+    pub disk_read_entries: u32,
+    /// Maximum number of entries that need to be written to the ledger due to
+    /// modification.
+    pub write_entries: u32,
+    /// Maximum number total ledger entries read and written (total size of the
+    /// transaction footprint).
+    ///
+    /// This is a sum of disk read entries, memory read entries and write
+    /// entries.
+    pub ledger_entries: u32,
+    /// Maximum amount of bytes a transaction is allowed to read from
+    /// disk.
+    pub disk_read_bytes: u32,
+    /// Maximum total number of bytes that need to be written to the ledger.
+    pub write_bytes: u32,
+    /// Maximum total size of the contract events emitted.
+    pub contract_events_size_bytes: u32,
 }
 
 impl From<SubInvocationResources> for InvocationResources {
@@ -363,6 +365,100 @@ impl InvocationResources {
             temporary_entry_rent,
         }
     }
+
+    /// Checks if this invocation resources exceed the transaction limits.
+    ///
+    /// If any limits are exceeded, panics, and logs diagnostic events listing
+    /// the all exceeded limits.
+    fn verify_limits(&self, host: &Host, limits: &InvocationResourceLimits) {
+        let mut exceeded: Vec<String> = Vec::new();
+
+        if self.instructions > limits.instructions {
+            exceeded.push(format!(
+                "instructions: {} > {}",
+                self.instructions, limits.instructions
+            ));
+        }
+
+        if self.mem_bytes > limits.mem_bytes {
+            exceeded.push(format!(
+                "memory bytes: {} > {}",
+                self.mem_bytes, limits.mem_bytes
+            ));
+        }
+
+        let total_ledger_entries = self
+            .disk_read_entries
+            .saturating_add(self.memory_read_entries)
+            .saturating_add(self.write_entries);
+        if total_ledger_entries > limits.ledger_entries {
+            exceeded.push(format!(
+                "total footprint ledger entries: {} > {}",
+                total_ledger_entries, limits.ledger_entries
+            ));
+        }
+
+        if self.disk_read_entries > limits.disk_read_entries {
+            exceeded.push(format!(
+                "disk read ledger entries: {} > {}",
+                self.disk_read_entries, limits.disk_read_entries
+            ));
+        }
+
+        if self.disk_read_bytes > limits.disk_read_bytes {
+            exceeded.push(format!(
+                "disk read bytes: {} > {}",
+                self.disk_read_bytes, limits.disk_read_bytes
+            ));
+        }
+
+        if self.write_entries > limits.write_entries {
+            exceeded.push(format!(
+                "write ledger entries: {} > {}",
+                self.write_entries, limits.write_entries
+            ));
+        }
+
+        if self.write_bytes > limits.write_bytes {
+            exceeded.push(format!(
+                "write bytes: {} > {}",
+                self.write_bytes, limits.write_bytes
+            ));
+        }
+
+        if self.contract_events_size_bytes > limits.contract_events_size_bytes {
+            exceeded.push(format!(
+                "contract events size bytes: {} > {}",
+                self.contract_events_size_bytes, limits.contract_events_size_bytes
+            ));
+        }
+
+        if !exceeded.is_empty() {
+            // This error may seem somewhat cryptic if experienced only via
+            // diagnostic events, so print a bit more user-friendly message to
+            // stderr as well.
+            eprintln!("Invocation exceeded the transaction resource limits, it's likely going to fail when executed in a real network. The following limits are exceeded:\n{} \nSee diagnostic events for invocation trace.", exceeded.join("\n"));
+
+            // We still want to panic though, and it's a easier to figure
+            // out *which* invocation has failed by looking at the diagnostic
+            // events instead of the raw backtrace. Hopefully, the error above
+            // provides enough context to interpret the event trace
+            // appropriately.
+            let event_msg = format!(
+                "invocation resource limits are exceeded: {}",
+                exceeded.join(", ")
+            );
+            panic!(
+                "{}",
+                host.err(
+                    ScErrorType::Budget,
+                    ScErrorCode::ExceededLimit,
+                    &event_msg,
+                    &[],
+                )
+            );
+        }
+    }
 }
 
 impl DetailedInvocationResources {
@@ -421,9 +517,9 @@ pub(crate) struct InvocationMeter {
     stack_depth: u32,
     storage_snapshot: Storage,
     detailed_invocation_resources: Option<DetailedInvocationResources>,
-    /// Optional network limits to enforce during testing.
-    /// When set, the meter will check that invocation resources don't exceed these limits.
-    enforce_limits: Option<NetworkLimits>,
+    /// When set, the meter will check that invocation resources don't exceed
+    /// these limits.
+    resource_limit: Option<InvocationResourceLimits>,
 }
 
 /// Identifies the type of invocation being metered.
@@ -534,6 +630,10 @@ impl Drop for InvocationMeterScope<'_> {
     fn drop(&mut self) {
         if let Ok(mut meter) = self.host.try_borrow_invocation_meter_mut() {
             let _res = meter.pop_invocation(self.host);
+            // This should normally never fail, but we gate the unwrap by
+            // testutils just in case (for no this module can not be used
+            // outside of the test mode, but that may change in the future).
+            #[cfg(any(test, feature = "testutils"))]
             _res.unwrap();
         }
     }
@@ -658,16 +758,13 @@ impl InvocationMeter {
             .snapshot_current_resources(&self.storage_snapshot)
             .subtract(&current_invocation_resources.resources);
 
-        // If we're popping the root invocation, check stellar-core limits if enforcement is enabled.
-        if self.stack_depth == 1 {
-            if let Some(limits) = &self.enforce_limits {
-                self.check_stellar_core_limits(host, limits)?;
-            }
-
-            // In test environment, we need to emulate the write-back to the module cache
-            // (typically done by the embedding environment) of any new contracts added
-            // during the invocation.
-            #[cfg(any(test, feature = "testutils"))]
+        self.stack_depth -= 1;
+        // Handle finalization of the root invocation in test environment.
+        #[cfg(any(test, feature = "testutils"))]
+        if self.stack_depth == 0 {
+            // Emulate the write-back to the module cache (typically done by the
+            // embedding environment) of any new contracts added during the
+            // invocation.
             {
                 // Subtle: we use `with_shadow_mode` instead of `with_debug_mode`
                 // here because this needs to happen even if debug mode is off and
@@ -677,91 +774,23 @@ impl InvocationMeter {
                     host.ensure_module_cache_contains_host_storage_contracts()
                 });
             }
-        }
 
-        self.stack_depth -= 1;
-        Ok(())
-    }
-
-    /// Checks if the invocation resources exceed the network limits.
-    /// Returns an error if any limit is exceeded.
-    fn check_stellar_core_limits(
-        &self,
-        host: &Host,
-        limits: &NetworkLimits,
-    ) -> Result<(), HostError> {
-        let resources = self.get_root_invocation_resources().ok_or_else(|| {
-            host.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "missing invocation resources when checking limits",
-                &[],
-            )
-        })?;
-
-        // Check disk read entries limit
-        if resources.disk_read_entries > limits.tx_max_disk_read_ledger_entries {
-            return Err(host.err(
-                ScErrorType::Storage,
-                ScErrorCode::ExceededLimit,
-                "transaction exceeded max disk read ledger entries",
-                &[
-                    resources.disk_read_entries.into(),
-                    limits.tx_max_disk_read_ledger_entries.into(),
-                ],
-            ));
-        }
-
-        // Check write entries limit
-        if resources.write_entries > limits.tx_max_write_ledger_entries {
-            return Err(host.err(
-                ScErrorType::Storage,
-                ScErrorCode::ExceededLimit,
-                "transaction exceeded max write ledger entries",
-                &[
-                    resources.write_entries.into(),
-                    limits.tx_max_write_ledger_entries.into(),
-                ],
-            ));
-        }
-
-        // Check disk read bytes limit
-        if resources.disk_read_bytes > limits.tx_max_disk_read_bytes {
-            return Err(host.err(
-                ScErrorType::Storage,
-                ScErrorCode::ExceededLimit,
-                "transaction exceeded max disk read bytes",
-                &[
-                    resources.disk_read_bytes.into(),
-                    limits.tx_max_disk_read_bytes.into(),
-                ],
-            ));
-        }
-
-        // Check write bytes limit
-        if resources.write_bytes > limits.tx_max_write_bytes {
-            return Err(host.err(
-                ScErrorType::Storage,
-                ScErrorCode::ExceededLimit,
-                "transaction exceeded max write bytes",
-                &[
-                    resources.write_bytes.into(),
-                    limits.tx_max_write_bytes.into(),
-                ],
-            ));
-        }
-
-        // Check contract events size limit
-        if resources.contract_events_size_bytes > limits.tx_max_contract_events_size_bytes {
-            return Err(host.err(
-                ScErrorType::Events,
-                ScErrorCode::ExceededLimit,
-                "transaction exceeded max contract events size",
-                &[
-                    resources.contract_events_size_bytes.into(),
-                    limits.tx_max_contract_events_size_bytes.into(),
-                ],
-            ));
+            // Verify that the measured resources don't exceed the limits, if any.
+            if let Some(limits) = &self.resource_limit {
+                let resources = self.get_root_invocation_resources().ok_or_else(|| {
+                    host.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "missing invocation resources when checking limits",
+                        &[],
+                    )
+                })?;
+                // Subtle: we need to verify limits as the very last step of
+                // pop_invocation in order to bring meter to the proper state.
+                // This likely only matters for our own tests as these unwind
+                // panics.
+                resources.verify_limits(host, limits);
+            }
         }
 
         Ok(())
@@ -808,31 +837,23 @@ impl Host {
         }
     }
 
-    /// Enables enforcement of network transaction limits during testing.
+    /// Sets resource limits for every invocation or disables the limits check
+    /// by passing `None`.
     ///
-    /// When enabled, the host will check that invocations don't exceed the limits
-    /// for disk read entries, write entries, disk read bytes, write bytes, and contract events
-    /// that are enforced in stellar-core.
-    ///
-    /// This is useful for contract developers to ensure their contracts will work
-    /// on testnet/mainnet before deployment.
-    ///
-    /// The default limits are taken from the latest pubnet configuration
-    /// (stellar-core/soroban-settings/pubnet_phase7.json).
-    pub fn enable_network_limits_enforcement(&self) {
-        self.enable_network_limits_enforcement_with_limits(NetworkLimits::default());
-    }
-
-    /// Enables enforcement of network transaction limits with custom limits.
-    ///
-    /// This allows testing with different limit configurations (e.g., for testing
-    /// behavior at different protocol versions or network configurations).
-    pub fn enable_network_limits_enforcement_with_limits(&self, limits: NetworkLimits) {
-        // Automatically enable invocation metering if not already enabled
-        self.enable_invocation_metering();
+    /// The limits specified should generally correspond to the Stellar
+    /// mainnet transaction limits, but any custom limits are supported as well.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn set_invocation_resource_limits(
+        &self,
+        limits: Option<InvocationResourceLimits>,
+    ) -> Result<(), HostError> {
         if let Ok(mut meter) = self.0.invocation_meter.try_borrow_mut() {
-            meter.enforce_limits = Some(limits);
+            if !meter.enabled {
+                panic!("can't set invocation resource limits when invocation metering is disabled");
+            }
+            meter.resource_limit = limits;
         }
+        Ok(())
     }
 
     fn snapshot_current_resources(
@@ -963,11 +984,12 @@ fn compute_fee_per_increment(resource_value: i64, fee_rate: i64, increment: i64)
 mod test {
     use super::*;
     use crate::{
+        testutils::call_with_suppressed_panic_hook,
         xdr::{ContractId, Hash},
         Symbol, TryFromVal, TryIntoVal,
     };
     use expect_test::expect;
-    use soroban_test_wasms::CONTRACT_STORAGE;
+    use soroban_test_wasms::{CONTRACT_STORAGE, LOADGEN};
 
     fn assert_resources_equal_to_budget(host: &Host) {
         assert_eq!(
@@ -1717,5 +1739,132 @@ mod test {
                 ],
             }"#]]
         .assert_eq(format!("{:#?}", fee_estimate).as_str());
+    }
+
+    #[test]
+    fn test_resource_limits_exceeded() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_invocation_metering();
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number = 100;
+            li.max_entry_ttl = 10000;
+            li.min_persistent_entry_ttl = 1000;
+            li.min_temp_entry_ttl = 16;
+        })
+        .unwrap();
+
+        let storage_contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+        let loadgen_contract_id = host.register_test_contract_wasm(LOADGEN);
+
+        // Set very low limits to trigger the exceeded limits error.
+        host.set_invocation_resource_limits(Some(InvocationResourceLimits {
+            instructions: 10,
+            mem_bytes: 20,
+            disk_read_entries: 1,
+            write_entries: 0,
+            ledger_entries: 4,
+            disk_read_bytes: 30,
+            write_bytes: 40,
+            contract_events_size_bytes: 50,
+        }))
+        .unwrap();
+
+        // Call loadgen contract to produce some events and exceed the events
+        // limit.
+        let res = call_with_suppressed_panic_hook(std::panic::AssertUnwindSafe(|| {
+            host.call(
+                loadgen_contract_id,
+                Symbol::try_from_val(&host, &"do_cpu_only_work").unwrap(),
+                test_vec![&host, 200_u32, 300_u32, 10_u32].into(),
+            )
+        }));
+        assert!(res.is_err());
+        let diag_events = host.get_diagnostic_events().unwrap();
+        expect![[r#"
+            HostEvent {
+                event: ContractEvent {
+                    ext: V0,
+                    contract_id: None,
+                    type_: Diagnostic,
+                    body: V0(
+                        ContractEventV0 {
+                            topics: VecM(
+                                [
+                                    Symbol(
+                                        ScSymbol(
+                                            StringM(error),
+                                        ),
+                                    ),
+                                    Error(
+                                        Budget(
+                                            ExceededLimit,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                            data: String(
+                                ScString(
+                                    StringM(invocation resource limits are exceeded: instructions: 1861715 > 10, memory bytes: 1163433 > 20, contract events size bytes: 800 > 50),
+                                ),
+                            ),
+                        },
+                    ),
+                },
+                failed_call: false,
+            }"#]]
+        .assert_eq(format!("{:#?}", diag_events.0.last().unwrap()).as_str());
+
+        // Advance the ledger sequence to get the contract instance and Wasm
+        // to expire.
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number += li.min_persistent_entry_ttl;
+        })
+        .unwrap();
+
+        let key = Symbol::try_from_small_str("key_1").unwrap();
+
+        // Auto-restore for 2 entries (the contract instance and code).
+        let res = call_with_suppressed_panic_hook(std::panic::AssertUnwindSafe(|| {
+            host.call(
+                storage_contract_id,
+                Symbol::try_from_val(&host, &"has_persistent").unwrap(),
+                test_vec![&host, key].into(),
+            )
+        }));
+        assert!(res.is_err());
+        let diag_events = host.get_diagnostic_events().unwrap();
+        expect![[r#"
+            HostEvent {
+                event: ContractEvent {
+                    ext: V0,
+                    contract_id: None,
+                    type_: Diagnostic,
+                    body: V0(
+                        ContractEventV0 {
+                            topics: VecM(
+                                [
+                                    Symbol(
+                                        ScSymbol(
+                                            StringM(error),
+                                        ),
+                                    ),
+                                    Error(
+                                        Budget(
+                                            ExceededLimit,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                            data: String(
+                                ScString(
+                                    StringM(invocation resource limits are exceeded: instructions: 320964 > 10, memory bytes: 1135814 > 20, total footprint ledger entries: 5 > 4, disk read ledger entries: 2 > 1, disk read bytes: 3132 > 30, write ledger entries: 2 > 0, write bytes: 3132 > 40),
+                                ),
+                            ),
+                        },
+                    ),
+                },
+                failed_call: false,
+            }"#]]
+        .assert_eq(format!("{:#?}", diag_events.0.last().unwrap()).as_str());
     }
 }
