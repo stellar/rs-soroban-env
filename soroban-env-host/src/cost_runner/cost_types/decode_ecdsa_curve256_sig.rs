@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 
 use ecdsa::{PrimeCurve, Signature, SignatureSize};
 use elliptic_curve::CurveArithmetic;
+#[allow(deprecated)]
 use generic_array::ArrayLength;
 // use k256::{ecdsa::Signature, Secp256k1};
 
@@ -14,6 +15,7 @@ pub struct DecodeEcdsaCurve256SigSample {
     pub bytes: Vec<u8>,
 }
 
+#[allow(deprecated)]
 pub struct DecodeEcdsaCurve256SigRun<C>
 where
     C: PrimeCurve + CurveArithmetic,
@@ -22,6 +24,7 @@ where
     phantom: PhantomData<C>,
 }
 
+#[allow(deprecated)]
 impl<C> CostRunner for DecodeEcdsaCurve256SigRun<C>
 where
     C: PrimeCurve + CurveArithmetic,

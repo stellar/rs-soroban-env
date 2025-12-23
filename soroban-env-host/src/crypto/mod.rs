@@ -19,6 +19,7 @@ use sha3::Keccak256;
 
 use ecdsa::{signature::hazmat::PrehashVerifier, PrimeCurve, Signature, SignatureSize};
 use elliptic_curve::CurveArithmetic;
+#[allow(deprecated)]
 use generic_array::ArrayLength;
 pub(crate) mod bls12_381;
 pub(crate) mod bn254;
@@ -157,6 +158,7 @@ impl Host {
     }
 
     // ECDSA functions
+    #[allow(deprecated)]
     pub(crate) fn ecdsa_signature_from_bytes<C>(
         &self,
         bytes: &[u8],
@@ -186,6 +188,7 @@ impl Host {
         }
     }
 
+    #[allow(deprecated)]
     pub(crate) fn ecdsa_signature_from_bytesobj_input<C>(
         &self,
         k: BytesObject,

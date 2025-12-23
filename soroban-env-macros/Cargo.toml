@@ -14,12 +14,12 @@ proc-macro = true
 
 [dependencies]
 stellar-xdr = { workspace = true, features = ["curr", "std"] }
-syn = {version="2.0.39",features=["full"]}
-quote = "1.0.33"
-proc-macro2 = "1.0.69"
+syn = {version="2.0.111",features=["full"]}
+quote = "1.0.42"
+proc-macro2 = "1.0.103"
 itertools = "0.10.5"
-serde = { version = "1.0.192", features = ["derive"] }
-serde_json = "1.0.108"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.146"
 
 [features]
 next = ["stellar-xdr/next"]
