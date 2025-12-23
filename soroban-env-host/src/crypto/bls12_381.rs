@@ -547,21 +547,13 @@ impl Host {
         // Then it returns `WBMap`, which wraps a `SWUMap<P>` where P is the
         // `ark_bls12_381::curves::g2_swu_iso::SwuIsoConfig`.
         //
-        // Potential panic condition: `SWUMap::new().unwrap()`
-        //
-        // The `SWUMap::new()` function performs some validation on the static
-        // parameters `ZETA`, `COEFF_A`, `COEFF_B`, all of which are statically
-        // defined in `ark_bls12_381::curves::g1_swu_iso` and `g2_swu_iso`.
-        // Realistically this panic cannot occur, otherwise it will panic every
-        // time including during tests
-        let mapper = WBMap::<P>::new().map_err(|e| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InternalError,
-                format!("hash-to-curve error {e}").as_str(),
-                &[],
-            )
-        })?;
+        // In ark-ec 0.5.0+, WBMap is a zero-sized type (only contains PhantomData)
+        // and map_to_curve is an associated function (static method) instead of
+        // an instance method.
+        // The validation previously done in new() is now performed in check_parameters()
+        // if needed, but since the curve parameters are statically defined in
+        // `ark_bls12_381::curves::g1_swu_iso` and `g2_swu_iso`, the mapping
+        // should always succeed.
 
         // The `SWUMap::map_to_curve` function contains several panic conditions
         // 1. assert!(!div3.is_zero())
@@ -577,7 +569,7 @@ impl Host {
         // happen.
         //
         // Otherwise, this function should never Err.
-        mapper.map_to_curve(fp).map_err(|e| {
+        WBMap::<P>::map_to_curve(fp).map_err(|e| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InternalError,
