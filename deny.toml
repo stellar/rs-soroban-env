@@ -92,11 +92,6 @@ ignore = [
     # into production, only on windows, and only with a custom allocator.
     "RUSTSEC-2021-0145",
 
-    # This ignores an error due to the now unmaintained derivative crate. This
-    # crate is a dependency for some of the ark crates, so we need to ignore the
-    # advisory.
-    "RUSTSEC-2024-0388",
-
     # This ignores the advisory re unmaintained `paste` crate that is a
     # transitive dependency of several crates we depend on.
     "RUSTSEC-2024-0436"
