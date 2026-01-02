@@ -656,6 +656,75 @@ impl Host {
         )
     }
 
+    /// Pushes a test contract [`Frame`], runs a closure, and then pops the
+    /// frame, rolling back if the closure returned an error. Returns the result
+    /// that the closure returned (or any error that occurred during the closure
+    /// or the frame push/pop). Used for testing.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn try_with_test_contract_frame<F>(
+        &self,
+        id: ContractId,
+        func: Symbol,
+        f: F,
+    ) -> Result<Val, HostError>
+    where
+        F: FnOnce() -> Result<Val, HostError>,
+    {
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
+
+        // Code taken from `call_n_internal` to handle panics inside the closure `f`.
+        // Modified to run as a closure within a test contract frame instead of invoking
+        // a contract function.
+        let frame = self.create_test_contract_frame(id.clone(), func, vec![])?;
+        let panic = frame.panic.clone();
+        return self.with_frame(Frame::TestContract(frame), || {
+            use std::any::Any;
+            use std::panic::AssertUnwindSafe;
+            type PanicVal = Box<dyn Any + Send>;
+
+            let closure = AssertUnwindSafe(move || f());
+            let res: Result<Result<Val, HostError>, PanicVal> =
+                crate::testutils::call_with_suppressed_panic_hook(closure);
+            match res {
+                Ok(res) => res,
+                Err(panic_payload) => {
+                    let mut error: Error =
+                        Error::from(wasmi::core::TrapCode::UnreachableCodeReached);
+
+                    let mut recovered_error_from_panic_refcell = false;
+                    if let Ok(panic) = panic.try_borrow() {
+                        if let Some(err) = *panic {
+                            recovered_error_from_panic_refcell = true;
+                            error = err;
+                        }
+                    }
+
+                    if !recovered_error_from_panic_refcell {
+                        self.with_debug_mode(|| {
+                            if let Some(str) = panic_payload.downcast_ref::<&str>() {
+                                let msg: String = format!(
+                                    "caught panic '{}' from contract function '{:?}'",
+                                    str, func
+                                );
+                                let _ = self.log_diagnostics(&msg, &[]);
+                            } else if let Some(str) = panic_payload.downcast_ref::<String>() {
+                                let msg: String = format!(
+                                    "caught panic '{}' from contract function '{:?}'",
+                                    str, func
+                                );
+                                let _ = self.log_diagnostics(&msg, &[]);
+                            };
+                            Ok(())
+                        })
+                    }
+                    Err(self.error(error, "caught error from function", &[]))
+                }
+            }
+        });
+    }
+
     #[cfg(any(test, feature = "testutils"))]
     fn create_test_contract_frame(
         &self,
