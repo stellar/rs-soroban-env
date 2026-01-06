@@ -539,3 +539,17 @@ allow_unsafe = true
 [pkg.cfg_eval]
 allow_proc_macro = true
 allow_unsafe = true
+
+[pkg.enum-ordinalize-derive]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.educe]
+allow_proc_macro = true
+allow_unsafe = true
+allow_apis = [
+    "hash",
+]
+
+[pkg.allocator-api2]
+allow_unsafe = true
