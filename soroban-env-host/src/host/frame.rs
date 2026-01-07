@@ -675,7 +675,7 @@ impl Host {
         // a contract function.
         let frame = self.create_test_contract_frame(id.clone(), func, vec![])?;
         let panic = frame.panic.clone();
-        return self.with_frame(Frame::TestContract(frame), || {
+        self.with_frame(Frame::TestContract(frame), || {
             use std::any::Any;
             use std::panic::AssertUnwindSafe;
             type PanicVal = Box<dyn Any + Send>;
@@ -714,7 +714,7 @@ impl Host {
                     Err(self.error(error, "caught error from test contract frame", &[]))
                 }
             }
-        });
+        })
     }
 
     #[cfg(any(test, feature = "testutils"))]
