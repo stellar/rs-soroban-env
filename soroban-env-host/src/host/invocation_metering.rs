@@ -7,8 +7,8 @@ use crate::{
     ledger_info::get_key_durability,
     storage::{is_persistent_key, AccessType, Storage},
     xdr::{
-        ContractDataDurability, ContractId, HostFunction, LedgerKey, ScAddress, ScErrorCode,
-        ScErrorType, ScSymbol,
+        ContractDataDurability, ContractId, HostFunction, LedgerEntryData, LedgerKey,
+        ScAddress, ScErrorCode, ScErrorType, ScSymbol,
     },
     AddressObject, Symbol, SymbolStr, TryFromVal,
 };
@@ -168,6 +168,12 @@ pub struct InvocationResourceLimits {
     pub write_bytes: u32,
     /// Maximum total size of the contract events emitted.
     pub contract_events_size_bytes: u32,
+    /// Maximum size of a contract data key in bytes.
+    pub max_contract_data_key_size_bytes: u32,
+    /// Maximum size of a contract data entry value in bytes.
+    pub max_contract_data_entry_size_bytes: u32,
+    /// Maximum size of a contract code entry in bytes.
+    pub max_contract_code_entry_size_bytes: u32,    
 }
 
 impl From<SubInvocationResources> for InvocationResources {
@@ -431,6 +437,66 @@ impl InvocationResources {
                 "contract events size bytes: {} > {}",
                 self.contract_events_size_bytes, limits.contract_events_size_bytes
             ));
+        }
+
+        // Check individual entry sizes in storage
+        if let Ok(storage) = host.try_borrow_storage() {
+            if let Ok(footprint_iter) = storage.footprint.0.iter(host.budget_ref()) {
+                for (key, _access_type) in footprint_iter {
+                    // Serialize the key to get its size
+                    let mut key_buf = Vec::<u8>::new();
+                    if metered_write_xdr(host.budget_ref(), key.as_ref(), &mut key_buf).is_ok() {
+                        let key_size = key_buf.len() as u32;
+
+                        // Check contract data key size limit
+                        if matches!(key.as_ref(), LedgerKey::ContractData(_)) {
+                            if key_size > limits.max_contract_data_key_size_bytes {
+                                exceeded.push(format!(
+                                    "contract data key '{:?}' size: {} > {}",
+                                    key.as_ref(),
+                                    key_size, limits.max_contract_data_key_size_bytes
+                                ));
+                            }
+                        }
+                    }
+
+                    // Get the entry to check its size
+                    if let Ok(maybe_entry) = storage.get_from_map(key, host) {
+                        if let Some((entry, _)) = maybe_entry {
+                            let mut entry_buf = Vec::<u8>::new();
+                            if metered_write_xdr(host.budget_ref(), entry.as_ref(), &mut entry_buf)
+                                .is_ok()
+                            {
+                                let entry_size = entry_buf.len() as u32;
+
+                                match &entry.data {
+                                    LedgerEntryData::ContractData(_) => {
+                                        if entry_size > limits.max_contract_data_entry_size_bytes {
+                                            exceeded.push(format!(
+                                                "contract data entry with key '{:?}' size: {} > {}",
+                                                key.as_ref(),
+                                                entry_size,
+                                                limits.max_contract_data_entry_size_bytes
+                                            ));
+                                        }
+                                    }
+                                    LedgerEntryData::ContractCode(_) => {
+                                        if entry_size > limits.max_contract_code_entry_size_bytes {
+                                            exceeded.push(format!(
+                                                "contract code entry with key '{:?}' size: {} > {}",
+                                                key.as_ref(),
+                                                entry_size,
+                                                limits.max_contract_code_entry_size_bytes
+                                            ));
+                                        }
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if !exceeded.is_empty() {
@@ -1766,6 +1832,9 @@ mod test {
             disk_read_bytes: 30,
             write_bytes: 40,
             contract_events_size_bytes: 50,
+            max_contract_data_key_size_bytes: 25,
+            max_contract_data_entry_size_bytes: 35,
+            max_contract_code_entry_size_bytes: 45,
         }))
         .unwrap();
 
@@ -1804,7 +1873,7 @@ mod test {
                             ),
                             data: String(
                                 ScString(
-                                    StringM(invocation resource limits are exceeded: instructions: 1861715 > 10, memory bytes: 1163433 > 20, contract events size bytes: 800 > 50),
+                                    StringM(invocation resource limits are exceeded: instructions: 1861715 > 10, memory bytes: 1163433 > 20, contract events size bytes: 800 > 50, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(1a2ee5a89dd2162a20e716b3e2de70a2d662480a9565350378661871bcf8e398) })' size: 1840 > 45),
                                 ),
                             ),
                         },
@@ -1857,7 +1926,7 @@ mod test {
                             ),
                             data: String(
                                 ScString(
-                                    StringM(invocation resource limits are exceeded: instructions: 320964 > 10, memory bytes: 1135814 > 20, total footprint ledger entries: 5 > 4, disk read ledger entries: 2 > 1, disk read bytes: 3132 > 30, write ledger entries: 2 > 0, write bytes: 3132 > 40),
+                                    StringM(invocation resource limits are exceeded: instructions: 320964 > 10, memory bytes: 1135814 > 20, total footprint ledger entries: 5 > 4, disk read ledger entries: 2 > 1, disk read bytes: 3132 > 30, write ledger entries: 2 > 0, write bytes: 3132 > 40, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: Symbol(ScSymbol(StringM(key_1))), durability: Persistent })' size: 60 > 25, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(fc644715caaead746e6145f4331ff75c427c965c20d2995a9942b01247515962) })' size: 3028 > 45),
                                 ),
                             ),
                         },
