@@ -7,8 +7,8 @@ use crate::{
     ledger_info::get_key_durability,
     storage::{is_persistent_key, AccessType, Storage},
     xdr::{
-        ContractDataDurability, ContractId, HostFunction, LedgerEntryData, LedgerKey,
-        ScAddress, ScErrorCode, ScErrorType, ScSymbol,
+        ContractDataDurability, ContractId, HostFunction, LedgerEntryData, LedgerKey, ScAddress,
+        ScErrorCode, ScErrorType, ScSymbol,
     },
     AddressObject, Symbol, SymbolStr, TryFromVal,
 };
@@ -173,7 +173,7 @@ pub struct InvocationResourceLimits {
     /// Maximum size of a contract data entry value in bytes.
     pub max_contract_data_entry_size_bytes: u32,
     /// Maximum size of a contract code entry in bytes.
-    pub max_contract_code_entry_size_bytes: u32,    
+    pub max_contract_code_entry_size_bytes: u32,
 }
 
 impl From<SubInvocationResources> for InvocationResources {
@@ -454,7 +454,8 @@ impl InvocationResources {
                                 exceeded.push(format!(
                                     "contract data key '{:?}' size: {} > {}",
                                     key.as_ref(),
-                                    key_size, limits.max_contract_data_key_size_bytes
+                                    key_size,
+                                    limits.max_contract_data_key_size_bytes
                                 ));
                             }
                         }
