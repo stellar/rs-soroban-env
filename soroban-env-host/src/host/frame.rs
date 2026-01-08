@@ -638,11 +638,15 @@ impl Host {
     /// that the closure returned (or any error caused during the frame
     /// push/pop). Used for testing.
     #[cfg(any(test, feature = "testutils"))]
-    pub fn with_test_contract_frame<F>(&self, id: ContractId, f: F) -> Result<Val, HostError>
+    pub fn with_test_contract_frame<F>(
+        &self,
+        id: ContractId,
+        func: Symbol,
+        f: F,
+    ) -> Result<Val, HostError>
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
-        let func = Symbol::try_from_small_str("")?;
         let _invocation_meter_scope = self.maybe_meter_invocation(
             crate::host::invocation_metering::MeteringInvocation::contract_invocation(
                 self, &id, func,
@@ -659,11 +663,15 @@ impl Host {
     /// that the closure returned (or any error that occurred during the closure
     /// or the frame push/pop). Used for testing.
     #[cfg(any(test, feature = "testutils"))]
-    pub fn try_with_test_contract_frame<F>(&self, id: ContractId, f: F) -> Result<Val, HostError>
+    pub fn try_with_test_contract_frame<F>(
+        &self,
+        id: ContractId,
+        func: Symbol,
+        f: F,
+    ) -> Result<Val, HostError>
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
-        let func = Symbol::try_from_small_str("")?;
         let _invocation_meter_scope = self.maybe_meter_invocation(
             crate::host::invocation_metering::MeteringInvocation::contract_invocation(
                 self, &id, func,
@@ -700,12 +708,16 @@ impl Host {
                     if !recovered_error_from_panic_refcell {
                         self.with_debug_mode(|| {
                             if let Some(str) = panic_payload.downcast_ref::<&str>() {
-                                let msg: String =
-                                    format!("caught panic '{}' from test contract frame", str);
+                                let msg: String = format!(
+                                    "caught panic '{}' from test contract frame '{:?}'",
+                                    str, func
+                                );
                                 let _ = self.log_diagnostics(&msg, &[]);
                             } else if let Some(str) = panic_payload.downcast_ref::<String>() {
-                                let msg: String =
-                                    format!("caught panic '{}' from test contract frame", str);
+                                let msg: String = format!(
+                                    "caught panic '{}' from test contract frame '{:?}'",
+                                    str, func
+                                );
                                 let _ = self.log_diagnostics(&msg, &[]);
                             };
                             Ok(())

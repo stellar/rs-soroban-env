@@ -10,7 +10,7 @@ use crate::{
         Uint256,
     },
     AddressObject, BytesObject, Env, EnvBase, Host, HostError, LedgerInfo, MeteredOrdMap,
-    StorageType, Val, VecObject,
+    StorageType, SymbolSmall, Val, VecObject,
 };
 use ed25519_dalek::SigningKey;
 use rand::RngCore;
@@ -356,13 +356,17 @@ impl Host {
         };
 
         // First step: insert all the data values in question into the storage map.
-        host.with_test_contract_frame(contract_hash.clone(), || {
-            for (k, (t, _)) in data_keys.iter() {
-                let v = host.to_host_val(k).unwrap();
-                host.put_contract_data(v, v, *t).unwrap();
-            }
-            Ok(Val::VOID.into())
-        })
+        host.with_test_contract_frame(
+            contract_hash.clone(),
+            SymbolSmall::try_from_str("test").unwrap().into(),
+            || {
+                for (k, (t, _)) in data_keys.iter() {
+                    let v = host.to_host_val(k).unwrap();
+                    host.put_contract_data(v, v, *t).unwrap();
+                }
+                Ok(Val::VOID.into())
+            },
+        )
         .unwrap();
 
         // Second step: generate some accounts to sign things with.

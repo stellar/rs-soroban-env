@@ -10,11 +10,11 @@
   "   8 call obj_cmp(Symbol(obj#11), Symbol(obj#7))": "",
   "   9 ret obj_cmp -> Ok(0)": "cpu:49832",
   "  10 pop TEST:   0:sym#7 -> Ok(Void)": "",
-  "  11 push TEST:   0:()": "cpu:54601, mem:4360, objs:-/7@e5e0c6fc, stk:1@bee58c5, auth:1@2014a68d/-",
+  "  11 push TEST:   0:test()": "cpu:54601, mem:4360, objs:-/7@e5e0c6fc, stk:1@6c0a26dc, auth:1@ff08e997/-",
   "  12 call symbol_new_from_slice(11)": "",
   "  13 ret symbol_new_from_slice -> Ok(Symbol(obj#15))": "cpu:55611, mem:4467, objs:-/8@75aa5756",
   "  14 call get_contract_data(Symbol(obj#15), Persistent)": "",
   "  15 ret get_contract_data -> Err(Error(Storage, MissingValue))": "cpu:59507, mem:4941, store:-/3@d3f11b10, foot:3@a65ae30e",
-  "  16 pop TEST:   0: -> Err(Error(Storage, MissingValue))": "",
+  "  16 pop TEST:   0:test -> Err(Error(Storage, MissingValue))": "",
   "  17 end": "cpu:59507, mem:4941, prngs:-/9b4a753, objs:-/8@75aa5756, vm:-/-, evt:-, store:-/2@7bc024e1, foot:3@a65ae30e, stk:-, auth:-/-"
 }

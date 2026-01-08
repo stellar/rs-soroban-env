@@ -10,7 +10,7 @@
   "   8 call obj_cmp(Symbol(obj#11), Symbol(obj#7))": "",
   "   9 ret obj_cmp -> Ok(0)": "cpu:49832",
   "  10 pop TEST:   0:sym#7 -> Ok(Void)": "",
-  "  11 push TEST:   0:()": "cpu:54601, mem:4360, objs:-/7@e5e0c6fc, stk:1@bee58c5, auth:1@2014a68d/-",
-  "  12 pop TEST:   0: -> Ok(Void)": "",
+  "  11 push TEST:   0:test()": "cpu:54601, mem:4360, objs:-/7@e5e0c6fc, stk:1@6c0a26dc, auth:1@ff08e997/-",
+  "  12 pop TEST:   0:test -> Ok(Void)": "",
   "  13 end": "cpu:54601, mem:4360, prngs:-/9b4a753, objs:-/7@e5e0c6fc, vm:-/-, evt:-, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
 }

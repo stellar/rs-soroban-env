@@ -37,11 +37,14 @@ fn has_frame() -> Result<(), HostError> {
     let id = [0u8; 32];
     let address = host.add_host_object(ScAddress::Contract(ContractId(Hash(id))))?;
     host.register_test_contract(address, Rc::new(NoopContractFunctionSet))?;
-    host.with_test_contract_frame(ContractId(Hash(id)), || {
-        assert!(host.has_frame()?);
-        Ok(().into())
-    })?;
-
+    host.with_test_contract_frame(
+        ContractId(Hash(id)),
+        Symbol::try_from_small_str("").unwrap(),
+        || {
+            assert!(host.has_frame()?);
+            Ok(().into())
+        },
+    )?;
     // Host has no frame outside of executing a contract.
     assert!(!host.has_frame()?);
 
@@ -59,10 +62,14 @@ fn try_with_test_contract_frame_has_frame() -> Result<(), HostError> {
     let id = [0u8; 32];
     let address = host.add_host_object(ScAddress::Contract(ContractId(Hash(id))))?;
     host.register_test_contract(address, Rc::new(NoopContractFunctionSet))?;
-    host.try_with_test_contract_frame(ContractId(Hash(id)), || {
-        assert!(host.has_frame()?);
-        Ok(().into())
-    })?;
+    host.try_with_test_contract_frame(
+        ContractId(Hash(id)),
+        Symbol::try_from_small_str("test").unwrap(),
+        || {
+            assert!(host.has_frame()?);
+            Ok(().into())
+        },
+    )?;
 
     // Host has no frame outside of executing a contract.
     assert!(!host.has_frame()?);
@@ -79,11 +86,15 @@ fn try_with_test_contract_frame_catches_host_error() -> Result<(), HostError> {
     host.register_test_contract(address, Rc::new(NoopContractFunctionSet))?;
 
     // Cause a HostError inside the contract frame
-    let result = host.try_with_test_contract_frame(ContractId(Hash(id)), || {
-        let key = host.symbol_new_from_slice(b"nonexistent")?;
-        host.get_contract_data(key.as_val().clone(), StorageType::Persistent)?;
-        Ok(().into())
-    });
+    let result = host.try_with_test_contract_frame(
+        ContractId(Hash(id)),
+        Symbol::try_from_small_str("test").unwrap(),
+        || {
+            let key = host.symbol_new_from_slice(b"nonexistent")?;
+            host.get_contract_data(key.as_val().clone(), StorageType::Persistent)?;
+            Ok(().into())
+        },
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -107,9 +118,13 @@ fn try_with_test_contract_frame_catches_panic() -> Result<(), HostError> {
 
     // Cause a panic inside the contract frame
     let panic_str = "intentional panic for testing";
-    let result = host.try_with_test_contract_frame(ContractId(Hash(id)), || {
-        panic!("{panic_str}");
-    });
+    let result = host.try_with_test_contract_frame(
+        ContractId(Hash(id)),
+        Symbol::try_from_small_str("test").unwrap(),
+        || {
+            panic!("{panic_str}");
+        },
+    );
     assert!(result.is_err());
 
     // Validate that a diagnostic event was logged with the contents of the panic
