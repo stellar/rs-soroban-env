@@ -431,10 +431,11 @@ fn test_contract_wasm_update() {
     // Make sure execution continued after the update and we've got the function
     // return value.
     assert_eq!(res, 123);
+
     // Verify that instance storage has been updated as well.
     host.with_test_contract_frame(
         host.contract_id_from_address(contract_addr_obj).unwrap(),
-        Symbol::try_from_small_str("").unwrap(),
+        Symbol::try_from_small_str("check_foo").unwrap(),
         || {
             let stored_value: i32 = host
                 .get_contract_data(

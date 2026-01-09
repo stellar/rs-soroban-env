@@ -355,16 +355,18 @@ impl Host {
             panic!()
         };
 
-        let test = SymbolSmall::try_from_str("test").unwrap();
-
         // First step: insert all the data values in question into the storage map.
-        host.with_test_contract_frame(contract_hash.clone(), test.into(), || {
-            for (k, (t, _)) in data_keys.iter() {
-                let v = host.to_host_val(k).unwrap();
-                host.put_contract_data(v, v, *t).unwrap();
-            }
-            Ok(Val::VOID.into())
-        })
+        host.with_test_contract_frame(
+            contract_hash.clone(),
+            SymbolSmall::try_from_str("test").unwrap().into(),
+            || {
+                for (k, (t, _)) in data_keys.iter() {
+                    let v = host.to_host_val(k).unwrap();
+                    host.put_contract_data(v, v, *t).unwrap();
+                }
+                Ok(Val::VOID.into())
+            },
+        )
         .unwrap();
 
         // Second step: generate some accounts to sign things with.
