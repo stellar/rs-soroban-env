@@ -707,16 +707,21 @@ impl Host {
 
                     if !recovered_error_from_panic_refcell {
                         self.with_debug_mode(|| {
+                            // only include func in log if a non-empty name is provided
+                            let func_str = match format!("{:?}", func).as_str() {
+                                "Symbol()" => String::new(),
+                                formatted => format!(" with fn name '{}'", formatted),
+                            };
                             if let Some(str) = panic_payload.downcast_ref::<&str>() {
                                 let msg: String = format!(
-                                    "caught panic '{}' from test contract frame '{:?}'",
-                                    str, func
+                                    "caught panic '{}' from test contract frame{}",
+                                    str, func_str
                                 );
                                 let _ = self.log_diagnostics(&msg, &[]);
                             } else if let Some(str) = panic_payload.downcast_ref::<String>() {
                                 let msg: String = format!(
-                                    "caught panic '{}' from test contract frame '{:?}'",
-                                    str, func
+                                    "caught panic '{}' from test contract frame{}",
+                                    str, func_str
                                 );
                                 let _ = self.log_diagnostics(&msg, &[]);
                             };
