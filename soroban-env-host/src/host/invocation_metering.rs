@@ -7,8 +7,8 @@ use crate::{
     ledger_info::get_key_durability,
     storage::{is_persistent_key, AccessType, Storage},
     xdr::{
-        ContractDataDurability, ContractId, HostFunction, LedgerKey, ScAddress, ScErrorCode,
-        ScErrorType, ScSymbol,
+        ContractDataDurability, ContractId, HostFunction, LedgerEntryData, LedgerKey, ScAddress,
+        ScErrorCode, ScErrorType, ScSymbol,
     },
     AddressObject, Symbol, SymbolStr, TryFromVal,
 };
@@ -20,11 +20,6 @@ use super::{metered_xdr::metered_write_xdr, Host, HostError};
 /// This resembles the resources necessary to build a Soroban transaction and
 /// compute its fee with a few exceptions (specifically, the transaction size
 /// and the return value size).
-///
-/// This is almost the same as `InvocationResources`, but uses signed types
-/// everywhere because sub-invocations may actually have 'negative' resource
-/// consumption (e.g. if a contract call reduces the size of the entry that has
-/// previously been modified to a larger size).
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct InvocationResources {
     /// Number of modelled CPU instructions.
@@ -84,6 +79,11 @@ pub struct InvocationResources {
 /// This resembles the resources necessary to build a Soroban transaction and
 /// compute its fee with a few exceptions (specifically, the transaction size
 /// and the return value size).
+///
+/// This is almost the same as `InvocationResources`, but uses signed types
+/// everywhere because sub-invocations may actually have 'negative' resource
+/// consumption (e.g. if a contract call reduces the size of the entry that has
+/// previously been modified to a larger size).
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct SubInvocationResources {
     /// Number of modelled CPU instructions.
@@ -136,6 +136,44 @@ pub struct SubInvocationResources {
     pub temporary_rent_ledger_bytes: i64,
     /// Number of temporary entries that had their rent bumped.
     pub temporary_entry_rent_bumps: i32,
+}
+
+/// Resource limits that should be enforced during testing.
+///
+/// These should correspond to the respective network transaction-level limits.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvocationResourceLimits {
+    /// Maximum Number of modelled CPU instructions.
+    pub instructions: i64,
+    /// Maximum size of modelled memory in bytes.
+    pub mem_bytes: i64,
+    /// Maximum number of entries that need to be read from disk.
+    ///
+    /// This accounts for the total number of restored Soroban ledger entries and
+    /// non-Soroban entries (such as 'classic' account balances).
+    pub disk_read_entries: u32,
+    /// Maximum number of entries that need to be written to the ledger due to
+    /// modification.
+    pub write_entries: u32,
+    /// Maximum number total ledger entries read and written (total size of the
+    /// transaction footprint).
+    ///
+    /// This is a sum of disk read entries, memory read entries and write
+    /// entries.
+    pub ledger_entries: u32,
+    /// Maximum amount of bytes a transaction is allowed to read from
+    /// disk.
+    pub disk_read_bytes: u32,
+    /// Maximum total number of bytes that need to be written to the ledger.
+    pub write_bytes: u32,
+    /// Maximum total size of the contract events emitted.
+    pub contract_events_size_bytes: u32,
+    /// Maximum size of a contract data key in bytes.
+    pub max_contract_data_key_size_bytes: u32,
+    /// Maximum size of a contract data entry value in bytes.
+    pub max_contract_data_entry_size_bytes: u32,
+    /// Maximum size of a contract code entry in bytes.
+    pub max_contract_code_entry_size_bytes: u32,
 }
 
 impl From<SubInvocationResources> for InvocationResources {
@@ -333,6 +371,161 @@ impl InvocationResources {
             temporary_entry_rent,
         }
     }
+
+    /// Checks if this invocation resources exceed the transaction limits.
+    ///
+    /// If any limits are exceeded, panics, and logs diagnostic events listing
+    /// the all exceeded limits.
+    fn verify_limits(&self, host: &Host, limits: &InvocationResourceLimits) {
+        let mut exceeded: Vec<String> = Vec::new();
+
+        if self.instructions > limits.instructions {
+            exceeded.push(format!(
+                "instructions: {} > {}",
+                self.instructions, limits.instructions
+            ));
+        }
+
+        if self.mem_bytes > limits.mem_bytes {
+            exceeded.push(format!(
+                "memory bytes: {} > {}",
+                self.mem_bytes, limits.mem_bytes
+            ));
+        }
+
+        let total_ledger_entries = self
+            .disk_read_entries
+            .saturating_add(self.memory_read_entries)
+            .saturating_add(self.write_entries);
+        if total_ledger_entries > limits.ledger_entries {
+            exceeded.push(format!(
+                "total footprint ledger entries: {} > {}",
+                total_ledger_entries, limits.ledger_entries
+            ));
+        }
+
+        if self.disk_read_entries > limits.disk_read_entries {
+            exceeded.push(format!(
+                "disk read ledger entries: {} > {}",
+                self.disk_read_entries, limits.disk_read_entries
+            ));
+        }
+
+        if self.disk_read_bytes > limits.disk_read_bytes {
+            exceeded.push(format!(
+                "disk read bytes: {} > {}",
+                self.disk_read_bytes, limits.disk_read_bytes
+            ));
+        }
+
+        if self.write_entries > limits.write_entries {
+            exceeded.push(format!(
+                "write ledger entries: {} > {}",
+                self.write_entries, limits.write_entries
+            ));
+        }
+
+        if self.write_bytes > limits.write_bytes {
+            exceeded.push(format!(
+                "write bytes: {} > {}",
+                self.write_bytes, limits.write_bytes
+            ));
+        }
+
+        if self.contract_events_size_bytes > limits.contract_events_size_bytes {
+            exceeded.push(format!(
+                "contract events size bytes: {} > {}",
+                self.contract_events_size_bytes, limits.contract_events_size_bytes
+            ));
+        }
+
+        // Check individual entry sizes in storage
+        if let Ok(storage) = host.try_borrow_storage() {
+            if let Ok(footprint_iter) = storage.footprint.0.iter(host.budget_ref()) {
+                for (key, _access_type) in footprint_iter {
+                    // Serialize the key to get its size
+                    let mut key_buf = Vec::<u8>::new();
+                    if metered_write_xdr(host.budget_ref(), key.as_ref(), &mut key_buf).is_ok() {
+                        let key_size = key_buf.len() as u32;
+
+                        // Check contract data key size limit
+                        if matches!(key.as_ref(), LedgerKey::ContractData(_)) {
+                            if key_size > limits.max_contract_data_key_size_bytes {
+                                exceeded.push(format!(
+                                    "contract data key '{:?}' size: {} > {}",
+                                    key.as_ref(),
+                                    key_size,
+                                    limits.max_contract_data_key_size_bytes
+                                ));
+                            }
+                        }
+                    }
+
+                    // Get the entry to check its size
+                    if let Ok(maybe_entry) = storage.get_from_map(key, host) {
+                        if let Some((entry, _)) = maybe_entry {
+                            let mut entry_buf = Vec::<u8>::new();
+                            if metered_write_xdr(host.budget_ref(), entry.as_ref(), &mut entry_buf)
+                                .is_ok()
+                            {
+                                let entry_size = entry_buf.len() as u32;
+
+                                match &entry.data {
+                                    LedgerEntryData::ContractData(_) => {
+                                        if entry_size > limits.max_contract_data_entry_size_bytes {
+                                            exceeded.push(format!(
+                                                "contract data entry with key '{:?}' size: {} > {}",
+                                                key.as_ref(),
+                                                entry_size,
+                                                limits.max_contract_data_entry_size_bytes
+                                            ));
+                                        }
+                                    }
+                                    LedgerEntryData::ContractCode(_) => {
+                                        if entry_size > limits.max_contract_code_entry_size_bytes {
+                                            exceeded.push(format!(
+                                                "contract code entry with key '{:?}' size: {} > {}",
+                                                key.as_ref(),
+                                                entry_size,
+                                                limits.max_contract_code_entry_size_bytes
+                                            ));
+                                        }
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !exceeded.is_empty() {
+            // This error may seem somewhat cryptic if experienced only via
+            // diagnostic events, so print a bit more user-friendly message to
+            // stderr as well.
+            eprintln!("Invocation exceeded the transaction resource limits, it's likely going to fail when executed in a real network. The following limits are exceeded:\n{} \nSee diagnostic events for invocation trace.", exceeded.join("\n"));
+
+            // We still want to panic though, and it's easier to figure
+            // out *which* invocation has failed by looking at the diagnostic
+            // events instead of the raw backtrace. Hopefully, the error above
+            // provides enough context to interpret the event trace
+            // appropriately.
+            let event_msg = format!(
+                "invocation resource limits are exceeded: {}",
+                exceeded.join(", ")
+            );
+            panic!(
+                "{}",
+                host.err(
+                    ScErrorType::Budget,
+                    ScErrorCode::ExceededLimit,
+                    &event_msg,
+                    &[],
+                )
+            );
+        }
+    }
 }
 
 impl DetailedInvocationResources {
@@ -391,6 +584,9 @@ pub(crate) struct InvocationMeter {
     stack_depth: u32,
     storage_snapshot: Storage,
     detailed_invocation_resources: Option<DetailedInvocationResources>,
+    /// When set, the meter will check that invocation resources don't exceed
+    /// these limits.
+    resource_limit: Option<InvocationResourceLimits>,
 }
 
 /// Identifies the type of invocation being metered.
@@ -501,6 +697,10 @@ impl Drop for InvocationMeterScope<'_> {
     fn drop(&mut self) {
         if let Ok(mut meter) = self.host.try_borrow_invocation_meter_mut() {
             let _res = meter.pop_invocation(self.host);
+            // This should normally never fail, but we gate the unwrap by
+            // testutils just in case (for now this module can not be used
+            // outside of the test mode, but that may change in the future).
+            #[cfg(any(test, feature = "testutils"))]
             _res.unwrap();
         }
     }
@@ -625,21 +825,41 @@ impl InvocationMeter {
             .snapshot_current_resources(&self.storage_snapshot)
             .subtract(&current_invocation_resources.resources);
 
-        // If we're popping the root invocation in test environment, we need to
-        // emulate the write-back to the module cache (typically done by the
-        // embedding environment) of any new contracts added during the
-        // invocation.
+        self.stack_depth -= 1;
+        // Handle finalization of the root invocation in test environment.
         #[cfg(any(test, feature = "testutils"))]
-        if self.stack_depth == 1 {
-            // Subtle: we use `with_shadow_mode` instead of `with_debug_mode`
-            // here because this needs to happen even if debug mode is off and
-            // also because we need to have some side effects that are not
-            // desired in debug mode.
-            host.budget_ref()
-                .with_shadow_mode(|| host.ensure_module_cache_contains_host_storage_contracts());
+        if self.stack_depth == 0 {
+            // Emulate the write-back to the module cache (typically done by the
+            // embedding environment) of any new contracts added during the
+            // invocation.
+            {
+                // Subtle: we use `with_shadow_mode` instead of `with_debug_mode`
+                // here because this needs to happen even if debug mode is off and
+                // also because we need to have some side effects that are not
+                // desired in debug mode.
+                host.budget_ref().with_shadow_mode(|| {
+                    host.ensure_module_cache_contains_host_storage_contracts()
+                });
+            }
+
+            // Verify that the measured resources don't exceed the limits, if any.
+            if let Some(limits) = &self.resource_limit {
+                let resources = self.get_root_invocation_resources().ok_or_else(|| {
+                    host.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "missing invocation resources when checking limits",
+                        &[],
+                    )
+                })?;
+                // Subtle: we need to verify limits as the very last step of
+                // pop_invocation in order to bring meter to the proper state.
+                // This likely only matters for our own tests as these unwind
+                // panics.
+                resources.verify_limits(host, limits);
+            }
         }
 
-        self.stack_depth -= 1;
         Ok(())
     }
 }
@@ -682,6 +902,25 @@ impl Host {
         if let Ok(mut meter) = self.0.invocation_meter.try_borrow_mut() {
             meter.enabled = true;
         }
+    }
+
+    /// Sets resource limits for every invocation or disables the limits check
+    /// by passing `None`.
+    ///
+    /// The limits specified should generally correspond to the Stellar
+    /// mainnet transaction limits, but any custom limits are supported as well.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn set_invocation_resource_limits(
+        &self,
+        limits: Option<InvocationResourceLimits>,
+    ) -> Result<(), HostError> {
+        if let Ok(mut meter) = self.0.invocation_meter.try_borrow_mut() {
+            if !meter.enabled {
+                panic!("can't set invocation resource limits when invocation metering is disabled");
+            }
+            meter.resource_limit = limits;
+        }
+        Ok(())
     }
 
     fn snapshot_current_resources(
@@ -812,11 +1051,12 @@ fn compute_fee_per_increment(resource_value: i64, fee_rate: i64, increment: i64)
 mod test {
     use super::*;
     use crate::{
+        testutils::call_with_suppressed_panic_hook,
         xdr::{ContractId, Hash},
         Symbol, TryFromVal, TryIntoVal,
     };
     use expect_test::expect;
-    use soroban_test_wasms::CONTRACT_STORAGE;
+    use soroban_test_wasms::{CONTRACT_STORAGE, LOADGEN};
 
     fn assert_resources_equal_to_budget(host: &Host) {
         assert_eq!(
@@ -1566,5 +1806,135 @@ mod test {
                 ],
             }"#]]
         .assert_eq(format!("{:#?}", fee_estimate).as_str());
+    }
+
+    #[test]
+    fn test_resource_limits_exceeded() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_invocation_metering();
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number = 100;
+            li.max_entry_ttl = 10000;
+            li.min_persistent_entry_ttl = 1000;
+            li.min_temp_entry_ttl = 16;
+        })
+        .unwrap();
+
+        let storage_contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+        let loadgen_contract_id = host.register_test_contract_wasm(LOADGEN);
+
+        // Set very low limits to trigger the exceeded limits error.
+        host.set_invocation_resource_limits(Some(InvocationResourceLimits {
+            instructions: 10,
+            mem_bytes: 20,
+            disk_read_entries: 1,
+            write_entries: 0,
+            ledger_entries: 4,
+            disk_read_bytes: 30,
+            write_bytes: 40,
+            contract_events_size_bytes: 50,
+            max_contract_data_key_size_bytes: 25,
+            max_contract_data_entry_size_bytes: 35,
+            max_contract_code_entry_size_bytes: 45,
+        }))
+        .unwrap();
+
+        // Call loadgen contract to produce some events and exceed the events
+        // limit.
+        let res = call_with_suppressed_panic_hook(std::panic::AssertUnwindSafe(|| {
+            host.call(
+                loadgen_contract_id,
+                Symbol::try_from_val(&host, &"do_cpu_only_work").unwrap(),
+                test_vec![&host, 200_u32, 300_u32, 10_u32].into(),
+            )
+        }));
+        assert!(res.is_err());
+        let diag_events = host.get_diagnostic_events().unwrap();
+        expect![[r#"
+            HostEvent {
+                event: ContractEvent {
+                    ext: V0,
+                    contract_id: None,
+                    type_: Diagnostic,
+                    body: V0(
+                        ContractEventV0 {
+                            topics: VecM(
+                                [
+                                    Symbol(
+                                        ScSymbol(
+                                            StringM(error),
+                                        ),
+                                    ),
+                                    Error(
+                                        Budget(
+                                            ExceededLimit,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                            data: String(
+                                ScString(
+                                    StringM(invocation resource limits are exceeded: instructions: 1861715 > 10, memory bytes: 1163433 > 20, contract events size bytes: 800 > 50, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(1a2ee5a89dd2162a20e716b3e2de70a2d662480a9565350378661871bcf8e398) })' size: 1840 > 45),
+                                ),
+                            ),
+                        },
+                    ),
+                },
+                failed_call: false,
+            }"#]]
+        .assert_eq(format!("{:#?}", diag_events.0.last().unwrap()).as_str());
+
+        // Advance the ledger sequence to get the contract instance and Wasm
+        // to expire.
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number += li.min_persistent_entry_ttl;
+        })
+        .unwrap();
+
+        let key = Symbol::try_from_small_str("key_1").unwrap();
+
+        // Auto-restore for 2 entries (the contract instance and code).
+        let res = call_with_suppressed_panic_hook(std::panic::AssertUnwindSafe(|| {
+            host.call(
+                storage_contract_id,
+                Symbol::try_from_val(&host, &"has_persistent").unwrap(),
+                test_vec![&host, key].into(),
+            )
+        }));
+        assert!(res.is_err());
+        let diag_events = host.get_diagnostic_events().unwrap();
+        expect![[r#"
+            HostEvent {
+                event: ContractEvent {
+                    ext: V0,
+                    contract_id: None,
+                    type_: Diagnostic,
+                    body: V0(
+                        ContractEventV0 {
+                            topics: VecM(
+                                [
+                                    Symbol(
+                                        ScSymbol(
+                                            StringM(error),
+                                        ),
+                                    ),
+                                    Error(
+                                        Budget(
+                                            ExceededLimit,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                            data: String(
+                                ScString(
+                                    StringM(invocation resource limits are exceeded: instructions: 320964 > 10, memory bytes: 1135814 > 20, total footprint ledger entries: 5 > 4, disk read ledger entries: 2 > 1, disk read bytes: 3132 > 30, write ledger entries: 2 > 0, write bytes: 3132 > 40, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: Symbol(ScSymbol(StringM(key_1))), durability: Persistent })' size: 60 > 25, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(fc644715caaead746e6145f4331ff75c427c965c20d2995a9942b01247515962) })' size: 3028 > 45),
+                                ),
+                            ),
+                        },
+                    ),
+                },
+                failed_call: false,
+            }"#]]
+        .assert_eq(format!("{:#?}", diag_events.0.last().unwrap()).as_str());
     }
 }
