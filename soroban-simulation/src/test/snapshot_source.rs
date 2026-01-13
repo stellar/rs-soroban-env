@@ -169,7 +169,7 @@ fn test_automatic_restoration() {
                     disk_read_bytes: 112,
                     write_bytes: 112,
                 },
-                resource_fee: 23274,
+                resource_fee: 23272,
             }
         })
     );
