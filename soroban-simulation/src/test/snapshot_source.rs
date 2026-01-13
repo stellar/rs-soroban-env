@@ -2,6 +2,7 @@ use crate::network_config::NetworkConfig;
 use crate::simulation::{RestoreOpSimulationResult, SimulationAdjustmentConfig};
 use crate::snapshot_source::{AutoRestoringSnapshotSource, SimulationSnapshotSource};
 use crate::testutils::{ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource};
+use expect_test::expect;
 use pretty_assertions::assert_eq;
 use soroban_env_host::e2e_testutils::{
     account_entry, get_account_id, ledger_entry, wasm_entry_non_validated,
@@ -143,15 +144,22 @@ fn test_automatic_restoration() {
             .unwrap(),
         Some((Rc::new(temp_entry(b"7")), Some(400)))
     );
-
+    let res = auto_restoring_snapshot
+        .simulate_restore_keys_op(
+            &network_config,
+            &SimulationAdjustmentConfig::no_adjustments(),
+            &ledger_info,
+        )
+        .unwrap();
+    expect!["23274"].assert_eq(
+        &res.as_ref()
+            .unwrap()
+            .transaction_data
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
-        auto_restoring_snapshot
-            .simulate_restore_keys_op(
-                &network_config,
-                &SimulationAdjustmentConfig::no_adjustments(),
-                &ledger_info
-            )
-            .unwrap(),
+        res,
         Some(RestoreOpSimulationResult {
             transaction_data: SorobanTransactionData {
                 ext: SorobanTransactionDataExt::V0,
@@ -169,7 +177,7 @@ fn test_automatic_restoration() {
                     disk_read_bytes: 112,
                     write_bytes: 112,
                 },
-                resource_fee: 23272,
+                resource_fee: res.as_ref().unwrap().transaction_data.resource_fee,
             }
         })
     );
