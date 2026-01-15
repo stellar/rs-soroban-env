@@ -131,3 +131,7 @@ pub const INVOKER_AUTH_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/23/invoker_auth_test_contract.wasm").as_slice();
 pub const CHECK_AUTH_INSTANCE_STORAGE_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/23/test_check_auth_instance_storage.wasm").as_slice();
+
+// Protocol 26 Wasms.
+pub const CONTRACT_STORAGE_P26: &[u8] =
+    include_bytes!("../wasm-workspace/opt/26/example_contract_data.wasm").as_slice();
