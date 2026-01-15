@@ -33,6 +33,18 @@ impl Contract {
             .extend_ttl(&key, threshold, extend_to)
     }
 
+    pub fn extend_persistent_v2(
+        e: Env,
+        key: Symbol,
+        extend_to: u32,
+        min_extension: u32,
+        max_extension: u32,
+    ) {
+        e.storage()
+            .persistent()
+            .extend_ttl_with_limits(&key, extend_to, min_extension, max_extension)
+    }
+
     pub fn put_temporary(e: Env, key: Symbol, val: u64) {
         e.storage().temporary().set(&key, &val)
     }
@@ -60,6 +72,18 @@ impl Contract {
             .extend_ttl(&key, threshold, extend_to)
     }
 
+    pub fn extend_temporary_v2(
+        e: Env,
+        key: Symbol,
+        extend_to: u32,
+        min_extension: u32,
+        max_extension: u32,
+    ) {
+        e.storage()
+            .temporary()
+            .extend_ttl_with_limits(&key, extend_to, min_extension, max_extension)
+    }
+
     pub fn put_instance(e: Env, key: Symbol, val: u64) {
         e.storage().instance().set(&key, &val)
     }
@@ -80,6 +104,12 @@ impl Contract {
         e.storage()
             .instance()
             .extend_ttl(threshold, extend_to)
+    }
+
+    pub fn extend_instance_v2(e: Env, extend_to: u32, min_extension: u32, max_extension: u32) {
+        e.storage()
+            .instance()
+            .extend_ttl_with_limits(extend_to, min_extension, max_extension)
     }
 
     pub fn replace_with_bytes_and_extend(
