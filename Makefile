@@ -6,8 +6,8 @@ test:
 test-opt:
 	cargo hack --locked --each-feature test --profile test-opt
 
-MIN_PROTOCOL := 25
-MAX_PROTOCOL := 25
+MIN_PROTOCOL := 26
+MAX_PROTOCOL := 26
 
 test-all-protocols:
 	for i in $$(seq $(MIN_PROTOCOL) $$(($(MAX_PROTOCOL) + 1))); do \
