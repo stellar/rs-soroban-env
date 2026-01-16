@@ -73,7 +73,7 @@ jobs:
     strategy:
       matrix:
         rust: [msrv, latest]
-        test-protocol: [25]
+        test-protocol: [26]
         sys:
         - os: ubuntu-latest
           target: wasm32-unknown-unknown
