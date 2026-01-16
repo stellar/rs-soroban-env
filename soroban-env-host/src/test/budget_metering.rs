@@ -441,8 +441,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
 
     let expected = expect![[r#"
         ===============================================================================================================================================================================
-        Cpu limit: 100000000; used: 68564977
-        Mem limit: 41943040; used: 725156
+        Cpu limit: 100000000; used: 71512669
+        Mem limit: 41943040; used: 737364
         ===============================================================================================================================================================================
         CostType                           iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec                       246            None           984            0              4                   0                   0                   0                   
@@ -500,14 +500,14 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bls12381G2ProjectiveToAffine       1              None           100742         0              100742              0                   0                   0                   
         Bls12381G1Add                      1              None           7689           0              7689                0                   0                   0                   
         Bls12381G1Mul                      1              None           2458985        0              2458985             0                   0                   0                   
-        Bls12381G1Msm                      1              Some(1)        3083017        111576         2347584             94135478            109494              266603              
-        Bls12381MapFpToG1                  1              None           1020885        2776           1020885             0                   2776                0                   
-        Bls12381HashToG1                   1              Some(1)        2638504        5896           2638451             6803                5896                0                   
+        Bls12381G1Msm                      1              Some(1)        3179828        112264         2426722             96397671            109494              354667              
+        Bls12381MapFpToG1                  1              None           1541554        5552           1541554             0                   5552                0                   
+        Bls12381HashToG1                   1              Some(1)        3211243        9424           3211191             6713                9424                0                   
         Bls12381G2Add                      1              None           25207          0              25207               0                   0                   0                   
         Bls12381G2Mul                      1              None           7873219        0              7873219             0                   0                   0                   
-        Bls12381G2Msm                      1              Some(1)        9996543        221736         7663880             298580871           219654              266603              
-        Bls12381MapFp2ToG2                 1              None           1856539        1672           1856539             0                   1672                0                   
-        Bls12381HashToG2                   1              Some(1)        6315508        3960           6315452             7232                3960                0                   
+        Bls12381G2Msm                      1              Some(1)        10455244       222424         8035968             309667335           219654              354667              
+        Bls12381MapFp2ToG2                 1              None           2420202        3344           2420202             0                   3344                0                   
+        Bls12381HashToG2                   1              Some(1)        7050617        6816           7050564             6797                6816                0                   
         Bls12381Pairing                    1              Some(1)        15503174       75176          10558948            632860943           2204                9340474             
         Bls12381FrFromU256                 1              None           1994           0              1994                0                   0                   0                   
         Bls12381FrToU256                   1              None           1155           248            1155                0                   248                 0                   
@@ -533,8 +533,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 70
-        Shadow cpu limit: 100000000; used: 68564977
-        Shadow mem limit: 41943040; used: 725156
+        Shadow cpu limit: 100000000; used: 71512669
+        Shadow mem limit: 41943040; used: 737364
         ===============================================================================================================================================================================
 
     "#]];
