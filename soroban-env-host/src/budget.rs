@@ -639,7 +639,7 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G2CheckPointInSubgroup => {
-                    cpu.const_term = 2937755;
+                    cpu.const_term = 1706052;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1ProjectiveToAffine => {

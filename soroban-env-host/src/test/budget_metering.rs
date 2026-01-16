@@ -519,7 +519,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bn254DecodeFp                      0              None           0              0              476                 0                   0                   0                   
         Bn254G1CheckPointOnCurve           0              None           0              0              904                 0                   0                   0                   
         Bn254G2CheckPointOnCurve           0              None           0              0              2811                0                   0                   0                   
-        Bn254G2CheckPointInSubgroup        0              None           0              0              2937755             0                   0                   0                   
+        Bn254G2CheckPointInSubgroup        0              None           0              0              1706052             0                   0                   0                   
         Bn254G1ProjectiveToAffine          0              None           0              0              61                  0                   0                   0                   
         Bn254G1Add                         0              None           0              0              3623                0                   0                   0                   
         Bn254G1Mul                         0              None           0              0              1150435             0                   0                   0                   
