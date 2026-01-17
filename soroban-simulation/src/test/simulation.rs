@@ -5,6 +5,7 @@ use crate::simulation::{
 };
 use crate::testutils::{ledger_entry_to_ledger_key, temp_entry, MockSnapshotSource};
 use crate::NetworkConfig;
+use expect_test::expect;
 use pretty_assertions::assert_eq;
 use soroban_env_host::e2e_invoke::RecordingInvocationAuthMode;
 use soroban_env_host::e2e_testutils::{
@@ -131,8 +132,22 @@ fn test_simulate_upload_wasm() {
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
 
-    let expected_instructions = 1676095;
-    let expected_write_bytes = 684;
+    expect!["1676095"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["684"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resources
+            .write_bytes
+            .to_string(),
+    );
+    expect!["4714773"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -142,15 +157,14 @@ fn test_simulate_upload_wasm() {
                     read_only: Default::default(),
                     read_write: vec![get_wasm_key(ADD_I32)].try_into().unwrap()
                 },
-                instructions: expected_instructions,
+                instructions: res.simulated_instructions,
                 disk_read_bytes: 0,
-                write_bytes: expected_write_bytes,
+                write_bytes: res.transaction_data.as_ref().unwrap().resources.write_bytes,
             },
-            resource_fee: 4714773,
+            resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 838046);
+    expect!["838046"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -187,6 +201,14 @@ fn test_simulate_upload_wasm() {
         res.simulated_instructions
     );
     assert_eq!(res_with_adjustments.simulated_memory, res.simulated_memory);
+    expect!["7071426"].assert_eq(
+        &res_with_adjustments
+            .transaction_data
+            .as_ref()
+            .unwrap()
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         res_with_adjustments.transaction_data,
         Some(SorobanTransactionData {
@@ -196,11 +218,15 @@ fn test_simulate_upload_wasm() {
                     read_only: Default::default(),
                     read_write: vec![get_wasm_key(ADD_I32)].try_into().unwrap()
                 },
-                instructions: (expected_instructions as f64 * 1.1) as u32,
+                instructions: (res.simulated_instructions as f64 * 1.1) as u32,
                 disk_read_bytes: 0,
-                write_bytes: expected_write_bytes + 300,
+                write_bytes: res.transaction_data.as_ref().unwrap().resources.write_bytes + 300,
             },
-            resource_fee: 7071426,
+            resource_fee: res_with_adjustments
+                .transaction_data
+                .as_ref()
+                .unwrap()
+                .resource_fee,
         })
     );
 }
@@ -234,8 +260,8 @@ fn test_simulation_returns_insufficient_budget_error() {
     assert!(res.diagnostic_events.is_empty());
 
     assert_eq!(res.transaction_data, None);
-    assert_eq!(res.simulated_instructions, 111516);
-    assert_eq!(res.simulated_memory, 45006);
+    expect!["111516"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["45006"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(res.modified_entries, vec![]);
 }
 
@@ -268,8 +294,8 @@ fn test_simulation_returns_logic_error() {
     assert!(!res.diagnostic_events.is_empty());
 
     assert_eq!(res.transaction_data, None);
-    assert_eq!(res.simulated_instructions, 154568);
-    assert_eq!(res.simulated_memory, 77284);
+    expect!["154568"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["77284"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(res.modified_entries, vec![]);
 }
 
@@ -314,7 +340,22 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    let expected_instructions = 2374206;
+    expect!["2374206"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["104"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resources
+            .write_bytes
+            .to_string(),
+    );
+    expect!["12928"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -324,15 +365,14 @@ fn test_simulate_create_contract() {
                     read_only: vec![contract.wasm_key.clone()].try_into().unwrap(),
                     read_write: vec![contract.contract_key.clone()].try_into().unwrap()
                 },
-                instructions: expected_instructions,
+                instructions: res.simulated_instructions,
                 disk_read_bytes: 0,
-                write_bytes: 104,
+                write_bytes: res.transaction_data.as_ref().unwrap().resources.write_bytes,
             },
-            resource_fee: 12928,
+            resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 1187102);
+    expect!["1187102"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -457,7 +497,30 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 39114574;
+    expect!["39114574"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["144"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resources
+            .disk_read_bytes
+            .to_string(),
+    );
+    expect!["76"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resources
+            .write_bytes
+            .to_string(),
+    );
+    expect!["114058"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -482,15 +545,19 @@ fn test_simulate_invoke_contract_with_auth() {
                     .try_into()
                     .unwrap()
                 },
-                instructions: expected_instructions,
-                disk_read_bytes: 144,
-                write_bytes: 76,
+                instructions: res.simulated_instructions,
+                disk_read_bytes: res
+                    .transaction_data
+                    .as_ref()
+                    .unwrap()
+                    .resources
+                    .disk_read_bytes,
+                write_bytes: res.transaction_data.as_ref().unwrap().resources.write_bytes,
             },
-            resource_fee: 114058,
+            resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 19557271);
+    expect!["19557271"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -557,7 +624,6 @@ fn test_simulate_invoke_contract_with_autorestore() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    let expected_instructions = 10998010;
     let wasm_entry_size = contracts[0]
         .wasm_entry
         .to_xdr(Limits::none())
@@ -568,6 +634,14 @@ fn test_simulate_invoke_contract_with_autorestore() {
         .to_xdr(Limits::none())
         .unwrap()
         .len() as u32;
+    expect!["10998010"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["6231402"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -585,15 +659,14 @@ fn test_simulate_invoke_contract_with_autorestore() {
                     .try_into()
                     .unwrap(),
                 },
-                instructions: expected_instructions,
+                instructions: res.simulated_instructions,
                 disk_read_bytes: wasm_entry_size + contract_1_size,
                 write_bytes: wasm_entry_size + contract_1_size,
             },
-            resource_fee: 6231402,
+            resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    assert_eq!(res.simulated_instructions, expected_instructions);
-    assert_eq!(res.simulated_memory, 5498994);
+    expect!["5498994"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![
@@ -653,6 +726,7 @@ fn test_simulate_extend_ttl_op() {
         100,
     )
     .unwrap();
+    expect!["280"].assert_eq(&no_op_extension.transaction_data.resource_fee.to_string());
     assert_eq!(
         no_op_extension,
         ExtendTtlOpSimulationResult {
@@ -667,7 +741,7 @@ fn test_simulate_extend_ttl_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 280,
+                resource_fee: no_op_extension.transaction_data.resource_fee,
             }
         }
     );
@@ -682,6 +756,12 @@ fn test_simulate_extend_ttl_op() {
     )
     .unwrap();
 
+    expect!["6204121"].assert_eq(
+        &extension_for_some_entries
+            .transaction_data
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         extension_for_some_entries,
         ExtendTtlOpSimulationResult {
@@ -704,7 +784,7 @@ fn test_simulate_extend_ttl_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 6204121,
+                resource_fee: extension_for_some_entries.transaction_data.resource_fee,
             }
         }
     );
@@ -718,6 +798,12 @@ fn test_simulate_extend_ttl_op() {
         1_000_001,
     )
     .unwrap();
+    expect!["104563088"].assert_eq(
+        &extension_for_all_entries
+            .transaction_data
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         extension_for_all_entries,
         ExtendTtlOpSimulationResult {
@@ -732,7 +818,7 @@ fn test_simulate_extend_ttl_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 104563088,
+                resource_fee: extension_for_all_entries.transaction_data.resource_fee,
             }
         }
     );
@@ -763,6 +849,12 @@ fn test_simulate_extend_ttl_op() {
     )
     .unwrap();
 
+    expect!["156844607"].assert_eq(
+        &extension_for_all_entries_with_adjustment
+            .transaction_data
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         extension_for_all_entries_with_adjustment,
         ExtendTtlOpSimulationResult {
@@ -777,7 +869,9 @@ fn test_simulate_extend_ttl_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 156844607,
+                resource_fee: extension_for_all_entries_with_adjustment
+                    .transaction_data
+                    .resource_fee,
             }
         }
     );
@@ -831,6 +925,7 @@ fn test_simulate_restore_op() {
     )
     .unwrap();
 
+    expect!["280"].assert_eq(&no_op_restoration.transaction_data.resource_fee.to_string());
     assert_eq!(
         no_op_restoration,
         RestoreOpSimulationResult {
@@ -845,7 +940,7 @@ fn test_simulate_restore_op() {
                     disk_read_bytes: 0,
                     write_bytes: 0,
                 },
-                resource_fee: 280,
+                resource_fee: no_op_restoration.transaction_data.resource_fee,
             }
         }
     );
@@ -860,7 +955,29 @@ fn test_simulate_restore_op() {
         &keys,
     )
     .unwrap();
-    let expected_rw_bytes = 7664;
+    expect!["7664"].assert_eq(
+        &restoration_for_some_entries
+            .transaction_data
+            .resources
+            .disk_read_bytes
+            .to_string(),
+    );
+    assert_eq!(
+        restoration_for_some_entries
+            .transaction_data
+            .resources
+            .disk_read_bytes,
+        restoration_for_some_entries
+            .transaction_data
+            .resources
+            .write_bytes
+    );
+    expect!["10922801"].assert_eq(
+        &restoration_for_some_entries
+            .transaction_data
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         restoration_for_some_entries,
         RestoreOpSimulationResult {
@@ -875,10 +992,16 @@ fn test_simulate_restore_op() {
                             .unwrap()
                     },
                     instructions: 0,
-                    disk_read_bytes: expected_rw_bytes,
-                    write_bytes: expected_rw_bytes,
+                    disk_read_bytes: restoration_for_some_entries
+                        .transaction_data
+                        .resources
+                        .disk_read_bytes,
+                    write_bytes: restoration_for_some_entries
+                        .transaction_data
+                        .resources
+                        .write_bytes,
                 },
-                resource_fee: 10922801,
+                resource_fee: restoration_for_some_entries.transaction_data.resource_fee,
             }
         }
     );
@@ -892,7 +1015,29 @@ fn test_simulate_restore_op() {
         &keys,
     )
     .unwrap();
-    let expected_rw_bytes = 7824;
+    expect!["7824"].assert_eq(
+        &extension_for_all_entries
+            .transaction_data
+            .resources
+            .disk_read_bytes
+            .to_string(),
+    );
+    assert_eq!(
+        extension_for_all_entries
+            .transaction_data
+            .resources
+            .disk_read_bytes,
+        extension_for_all_entries
+            .transaction_data
+            .resources
+            .write_bytes
+    );
+    expect!["11130765"].assert_eq(
+        &extension_for_all_entries
+            .transaction_data
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         extension_for_all_entries,
         RestoreOpSimulationResult {
@@ -904,10 +1049,16 @@ fn test_simulate_restore_op() {
                         read_write: keys.clone().tap_mut(|v| v.sort()).try_into().unwrap()
                     },
                     instructions: 0,
-                    disk_read_bytes: expected_rw_bytes,
-                    write_bytes: expected_rw_bytes,
+                    disk_read_bytes: extension_for_all_entries
+                        .transaction_data
+                        .resources
+                        .disk_read_bytes,
+                    write_bytes: extension_for_all_entries
+                        .transaction_data
+                        .resources
+                        .write_bytes,
                 },
-                resource_fee: 11130765,
+                resource_fee: extension_for_all_entries.transaction_data.resource_fee,
             }
         }
     );
@@ -921,6 +1072,12 @@ fn test_simulate_restore_op() {
     )
     .unwrap();
 
+    expect!["16695904"].assert_eq(
+        &extension_for_all_entries_with_adjustment
+            .transaction_data
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         extension_for_all_entries_with_adjustment,
         RestoreOpSimulationResult {
@@ -932,10 +1089,20 @@ fn test_simulate_restore_op() {
                         read_write: keys.clone().tap_mut(|v| v.sort()).try_into().unwrap()
                     },
                     instructions: 0,
-                    disk_read_bytes: (expected_rw_bytes as f64 * 1.2) as u32,
-                    write_bytes: (expected_rw_bytes as f64 * 1.3) as u32,
+                    disk_read_bytes: (extension_for_all_entries
+                        .transaction_data
+                        .resources
+                        .disk_read_bytes as f64
+                        * 1.2) as u32,
+                    write_bytes: (extension_for_all_entries
+                        .transaction_data
+                        .resources
+                        .disk_read_bytes as f64
+                        * 1.3) as u32,
                 },
-                resource_fee: 16695904,
+                resource_fee: extension_for_all_entries_with_adjustment
+                    .transaction_data
+                    .resource_fee,
             }
         }
     );
@@ -1134,6 +1301,37 @@ fn test_simulate_successful_sac_call() {
             },
         },]
     );
+    expect!["3443303"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resources
+            .instructions
+            .to_string(),
+    );
+    expect!["116"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resources
+            .disk_read_bytes
+            .to_string(),
+    );
+    expect!["116"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resources
+            .write_bytes
+            .to_string(),
+    );
+    expect!["52979"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -1147,11 +1345,21 @@ fn test_simulate_successful_sac_call() {
                         .try_into()
                         .unwrap()
                 },
-                instructions: 3443303,
-                disk_read_bytes: 116,
-                write_bytes: 116,
+                instructions: res
+                    .transaction_data
+                    .as_ref()
+                    .unwrap()
+                    .resources
+                    .instructions,
+                disk_read_bytes: res
+                    .transaction_data
+                    .as_ref()
+                    .unwrap()
+                    .resources
+                    .disk_read_bytes,
+                write_bytes: res.transaction_data.as_ref().unwrap().resources.write_bytes,
             },
-            resource_fee: 52979,
+            resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
 }
@@ -1227,6 +1435,21 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
             issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
         }),
     });
+    expect!["5199245"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resources
+            .instructions
+            .to_string(),
+    );
+    expect!["5548"].assert_eq(
+        &res.transaction_data
+            .as_ref()
+            .unwrap()
+            .resource_fee
+            .to_string(),
+    );
     assert_eq!(
         res.transaction_data,
         Some(SorobanTransactionData {
@@ -1247,11 +1470,16 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
                     // No entries should be actually modified.
                     read_write: Default::default(),
                 },
-                instructions: 5199245,
+                instructions: res
+                    .transaction_data
+                    .as_ref()
+                    .unwrap()
+                    .resources
+                    .instructions,
                 disk_read_bytes: 0,
                 write_bytes: 0,
             },
-            resource_fee: 5548,
+            resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
 }

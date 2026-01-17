@@ -29,6 +29,7 @@ soroban-env-host = { workspace = true,  features = ["recording_mode", "testutils
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 pretty_assertions = "1.4"
 tap = "1.0.1"
+expect-test = "1.4.1"
 
 [package.metadata.docs.rs]
 all-features = true

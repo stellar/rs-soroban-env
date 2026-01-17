@@ -34,6 +34,7 @@ use crate::{
 };
 use crate::{ErrorHandler, ModuleCache};
 use ed25519_dalek::SigningKey;
+use expect_test::expect;
 use pretty_assertions::assert_eq;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -823,7 +824,8 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    let (expected_insns, expected_write_bytes) = (1767593, 684);
+    expect!["1767593"].assert_eq(&res.resources.instructions.to_string());
+    expect!["684"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -831,9 +833,9 @@ fn test_wasm_upload_success_in_recording_mode() {
                 read_only: Default::default(),
                 read_write: vec![ledger_key.clone()].try_into().unwrap()
             },
-            instructions: expected_insns,
+            instructions: res.resources.instructions,
             disk_read_bytes: 0,
-            write_bytes: expected_write_bytes,
+            write_bytes: res.resources.write_bytes,
         }
     );
 }
@@ -861,7 +863,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    let expected_instructions = 1093647;
+    expect!["1093647"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -869,7 +871,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
                 read_only: Default::default(),
                 read_write: Default::default(),
             },
-            instructions: expected_instructions,
+            instructions: res.resources.instructions,
             disk_read_bytes: 0,
             write_bytes: 0,
         }
@@ -1378,6 +1380,8 @@ fn test_create_contract_success_in_recording_mode() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    expect!["639602"].assert_eq(&res.resources.instructions.to_string());
+    expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1385,9 +1389,9 @@ fn test_create_contract_success_in_recording_mode() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 639602,
+            instructions: res.resources.instructions,
             disk_read_bytes: 0,
-            write_bytes: 104,
+            write_bytes: res.resources.write_bytes,
         }
     );
 }
@@ -1514,6 +1518,8 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    expect!["1046760"].assert_eq(&res.resources.instructions.to_string());
+    expect!["176"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1528,9 +1534,9 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                 .unwrap(),
                 read_write: vec![cd.contract_key, nonce_entry_key].try_into().unwrap()
             },
-            instructions: 1046760,
+            instructions: res.resources.instructions,
             disk_read_bytes: 0,
-            write_bytes: 176,
+            write_bytes: res.resources.write_bytes,
         }
     );
 }
@@ -1583,6 +1589,8 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    expect!["641049"].assert_eq(&res.resources.instructions.to_string());
+    expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1590,9 +1598,9 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                 read_only: vec![cd.wasm_key].try_into().unwrap(),
                 read_write: vec![cd.contract_key].try_into().unwrap()
             },
-            instructions: 641049,
+            instructions: res.resources.instructions,
             disk_read_bytes: 0,
-            write_bytes: 104,
+            write_bytes: res.resources.write_bytes,
         }
     );
 }
@@ -2020,6 +2028,8 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         ]
     );
     assert!(res.restored_rw_entry_ids.is_empty());
+    expect!["791047"].assert_eq(&res.resources.instructions.to_string());
+    expect!["80"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2029,9 +2039,9 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                     .unwrap(),
                 read_write: vec![data_key.clone()].try_into().unwrap(),
             },
-            instructions: 791047,
+            instructions: res.resources.instructions,
             disk_read_bytes: 0,
-            write_bytes: 80,
+            write_bytes: res.resources.write_bytes,
         }
     );
 
@@ -2085,6 +2095,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
+    expect!["902901"].assert_eq(&extend_res.resources.instructions.to_string());
     assert_eq!(
         extend_res.resources,
         SorobanResources {
@@ -2098,7 +2109,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                 .unwrap(),
                 read_write: Default::default(),
             },
-            instructions: 902901,
+            instructions: extend_res.resources.instructions,
             disk_read_bytes: 0,
             write_bytes: 0,
         }
@@ -2384,6 +2395,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
         ]
     );
 
+    expect!["1562621"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2397,7 +2409,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
                 .try_into()
                 .unwrap(),
             },
-            instructions: 1562621,
+            instructions: res.resources.instructions,
             disk_read_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
             write_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
         }
@@ -2526,6 +2538,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
         ]
     );
 
+    expect!["921385"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2535,7 +2548,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
                     .try_into()
                     .unwrap(),
             },
-            instructions: 921385,
+            instructions: res.resources.instructions,
             disk_read_bytes: data_entry_size + instance_entry_size,
             write_bytes: data_entry_size + instance_entry_size,
         }
@@ -2665,6 +2678,7 @@ fn test_auto_restore_with_new_entry_in_recording_mode() {
         ]
     );
     let wasm_entry_size = cd.wasm_entry.to_xdr(Limits::none()).unwrap().len() as u32;
+    expect!["1444181"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2678,7 +2692,7 @@ fn test_auto_restore_with_new_entry_in_recording_mode() {
                 .try_into()
                 .unwrap(),
             },
-            instructions: 1444181,
+            instructions: res.resources.instructions,
             disk_read_bytes: wasm_entry_size + instance_entry_size,
             write_bytes: data_entry_size + wasm_entry_size + instance_entry_size,
         }
@@ -2801,6 +2815,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
         ]
     );
 
+    expect!["1561476"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2810,7 +2825,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
                     .try_into()
                     .unwrap(),
             },
-            instructions: 1561476,
+            instructions: res.resources.instructions,
             disk_read_bytes: wasm_entry_size + instance_entry_size,
             write_bytes: wasm_entry_size + instance_entry_size,
         }
@@ -2923,6 +2938,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
         ]
     );
 
+    expect!["1563649"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2930,7 +2946,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
                 read_only: vec![cd.contract_key.clone()].try_into().unwrap(),
                 read_write: vec![data_key, cd.wasm_key.clone()].try_into().unwrap(),
             },
-            instructions: 1563649,
+            instructions: res.resources.instructions,
             disk_read_bytes: wasm_entry_size,
             write_bytes: wasm_entry_size + temp_entry_size,
         }
