@@ -563,16 +563,16 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381G1Msm => {
-                    cpu.const_term = 2426722;
-                    cpu.lin_term = ScaledU64(96397671);
+                    cpu.const_term = 2347584;
+                    cpu.lin_term = ScaledU64(94135478);
                 }
                 ContractCostType::Bls12381MapFpToG1 => {
-                    cpu.const_term = 1541554;
+                    cpu.const_term = 1020885;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381HashToG1 => {
-                    cpu.const_term = 3211191;
-                    cpu.lin_term = ScaledU64(6713);
+                    cpu.const_term = 2638451;
+                    cpu.lin_term = ScaledU64(6803);
                 }
                 ContractCostType::Bls12381G2Add => {
                     cpu.const_term = 25207;
@@ -583,16 +583,16 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381G2Msm => {
-                    cpu.const_term = 8035968;
-                    cpu.lin_term = ScaledU64(309667335);
+                    cpu.const_term = 7663880;
+                    cpu.lin_term = ScaledU64(298580871);
                 }
                 ContractCostType::Bls12381MapFp2ToG2 => {
-                    cpu.const_term = 2420202;
+                    cpu.const_term = 1856539;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381HashToG2 => {
-                    cpu.const_term = 7050564;
-                    cpu.lin_term = ScaledU64(6797);
+                    cpu.const_term = 6315452;
+                    cpu.lin_term = ScaledU64(7232);
                 }
                 ContractCostType::Bls12381Pairing => {
                     cpu.const_term = 10558948;
@@ -639,7 +639,7 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G2CheckPointInSubgroup => {
-                    cpu.const_term = 2937755;
+                    cpu.const_term = 1706052;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bn254G1ProjectiveToAffine => {
@@ -916,14 +916,14 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::Bls12381G1Msm => {
                     mem.const_term = 109494;
-                    mem.lin_term = ScaledU64(354667);
+                    mem.lin_term = ScaledU64(266603);
                 }
                 ContractCostType::Bls12381MapFpToG1 => {
-                    mem.const_term = 5552;
+                    mem.const_term = 2776;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381HashToG1 => {
-                    mem.const_term = 9424;
+                    mem.const_term = 5896;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381G2Add => {
@@ -936,14 +936,14 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::Bls12381G2Msm => {
                     mem.const_term = 219654;
-                    mem.lin_term = ScaledU64(354667);
+                    mem.lin_term = ScaledU64(266603);
                 }
                 ContractCostType::Bls12381MapFp2ToG2 => {
-                    mem.const_term = 3344;
+                    mem.const_term = 1672;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381HashToG2 => {
-                    mem.const_term = 6816;
+                    mem.const_term = 3960;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Bls12381Pairing => {

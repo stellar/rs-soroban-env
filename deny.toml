@@ -88,15 +88,6 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 ignore = [
     #"RUSTSEC-0000-0000",
 
-    # Very low-severity TTY error we will never hit: code that's not compiled
-    # into production, only on windows, and only with a custom allocator.
-    "RUSTSEC-2021-0145",
-
-    # This ignores an error due to the now unmaintained derivative crate. This
-    # crate is a dependency for some of the ark crates, so we need to ignore the
-    # advisory.
-    "RUSTSEC-2024-0388",
-
     # This ignores the advisory re unmaintained `paste` crate that is a
     # transitive dependency of several crates we depend on.
     "RUSTSEC-2024-0436"
@@ -243,7 +234,7 @@ deny = [
 
 # Certain crates/versions that will be skipped when doing duplicate detection.
 skip = [
-    { name = "hashbrown", version = "=0.13.2" },
+    { name = "hashbrown", version = "=0.14.1" },
     { name = "syn", version = "=1.0.109" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
