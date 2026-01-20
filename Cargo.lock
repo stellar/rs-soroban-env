@@ -1667,6 +1667,7 @@ name = "soroban-simulation"
 version = "25.0.1"
 dependencies = [
  "anyhow",
+ "expect-test",
  "pretty_assertions",
  "rand",
  "soroban-env-host",
