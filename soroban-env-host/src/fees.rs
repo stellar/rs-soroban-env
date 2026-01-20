@@ -389,7 +389,7 @@ fn rent_fee_per_entry_change(
         ));
     }
     if entry_change.is_code_entry {
-        fee /= CODE_ENTRY_RENT_DISCOUNT_FACTOR;
+        fee = num_integer::div_ceil(fee, CODE_ENTRY_RENT_DISCOUNT_FACTOR);
     }
     fee
 }

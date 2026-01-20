@@ -141,7 +141,7 @@ fn test_simulate_upload_wasm() {
             .write_bytes
             .to_string(),
     );
-    expect!["4714773"].assert_eq(
+    expect!["4714774"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()
@@ -201,7 +201,7 @@ fn test_simulate_upload_wasm() {
         res.simulated_instructions
     );
     assert_eq!(res_with_adjustments.simulated_memory, res.simulated_memory);
-    expect!["7071426"].assert_eq(
+    expect!["7071427"].assert_eq(
         &res_with_adjustments
             .transaction_data
             .as_ref()
@@ -635,7 +635,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
         .unwrap()
         .len() as u32;
     expect!["10998010"].assert_eq(&res.simulated_instructions.to_string());
-    expect!["6231402"].assert_eq(
+    expect!["6231403"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()
@@ -756,7 +756,7 @@ fn test_simulate_extend_ttl_op() {
     )
     .unwrap();
 
-    expect!["6204121"].assert_eq(
+    expect!["6204123"].assert_eq(
         &extension_for_some_entries
             .transaction_data
             .resource_fee
@@ -798,7 +798,7 @@ fn test_simulate_extend_ttl_op() {
         1_000_001,
     )
     .unwrap();
-    expect!["104563088"].assert_eq(
+    expect!["104563090"].assert_eq(
         &extension_for_all_entries
             .transaction_data
             .resource_fee
@@ -849,7 +849,7 @@ fn test_simulate_extend_ttl_op() {
     )
     .unwrap();
 
-    expect!["156844607"].assert_eq(
+    expect!["156844610"].assert_eq(
         &extension_for_all_entries_with_adjustment
             .transaction_data
             .resource_fee
@@ -972,7 +972,7 @@ fn test_simulate_restore_op() {
             .resources
             .write_bytes
     );
-    expect!["10922801"].assert_eq(
+    expect!["10922803"].assert_eq(
         &restoration_for_some_entries
             .transaction_data
             .resource_fee
@@ -1032,7 +1032,7 @@ fn test_simulate_restore_op() {
             .resources
             .write_bytes
     );
-    expect!["11130765"].assert_eq(
+    expect!["11130768"].assert_eq(
         &extension_for_all_entries
             .transaction_data
             .resource_fee
@@ -1072,7 +1072,7 @@ fn test_simulate_restore_op() {
     )
     .unwrap();
 
-    expect!["16695904"].assert_eq(
+    expect!["16695909"].assert_eq(
         &extension_for_all_entries_with_adjustment
             .transaction_data
             .resource_fee
