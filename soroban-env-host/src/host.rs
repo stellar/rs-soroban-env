@@ -3290,6 +3290,23 @@ impl VmCallerEnv for Host {
         self.bn254_fr_to_u256val(res)
     }
 
+    fn bn254_g1_msm(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        vp: VecObject,
+        vs: VecObject,
+    ) -> Result<BytesObject, HostError> {
+        let points = self.bn254_checked_g1_vec_from_vecobj(vp)?;
+        let scalars = self.bn254_fr_vec_from_vecobj(vs)?;
+        let res = self.msm_internal(
+            &points,
+            &scalars,
+            &ContractCostType::Bn254G1Msm,
+            "BN254 G1",
+        )?;
+        self.bn254_g1_projective_serialize_uncompressed(res)
+    }
+
     fn poseidon_permutation(
         &self,
         _vmcaller: &mut VmCaller<Host>,

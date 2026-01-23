@@ -428,6 +428,24 @@ impl Host {
         Ok(points)
     }
 
+    pub(crate) fn bn254_fr_vec_from_vecobj(&self, vs: VecObject) -> Result<Vec<Fr>, HostError> {
+        let len: u32 = self.vec_len(vs)?.into();
+        let mut scalars: Vec<Fr> = vec![];
+        self.charge_budget(
+            ContractCostType::MemAlloc,
+            Some(len as u64 * 32), // Fr is 32 bytes
+        )?;
+        scalars.reserve(len as usize);
+        let _ = self.visit_obj(vs, |vs: &HostVec| {
+            for s in vs.iter() {
+                let ss = self.bn254_fr_from_u256val(U256Val::try_from_val(self, s)?)?;
+                scalars.push(ss);
+            }
+            Ok(())
+        })?;
+        Ok(scalars)
+    }
+
     pub(crate) fn bn254_fr_from_u256val(&self, sv: U256Val) -> Result<Fr, HostError> {
         <Fr as MeteredScalar>::from_u256val(self, sv)
     }
