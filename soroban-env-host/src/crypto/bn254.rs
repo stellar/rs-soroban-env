@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::ops::{Add, AddAssign, Mul, MulAssign};
+use std::ops::{Add, AddAssign, Mul, MulAssign, SubAssign};
 
 use ark_bn254::{Bn254, Fq as Fp, Fq12, Fq2 as Fp2, Fr, G1Affine, G1Projective, G2Affine};
 use ark_ec::AffineRepr;
@@ -8,7 +8,7 @@ use ark_ec::{
     short_weierstrass::{Affine, SWCurveConfig},
     CurveGroup,
 };
-use ark_ff::Field;
+use ark_ff::{Field, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use soroban_env_common::EnvBase;
 
@@ -432,7 +432,6 @@ impl Host {
         <Fr as MeteredScalar>::from_u256val(self, sv)
     }
 
-    #[cfg(feature = "bench")]
     pub(crate) fn bn254_fr_to_u256val(&self, fr: Fr) -> Result<U256Val, HostError> {
         fr.into_u256val(self)
     }
@@ -440,6 +439,12 @@ impl Host {
     pub(crate) fn bn254_fr_add_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
         self.charge_budget(ContractCostType::Bn254FrAddSub, None)?;
         lhs.add_assign(rhs);
+        Ok(())
+    }
+
+    pub(crate) fn bn254_fr_sub_internal(&self, lhs: &mut Fr, rhs: &Fr) -> Result<(), HostError> {
+        self.charge_budget(ContractCostType::Bn254FrAddSub, None)?;
+        lhs.sub_assign(rhs);
         Ok(())
     }
 
@@ -457,14 +462,21 @@ impl Host {
         Ok(lhs.pow(&[*rhs]))
     }
 
-    #[cfg(feature = "bench")]
     pub(crate) fn bn254_fr_inv_internal(&self, lhs: &Fr) -> Result<Fr, HostError> {
+        if lhs.is_zero() {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "bn254 scalar inversion input is zero",
+                &[],
+            ));
+        }
         self.charge_budget(ContractCostType::Bn254FrInv, None)?;
         lhs.inverse().ok_or_else(|| {
             self.err(
                 ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                "bn254 fr_inv: field element has no inverse",
+                ScErrorCode::InternalError,
+                "bn254 scalar inversion failed",
                 &[],
             )
         })
