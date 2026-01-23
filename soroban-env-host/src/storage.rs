@@ -484,11 +484,11 @@ impl Storage {
                 ))
             })
         })?;
-
-        if new_live_until > host.max_live_until_ledger()? {
+        let max_live_until = host.max_live_until_ledger()?;
+        if new_live_until > max_live_until {
             if let Some(durability) = get_key_durability(&key) {
                 if matches!(durability, ContractDataDurability::Persistent) {
-                    new_live_until = host.max_live_until_ledger()?;
+                    new_live_until = max_live_until;
                 } else {
                     //  for `Temporary` entries TTL has to be exact - most of
                     //  the time entry has to live until the exact specified
@@ -499,10 +499,7 @@ impl Storage {
                         ScErrorType::Storage,
                         ScErrorCode::InvalidAction,
                         "trying to extend temporary entry past max TTL allowed by network: {} > {}",
-                        &[
-                            extend_to.into(),
-                            new_live_until.saturating_sub(ledger_seq).into(),
-                        ],
+                        &[extend_to.into(), max_live_until.into()],
                     ));
                 }
             } else {
