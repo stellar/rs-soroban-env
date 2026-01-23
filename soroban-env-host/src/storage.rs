@@ -530,7 +530,7 @@ impl Storage {
     ///
     /// The function extends the TTL to be up to `extend_to` ledgers from
     /// current ledger. The TTL extension only actually happens if the
-    /// amount of extension ledgers exceeds `min_extension`, otherwise this
+    /// amount of extension ledgers is at least `min_extension`; otherwise this
     /// function is a no-op. The amount of extension ledgers will not exceed
     /// `max_extension` ledgers.
     ///
