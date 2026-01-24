@@ -9,11 +9,11 @@ use soroban_env_host::{
         Bn254FrAddRun, Bn254FrAddSubMulSample, Bn254FrFromU256Run, Bn254FrFromU256Sample,
         Bn254FrInvRun, Bn254FrInvSample, Bn254FrMulRun, Bn254FrPowRun, Bn254FrPowSample,
         Bn254FrSubRun, Bn254FrToU256Run, Bn254FrToU256Sample, Bn254G1AddRun, Bn254G1AddSample,
-        Bn254G1CheckPointOnCurveRun, Bn254G1CheckPointOnCurveSample, Bn254G1MulRun,
-        Bn254G1MulSample, Bn254G1ProjectiveToAffineRun, Bn254G1ProjectiveToAffineSample,
-        Bn254G2CheckPointInSubgroupRun, Bn254G2CheckPointInSubgroupSample,
-        Bn254G2CheckPointOnCurveRun, Bn254G2CheckPointOnCurveSample, Bn254PairingRun,
-        Bn254PairingSample,
+        Bn254G1CheckPointOnCurveRun, Bn254G1CheckPointOnCurveSample, Bn254G1MsmRun,
+        Bn254G1MsmSample, Bn254G1MulRun, Bn254G1MulSample, Bn254G1ProjectiveToAffineRun,
+        Bn254G1ProjectiveToAffineSample, Bn254G2CheckPointInSubgroupRun,
+        Bn254G2CheckPointInSubgroupSample, Bn254G2CheckPointOnCurveRun,
+        Bn254G2CheckPointOnCurveSample, Bn254PairingRun, Bn254PairingSample,
     },
     xdr::ContractCostType::*,
     Host, TryIntoVal, U256Val, U256,
@@ -132,6 +132,24 @@ impl HostCostMeasurement for Bn254G1MulMeasure {
         let p = G1Affine::rand(rng);
         let s = Fr::rand(rng);
         Bn254G1MulSample(p, s)
+    }
+}
+
+pub(crate) struct Bn254G1MsmMeasure;
+
+impl HostCostMeasurement for Bn254G1MsmMeasure {
+    type Runner = Bn254G1MsmRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bn254G1MsmSample {
+        Bn254G1MsmSample(
+            (0..input)
+                .into_iter()
+                .map(|_| G1Affine::rand(rng))
+                .collect(),
+            (0..input).into_iter().map(|_| Fr::rand(rng)).collect(),
+            Bn254G1Msm,
+            "G1".to_string(),
+        )
     }
 }
 
