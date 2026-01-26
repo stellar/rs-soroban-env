@@ -683,10 +683,9 @@ impl Default for BudgetImpl {
                     cpu.const_term = 33151;
                     cpu.lin_term = ScaledU64(0);
                 }
-                // TODO: calibrate this!
                 ContractCostType::Bn254G1Msm => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(0);
+                    cpu.const_term = 1185193;
+                    cpu.lin_term = ScaledU64(41568084);
                 }
             }
 
@@ -1040,10 +1039,9 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                // TODO: calibrate this!
                 ContractCostType::Bn254G1Msm => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
+                    mem.const_term = 73061;
+                    mem.lin_term = ScaledU64(229779);
                 }
             }
         }
