@@ -164,6 +164,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, Bn254G1ProjectiveToAffineMeasure>(&mut params)?;
     call_bench::<B, Bn254G1AddMeasure>(&mut params)?;
     call_bench::<B, Bn254G1MulMeasure>(&mut params)?;
+    call_bench::<B, Bn254G1MsmMeasure>(&mut params)?;
     call_bench::<B, Bn254PairingMeasure>(&mut params)?;
     call_bench::<B, Bn254FrFromU256Measure>(&mut params)?;
     call_bench::<B, Bn254FrToU256Measure>(&mut params)?;

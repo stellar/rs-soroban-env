@@ -1128,3 +1128,190 @@ fn ethereum_bn254_pairing_tests() -> Result<(), HostError> {
 
     Ok(())
 }
+
+// ---- BN254 G1 MSM tests ----
+
+fn sample_fr_vec(host: &Host, n: usize, rng: &mut StdRng) -> Result<VecObject, HostError> {
+    let vals: Vec<Val> = (0..n)
+        .map(|_| sample_fr(host, rng).map(|v| v.to_val()))
+        .collect::<Result<_, _>>()?;
+    host.vec_new_from_slice(&vals)
+}
+
+use crate::{U64Val, Val, VecObject};
+
+#[test]
+fn test_bn254_g1_msm() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x5b; 32]);
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    // Empty vectors should fail
+    {
+        let vp = host.vec_new()?;
+        let vs = host.vec_new()?;
+        assert!(HostError::result_matches_err(
+            host.bn254_g1_msm(vp, vs),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // Mismatched vector lengths should fail
+    {
+        let p1 = sample_g1(&host, &mut rng)?;
+        let p2 = sample_g1(&host, &mut rng)?;
+        let vp = host.vec_new_from_slice(&[p1.to_val(), p2.to_val()])?;
+        let vs = sample_fr_vec(&host, 3, &mut rng)?;
+        assert!(HostError::result_matches_err(
+            host.bn254_g1_msm(vp, vs),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // Zero scalars result in zero point
+    {
+        let p1 = sample_g1(&host, &mut rng)?;
+        let p2 = sample_g1(&host, &mut rng)?;
+        let vp = host.vec_new_from_slice(&[p1.to_val(), p2.to_val()])?;
+        let vs = host.vec_new_from_slice(&[U256Val::from_u32(0).to_val(); 2])?;
+        let res = host.bn254_g1_msm(vp, vs)?;
+        assert_eq!(
+            host.obj_cmp(res.into(), g1_zero(&host)?.into())?,
+            Ordering::Equal as i64
+        );
+    }
+
+    // p * 1 + (-p) * 1 = 0
+    {
+        let pt = sample_g1(&host, &mut rng)?;
+        let neg_pt = minus_g1(pt, &host)?;
+        let vp = host.vec_new_from_slice(&[pt.to_val(), neg_pt.to_val()])?;
+        let vs = host.vec_new_from_slice(&[U256Val::from_u32(1).to_val(); 2])?;
+        let res = host.bn254_g1_msm(vp, vs)?;
+        assert_eq!(
+            host.obj_cmp(res.into(), g1_zero(&host)?.into())?,
+            Ordering::Equal as i64
+        );
+    }
+
+    // MSM consistency: p1*s1 + p2*s2 computed via MSM should equal sum of individual muls
+    {
+        let p1 = sample_g1(&host, &mut rng)?;
+        let p2 = sample_g1(&host, &mut rng)?;
+        let s1 = sample_fr(&host, &mut rng)?;
+        let s2 = sample_fr(&host, &mut rng)?;
+
+        // Compute via MSM
+        let vp = host.vec_new_from_slice(&[p1.to_val(), p2.to_val()])?;
+        let vs = host.vec_new_from_slice(&[s1.to_val(), s2.to_val()])?;
+        let msm_res = host.bn254_g1_msm(vp, vs)?;
+
+        // Compute individually and add
+        let r1 = host.bn254_g1_mul(p1, s1)?;
+        let r2 = host.bn254_g1_mul(p2, s2)?;
+        let add_res = host.bn254_g1_add(r1, r2)?;
+
+        assert_eq!(
+            host.obj_cmp(msm_res.into(), add_res.into())?,
+            Ordering::Equal as i64
+        );
+    }
+
+    Ok(())
+}
+
+// ---- BN254 Fr arithmetic tests ----
+
+#[test]
+fn test_bn254_fr_arithmetic() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x5b; 32]);
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    let a = sample_fr(&host, &mut rng)?;
+    let b = sample_fr(&host, &mut rng)?;
+
+    // Helper to compare U256Vals by converting to bytes
+    let vals_equal = |host: &Host, x: U256Val, y: U256Val| -> Result<bool, HostError> {
+        let x_bytes = host.u256_val_to_be_bytes(x)?;
+        let y_bytes = host.u256_val_to_be_bytes(y)?;
+        Ok(host.obj_cmp(x_bytes.into(), y_bytes.into())? == Ordering::Equal as i64)
+    };
+
+    // Create zero as U256Val (32 bytes of zeros)
+    let zero_bytes = host.bytes_new_from_slice(&[0u8; 32])?;
+    let zero = host.u256_val_from_be_bytes(zero_bytes)?;
+
+    // Create one as U256Val
+    let mut one_buf = [0u8; 32];
+    one_buf[31] = 1;
+    let one_bytes = host.bytes_new_from_slice(&one_buf)?;
+    let one = host.u256_val_from_be_bytes(one_bytes)?;
+
+    // a + 0 = a
+    {
+        let res = host.bn254_fr_add(a, zero)?;
+        assert!(vals_equal(&host, res, a)?);
+    }
+
+    // a - a = 0
+    {
+        let res = host.bn254_fr_sub(a, a)?;
+        assert!(vals_equal(&host, res, zero)?);
+    }
+
+    // a * 1 = a
+    {
+        let res = host.bn254_fr_mul(a, one)?;
+        assert!(vals_equal(&host, res, a)?);
+    }
+
+    // a * 0 = 0
+    {
+        let res = host.bn254_fr_mul(a, zero)?;
+        assert!(vals_equal(&host, res, zero)?);
+    }
+
+    // a^0 = 1
+    {
+        let res = host.bn254_fr_pow(a, U64Val::from_u32(0))?;
+        assert!(vals_equal(&host, res, one)?);
+    }
+
+    // a^1 = a
+    {
+        let res = host.bn254_fr_pow(a, U64Val::from_u32(1))?;
+        assert!(vals_equal(&host, res, a)?);
+    }
+
+    // a * inv(a) = 1 (for non-zero a)
+    {
+        let inv_a = host.bn254_fr_inv(a)?;
+        let res = host.bn254_fr_mul(a, inv_a)?;
+        assert!(vals_equal(&host, res, one)?);
+    }
+
+    // inv(0) should fail
+    {
+        assert!(HostError::result_matches_err(
+            host.bn254_fr_inv(zero),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // (a + b) - b = a
+    {
+        let sum = host.bn254_fr_add(a, b)?;
+        let res = host.bn254_fr_sub(sum, b)?;
+        assert!(vals_equal(&host, res, a)?);
+    }
+
+    // a^2 = a * a
+    {
+        let a_squared = host.bn254_fr_pow(a, U64Val::from_u32(2))?;
+        let a_times_a = host.bn254_fr_mul(a, a)?;
+        assert!(vals_equal(&host, a_squared, a_times_a)?);
+    }
+
+    Ok(())
+}

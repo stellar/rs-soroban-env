@@ -616,6 +616,7 @@ fn excessive_logging() -> Result<(), HostError> {
     Bn254FrMul                         0              0              
     Bn254FrPow                         0              0              
     Bn254FrInv                         0              0              
+    Bn254G1Msm                         0              0              
     =================================================================
     
     "#

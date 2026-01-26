@@ -86,10 +86,14 @@ lazy_static = "1.5.0"
 
 [dev-dependencies.stellar-xdr]
 version = "=25.0.0"
-#git = "https://github.com/stellar/rs-stellar-xdr"
-#rev = "6d8d16fce8a3c547ec20dedd8b39c36280fb3a33"
+git = "https://github.com/stellar/rs-stellar-xdr"
+rev = "c458ac6bb943c271332cb8cf274b492433cb763f"
 default-features = false
-features = ["arbitrary"]
+# env should be pinned to next while the next protocol is in development. Switch to curr when it is updated.
+features = ["arbitrary",
+#"curr",
+"next"
+]
 
 [features]
 testutils = ["soroban-env-common/testutils", "recording_mode"]

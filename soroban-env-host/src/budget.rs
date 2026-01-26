@@ -148,6 +148,7 @@ impl Default for BudgetTracker {
                 ContractCostType::Bn254G1ProjectiveToAffine => (),
                 ContractCostType::Bn254G1Add => (),
                 ContractCostType::Bn254G1Mul => (),
+                ContractCostType::Bn254G1Msm => init_input(), // input is number of (G1,Fr) pairs
                 ContractCostType::Bn254Pairing => init_input(),
                 ContractCostType::Bn254FrFromU256 => (),
                 ContractCostType::Bn254FrToU256 => (),
@@ -682,6 +683,10 @@ impl Default for BudgetImpl {
                     cpu.const_term = 33151;
                     cpu.lin_term = ScaledU64(0);
                 }
+                ContractCostType::Bn254G1Msm => {
+                    cpu.const_term = 1185193;
+                    cpu.lin_term = ScaledU64(41568084);
+                }
             }
 
             // define the memory cost model parameters
@@ -1033,6 +1038,10 @@ impl Default for BudgetImpl {
                 ContractCostType::Bn254FrInv => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::Bn254G1Msm => {
+                    mem.const_term = 73061;
+                    mem.lin_term = ScaledU64(229779);
                 }
             }
         }

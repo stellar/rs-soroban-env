@@ -103,9 +103,8 @@ pub use num::{I256, U256};
 pub use storage_type::StorageType;
 
 // Re-export the XDR definitions of a specific version -- curr or next -- of the xdr crate.
-#[cfg(not(feature = "next"))]
-pub use stellar_xdr::curr as xdr;
-#[cfg(feature = "next")]
+// next should be used while the protocol is in development.
+//pub use stellar_xdr::curr as xdr;
 pub use stellar_xdr::next as xdr;
 
 // Val is the 64-bit transparent type.
