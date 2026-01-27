@@ -540,3 +540,281 @@ fn test_large_instance_key() {
         test_vec![&*host, key, 1_u64].into(),
     );
 }
+
+// ============================================================================
+// Tests for CAP-0078: extend_contract_data_ttl_v2 and
+// extend_contract_instance_and_code_ttl_v2
+// ============================================================================
+
+mod ttl_extension_v2_tests {
+    use super::*;
+    use crate::xdr::{ContractDataDurability, LedgerKeyContractData, ScSymbol, ScVal};
+    use soroban_env_common::{ContractTTLExtension, StorageType};
+    use soroban_test_wasms::CONTRACT_STORAGE_P26;
+
+    fn setup_host() -> Host {
+        let host = Host::test_host_with_recording_footprint();
+        host.set_ledger_info(crate::LedgerInfo {
+            protocol_version: Host::current_test_protocol(),
+            sequence_number: 1000,
+            max_entry_ttl: 100000,
+            ..Default::default()
+        })
+        .unwrap();
+        host
+    }
+
+    fn get_live_until(host: &Host, key: &Rc<LedgerKey>) -> u32 {
+        host.with_mut_storage(|s| Ok(s.get_with_live_until_ledger(key, host, None)?.1.unwrap()))
+            .unwrap()
+    }
+
+    fn make_data_key(host: &Host, contract_id: AddressObject, storage: &str) -> Rc<LedgerKey> {
+        let contract_id_hash = host.contract_id_from_address(contract_id).unwrap();
+        let durability = match storage {
+            "persistent" => ContractDataDurability::Persistent,
+            "temporary" => ContractDataDurability::Temporary,
+            _ => panic!("unexpected storage type"),
+        };
+        Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract(contract_id_hash),
+            key: ScVal::Symbol(ScSymbol("key_1".try_into().unwrap())),
+            durability,
+        }))
+    }
+
+    fn extend_v2_fn_name(host: &Host, storage: &str) -> Symbol {
+        let name = format!("extend_{}_v2", storage);
+        name.as_str().try_into_val(host).unwrap()
+    }
+
+    fn test_extend_ttl_v2(host: &Host, contract_id: AddressObject, storage: &str) {
+        let key = Symbol::try_from_small_str("key_1").unwrap();
+
+        host.call(
+            contract_id,
+            storage_fn_name(host, "put", storage),
+            test_vec![host, key, 1234_u64].into(),
+        )
+        .unwrap();
+
+        let storage_key = if storage == "instance" {
+            let c_id = host.contract_id_from_address(contract_id).unwrap();
+            host.contract_instance_ledger_key(&c_id).unwrap()
+        } else {
+            make_data_key(host, contract_id, storage)
+        };
+
+        let extend = |extend_to: u32, min_ext: u32, max_ext: u32| {
+            let curr_live_until = get_live_until(host, &storage_key);
+            let args = if storage == "instance" {
+                test_vec![host, extend_to, min_ext, max_ext]
+            } else {
+                test_vec![host, key, extend_to, min_ext, max_ext]
+            };
+            host.call(contract_id, extend_v2_fn_name(host, storage), args.into())
+                .and_then(|_| Ok(get_live_until(host, &storage_key) - curr_live_until))
+        };
+
+        // max_extension < min_extension => InvalidInput
+        assert!(HostError::result_matches_err(
+            extend(5000, 1000, 500),
+            (ScErrorType::Storage, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            extend(1, 3, 2),
+            (ScErrorType::Storage, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            extend(100, 100, 99),
+            (ScErrorType::Storage, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            extend(100, u32::MAX, u32::MAX - 1),
+            (ScErrorType::Storage, ScErrorCode::InvalidInput)
+        ));
+
+        let ledger_seq: u32 = host.get_ledger_sequence().unwrap().into();
+        let curr_ttl = || get_live_until(host, &storage_key) - ledger_seq;
+
+        // regular extension, between min and max
+        assert_eq!(extend(curr_ttl() + 500, 100, 1000).unwrap(), 500);
+        assert_eq!(extend(curr_ttl() + 1, 0, 1).unwrap(), 1);
+        assert_eq!(extend(curr_ttl() + 10, 10, 10).unwrap(), 10);
+        assert_eq!(extend(curr_ttl() + 99, 99, 100).unwrap(), 99);
+        assert_eq!(extend(curr_ttl() + 90, 40, u32::MAX).unwrap(), 90);
+
+        // no-op when extend_to already satisfied
+        assert_eq!(extend(curr_ttl() - 100, 0, 1000).unwrap(), 0);
+        assert_eq!(extend(curr_ttl() - 1, 0, 1000).unwrap(), 0);
+        assert_eq!(extend(curr_ttl(), 0, 10000).unwrap(), 0);
+
+        // no-op when extension < min_extension
+        assert_eq!(extend(curr_ttl() + 50, 100, 200).unwrap(), 0);
+        assert_eq!(extend(curr_ttl(), 1, 10000).unwrap(), 0); // extension = 0
+        assert_eq!(extend(curr_ttl() + 99, 100, 10000).unwrap(), 0); // extension = min - 1
+
+        // extension capped by max_extension
+        assert_eq!(extend(curr_ttl() + 4999, 4999, 4999).unwrap(), 4999);
+        assert_eq!(extend(curr_ttl() + 3000, 199, 200).unwrap(), 200);
+        assert_eq!(extend(curr_ttl() + 7000, 0, 1).unwrap(), 1);
+
+        // let curr_live_until = get_live_until(host, &storage_key);
+        // let max_live_until = host.max_live_until_ledger().unwrap();
+
+        let max_ttl = host.max_live_until_ledger().unwrap() - ledger_seq;
+        // Extend exactly to max_live_until
+        let max_ext = max_ttl - curr_ttl();
+        assert_eq!(extend(max_ttl, 0, 100000).unwrap(), max_ext);
+
+        // For temporary storage, test extensions that should error due to
+        // exceeding the maximum TTL allowed by config.
+        if storage == "temporary" {
+            for _ in 0..=1 {
+                // 1 ledger past max extension
+                assert!(HostError::result_matches_err(
+                    extend(max_ttl + 1, 0, max_ttl + 100),
+                    (ScErrorType::Storage, ScErrorCode::InvalidAction)
+                ));
+                // TTL is past max, but below min extension, should still error.
+                assert!(HostError::result_matches_err(
+                    extend(max_ttl + 100, max_ttl, max_ttl + 10000),
+                    (ScErrorType::Storage, ScErrorCode::InvalidAction)
+                ));
+                // Extension is past max, but is below the max_extension argument,
+                // should still error.
+                assert!(HostError::result_matches_err(
+                    extend(max_ttl + 100, 0, 1),
+                    (ScErrorType::Storage, ScErrorCode::InvalidAction)
+                ));
+                // Bump ledger sequence such that there is an extension
+                // opportunity and ensure the errors persist.
+                host.with_mut_ledger_info(|li| {
+                    li.sequence_number += 1000;
+                })
+                .unwrap();
+            }
+        } else {
+            // For persistent/instance storage, extensions are clamped to not
+            // exceed max TTL allowed.
+
+            // Try extending past max, these should be no-ops.
+            assert_eq!(extend(max_ttl + 1, 0, max_ttl + 100).unwrap(), 0);
+            assert_eq!(extend(max_ttl + 1000, 0, u32::MAX).unwrap(), 0);
+            // No-op due to too high min extension in addition to being extended
+            // to max.
+            assert_eq!(
+                extend(max_ttl + 1000, max_ttl + 10000, u32::MAX).unwrap(),
+                0
+            );
+
+            // Bump ledger sequence to get some actual extensions.
+            host.with_mut_ledger_info(|li| {
+                li.sequence_number += 1000;
+            })
+            .unwrap();
+            // Bump by just 1 ledger (guarded with max_extension).
+            assert_eq!(extend(max_ttl + 1, 0, 1).unwrap(), 1);
+            // No bump due to min extension too high.
+            assert_eq!(extend(max_ttl + 100, max_ttl, max_ttl + 1000).unwrap(), 0);
+            // Bump without min/max restrictions to reach max TTL.
+            assert_eq!(extend(max_ttl + 1000, 0, max_ttl + 100).unwrap(), 999);
+        }
+    }
+
+    #[test]
+    fn test_extend_ttl_v2_persistent() {
+        let host = setup_host();
+        let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_P26);
+        test_extend_ttl_v2(&host, contract_id, "persistent");
+    }
+
+    #[test]
+    fn test_extend_ttl_v2_instance() {
+        let host = setup_host();
+        let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_P26);
+        test_extend_ttl_v2(&host, contract_id, "instance");
+    }
+
+    #[test]
+    fn test_extend_ttl_v2_temporary() {
+        let host = setup_host();
+        let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_P26);
+        test_extend_ttl_v2(&host, contract_id, "temporary");
+    }
+
+    #[test]
+    fn test_extend_data_ttl_v2_rejects_instance_storage() {
+        let host = setup_host();
+        let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_P26);
+        let key = Symbol::try_from_small_str("key_1").unwrap();
+        host.call(
+            contract_id,
+            storage_fn_name(&host, "put", "instance"),
+            test_vec![&host, key, 1234_u64].into(),
+        )
+        .unwrap();
+
+        let key_val = host
+            .to_host_val(&ScVal::Symbol(ScSymbol("key_1".try_into().unwrap())))
+            .unwrap();
+        assert!(HostError::result_matches_err(
+            host.extend_contract_data_ttl_v2(
+                key_val,
+                StorageType::Instance,
+                5000.into(),
+                1.into(),
+                500.into()
+            ),
+            (ScErrorType::Storage, ScErrorCode::InvalidAction)
+        ));
+    }
+
+    #[test]
+    fn test_extend_instance_and_code_ttl_v2_extension_scope() {
+        let host = setup_host();
+        let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_P26);
+        let contract_id_hash = host.contract_id_from_address(contract_id).unwrap();
+        let instance_key = host
+            .contract_instance_ledger_key(&contract_id_hash)
+            .unwrap();
+
+        let code_hash = match &host
+            .retrieve_contract_instance_from_storage(&instance_key)
+            .unwrap()
+            .executable
+        {
+            crate::xdr::ContractExecutable::Wasm(hash) => hash.clone(),
+            _ => panic!("Expected Wasm executable"),
+        };
+        let code_key = host.contract_code_ledger_key(&code_hash).unwrap();
+
+        let get_ttls = || {
+            (
+                get_live_until(&host, &instance_key),
+                get_live_until(&host, &code_key),
+            )
+        };
+
+        let extend = |scope: ContractTTLExtension, extend_to: u32| {
+            let (inst_before, code_before) = get_ttls();
+            host.extend_contract_instance_and_code_ttl_v2(
+                contract_id,
+                scope,
+                extend_to.into(),
+                1.into(),
+                500.into(),
+            )
+            .unwrap();
+            let (inst_after, code_after) = get_ttls();
+            (inst_after - inst_before, code_after - code_before)
+        };
+
+        assert_eq!(
+            extend(ContractTTLExtension::InstanceAndCode, 8000),
+            (500, 500)
+        );
+        assert_eq!(extend(ContractTTLExtension::Instance, 9000), (500, 0));
+        assert_eq!(extend(ContractTTLExtension::Code, 10000), (0, 500));
+    }
+}

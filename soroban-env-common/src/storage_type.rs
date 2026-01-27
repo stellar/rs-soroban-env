@@ -32,3 +32,15 @@ impl TryFrom<StorageType> for ContractDataDurability {
 }
 
 declare_wasmi_marshal_for_enum!(StorageType);
+
+/// This enum is used as an argument to `extend_contract_instance_and_code_ttl_v2`
+/// to specify which entries should have their TTL extended.
+#[repr(u64)]
+#[derive(Debug, FromPrimitive, PartialEq, Eq, Clone, Copy)]
+pub enum ContractTTLExtension {
+    InstanceAndCode = 0,
+    Instance = 1,
+    Code = 2,
+}
+
+declare_wasmi_marshal_for_enum!(ContractTTLExtension);
