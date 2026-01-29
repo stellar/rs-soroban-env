@@ -98,7 +98,7 @@ features = ["arbitrary",
 [features]
 testutils = ["soroban-env-common/testutils", "recording_mode"]
 backtrace = ["dep:backtrace"]
-next = ["soroban-env-common/next", "stellar-xdr/next"]
+next = ["soroban-env-common/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_mode = []
 bench = ["testutils"]

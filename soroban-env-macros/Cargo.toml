@@ -22,7 +22,7 @@ serde = { version = "1.0.192", features = ["derive"] }
 serde_json = "1.0.108"
 
 [features]
-next = ["stellar-xdr/next"]
+next = []
 
 [package.metadata.docs.rs]
 all-features = true
