@@ -1,8 +1,8 @@
 use crate::{
     crypto::bn254::{BN254_G1_SERIALIZED_SIZE, BN254_G2_SERIALIZED_SIZE},
     xdr::{ScErrorCode, ScErrorType},
-    BytesObject, Compare, Env, EnvBase, ErrorHandler, Host, HostError, U256Val, U32Val,
-    {ConversionError, TryFromVal, U256},
+    BytesObject, Compare, Env, EnvBase, ErrorHandler, Host, HostError, U256Val, U32Val, U64Val,
+    Val, VecObject, {ConversionError, TryFromVal, U256},
 };
 use ark_bn254::{Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ec::{AffineRepr, CurveGroup};
@@ -1137,8 +1137,6 @@ fn sample_fr_vec(host: &Host, n: usize, rng: &mut StdRng) -> Result<VecObject, H
         .collect::<Result<_, _>>()?;
     host.vec_new_from_slice(&vals)
 }
-
-use crate::{U64Val, Val, VecObject};
 
 #[test]
 fn test_bn254_g1_msm() -> Result<(), HostError> {
