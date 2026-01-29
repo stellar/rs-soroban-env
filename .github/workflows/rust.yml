@@ -59,6 +59,7 @@ jobs:
     - uses: stellar/actions/rust-check-git-rev-deps@main
 
   semver-checks:    
+    if: "!contains('skip-semver-checks')"
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
