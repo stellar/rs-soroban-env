@@ -181,11 +181,21 @@ impl Host {
     pub(crate) fn affine_deserialize<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
         &self,
         bo: BytesObject,
+        on_curve_check: bool,
         ct_curve: ContractCostType,
         subgroup_check: bool,
         ct_subgroup: ContractCostType,
         tag: &str,
     ) -> Result<Affine<P>, HostError> {
+        if !on_curve_check && subgroup_check {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InternalError,
+                "bls12-381 affine deserialization: subgroup check requested without on-curve check",
+                &[],
+            ));
+        }
+
         let pt: Affine<P> = self.visit_obj(bo, |bytes: &ScBytes| {
             self.validate_point_encoding::<EXPECTED_SIZE>(&bytes, tag)?;
             // `CanonicalDeserialize` of `Affine<P>` calls into
@@ -212,7 +222,7 @@ impl Host {
             // makes sure any value >= prime modulus results in an error.
             self.deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(bytes.as_slice(), tag)
         })?;
-        if !self.check_point_is_on_curve(&pt, &ct_curve)? {
+        if on_curve_check && !self.check_point_is_on_curve(&pt, &ct_curve)? {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
@@ -234,10 +244,12 @@ impl Host {
     pub(crate) fn g1_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
+        on_curve_check: bool,
         subgroup_check: bool,
     ) -> Result<G1Affine, HostError> {
         self.affine_deserialize::<G1_SERIALIZED_SIZE, G1Config>(
             bo,
+            on_curve_check,
             ContractCostType::Bls12381G1CheckPointOnCurve,
             subgroup_check,
             ContractCostType::Bls12381G1CheckPointInSubgroup,
@@ -248,10 +260,12 @@ impl Host {
     pub(crate) fn g2_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
+        on_curve_check: bool,
         subgroup_check: bool,
     ) -> Result<G2Affine, HostError> {
         self.affine_deserialize::<G2_SERIALIZED_SIZE, G2Config>(
             bo,
+            on_curve_check,
             ContractCostType::Bls12381G2CheckPointOnCurve,
             subgroup_check,
             ContractCostType::Bls12381G2CheckPointInSubgroup,
@@ -433,6 +447,7 @@ impl Host {
     pub(crate) fn affine_vec_from_vecobj<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
         &self,
         vp: VecObject,
+        on_curve_check: bool,
         ct_curve: ContractCostType,
         subgroup_check: bool,
         ct_subgroup: ContractCostType,
@@ -448,6 +463,7 @@ impl Host {
             for p in vp.iter() {
                 let pp = self.affine_deserialize::<EXPECTED_SIZE, P>(
                     BytesObject::try_from_val(self, p)?,
+                    on_curve_check,
                     ct_curve,
                     subgroup_check,
                     ct_subgroup,
@@ -466,6 +482,7 @@ impl Host {
     ) -> Result<Vec<G1Affine>, HostError> {
         self.affine_vec_from_vecobj::<G1_SERIALIZED_SIZE, G1Config>(
             vp,
+            true,
             ContractCostType::Bls12381G1CheckPointOnCurve,
             true,
             ContractCostType::Bls12381G1CheckPointInSubgroup,
@@ -479,6 +496,7 @@ impl Host {
     ) -> Result<Vec<G2Affine>, HostError> {
         self.affine_vec_from_vecobj::<G2_SERIALIZED_SIZE, G2Config>(
             vp,
+            true,
             ContractCostType::Bls12381G2CheckPointOnCurve,
             true,
             ContractCostType::Bls12381G2CheckPointInSubgroup,

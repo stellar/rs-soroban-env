@@ -202,6 +202,7 @@ impl Host {
     pub(crate) fn bn254_g1_affine_deserialize(
         &self,
         bo: BytesObject,
+        on_curve_check: bool,
     ) -> Result<G1Affine, HostError> {
         self.visit_obj(bo, |bytes: &ScBytes| {
             if self
@@ -230,7 +231,12 @@ impl Host {
                 .bn254_field_element_deserialize::<BN254_FP_SERIALIZED_SIZE, Fp>(&y, "bn254 Fp")?;
             let pt = G1Affine::new_unchecked(fp_x, fp_y);
             // check point is on curve
-            if !self.check_point_is_on_curve(&pt, &ContractCostType::Bn254G1CheckPointOnCurve)? {
+            if on_curve_check
+                && !self.bn254_check_point_is_on_curve(
+                    &pt,
+                    &ContractCostType::Bn254G1CheckPointOnCurve,
+                )?
+            {
                 return Err(self.bn254_err_invalid_input("bn254 G1: point not on curve"));
             }
             // G1 point does not require subgroup check, if it is on the curve
@@ -399,7 +405,8 @@ impl Host {
         let mut points: Vec<G1Affine> = Vec::with_capacity(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self.bn254_g1_affine_deserialize(BytesObject::try_from_val(self, p)?)?;
+                let pp =
+                    self.bn254_g1_affine_deserialize(BytesObject::try_from_val(self, p)?, true)?;
                 points.push(pp);
             }
             Ok(())

@@ -130,7 +130,7 @@ fn g1_zero(host: &Host) -> Result<BytesObject, HostError> {
 }
 
 fn neg_g1(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g1 = host.g1_affine_deserialize_from_bytesobj(bo, true)?;
+    let g1 = host.g1_affine_deserialize_from_bytesobj(bo, true, true)?;
     host.g1_affine_serialize_uncompressed(&-g1)
 }
 
@@ -209,7 +209,7 @@ fn sample_g2_out_of_range(host: &Host, rng: &mut StdRng) -> Result<BytesObject, 
 }
 
 fn neg_g2(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g2 = host.g2_affine_deserialize_from_bytesobj(bo, true)?;
+    let g2 = host.g2_affine_deserialize_from_bytesobj(bo, true, true)?;
     host.g2_affine_serialize_uncompressed(&-g2)
 }
 
@@ -1633,7 +1633,7 @@ fn test_serialization_roundtrip() -> Result<(), HostError> {
     {
         let g1_roundtrip_check = |g1: &G1Affine, subgroup_check: bool| -> Result<bool, HostError> {
             let bo = host.g1_affine_serialize_uncompressed(&g1)?;
-            let g1_back = host.g1_affine_deserialize_from_bytesobj(bo, subgroup_check)?;
+            let g1_back = host.g1_affine_deserialize_from_bytesobj(bo, true, subgroup_check)?;
             Ok(g1.eq(&g1_back))
         };
         assert!(g1_roundtrip_check(&G1Affine::zero(), true)?);
@@ -1671,7 +1671,7 @@ fn test_serialization_roundtrip() -> Result<(), HostError> {
     {
         let g2_roundtrip_check = |g2: &G2Affine, subgroup_check: bool| -> Result<bool, HostError> {
             let bo = host.g2_affine_serialize_uncompressed(&g2)?;
-            let g2_back = host.g2_affine_deserialize_from_bytesobj(bo, subgroup_check)?;
+            let g2_back = host.g2_affine_deserialize_from_bytesobj(bo, true, subgroup_check)?;
             Ok(g2.eq(&g2_back))
         };
         assert!(g2_roundtrip_check(&G2Affine::zero(), true)?);
@@ -1746,5 +1746,219 @@ fn test_serialization_roundtrip() -> Result<(), HostError> {
             assert!(fr_roundtrip_check(Fr::rand(&mut rng))?)
         }
     }
+    Ok(())
+}
+
+#[test]
+fn g1_is_on_curve() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    // invalid encoding tests
+    {
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_is_on_curve(invalid_g1(
+                &host,
+                InvalidPointTypes::TooManyBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_is_on_curve(invalid_g1(
+                &host,
+                InvalidPointTypes::TooFewBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_is_on_curve(invalid_g1(
+                &host,
+                InvalidPointTypes::CompressionFlagSet,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_is_on_curve(invalid_g1(
+                &host,
+                InvalidPointTypes::InfinityFlagSetBitsNotAllZero,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_is_on_curve(invalid_g1(
+                &host,
+                InvalidPointTypes::SortFlagSet,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g1_is_on_curve(invalid_g1(
+                &host,
+                InvalidPointTypes::OutOfRange,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // valid point on curve
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_g1_is_on_curve(sample_g1(&host, &mut rng)?)?
+                .to_val()
+                .is_true())
+        }
+    }
+
+    // infinity point is on curve
+    {
+        assert!(host
+            .bls12_381_g1_is_on_curve(g1_zero(&host)?)?
+            .to_val()
+            .is_true())
+    }
+
+    // point not on curve
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_g1_is_on_curve(invalid_g1(
+                    &host,
+                    InvalidPointTypes::PointNotOnCurve,
+                    &mut rng
+                )?)?
+                .to_val()
+                .is_false())
+        }
+    }
+
+    // point not in subgroup but on curve should return true
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_g1_is_on_curve(invalid_g1(
+                    &host,
+                    InvalidPointTypes::PointNotInSubgroup,
+                    &mut rng
+                )?)?
+                .to_val()
+                .is_true())
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn g2_is_on_curve() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0xff; 32]);
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    // invalid encoding tests
+    {
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_is_on_curve(invalid_g2(
+                &host,
+                InvalidPointTypes::TooManyBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_is_on_curve(invalid_g2(
+                &host,
+                InvalidPointTypes::TooFewBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_is_on_curve(invalid_g2(
+                &host,
+                InvalidPointTypes::CompressionFlagSet,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_is_on_curve(invalid_g2(
+                &host,
+                InvalidPointTypes::InfinityFlagSetBitsNotAllZero,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_is_on_curve(invalid_g2(
+                &host,
+                InvalidPointTypes::SortFlagSet,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bls12_381_g2_is_on_curve(invalid_g2(
+                &host,
+                InvalidPointTypes::OutOfRange,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // valid point on curve
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_g2_is_on_curve(sample_g2(&host, &mut rng)?)?
+                .to_val()
+                .is_true())
+        }
+    }
+
+    // infinity point is on curve
+    {
+        assert!(host
+            .bls12_381_g2_is_on_curve(g2_zero(&host)?)?
+            .to_val()
+            .is_true())
+    }
+
+    // point not on curve
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_g2_is_on_curve(invalid_g2(
+                    &host,
+                    InvalidPointTypes::PointNotOnCurve,
+                    &mut rng
+                )?)?
+                .to_val()
+                .is_false())
+        }
+    }
+
+    // point not in subgroup but on curve should return true
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bls12_381_g2_is_on_curve(invalid_g2(
+                    &host,
+                    InvalidPointTypes::PointNotInSubgroup,
+                    &mut rng
+                )?)?
+                .to_val()
+                .is_true())
+        }
+    }
+
     Ok(())
 }
