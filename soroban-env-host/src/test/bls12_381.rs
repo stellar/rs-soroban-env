@@ -2,6 +2,7 @@ use crate::{
     crypto::bls12_381::{
         FP2_SERIALIZED_SIZE, FP_SERIALIZED_SIZE, G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE,
     },
+    crypto::PointValidationMode,
     xdr::{ScErrorCode, ScErrorType},
     BytesObject, Env, EnvBase, Host, HostError, U256Val, U32Val, Val, VecObject,
 };
@@ -130,7 +131,8 @@ fn g1_zero(host: &Host) -> Result<BytesObject, HostError> {
 }
 
 fn neg_g1(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g1 = host.g1_affine_deserialize_from_bytesobj(bo, true, true)?;
+    let g1 = host
+        .g1_affine_deserialize_from_bytesobj(bo, PointValidationMode::CheckOnCurveAndInSubgroup)?;
     host.g1_affine_serialize_uncompressed(&-g1)
 }
 
@@ -209,7 +211,8 @@ fn sample_g2_out_of_range(host: &Host, rng: &mut StdRng) -> Result<BytesObject, 
 }
 
 fn neg_g2(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g2 = host.g2_affine_deserialize_from_bytesobj(bo, true, true)?;
+    let g2 = host
+        .g2_affine_deserialize_from_bytesobj(bo, PointValidationMode::CheckOnCurveAndInSubgroup)?;
     host.g2_affine_serialize_uncompressed(&-g2)
 }
 
@@ -1631,26 +1634,36 @@ fn test_serialization_roundtrip() -> Result<(), HostError> {
     host.enable_debug()?;
     // g1
     {
-        let g1_roundtrip_check = |g1: &G1Affine, subgroup_check: bool| -> Result<bool, HostError> {
-            let bo = host.g1_affine_serialize_uncompressed(&g1)?;
-            let g1_back = host.g1_affine_deserialize_from_bytesobj(bo, true, subgroup_check)?;
-            Ok(g1.eq(&g1_back))
-        };
-        assert!(g1_roundtrip_check(&G1Affine::zero(), true)?);
-        assert!(g1_roundtrip_check(&G1Affine::generator(), true)?);
+        let g1_roundtrip_check =
+            |g1: &G1Affine, validation_mode: PointValidationMode| -> Result<bool, HostError> {
+                let bo = host.g1_affine_serialize_uncompressed(&g1)?;
+                let g1_back = host.g1_affine_deserialize_from_bytesobj(bo, validation_mode)?;
+                Ok(g1.eq(&g1_back))
+            };
+        assert!(g1_roundtrip_check(
+            &G1Affine::zero(),
+            PointValidationMode::CheckOnCurveAndInSubgroup
+        )?);
+        assert!(g1_roundtrip_check(
+            &G1Affine::generator(),
+            PointValidationMode::CheckOnCurveAndInSubgroup
+        )?);
         for _ in 0..20 {
             // on curve and in subgroup
             let g1 = G1Affine::rand(&mut rng);
-            assert!(g1_roundtrip_check(&g1, true)?)
+            assert!(g1_roundtrip_check(
+                &g1,
+                PointValidationMode::CheckOnCurveAndInSubgroup
+            )?)
         }
         for i in 0..10 {
             // on curve and not in subgroup
             let g1 = G1Affine::get_point_from_x_unchecked(Fq::rand(&mut rng), (i % 2) != 0)
                 .unwrap_or(G1Affine::zero());
-            assert!(g1_roundtrip_check(&g1, false)?);
+            assert!(g1_roundtrip_check(&g1, PointValidationMode::CheckOnCurve)?);
             if !g1.is_in_correct_subgroup_assuming_on_curve() {
                 assert!(HostError::result_matches_err(
-                    g1_roundtrip_check(&g1, true),
+                    g1_roundtrip_check(&g1, PointValidationMode::CheckOnCurveAndInSubgroup),
                     (ScErrorType::Crypto, ScErrorCode::InvalidInput)
                 ));
             }
@@ -1662,33 +1675,43 @@ fn test_serialization_roundtrip() -> Result<(), HostError> {
                 continue;
             }
             assert!(HostError::result_matches_err(
-                g1_roundtrip_check(&g1, false),
+                g1_roundtrip_check(&g1, PointValidationMode::CheckOnCurve),
                 (ScErrorType::Crypto, ScErrorCode::InvalidInput)
             ));
         }
     }
     // g2
     {
-        let g2_roundtrip_check = |g2: &G2Affine, subgroup_check: bool| -> Result<bool, HostError> {
-            let bo = host.g2_affine_serialize_uncompressed(&g2)?;
-            let g2_back = host.g2_affine_deserialize_from_bytesobj(bo, true, subgroup_check)?;
-            Ok(g2.eq(&g2_back))
-        };
-        assert!(g2_roundtrip_check(&G2Affine::zero(), true)?);
-        assert!(g2_roundtrip_check(&G2Affine::generator(), true)?);
+        let g2_roundtrip_check =
+            |g2: &G2Affine, validation_mode: PointValidationMode| -> Result<bool, HostError> {
+                let bo = host.g2_affine_serialize_uncompressed(&g2)?;
+                let g2_back = host.g2_affine_deserialize_from_bytesobj(bo, validation_mode)?;
+                Ok(g2.eq(&g2_back))
+            };
+        assert!(g2_roundtrip_check(
+            &G2Affine::zero(),
+            PointValidationMode::CheckOnCurveAndInSubgroup
+        )?);
+        assert!(g2_roundtrip_check(
+            &G2Affine::generator(),
+            PointValidationMode::CheckOnCurveAndInSubgroup
+        )?);
         for _ in 0..20 {
             // on curve and in subgroup
             let g2 = G2Affine::rand(&mut rng);
-            assert!(g2_roundtrip_check(&g2, true)?)
+            assert!(g2_roundtrip_check(
+                &g2,
+                PointValidationMode::CheckOnCurveAndInSubgroup
+            )?)
         }
         for i in 0..10 {
             // on curve and not in subgroup
             let g2 = G2Affine::get_point_from_x_unchecked(Fq2::rand(&mut rng), (i % 2) != 0)
                 .unwrap_or(G2Affine::zero());
-            assert!(g2_roundtrip_check(&g2, false)?);
+            assert!(g2_roundtrip_check(&g2, PointValidationMode::CheckOnCurve)?);
             if !g2.is_in_correct_subgroup_assuming_on_curve() {
                 assert!(HostError::result_matches_err(
-                    g2_roundtrip_check(&g2, true),
+                    g2_roundtrip_check(&g2, PointValidationMode::CheckOnCurveAndInSubgroup),
                     (ScErrorType::Crypto, ScErrorCode::InvalidInput)
                 ));
             }
@@ -1700,7 +1723,7 @@ fn test_serialization_roundtrip() -> Result<(), HostError> {
                 continue;
             }
             assert!(HostError::result_matches_err(
-                g2_roundtrip_check(&g2, false),
+                g2_roundtrip_check(&g2, PointValidationMode::CheckOnCurve),
                 (ScErrorType::Crypto, ScErrorCode::InvalidInput)
             ));
         }

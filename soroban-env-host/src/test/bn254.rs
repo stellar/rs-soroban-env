@@ -1,5 +1,6 @@
 use crate::{
     crypto::bn254::{BN254_G1_SERIALIZED_SIZE, BN254_G2_SERIALIZED_SIZE},
+    crypto::PointValidationMode,
     xdr::{ScErrorCode, ScErrorType},
     BytesObject, Compare, Env, EnvBase, ErrorHandler, Host, HostError, U256Val, U32Val, U64Val,
     Val, VecObject, {ConversionError, TryFromVal, U256},
@@ -103,7 +104,7 @@ fn g1_zero(host: &Host) -> Result<BytesObject, HostError> {
 }
 
 fn minus_g1(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g1 = host.bn254_g1_affine_deserialize(bo, true)?;
+    let g1 = host.bn254_g1_affine_deserialize(bo, PointValidationMode::CheckOnCurve)?;
     host.bn254_g1_affine_serialize_uncompressed(&-g1)
 }
 
@@ -584,7 +585,8 @@ fn test_serialization_roundtrip() -> Result<(), HostError> {
     {
         let g1_roundtrip_check = |g1: &G1Affine| -> Result<bool, HostError> {
             let bo = host.bn254_g1_affine_serialize_uncompressed(&g1)?;
-            let g1_back = host.bn254_g1_affine_deserialize(bo, true)?;
+            let g1_back =
+                host.bn254_g1_affine_deserialize(bo, PointValidationMode::CheckOnCurve)?;
             Ok(g1.eq(&g1_back))
         };
         assert!(g1_roundtrip_check(&G1Affine::zero())?);
@@ -841,7 +843,8 @@ fn test_bn254_g1_deserialize_rejects_y_sign_bit() -> Result<(), HostError> {
 
         // Try to deserialize - should fail
         let g1_bytes_obj_modified = host.test_bin_obj(&g1_bytes)?;
-        let result = host.bn254_g1_affine_deserialize(g1_bytes_obj_modified, true);
+        let result = host
+            .bn254_g1_affine_deserialize(g1_bytes_obj_modified, PointValidationMode::CheckOnCurve);
 
         assert!(HostError::result_matches_err(
             result,
@@ -873,7 +876,8 @@ fn test_bn254_g1_deserialize_rejects_infinity_bit() -> Result<(), HostError> {
 
     // Try to deserialize - should fail
     let g1_bytes_obj_modified = host.test_bin_obj(&g1_bytes)?;
-    let result = host.bn254_g1_affine_deserialize(g1_bytes_obj_modified, true);
+    let result =
+        host.bn254_g1_affine_deserialize(g1_bytes_obj_modified, PointValidationMode::CheckOnCurve);
 
     assert!(HostError::result_matches_err(
         result,
