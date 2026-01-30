@@ -8,7 +8,7 @@ use crate::{
     impl_lin_cost_runner_for_bls_deref_sample,
     xdr::ContractCostType::{
         self, Bn254DecodeFp, Bn254EncodeFp, Bn254FrAddSub, Bn254FrFromU256, Bn254FrInv, Bn254FrMul,
-        Bn254FrPow, Bn254FrToU256, Bn254G1Add, Bn254G1CheckPointOnCurve, Bn254G1Mul,
+        Bn254FrPow, Bn254FrToU256, Bn254G1Add, Bn254G1CheckPointOnCurve, Bn254G1Msm, Bn254G1Mul,
         Bn254G1ProjectiveToAffine, Bn254G2CheckPointInSubgroup, Bn254G2CheckPointOnCurve,
         Bn254Pairing,
     },
@@ -24,6 +24,7 @@ pub struct Bn254G2CheckPointInSubgroupRun;
 pub struct Bn254G1ProjectiveToAffineRun;
 pub struct Bn254G1AddRun;
 pub struct Bn254G1MulRun;
+pub struct Bn254G1MsmRun;
 pub struct Bn254PairingRun;
 pub struct Bn254FrFromU256Run;
 pub struct Bn254FrToU256Run;
@@ -39,6 +40,13 @@ pub struct Bn254G1ProjectiveToAffineSample(pub G1Projective);
 pub struct Bn254G1AddSample(pub G1Affine, pub G1Affine);
 #[derive(Clone)]
 pub struct Bn254G1MulSample(pub G1Affine, pub Fr);
+#[derive(Clone)]
+pub struct Bn254G1MsmSample(
+    pub Vec<G1Affine>,
+    pub Vec<Fr>,
+    pub ContractCostType,
+    pub String,
+);
 #[derive(Clone)]
 pub struct Bn254PairingSample(pub Vec<G1Affine>, pub Vec<G2Affine>);
 #[derive(Clone)]
@@ -95,6 +103,18 @@ impl_const_cost_runner_for_bls_consume_sample!(
     Bn254FrFromU256Sample,
     Fr,
     sv
+);
+
+impl_lin_cost_runner_for_bls_deref_sample!(
+    Bn254G1MsmRun,
+    Bn254G1Msm,
+    msm_internal,
+    Bn254G1MsmSample,
+    G1Projective,
+    vp,
+    vs,
+    ty,
+    tag
 );
 
 type InternalPairingOutput = PairingOutput<Bn254>;

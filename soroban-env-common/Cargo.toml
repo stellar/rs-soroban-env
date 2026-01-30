@@ -15,7 +15,7 @@ crate-git-revision = "0.0.6"
 
 [dependencies]
 soroban-env-macros = { workspace = true }
-stellar-xdr = { workspace = true, default-features = false, features = [ "curr" ] }
+stellar-xdr = { workspace = true, default-features = false }
 wasmi = { workspace = true, optional = true }
 wasmparser = { workspace = true, optional = true}
 serde = { version = "1.0.192", features = ["derive"], optional = true }
@@ -37,7 +37,7 @@ std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["dep:serde", "stellar-xdr/serde"]
 wasmi = ["dep:wasmi", "dep:wasmparser"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
-next = ["stellar-xdr/next", "soroban-env-macros/next"]
+next = ["soroban-env-macros/next"]
 tracy = ["dep:tracy-client"]
 shallow-val-hash = []
 

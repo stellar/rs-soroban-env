@@ -530,6 +530,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bn254FrMul                         0              None           0              0              332                 0                   0                   0                   
         Bn254FrPow                         0              Some(0)        0              0              755                 68930               0                   0                   
         Bn254FrInv                         0              None           0              0              33151               0                   0                   0                   
+        Bn254G1Msm                         0              Some(0)        0              0              1185193             41568084            73061               229779              
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 70
