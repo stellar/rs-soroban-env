@@ -444,7 +444,6 @@ impl Host {
     pub(crate) fn affine_vec_from_vecobj<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
         &self,
         vp: VecObject,
-        validation_mode: PointValidationMode,
         ct_curve: ContractCostType,
         ct_subgroup: ContractCostType,
         tag: &str,
@@ -459,7 +458,7 @@ impl Host {
             for p in vp.iter() {
                 let pp = self.affine_deserialize::<EXPECTED_SIZE, P>(
                     BytesObject::try_from_val(self, p)?,
-                    validation_mode,
+                    PointValidationMode::CheckOnCurveAndInSubgroup,
                     ct_curve,
                     ct_subgroup,
                     tag,
@@ -477,7 +476,6 @@ impl Host {
     ) -> Result<Vec<G1Affine>, HostError> {
         self.affine_vec_from_vecobj::<G1_SERIALIZED_SIZE, G1Config>(
             vp,
-            PointValidationMode::CheckOnCurveAndInSubgroup,
             ContractCostType::Bls12381G1CheckPointOnCurve,
             ContractCostType::Bls12381G1CheckPointInSubgroup,
             "G1",
@@ -490,7 +488,6 @@ impl Host {
     ) -> Result<Vec<G2Affine>, HostError> {
         self.affine_vec_from_vecobj::<G2_SERIALIZED_SIZE, G2Config>(
             vp,
-            PointValidationMode::CheckOnCurveAndInSubgroup,
             ContractCostType::Bls12381G2CheckPointOnCurve,
             ContractCostType::Bls12381G2CheckPointInSubgroup,
             "G2",
