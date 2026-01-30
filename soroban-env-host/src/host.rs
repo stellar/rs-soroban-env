@@ -14,9 +14,9 @@ use crate::{
     vm::ModuleCache,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
-        ContractId, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2,
-        Duration, Hash, LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType,
-        ScString, ScSymbol, ScVal, TimePoint, Uint256,
+        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration,
+        LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
+        ScSymbol, ScVal, TimePoint,
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
     MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal,
@@ -128,7 +128,8 @@ struct HostImpl {
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
     // production hosts)
     #[cfg(any(test, feature = "testutils"))]
-    contracts: RefCell<std::collections::BTreeMap<ContractId, Rc<dyn ContractFunctionSet>>>,
+    contracts:
+        RefCell<std::collections::BTreeMap<crate::xdr::ContractId, Rc<dyn ContractFunctionSet>>>,
     // Store a copy of the `AuthorizationManager` for the last host function
     // invocation. In order to emulate the production behavior in tests, we reset
     // authorization manager after every invocation (as it's not meant to be
@@ -278,7 +279,7 @@ impl_checked_borrow_helpers!(
 );
 
 #[cfg(any(test, feature = "testutils"))]
-impl_checked_borrow_helpers!(contracts, std::collections::BTreeMap<ContractId, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
+impl_checked_borrow_helpers!(contracts, std::collections::BTreeMap<crate::xdr::ContractId, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
 
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
@@ -3479,34 +3480,35 @@ impl VmCallerEnv for Host {
         address: AddressObject,
     ) -> Result<StringObject, Self::Error> {
         let strkey = self.visit_obj(address, |addr: &ScAddress| {
-            // Approximate the strkey encoding cost with two vector allocations:
-            // one for the payload size (32-byte key/hash + 3 bytes for
-            // version/checksum) and  another one for the base32 encoding of
-            // the payload.
-            const PAYLOAD_LEN: u64 = 32 + 3;
-            Vec::<u8>::charge_bulk_init_cpy(PAYLOAD_LEN + (PAYLOAD_LEN * 8).div_ceil(5), self)?;
-            let strkey = match addr {
-                ScAddress::Account(acc_id) => {
-                    let AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(ed25519))) = acc_id;
-                    let strkey = stellar_strkey::Strkey::PublicKeyEd25519(
-                        stellar_strkey::ed25519::PublicKey(ed25519.metered_clone(self)?),
-                    );
-                    strkey
-                }
-                ScAddress::Contract(ContractId(Hash(h))) => stellar_strkey::Strkey::Contract(
-                    stellar_strkey::Contract(h.metered_clone(self)?),
-                ),
-                _ => {
-                    return Err(self.err(
-                        ScErrorType::Object,
-                        ScErrorCode::InternalError,
-                        "Unexpected ScAddress type",
-                        &[address.into()],
-                    ))
-                }
-            };
-            Ok(strkey.to_string())
+            self.non_muxed_sc_address_to_strkey(addr)
         })?;
+        self.add_host_object(ScString(strkey.try_into()?))
+    }
+
+    fn muxed_address_to_strkey(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        address: Val,
+    ) -> Result<StringObject, Self::Error> {
+        let address_obj = Object::try_from(address).map_err(|_| {
+            self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "address is not an object",
+                &[address],
+            )
+        })?;
+        let strkey =
+            self.visit_obj_untyped(address_obj, |addr_obj: &HostObject| match addr_obj {
+                HostObject::Address(addr) => self.non_muxed_sc_address_to_strkey(addr),
+                HostObject::MuxedAddress(muxed_addr) => self.muxed_sc_address_to_strkey(muxed_addr),
+                _ => Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::UnexpectedType,
+                    "value is not an AddressObject or MuxedAddressObject",
+                    &[address],
+                )),
+            })?;
         self.add_host_object(ScString(strkey.try_into()?))
     }
 
@@ -3515,70 +3517,22 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         strkey_obj: Val,
     ) -> Result<AddressObject, Self::Error> {
-        let strkey_obj = Object::try_from(strkey_obj).map_err(|_| {
-            self.err(
-                ScErrorType::Value,
-                ScErrorCode::UnexpectedType,
-                "strkey is not an object",
-                &[strkey_obj],
-            )
-        })?;
-        let sc_addr = self.visit_obj_untyped(strkey_obj, |key_obj: &HostObject| {
-            let key = match key_obj {
-                HostObject::Bytes(b) => b.as_slice(),
-                HostObject::String(s) => s.as_slice(),
-                _ => {
-                    return Err(self.err(
-                        ScErrorType::Value,
-                        ScErrorCode::UnexpectedType,
-                        "strkey is not a string or bytes object",
-                        &[strkey_obj.to_val()],
-                    ));
-                }
-            };
-            const PAYLOAD_LEN: u64 = 32 + 3;
-            let expected_key_len = (PAYLOAD_LEN * 8).div_ceil(5);
-            if expected_key_len != key.len() as u64 {
-                return Err(self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InvalidInput,
-                    "unexpected strkey length",
-                    &[strkey_obj.to_val()],
-                ));
-            }
-            // Charge for the key copy to string.
-            Vec::<u8>::charge_bulk_init_cpy(key.len() as u64, self)?;
-            let key_str = String::from_utf8_lossy(key);
-            // Approximate the decoding cost as two vector allocations for the
-            // expected payload length (the strkey library does one extra copy).
-            Vec::<u8>::charge_bulk_init_cpy(PAYLOAD_LEN + PAYLOAD_LEN, self)?;
-            let strkey = stellar_strkey::Strkey::from_string(&key_str).map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InvalidInput,
-                    "couldn't process the string as strkey",
-                    &[strkey_obj.to_val()],
-                )
-            })?;
-            match strkey {
-                stellar_strkey::Strkey::PublicKeyEd25519(pk) => Ok(ScAddress::Account(AccountId(
-                    PublicKey::PublicKeyTypeEd25519(Uint256(pk.0)),
-                ))),
-
-                stellar_strkey::Strkey::Contract(c) => {
-                    Ok(ScAddress::Contract(ContractId(Hash(c.0))))
-                }
-                _ => {
-                    return Err(self.err(
-                        ScErrorType::Value,
-                        ScErrorCode::InvalidInput,
-                        "incorrect strkey type",
-                        &[strkey_obj.to_val()],
-                    ));
-                }
-            }
-        })?;
+        let sc_addr = self.strkey_to_scaddress(strkey_obj, false)?;
         self.add_host_object(sc_addr)
+    }
+
+    fn strkey_to_muxed_address(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        strkey_obj: Val,
+    ) -> Result<Val, Self::Error> {
+        let sc_addr = self.strkey_to_scaddress(strkey_obj, true)?;
+        match &sc_addr {
+            ScAddress::MuxedAccount(_) => {
+                Ok(self.add_host_object(MuxedScAddress(sc_addr))?.to_val())
+            }
+            _ => Ok(self.add_host_object(sc_addr)?.to_val()),
+        }
     }
 
     fn get_address_from_muxed_address(
