@@ -20,7 +20,7 @@ use crate::{
     },
     err,
     host::{metered_clone::MeteredClone, Host},
-    xdr::Asset,
+    xdr::{Asset, ScErrorCode, ScErrorType},
     BytesObject, Compare, Env, EnvBase, ErrorHandler, HostError, TryFromVal, TryIntoVal,
 };
 
@@ -93,8 +93,9 @@ impl StellarAssetContract {
         let curr_contract_id = e.get_current_contract_id_internal()?;
         let expected_contract_id = e.get_asset_contract_id_hash(asset.metered_clone(e)?)?;
         if curr_contract_id != expected_contract_id {
-            return Err(e.error(
-                ContractError::InternalError.into(),
+            return Err(e.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
                 "bad id for asset contract",
                 &[],
             ));
