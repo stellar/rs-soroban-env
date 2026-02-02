@@ -271,4 +271,18 @@ impl<'a> TestStellarAssetContract<'a> {
             )?
             .try_into_val(self.host)
     }
+
+    pub(crate) fn trust(&self, addr: &TestSigner) -> Result<(), HostError> {
+        self.call_with_single_signer(addr, "trust", test_vec![self.host, addr.address(self.host)])
+    }
+
+    /// Call trust with an arbitrary address (no signer required for no-op cases like contracts)
+    pub(crate) fn trust_address(&self, addr: Address) -> Result<(), HostError> {
+        self.host.call(
+            self.address.clone().into(),
+            Symbol::try_from_val(self.host, &"trust")?,
+            test_vec![self.host, addr].into(),
+        )?;
+        Ok(())
+    }
 }

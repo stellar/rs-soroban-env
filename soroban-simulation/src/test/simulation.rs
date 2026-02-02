@@ -1301,7 +1301,7 @@ fn test_simulate_successful_sac_call() {
             },
         },]
     );
-    expect!["3443303"].assert_eq(
+    expect!["3447315"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()
@@ -1325,7 +1325,7 @@ fn test_simulate_successful_sac_call() {
             .write_bytes
             .to_string(),
     );
-    expect!["52979"].assert_eq(
+    expect!["52983"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()
@@ -1435,7 +1435,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
             issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
         }),
     });
-    expect!["5199245"].assert_eq(
+    expect!["5203257"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()
@@ -1443,7 +1443,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
             .instructions
             .to_string(),
     );
-    expect!["5548"].assert_eq(
+    expect!["5552"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()

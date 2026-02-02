@@ -22,6 +22,8 @@ pub(crate) enum ContractError {
     BalanceDeauthorizedError = 11,
     OverflowError = 12,
     TrustlineMissingError = 13,
+    InsufficientAccountReserve = 14,
+    TooManyAccountSubentries = 15,
 }
 
 impl From<ContractError> for Error {
