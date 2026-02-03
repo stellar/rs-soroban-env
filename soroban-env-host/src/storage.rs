@@ -564,7 +564,7 @@ impl Storage {
         })?;
 
         // Clamp persistent entries to max network TTL (temporary entries
-        // woudldn't get here).
+        // wouldn't get here).
         new_live_until = new_live_until.min(ttl_ext_info.max_live_until);
 
         if ttl_ext_info.current_ttl <= threshold {
