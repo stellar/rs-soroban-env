@@ -25,6 +25,14 @@ pub(crate) mod bn254;
 pub(crate) mod metered_scalar;
 pub(crate) mod poseidon;
 
+/// Specifies which validation checks to perform when deserializing elliptic curve points.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PointValidationMode {
+    NoCheck,
+    CheckOnCurve,
+    CheckOnCurveAndInSubgroup,
+}
+
 impl Host {
     // Ed25519 functions
     pub(crate) fn ed25519_signature_from_bytesobj_input(

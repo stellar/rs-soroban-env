@@ -13,6 +13,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use soroban_env_common::EnvBase;
 
 use crate::crypto::metered_scalar::MeteredScalar;
+use crate::crypto::PointValidationMode;
 use crate::{
     budget::AsBudget,
     host_object::HostVec,
@@ -202,7 +203,12 @@ impl Host {
     pub(crate) fn bn254_g1_affine_deserialize(
         &self,
         bo: BytesObject,
+        validation_mode: PointValidationMode,
     ) -> Result<G1Affine, HostError> {
+        // For BN254 G1, CheckOnCurveAndInSubgroup is treated the same as CheckOnCurve
+        // because if a point is on the curve, it's automatically in the subgroup for BN254 G1.
+        let check_on_curve = !matches!(validation_mode, PointValidationMode::NoCheck);
+
         self.visit_obj(bo, |bytes: &ScBytes| {
             if self
                 .bn254_validate_flags_and_check_infinity::<BN254_G1_SERIALIZED_SIZE>(bytes, "G1")?
@@ -230,7 +236,12 @@ impl Host {
                 .bn254_field_element_deserialize::<BN254_FP_SERIALIZED_SIZE, Fp>(&y, "bn254 Fp")?;
             let pt = G1Affine::new_unchecked(fp_x, fp_y);
             // check point is on curve
-            if !self.check_point_is_on_curve(&pt, &ContractCostType::Bn254G1CheckPointOnCurve)? {
+            if check_on_curve
+                && !self.bn254_check_point_is_on_curve(
+                    &pt,
+                    &ContractCostType::Bn254G1CheckPointOnCurve,
+                )?
+            {
                 return Err(self.bn254_err_invalid_input("bn254 G1: point not on curve"));
             }
             // G1 point does not require subgroup check, if it is on the curve
@@ -238,6 +249,8 @@ impl Host {
         })
     }
 
+    // This does not take PointValidationMode because we only support host functions
+    // for the pairing check, which always require full validation.
     pub(crate) fn bn254_g2_affine_deserialize(
         &self,
         bo: BytesObject,
@@ -399,7 +412,10 @@ impl Host {
         let mut points: Vec<G1Affine> = Vec::with_capacity(len as usize);
         let _ = self.visit_obj(vp, |vp: &HostVec| {
             for p in vp.iter() {
-                let pp = self.bn254_g1_affine_deserialize(BytesObject::try_from_val(self, p)?)?;
+                let pp = self.bn254_g1_affine_deserialize(
+                    BytesObject::try_from_val(self, p)?,
+                    PointValidationMode::CheckOnCurveAndInSubgroup,
+                )?;
                 points.push(pp);
             }
             Ok(())

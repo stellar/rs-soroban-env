@@ -1,5 +1,6 @@
 use crate::{
     crypto::bn254::{BN254_G1_SERIALIZED_SIZE, BN254_G2_SERIALIZED_SIZE},
+    crypto::PointValidationMode,
     xdr::{ScErrorCode, ScErrorType},
     BytesObject, Compare, Env, EnvBase, ErrorHandler, Host, HostError, U256Val, U32Val, U64Val,
     Val, VecObject, {ConversionError, TryFromVal, U256},
@@ -103,7 +104,7 @@ fn g1_zero(host: &Host) -> Result<BytesObject, HostError> {
 }
 
 fn minus_g1(bo: BytesObject, host: &Host) -> Result<BytesObject, HostError> {
-    let g1 = host.bn254_g1_affine_deserialize(bo)?;
+    let g1 = host.bn254_g1_affine_deserialize(bo, PointValidationMode::CheckOnCurve)?;
     host.bn254_g1_affine_serialize_uncompressed(&-g1)
 }
 
@@ -584,7 +585,8 @@ fn test_serialization_roundtrip() -> Result<(), HostError> {
     {
         let g1_roundtrip_check = |g1: &G1Affine| -> Result<bool, HostError> {
             let bo = host.bn254_g1_affine_serialize_uncompressed(&g1)?;
-            let g1_back = host.bn254_g1_affine_deserialize(bo)?;
+            let g1_back =
+                host.bn254_g1_affine_deserialize(bo, PointValidationMode::CheckOnCurve)?;
             Ok(g1.eq(&g1_back))
         };
         assert!(g1_roundtrip_check(&G1Affine::zero())?);
@@ -841,7 +843,8 @@ fn test_bn254_g1_deserialize_rejects_y_sign_bit() -> Result<(), HostError> {
 
         // Try to deserialize - should fail
         let g1_bytes_obj_modified = host.test_bin_obj(&g1_bytes)?;
-        let result = host.bn254_g1_affine_deserialize(g1_bytes_obj_modified);
+        let result = host
+            .bn254_g1_affine_deserialize(g1_bytes_obj_modified, PointValidationMode::CheckOnCurve);
 
         assert!(HostError::result_matches_err(
             result,
@@ -873,7 +876,8 @@ fn test_bn254_g1_deserialize_rejects_infinity_bit() -> Result<(), HostError> {
 
     // Try to deserialize - should fail
     let g1_bytes_obj_modified = host.test_bin_obj(&g1_bytes)?;
-    let result = host.bn254_g1_affine_deserialize(g1_bytes_obj_modified);
+    let result =
+        host.bn254_g1_affine_deserialize(g1_bytes_obj_modified, PointValidationMode::CheckOnCurve);
 
     assert!(HostError::result_matches_err(
         result,
@@ -1309,6 +1313,67 @@ fn test_bn254_fr_arithmetic() -> Result<(), HostError> {
         let a_squared = host.bn254_fr_pow(a, U64Val::from_u32(2))?;
         let a_times_a = host.bn254_fr_mul(a, a)?;
         assert!(vals_equal(&host, a_squared, a_times_a)?);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_bn254_g1_is_on_curve() -> Result<(), HostError> {
+    let mut rng = StdRng::from_seed([0x5b; 32]);
+    let host = observe_host!(Host::test_host());
+    host.enable_debug()?;
+
+    // invalid encoding tests
+    {
+        assert!(HostError::result_matches_err(
+            host.bn254_g1_is_on_curve(invalid_g1(
+                &host,
+                InvalidPointTypes::TooManyBytes,
+                &mut rng
+            )?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bn254_g1_is_on_curve(invalid_g1(&host, InvalidPointTypes::TooFewBytes, &mut rng)?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            host.bn254_g1_is_on_curve(invalid_g1(&host, InvalidPointTypes::OutOfRange, &mut rng)?),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    // valid point on curve
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bn254_g1_is_on_curve(sample_g1(&host, &mut rng)?)?
+                .to_val()
+                .is_true())
+        }
+    }
+
+    // infinity point is on curve
+    {
+        assert!(host
+            .bn254_g1_is_on_curve(g1_zero(&host)?)?
+            .to_val()
+            .is_true())
+    }
+
+    // point not on curve
+    {
+        for _ in 0..10 {
+            assert!(host
+                .bn254_g1_is_on_curve(invalid_g1(
+                    &host,
+                    InvalidPointTypes::PointNotOnCurve,
+                    &mut rng
+                )?)?
+                .to_val()
+                .is_false())
+        }
     }
 
     Ok(())

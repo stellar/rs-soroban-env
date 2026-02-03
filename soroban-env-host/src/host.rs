@@ -58,6 +58,7 @@ use self::{
     prng::Prng,
 };
 
+use crate::crypto::PointValidationMode;
 use crate::host::error::TryBorrowOrErr;
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
@@ -3089,7 +3090,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         pt: BytesObject,
     ) -> Result<Bool, HostError> {
-        let pt = self.g1_affine_deserialize_from_bytesobj(pt, false)?;
+        let pt = self.g1_affine_deserialize_from_bytesobj(pt, PointValidationMode::CheckOnCurve)?;
         self.check_point_is_in_subgroup(&pt, &ContractCostType::Bls12381G1CheckPointInSubgroup)
             .map(|b| Bool::from(b))
     }
@@ -3100,8 +3101,8 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.g1_affine_deserialize_from_bytesobj(p0, false)?;
-        let p1 = self.g1_affine_deserialize_from_bytesobj(p1, false)?;
+        let p0 = self.g1_affine_deserialize_from_bytesobj(p0, PointValidationMode::CheckOnCurve)?;
+        let p1 = self.g1_affine_deserialize_from_bytesobj(p1, PointValidationMode::CheckOnCurve)?;
         let res = self.g1_add_internal(p0, p1)?;
         self.g1_projective_serialize_uncompressed(res)
     }
@@ -3112,7 +3113,10 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         scalar: U256Val,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.g1_affine_deserialize_from_bytesobj(p0, true)?;
+        let p0 = self.g1_affine_deserialize_from_bytesobj(
+            p0,
+            PointValidationMode::CheckOnCurveAndInSubgroup,
+        )?;
         let scalar = self.fr_from_u256val(scalar)?;
         let res = self.g1_mul_internal(p0, scalar)?;
         self.g1_projective_serialize_uncompressed(res)
@@ -3163,7 +3167,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         pt: BytesObject,
     ) -> Result<Bool, HostError> {
-        let pt = self.g2_affine_deserialize_from_bytesobj(pt, false)?;
+        let pt = self.g2_affine_deserialize_from_bytesobj(pt, PointValidationMode::CheckOnCurve)?;
         self.check_point_is_in_subgroup(&pt, &ContractCostType::Bls12381G2CheckPointInSubgroup)
             .map(|b| Bool::from(b))
     }
@@ -3174,8 +3178,8 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.g2_affine_deserialize_from_bytesobj(p0, false)?;
-        let p1 = self.g2_affine_deserialize_from_bytesobj(p1, false)?;
+        let p0 = self.g2_affine_deserialize_from_bytesobj(p0, PointValidationMode::CheckOnCurve)?;
+        let p1 = self.g2_affine_deserialize_from_bytesobj(p1, PointValidationMode::CheckOnCurve)?;
         let res = self.g2_add_internal(p0, p1)?;
         self.g2_projective_serialize_uncompressed(res)
     }
@@ -3186,7 +3190,10 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         scalar_le_bytes: U256Val,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.g2_affine_deserialize_from_bytesobj(p0, true)?;
+        let p0 = self.g2_affine_deserialize_from_bytesobj(
+            p0,
+            PointValidationMode::CheckOnCurveAndInSubgroup,
+        )?;
         let scalar = self.fr_from_u256val(scalar_le_bytes)?;
         let res = self.g2_mul_internal(p0, scalar)?;
         self.g2_projective_serialize_uncompressed(res)
@@ -3286,8 +3293,8 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.bn254_g1_affine_deserialize(p0)?;
-        let p1 = self.bn254_g1_affine_deserialize(p1)?;
+        let p0 = self.bn254_g1_affine_deserialize(p0, PointValidationMode::CheckOnCurve)?;
+        let p1 = self.bn254_g1_affine_deserialize(p1, PointValidationMode::CheckOnCurve)?;
         let res = self.bn254_g1_add_internal(p0, p1)?;
         self.bn254_g1_projective_serialize_uncompressed(res)
     }
@@ -3298,7 +3305,7 @@ impl VmCallerEnv for Host {
         p0: BytesObject,
         scalar: U256Val,
     ) -> Result<BytesObject, HostError> {
-        let p0 = self.bn254_g1_affine_deserialize(p0)?;
+        let p0 = self.bn254_g1_affine_deserialize(p0, PointValidationMode::CheckOnCurve)?;
         let scalar = self.bn254_fr_from_u256val(scalar)?;
         let res = self.bn254_g1_mul_internal(p0, scalar)?;
         self.bn254_g1_projective_serialize_uncompressed(res)
@@ -3350,6 +3357,36 @@ impl VmCallerEnv for Host {
         let lhs = self.bn254_fr_from_u256val(lhs)?;
         let res = self.bn254_fr_inv_internal(&lhs)?;
         self.bn254_fr_to_u256val(res)
+    }
+
+    fn bls12_381_g1_is_on_curve(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        point: BytesObject,
+    ) -> Result<Bool, HostError> {
+        let pt = self.g1_affine_deserialize_from_bytesobj(point, PointValidationMode::NoCheck)?;
+        self.check_point_is_on_curve(&pt, &ContractCostType::Bls12381G1CheckPointOnCurve)
+            .map(|b| Bool::from(b))
+    }
+
+    fn bls12_381_g2_is_on_curve(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        point: BytesObject,
+    ) -> Result<Bool, HostError> {
+        let pt = self.g2_affine_deserialize_from_bytesobj(point, PointValidationMode::NoCheck)?;
+        self.check_point_is_on_curve(&pt, &ContractCostType::Bls12381G2CheckPointOnCurve)
+            .map(|b| Bool::from(b))
+    }
+
+    fn bn254_g1_is_on_curve(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        point: BytesObject,
+    ) -> Result<Bool, HostError> {
+        let pt = self.bn254_g1_affine_deserialize(point, PointValidationMode::NoCheck)?;
+        self.bn254_check_point_is_on_curve(&pt, &ContractCostType::Bn254G1CheckPointOnCurve)
+            .map(|b| Bool::from(b))
     }
 
     fn bn254_g1_msm(
