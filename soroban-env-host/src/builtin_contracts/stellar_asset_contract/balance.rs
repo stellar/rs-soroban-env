@@ -19,7 +19,7 @@ use crate::{
         ScErrorType, SequenceNumber, Thresholds, TrustLineAsset, TrustLineEntry, TrustLineEntryExt,
         TrustLineFlags,
     },
-    Env, ErrorHandler, Host, HostError, StorageType, TryIntoVal, Val,
+    Env, ErrorHandler, Host, HostError, StorageType, TryIntoVal,
 };
 
 use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRESHOLD};
@@ -43,9 +43,7 @@ const MAX_ACCOUNT_SUBENTRIES: u32 = 1000;
 // Metering: covered by components.
 pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
     match addr.to_sc_address()? {
-        ScAddress::Account(acc_id) => {
-            Ok(get_classic_balance(e, acc_id, addr.as_object().to_val())?.into())
-        }
+        ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id, &addr)?.into()),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
             if let Some(raw_balance) =
@@ -117,12 +115,7 @@ pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(
                     &[],
                 )
             })?;
-            Ok(transfer_classic_balance(
-                e,
-                acc_id,
-                i64_amount,
-                addr.as_object().to_val(),
-            )?)
+            Ok(transfer_classic_balance(e, acc_id, i64_amount, &addr)?)
         }
         ScAddress::Contract(id) => {
             let key = DataKey::Balance(addr.metered_clone(e)?);
@@ -174,7 +167,7 @@ pub(crate) fn spend_balance_no_authorization_check(
                     &[],
                 )
             })?;
-            transfer_classic_balance(e, acc_id, -i64_amount, addr.as_object().to_val())
+            transfer_classic_balance(e, acc_id, -i64_amount, &addr)
         }
         ScAddress::Contract(id) => {
             // If a balance exists, calculate new amount and write the existing authorized state as is because
@@ -384,7 +377,7 @@ pub(crate) fn transfer_classic_balance(
     e: &Host,
     to_key: AccountId,
     amount: i64,
-    addr_val: Val,
+    addr: &Address,
 ) -> Result<(), HostError> {
     let transfer_trustline_balance_unless_issuer =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
@@ -396,7 +389,7 @@ pub(crate) fn transfer_classic_balance(
         };
 
     match read_asset(e)? {
-        Asset::Native => transfer_account_balance(e, to_key, amount, addr_val),
+        Asset::Native => transfer_account_balance(e, to_key, amount, addr),
         Asset::CreditAlphanum4(asset) => {
             let issuer = asset.issuer.metered_clone(e)?;
             let tlasset = TrustLineAsset::CreditAlphanum4(asset);
@@ -411,7 +404,7 @@ pub(crate) fn transfer_classic_balance(
 }
 
 // Metering: covered by components.
-fn get_classic_balance(e: &Host, acct: AccountId, addr_val: Val) -> Result<i64, HostError> {
+fn get_classic_balance(e: &Host, acct: AccountId, addr: &Address) -> Result<i64, HostError> {
     let get_trustline_balance_or_max_if_issuer =
         |asset: TrustLineAsset, issuer: AccountId, acct: AccountId| -> Result<i64, HostError> {
             if issuer == acct {
@@ -422,7 +415,7 @@ fn get_classic_balance(e: &Host, acct: AccountId, addr_val: Val) -> Result<i64, 
         };
 
     match read_asset(e)? {
-        Asset::Native => get_account_balance(e, acct, addr_val),
+        Asset::Native => get_account_balance(e, acct, addr),
         Asset::CreditAlphanum4(asset) => {
             let issuer = asset.issuer.metered_clone(e)?;
             let tlasset = TrustLineAsset::CreditAlphanum4(asset);
@@ -441,7 +434,7 @@ fn transfer_account_balance(
     host: &Host,
     account_id: AccountId,
     amount: i64,
-    addr_val: Val,
+    addr: &Address,
 ) -> Result<(), HostError> {
     let lk = host.to_account_key(account_id.metered_clone(host)?)?;
 
@@ -452,40 +445,40 @@ fn transfer_account_balance(
         match existing_entry {
             Some(le) => {
                 // Account exists - update the balance
-        let mut ae = match &le.data {
-            LedgerEntryData::Account(ae) => Ok(ae.metered_clone(host)?),
+                let mut ae = match &le.data {
+                    LedgerEntryData::Account(ae) => Ok(ae.metered_clone(host)?),
             _ => Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
-                "unexpected entry found",
-                &[],
-            )),
-        }?;
+                        "unexpected entry found",
+                        &[],
+                    )),
+                }?;
 
-        let (min_balance, max_balance) = get_min_max_account_balance(host, &ae)?;
+                let (min_balance, max_balance) = get_min_max_account_balance(host, &ae)?;
 
-        let Some(new_balance) = ae.balance.checked_add(amount) else {
-            return Err(host.error(
-                ContractError::BalanceError.into(),
-                "resulting balance overflow",
-                &[],
-            ));
-        };
-        if new_balance >= min_balance && new_balance <= max_balance {
-            ae.balance = new_balance;
+                let Some(new_balance) = ae.balance.checked_add(amount) else {
+                    return Err(host.error(
+                        ContractError::BalanceError.into(),
+                        "resulting balance overflow",
+                        &[],
+                    ));
+                };
+                if new_balance >= min_balance && new_balance <= max_balance {
+                    ae.balance = new_balance;
                     let updated_le =
                         Host::modify_ledger_entry_data(host, &le, LedgerEntryData::Account(ae))?;
                     storage.put(&lk, &updated_le, None, host, None)
-        } else {
-            Err(err!(
-                host,
-                ContractError::BalanceError,
-                "resulting balance is not within the allowed range",
-                min_balance,
-                new_balance,
-                max_balance
-            ))
-        }
+                } else {
+                    Err(err!(
+                        host,
+                        ContractError::BalanceError,
+                        "resulting balance is not within the allowed range",
+                        min_balance,
+                        new_balance,
+                        max_balance
+                    ))
+                }
             }
             None => {
                 // Account doesn't exist - create it if this is a positive transfer
@@ -494,7 +487,7 @@ fn transfer_account_balance(
                     return Err(host.error(
                         ContractError::AccountMissingError.into(),
                         "account entry is missing",
-                        &[addr_val],
+                        &[addr.as_object().to_val()],
                     ));
                 }
 
@@ -558,13 +551,13 @@ fn read_account_entry(
     host: &Host,
     storage: &mut Storage,
     lk: &Rc<LedgerKey>,
-    addr_val: Val,
+    addr: &Address,
 ) -> Result<Rc<LedgerEntry>, HostError> {
     storage.try_get(&lk, &host, None)?.ok_or_else(|| {
         host.error(
-                ContractError::AccountMissingError.into(),
-                "account entry is missing",
-            &[addr_val],
+            ContractError::AccountMissingError.into(),
+            "account entry is missing",
+            &[addr.as_object().to_val()],
         )
     })
 }
@@ -638,12 +631,12 @@ fn transfer_trustline_balance(
 fn get_account_balance(
     host: &Host,
     account_id: AccountId,
-    addr_val: Val,
+    addr: &Address,
 ) -> Result<i64, HostError> {
     let lk = host.to_account_key(account_id)?;
 
     host.with_mut_storage(|storage| {
-        let le = read_account_entry(host, storage, &lk, addr_val)?;
+        let le = read_account_entry(host, storage, &lk, &addr)?;
 
         let ae = match &le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
