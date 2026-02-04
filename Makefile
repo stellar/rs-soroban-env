@@ -1,4 +1,10 @@
-all: build test test-opt
+all: build test test-opt other-checks
+
+other-checks:
+	cargo deny check advisories
+	cargo deny check bans licenses sources
+	cargo acl -n run
+	cargo semver-checks --exclude soroban-simulation
 
 test:
 	cargo hack --locked --each-feature test

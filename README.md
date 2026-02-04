@@ -15,3 +15,5 @@ The `soroban-builtin-sdk-macros` and `soroban-env-macros` are crates dedicated t
 The `soroban-bench-utils` crate contains the utilties for running the benchmarks using for calibration of the Soroban execution costs via benchmarks.
 
 The `soroban-synth-wasm` and `soroban-test-wasms` are crates used for tests that use smart contract. The former synthesizes simple parametric Wasms, and the latter contains various pre-compiled smart contract contracts used by tests.
+
+The `soroban-fuzz-targets` crate is an unpublished internal crate that contains reusable fuzz-target bodies (for example, for embedders that want to invoke them programmatically). The `soroban-env-host/fuzz` crate keeps the small cargo-fuzz entrypoint stubs that link libfuzzer and call into `soroban-fuzz-targets`.
