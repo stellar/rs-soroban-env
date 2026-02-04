@@ -3,10 +3,10 @@
 use crate::xdr::{ScErrorCode, ScErrorType};
 
 use super::{
-    AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
-    I64Object, MapObject, MuxedAddressObject, StorageType, StringObject, SymbolObject,
-    TimepointObject, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject,
-    Void,
+    AddressObject, Bool, BytesObject, ContractTTLExtension, DurationObject, Error, I128Object,
+    I256Object, I256Val, I64Object, MapObject, MuxedAddressObject, StorageType, StringObject,
+    SymbolObject, TimepointObject, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val,
+    VecObject, Void,
 };
 use crate::call_macro_with_all_host_functions;
 use crate::{CheckedEnvArg, EnvBase, Symbol};

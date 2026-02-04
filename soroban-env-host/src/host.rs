@@ -18,9 +18,9 @@ use crate::{
         Duration, Hash, LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType,
         ScString, ScSymbol, ScVal, TimePoint, Uint256,
     },
-    AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, LedgerInfo,
-    MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TryFromVal,
-    TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
+    AddressObject, Bool, BytesObject, Compare, ContractTTLExtension, ConversionError, EnvBase,
+    Error, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject,
+    SymbolSmall, TryFromVal, TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
 };
 
 mod comparison;
@@ -2312,6 +2312,68 @@ impl VmCallerEnv for Host {
         let key = self.contract_instance_ledger_key(&contract_id)?;
 
         self.extend_contract_code_ttl_from_contract_id(key, threshold.into(), extend_to.into())?;
+
+        Ok(Val::VOID)
+    }
+
+    // Notes on metering: covered by components
+    fn extend_contract_data_ttl_v2(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: Val,
+        t: StorageType,
+        extend_to: U32Val,
+        min_extension: U32Val,
+        max_extension: U32Val,
+    ) -> Result<Void, HostError> {
+        if matches!(t, StorageType::Instance) {
+            return Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidAction,
+                "instance storage should be extended via `extend_contract_instance_and_code_ttl_v2` function only",
+                &[],
+            ))?;
+        }
+        let key = self.storage_key_from_val(k, t.try_into()?)?;
+        self.try_borrow_storage_mut()?.extend_ttl_v2(
+            self,
+            key,
+            extend_to.into(),
+            min_extension.into(),
+            max_extension.into(),
+            Some(k),
+        )?;
+        Ok(Val::VOID)
+    }
+
+    fn extend_contract_instance_and_code_ttl_v2(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        extension_scope: ContractTTLExtension,
+        extend_to: U32Val,
+        min_extension: U32Val,
+        max_extension: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+
+        if extension_scope != ContractTTLExtension::Instance {
+            self.extend_contract_code_ttl_v2(
+                &key,
+                extend_to.into(),
+                min_extension.into(),
+                max_extension.into(),
+            )?;
+        }
+        if extension_scope != ContractTTLExtension::Code {
+            self.extend_contract_instance_ttl_v2(
+                key,
+                extend_to.into(),
+                min_extension.into(),
+                max_extension.into(),
+            )?;
+        }
 
         Ok(Val::VOID)
     }
