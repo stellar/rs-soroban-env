@@ -368,9 +368,9 @@ impl Host {
                     ],
                 ));
             }
-            self.charge_budget(ContractCostType::MemCpy, Some(EXPECTED_SIZE as u64))?;
             let mut buf = [0u8; EXPECTED_SIZE];
-            buf.copy_from_slice(bytes);
+            self.metered_copy_byte_slice(&mut buf, bytes)?;
+
             buf.reverse();
 
             // The field element here an either be a Fp<P, N=6> (base field
