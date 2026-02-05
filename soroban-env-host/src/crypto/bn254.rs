@@ -123,9 +123,8 @@ impl Host {
                 ],
             ));
         }
-        self.charge_budget(ContractCostType::MemCpy, Some(EXPECTED_SIZE as u64))?;
         let mut buf = [0u8; EXPECTED_SIZE];
-        buf.copy_from_slice(input);
+        self.metered_copy_byte_slice(&mut buf, input)?;
         buf.reverse();
 
         self.as_budget().bulk_charge(
@@ -220,16 +219,18 @@ impl Host {
             // Size already validated by bn254_validate_flags_and_check_infinity
             // These slices are guaranteed to be in bounds due to the size check,
             // but we use explicit checks for defense in depth
-            x.copy_from_slice(
+            self.metered_copy_byte_slice(
+                &mut x,
                 bytes
                     .get(0..BN254_FP_SERIALIZED_SIZE)
                     .ok_or_else(|| self.bn254_err_invalid_input("G1 X coordinate out of bounds"))?,
-            );
-            y.copy_from_slice(
+            )?;
+            self.metered_copy_byte_slice(
+                &mut y,
                 bytes
                     .get(BN254_FP_SERIALIZED_SIZE..BN254_G1_SERIALIZED_SIZE)
                     .ok_or_else(|| self.bn254_err_invalid_input("G1 Y coordinate out of bounds"))?,
-            );
+            )?;
             let fp_x = self
                 .bn254_field_element_deserialize::<BN254_FP_SERIALIZED_SIZE, Fp>(&x, "bn254 Fp")?;
             let fp_y = self
@@ -266,16 +267,18 @@ impl Host {
             // Size already validated by bn254_validate_flags_and_check_infinity
             // These slices are guaranteed to be in bounds due to the size check,
             // but we use explicit checks for defense in depth
-            x.copy_from_slice(
+            self.metered_copy_byte_slice(
+                &mut x,
                 bytes
                     .get(0..BN254_FP2_SERIALIZED_SIZE)
                     .ok_or_else(|| self.bn254_err_invalid_input("G2 X coordinate out of bounds"))?,
-            );
-            y.copy_from_slice(
+            )?;
+            self.metered_copy_byte_slice(
+                &mut y,
                 bytes
                     .get(BN254_FP2_SERIALIZED_SIZE..BN254_G2_SERIALIZED_SIZE)
                     .ok_or_else(|| self.bn254_err_invalid_input("G2 Y coordinate out of bounds"))?,
-            );
+            )?;
             let fp2_x = self.bn254_field_element_deserialize::<BN254_FP2_SERIALIZED_SIZE, Fp2>(
                 &x,
                 "bn254 Fp2",
