@@ -885,10 +885,10 @@ impl AuthorizationManager {
             if call_stack.len() < 2 {
                 return Ok(false);
             }
-            // Get current contract address if the current frame is a contract 
+            // Get current contract address if the current frame is a contract
             // call. Note, that this can be `None` for host fn frames, that's
             // fine and expected as curr_contract_address is only used for
-            // skipping the invoker contract tracker created by the current 
+            // skipping the invoker contract tracker created by the current
             // contract.
             curr_contract_address = match call_stack.last() {
                 Some(AuthStackFrame::Contract(c)) => Some(c.contract_address),
