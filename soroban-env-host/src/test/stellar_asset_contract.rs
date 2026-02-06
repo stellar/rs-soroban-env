@@ -22,8 +22,8 @@ use crate::{
         ContractEventType, ContractExecutable, ContractId, Hash, InvokeContractArgs,
         LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScAddress, ScContractInstance,
         ScErrorCode, ScErrorType, ScSymbol, ScVal, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1,
-        TrustLineEntryV1Ext, TrustLineFlags,
+        SorobanAuthorizedInvocation, TrustLineAsset, TrustLineEntry, TrustLineEntryExt,
+        TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
     Env, EnvBase, Host, HostError, LedgerInfo, Symbol, TryFromVal, TryIntoVal, Val,
 };
@@ -319,6 +319,53 @@ impl StellarAssetContractTest {
             self.host.set_source_account(acc)?;
         }
         res
+    }
+
+    /// Create an account with the given XLM balance and default settings.
+    /// Useful for tests that only care about the balance.
+    fn create_account_with_balance(&self, user: &TestSigner, balance: i64) {
+        let signers = match user {
+            TestSigner::Account(acc_signer) => {
+                acc_signer.signers.iter().map(|s| (*s, 100)).collect()
+            }
+            _ => vec![],
+        };
+        self.create_account(
+            &user.account_id(),
+            signers,
+            balance,
+            0,
+            [1, 0, 0, 0],
+            None,
+            None,
+            0,
+        );
+    }
+
+    /// Create a native (XLM) asset contract.
+    fn native_contract(&self) -> TestStellarAssetContract<'_> {
+        TestStellarAssetContract::new_from_asset(&self.host, Asset::Native).unwrap()
+    }
+
+    /// Get the trustline entry for a user on the default asset.
+    fn get_trustline(&self, user: &TestSigner) -> TrustLineEntry {
+        let tl_key = self
+            .host
+            .to_trustline_key(
+                user.account_id(),
+                TrustLineAsset::CreditAlphanum4(AlphaNum4 {
+                    asset_code: AssetCode4(self.asset_code),
+                    issuer: signing_key_to_account_id(&self.issuer_key),
+                }),
+            )
+            .unwrap();
+
+        self.host
+            .with_mut_storage(|s| match &s.get(&tl_key, &self.host, None).unwrap().data {
+                LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
+                _ => panic!("Expected trustline entry"),
+            })
+            .unwrap()
     }
 }
 
@@ -843,6 +890,89 @@ fn test_cap_67_transfer_with_muxed_accounts() {
     assert_eq!(
         contract.balance(user_2.address(&test.host)).unwrap(),
         5_000_002
+    );
+}
+
+#[test]
+fn test_native_self_transfer() {
+    let test = StellarAssetContractTest::setup(function_name!());
+
+    // Create account with balance
+    let user = TestSigner::account(&test.user_key);
+    let user_id = user.account_id();
+    test.create_account(
+        &user_id,
+        vec![(&test.user_key, 100)],
+        100_000_000,
+        0,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    let contract = TestStellarAssetContract::new_from_asset(&test.host, Asset::Native).unwrap();
+
+    // Transfer full available balance (9 XLM) to self
+    contract
+        .transfer(&user, user.address(&test.host), 90_000_000)
+        .unwrap();
+
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        100_000_000
+    );
+
+    // Transfer more than balance
+    assert_eq!(
+        to_contract_err(
+            contract
+                .transfer(&user, user.address(&test.host), 90_000_001)
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+}
+
+#[test]
+fn test_asset_self_transfer() {
+    let test = StellarAssetContractTest::setup(function_name!());
+
+    // Create account with balance
+    let user = TestSigner::account(&test.user_key);
+    test.create_default_account(&user);
+    test.create_default_trustline(&user);
+
+    let contract = test.default_stellar_asset_contract();
+
+    contract
+        .mint(
+            &TestSigner::account(&test.issuer_key),
+            user.address(&test.host),
+            100_000_000,
+        )
+        .unwrap();
+
+    // Transfer full balance to self
+    contract
+        .transfer(&user, user.address(&test.host), 100_000_000)
+        .unwrap();
+
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        100_000_000
+    );
+
+    // Transfer more than balance
+    assert_eq!(
+        to_contract_err(
+            contract
+                .transfer(&user, user.address(&test.host), 100_000_001)
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
     );
 }
 
@@ -3293,6 +3423,42 @@ fn test_asset_stellar_asset_contract_classic_balance_boundaries_large_values() {
 }
 
 #[test]
+fn test_transfer_without_destination_trustline_fails() {
+    let test = StellarAssetContractTest::setup(function_name!());
+
+    // Create source account with trustline
+    let source = TestSigner::account(&test.user_key);
+    test.create_account(
+        &source.account_id(),
+        vec![(&test.user_key, 100)],
+        100_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    let contract = test.default_stellar_asset_contract();
+    test.create_default_trustline(&source);
+
+    // Mint some tokens to source
+    let issuer = TestSigner::account(&test.issuer_key);
+    contract
+        .mint(&issuer, source.address(&test.host), 1000)
+        .unwrap();
+
+    // Destination account does NOT exist
+    let dest_key = generate_signing_key(&test.host);
+    let dest_id = signing_key_to_account_id(&dest_key);
+    let dest_address = account_to_address(&test.host, dest_id);
+
+    let err = contract.transfer(&source, dest_address, 100).err().unwrap();
+
+    assert_eq!(to_contract_err(err), ContractError::TrustlineMissingError);
+}
+
+#[test]
 fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     let test = StellarAssetContractTest::setup(function_name!());
     let account_id = signing_key_to_account_id(&test.user_key);
@@ -3462,7 +3628,7 @@ fn test_custom_account_auth() {
                 ),
             ),
             resources: SubInvocationResources {
-                instructions: 828505,
+                instructions: 828549,
                 mem_bytes: 1216862,
                 disk_read_entries: 1,
                 memory_read_entries: 5,
@@ -3726,4 +3892,478 @@ fn test_sac_reentry_is_not_allowed() {
         .unwrap()
         .error
         .is_type(ScErrorType::Auth));
+}
+
+/// CAP-73 Tests: trust function and XLM transfer account creation
+mod cap_73 {
+    use super::*;
+
+    // ===== CAP-73-specific helpers =====
+
+    /// Generate a non-existent account (signing key, account ID, and address).
+    fn generate_non_existent_account(
+        test: &StellarAssetContractTest,
+    ) -> (SigningKey, AccountId, Address) {
+        let key = generate_signing_key(&test.host);
+        let id = signing_key_to_account_id(&key);
+        let addr = account_to_address(&test.host, id.clone());
+        (key, id, addr)
+    }
+
+    /// Assert that a newly created account has the expected properties.
+    fn assert_account_created(
+        test: &StellarAssetContractTest,
+        account_id: &AccountId,
+        expected_balance: i64,
+    ) {
+        let account = test.host.load_account(account_id.clone()).unwrap();
+        assert_eq!(account.balance, expected_balance);
+        assert_eq!(account.num_sub_entries, 0);
+        // Sequence number should be (ledger_seq << 32), ledger_seq is 123 in test setup
+        let expected_seq_num = (123i64) << 32;
+        assert_eq!(account.seq_num.0, expected_seq_num);
+    }
+
+    /// Common test for XLM transfer below minimum balance (parameterized for transfer vs transfer_from).
+    fn xlm_transfer_below_minimum_fails(use_transfer_from: bool, testname: &'static str) {
+        let test = StellarAssetContractTest::setup(testname);
+
+        let source = TestSigner::account(&test.user_key);
+        test.create_account_with_balance(&source, 100_000_000);
+
+        let (_, dest_id, dest_address) = generate_non_existent_account(&test);
+        let contract = test.native_contract();
+
+        // Transfer less than minimum balance (2 * base_reserve = 10_000_000)
+        let transfer_amount = 9_999_999i128; // 1 stroop short
+
+        let err = if use_transfer_from {
+            // Set up spender with allowance
+            let spender = TestSigner::account(&test.user_key_2);
+            test.create_account_with_balance(&spender, 10_000_000);
+            contract
+                .approve(&source, spender.address(&test.host), 50_000_000, 200)
+                .unwrap();
+            contract
+                .transfer_from(
+                    &spender,
+                    source.address(&test.host),
+                    dest_address,
+                    transfer_amount,
+                )
+                .err()
+                .unwrap()
+        } else {
+            contract
+                .transfer(&source, dest_address, transfer_amount)
+                .err()
+                .unwrap()
+        };
+
+        assert_eq!(
+            to_contract_err(err),
+            ContractError::InsufficientAccountReserve
+        );
+
+        // Verify destination account was NOT created
+        assert!(test.host.load_account(dest_id).is_err());
+    }
+
+    // ===== Trust function tests =====
+
+    #[test]
+    fn test_trust_creates_trustline() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let user = TestSigner::account(&test.user_key);
+        // base_reserve is 5_000_000, need at least 15_000_000 for 3 entries (2 base + 1 sub)
+        test.create_account_with_balance(&user, 15_000_000);
+
+        let contract = test.default_stellar_asset_contract();
+        contract.trust(&user).unwrap();
+
+        // Verify trustline was created with correct properties
+        let tl = test.get_trustline(&user);
+        assert_eq!(tl.balance, 0);
+        assert_eq!(tl.limit, i64::MAX);
+        assert!(tl.flags & (TrustLineFlags::AuthorizedFlag as u32) != 0);
+        assert!(tl.flags & (TrustLineFlags::TrustlineClawbackEnabledFlag as u32) != 0);
+
+        // Verify account num_sub_entries was incremented
+        let account = test.host.load_account(user.account_id()).unwrap();
+        assert_eq!(account.num_sub_entries, 1);
+
+        // Test transfers work with newly created trustlines
+        let issuer = TestSigner::account(&test.issuer_key);
+        contract
+            .mint(&issuer, user.address(&test.host), 50_000_000)
+            .unwrap();
+        assert_eq!(
+            contract.balance(user.address(&test.host)).unwrap(),
+            50_000_000
+        );
+
+        // Create second user and test transfer
+        let user_2 = TestSigner::account(&test.user_key_2);
+        test.create_account_with_balance(&user_2, 20_000_000);
+        contract.trust(&user_2).unwrap();
+
+        contract
+            .transfer(&user, user_2.address(&test.host), 10_000_000)
+            .unwrap();
+        assert_eq!(
+            contract.balance(user.address(&test.host)).unwrap(),
+            40_000_000
+        );
+        assert_eq!(
+            contract.balance(user_2.address(&test.host)).unwrap(),
+            10_000_000
+        );
+    }
+
+    #[test]
+    fn test_trust_noop_if_trustline_exists() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let user = TestSigner::account(&test.user_key);
+        test.create_account(
+            &user.account_id(),
+            vec![(&test.user_key, 100)],
+            20_000_000,
+            1, // Already has 1 sub-entry
+            [1, 0, 0, 0],
+            None,
+            None,
+            0,
+        );
+
+        let contract = test.default_stellar_asset_contract();
+
+        // Create trustline manually with custom limit
+        test.create_trustline(
+            &user.account_id(),
+            &signing_key_to_account_id(&test.issuer_key),
+            &test.asset_code,
+            1000,
+            5000, // Custom limit (not i64::MAX)
+            TrustLineFlags::AuthorizedFlag as u32,
+            None,
+        );
+
+        // Call trust - should be no-op
+        contract.trust(&user).unwrap();
+
+        // Verify trustline was NOT modified
+        let tl = test.get_trustline(&user);
+        assert_eq!(tl.balance, 1000);
+        assert_eq!(tl.limit, 5000); // Should NOT be modified to i64::MAX
+
+        // num_sub_entries should NOT have been incremented (still 1)
+        let account = test.host.load_account(user.account_id()).unwrap();
+        assert_eq!(account.num_sub_entries, 1);
+    }
+
+    #[test]
+    fn test_trust_fails_for_issuer() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let issuer = TestSigner::account(&test.issuer_key);
+        let contract = test.default_stellar_asset_contract();
+
+        let err = contract.trust(&issuer).err().unwrap();
+        assert_eq!(
+            to_contract_err(err),
+            ContractError::OperationNotSupportedError
+        );
+    }
+
+    #[test]
+    fn test_trust_fails_for_native() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let user = TestSigner::account(&test.user_key);
+        test.create_account_with_balance(&user, 20_000_000);
+
+        let contract = test.native_contract();
+
+        let err = contract.trust(&user).err().unwrap();
+        assert_eq!(
+            to_contract_err(err),
+            ContractError::OperationNotSupportedError
+        );
+    }
+
+    #[test]
+    fn test_trust_fails_low_reserve() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let user = TestSigner::account(&test.user_key);
+        // Need 3*base_reserve to add a sub-entry, but we have 1 stroop less.
+        test.create_account_with_balance(&user, 14_999_999);
+
+        let contract = test.default_stellar_asset_contract();
+
+        let err = contract.trust(&user).err().unwrap();
+        assert_eq!(
+            to_contract_err(err),
+            ContractError::InsufficientAccountReserve
+        );
+    }
+
+    #[test]
+    fn test_trust_fails_too_many_subentries() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let user = TestSigner::account(&test.user_key);
+        // Create account at the sub-entry limit (1000)
+        test.create_account(
+            &user.account_id(),
+            vec![(&test.user_key, 100)],
+            100_000_000_000,
+            1000, // At the limit
+            [1, 0, 0, 0],
+            None,
+            None,
+            0,
+        );
+
+        let contract = test.default_stellar_asset_contract();
+
+        let err = contract.trust(&user).err().unwrap();
+        assert_eq!(
+            to_contract_err(err),
+            ContractError::TooManyAccountSubentries
+        );
+    }
+
+    #[test]
+    fn test_trust_auth_required_issuer() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let user = TestSigner::account(&test.user_key);
+        test.create_account_with_balance(&user, 20_000_000);
+
+        // Create issuer with AUTH_REQUIRED flag
+        let issuer_id = signing_key_to_account_id(&test.issuer_key);
+        test.create_account(
+            &issuer_id,
+            vec![(&test.issuer_key, 100)],
+            10_000_000,
+            1,
+            [1, 0, 0, 0],
+            None,
+            None,
+            AccountFlags::RequiredFlag as u32
+                | AccountFlags::RevocableFlag as u32
+                | AccountFlags::ClawbackEnabledFlag as u32,
+        );
+
+        let asset = Asset::CreditAlphanum4(AlphaNum4 {
+            asset_code: AssetCode4(test.asset_code),
+            issuer: issuer_id.clone(),
+        });
+        let contract = TestStellarAssetContract::new_from_asset(&test.host, asset).unwrap();
+
+        contract.trust(&user).unwrap();
+
+        // Verify trustline was created WITHOUT AuthorizedFlag
+        let tl = test.get_trustline(&user);
+        assert_eq!(tl.flags & (TrustLineFlags::AuthorizedFlag as u32), 0);
+        assert!(tl.flags & (TrustLineFlags::TrustlineClawbackEnabledFlag as u32) != 0);
+    }
+
+    #[test]
+    fn test_trust_fails_wrong_auth() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let user = TestSigner::account(&test.user_key);
+        test.create_default_account(&user);
+
+        let contract = test.default_stellar_asset_contract();
+        let wrong_signer =
+            TestSigner::account_with_multisig(&user.account_id(), vec![&test.user_key_2]);
+
+        // No auth provided
+        assert_eq!(
+            contract
+                .trust_address(user.address(&test.host))
+                .err()
+                .unwrap()
+                .error,
+            (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
+        );
+        // Bad auth provided
+        assert_eq!(
+            contract.trust(&wrong_signer).err().unwrap().error,
+            (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
+        );
+    }
+
+    #[test]
+    fn test_trust_noop_for_contract_address() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let contract = test.default_stellar_asset_contract();
+
+        let contract_id = generate_bytes_array(&test.host);
+        let contract_address = contract_id_to_address(&test.host, contract_id);
+
+        // Call trust on contract address - should succeed as no-op
+        contract.trust_address(contract_address.clone()).unwrap();
+
+        // Balance for a contract address without balance entry should be 0
+        assert_eq!(contract.balance(contract_address).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_trust_fails_account_missing() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let contract = test.default_stellar_asset_contract();
+
+        let non_existent_key = generate_signing_key(&test.host);
+        let non_existent = TestSigner::account(&non_existent_key);
+
+        // Trust fails because the account doesn't exist (auth fails first)
+        let err = contract.trust(&non_existent).err().unwrap();
+        assert!(err.error.is_type(ScErrorType::Auth));
+    }
+
+    // ===== XLM transfer account creation tests =====
+
+    #[test]
+    fn test_xlm_transfer_creates_account() {
+        let test = StellarAssetContractTest::setup(function_name!());
+
+        let source = TestSigner::account(&test.user_key);
+        test.create_account_with_balance(&source, 100_000_000);
+
+        let (_, dest_id, dest_address) = generate_non_existent_account(&test);
+        let contract = test.native_contract();
+
+        let transfer_amount = 10_000_000i128; // Minimum balance
+        contract
+            .transfer(&source, dest_address, transfer_amount)
+            .unwrap();
+
+        assert_account_created(&test, &dest_id, transfer_amount as i64);
+
+        // Verify source balance was reduced
+        let source_account = test.host.load_account(source.account_id()).unwrap();
+        assert_eq!(source_account.balance, 100_000_000 - transfer_amount as i64);
+    }
+
+    #[test]
+    fn test_xlm_transfer_fails_below_minimum() {
+        xlm_transfer_below_minimum_fails(false, function_name!());
+    }
+
+    #[test]
+    fn test_xlm_transfer_from_fails_below_minimum() {
+        xlm_transfer_below_minimum_fails(true, function_name!());
+    }
+
+    #[test]
+    fn test_xlm_transfer_fails_sender_missing() {
+        let test = StellarAssetContractTest::setup(function_name!());
+
+        // Source account does NOT exist
+        let source = TestSigner::account(&test.user_key);
+
+        // Create destination account (already exists)
+        let dest = TestSigner::account(&test.user_key_2);
+        test.create_account_with_balance(&dest, 50_000_000);
+
+        let contract = test.native_contract();
+
+        // Transfer fails because source account doesn't exist (auth fails)
+        let err = contract
+            .transfer(&source, dest.address(&test.host), 10_000_000)
+            .err()
+            .unwrap();
+        assert!(err.error.is_type(ScErrorType::Auth));
+
+        // Verify destination balance was NOT changed
+        let dest_account = test.host.load_account(dest.account_id()).unwrap();
+        assert_eq!(dest_account.balance, 50_000_000);
+    }
+
+    #[test]
+    fn test_xlm_self_transfer_to_non_existent_account() {
+        let test = StellarAssetContractTest::setup(function_name!());
+        let user = TestSigner::account(&test.user_key);
+        let contract = test.native_contract();
+
+        assert_eq!(
+            contract
+                .transfer(&user, user.address(&test.host), 0)
+                .err()
+                .unwrap()
+                .error,
+            (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
+        );
+    }
+
+    #[test]
+    fn test_xlm_transfer_from_creates_account() {
+        let test = StellarAssetContractTest::setup(function_name!());
+
+        let source = TestSigner::account(&test.user_key);
+        test.create_account_with_balance(&source, 100_000_000);
+
+        let spender = TestSigner::account(&test.user_key_2);
+        test.create_account_with_balance(&spender, 10_000_000);
+
+        let (_, dest_id, dest_address) = generate_non_existent_account(&test);
+        let contract = test.native_contract();
+
+        // Source approves spender
+        contract
+            .approve(&source, spender.address(&test.host), 50_000_000, 200)
+            .unwrap();
+
+        let transfer_amount = 15_000_000i128;
+        contract
+            .transfer_from(
+                &spender,
+                source.address(&test.host),
+                dest_address,
+                transfer_amount,
+            )
+            .unwrap();
+
+        assert_account_created(&test, &dest_id, transfer_amount as i64);
+
+        // Verify source balance was reduced
+        let source_account = test.host.load_account(source.account_id()).unwrap();
+        assert_eq!(source_account.balance, 100_000_000 - transfer_amount as i64);
+
+        // Verify allowance was reduced
+        assert_eq!(
+            contract
+                .allowance(source.address(&test.host), spender.address(&test.host))
+                .unwrap(),
+            50_000_000 - transfer_amount
+        );
+    }
+
+    #[test]
+    fn test_xlm_transfer_muxed_creates_account() {
+        let test = StellarAssetContractTest::setup(function_name!());
+
+        let source = TestSigner::account(&test.user_key);
+        test.create_account_with_balance(&source, 100_000_000);
+
+        let dest_key = generate_signing_key(&test.host);
+        let dest = TestSigner::account(&dest_key);
+        let dest_id = signing_key_to_account_id(&dest_key);
+
+        let contract = test.native_contract();
+
+        let transfer_amount = 15_000_000i128;
+        let muxed_id = 12345678_u64;
+        contract
+            .transfer_muxed(
+                &source,
+                dest.muxed_address(&test.host, Some(muxed_id)),
+                transfer_amount,
+            )
+            .unwrap();
+
+        assert_account_created(&test, &dest_id, transfer_amount as i64);
+
+        // Verify source balance was reduced
+        let source_account = test.host.load_account(source.account_id()).unwrap();
+        assert_eq!(source_account.balance, 100_000_000 - transfer_amount as i64);
+    }
 }
