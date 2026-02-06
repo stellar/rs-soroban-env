@@ -27,8 +27,8 @@ use crate::{
         HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryType,
         LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr,
         ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
-        SorobanAuthorizationEntry, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
-        WriteXdr,
+        SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedInvocation,
+        SorobanCredentials, SorobanResources, TtlEntry, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -677,6 +677,23 @@ fn contract_data_entry(
         durability,
         val: value.clone(),
     }))
+}
+
+fn build_auth_entry_with_nonce(
+    address: &ScAddress,
+    nonce: i64,
+    signature_expiration_ledger: u32,
+    root_invocation: SorobanAuthorizedInvocation,
+) -> SorobanAuthorizationEntry {
+    SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address: address.clone(),
+            nonce,
+            signature_expiration_ledger,
+            signature: ScVal::Void,
+        }),
+        root_invocation,
+    }
 }
 
 #[test]
@@ -3314,4 +3331,128 @@ fn test_create_contract_authorized_by_custom_account() {
     )
     .unwrap();
     assert!(res.invoke_result.is_ok());
+}
+
+mod nonce_collision_tests {
+    use super::*;
+
+    fn nonce_key(address: &ScAddress, nonce: i64) -> LedgerKey {
+        LedgerKey::ContractData(LedgerKeyContractData {
+            contract: address.clone(),
+            key: ScVal::LedgerKeyNonce(ScNonceKey { nonce }),
+            durability: ContractDataDurability::Temporary,
+        })
+    }
+
+    fn nonce_entry(address: &ScAddress, nonce: i64) -> LedgerEntry {
+        ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
+            ext: ExtensionPoint::V0,
+            contract: address.clone(),
+            key: ScVal::LedgerKeyNonce(ScNonceKey { nonce }),
+            durability: ContractDataDurability::Temporary,
+            val: ScVal::Void,
+        }))
+    }
+
+    fn account_key(account_id: &AccountId) -> LedgerKey {
+        LedgerKey::Account(crate::xdr::LedgerKeyAccount {
+            account_id: account_id.clone(),
+        })
+    }
+
+    fn invoke_with_nonces(
+        seed: [u8; 32],
+        auth_nonce: i64,
+        stored_nonce: i64,
+    ) -> InvokeHostFunctionHelperResult {
+        let mut prng = StdRng::from_seed(seed);
+        let signer_key = SigningKey::generate(&mut prng);
+        let signer_address = TestSigner::account(&signer_key).sc_address();
+        let signer_account_id = TestSigner::account(&signer_key).account_id();
+
+        let contract = CreateContractData::new([1; 32], AUTH_TEST_CONTRACT);
+        let source_account = get_account_id([123; 32]);
+        let ledger_info = default_ledger_info();
+        let nonce_live_until = ledger_info.sequence_number + 1000;
+
+        let tree = AuthContractInvocationNode {
+            address: contract.contract_address.clone(),
+            children: vec![],
+        };
+        let host_fn = auth_contract_invocation(vec![signer_address.clone()], tree.clone());
+
+        // Build and sign auth entry
+        let root_invocation = tree.into_authorized_invocation();
+        let auth_entry = build_auth_entry_with_nonce(
+            &signer_address,
+            auth_nonce,
+            ledger_info.sequence_number + 100,
+            root_invocation,
+        );
+        let dummy_host = Host::test_host();
+        let signers = vec![TestSigner::account(&signer_key)];
+        let signed_auth = sign_auth_entry(&dummy_host, &ledger_info, &signers, auth_entry);
+
+        // Build read-only keys: always include wasm and account
+        let mut ro_keys = vec![contract.wasm_key.clone(), account_key(&signer_account_id)];
+        // If there's a stored nonce different from auth_nonce, add it to ro
+        if stored_nonce != auth_nonce {
+            ro_keys.push(nonce_key(&signer_address, stored_nonce));
+        }
+
+        // Build read-write keys: always include contract and the auth nonce
+        let rw_keys = vec![
+            contract.contract_key.clone(),
+            nonce_key(&signer_address, auth_nonce),
+        ];
+
+        // Build ledger entries
+        let mut ledger_entries = vec![
+            (
+                contract.wasm_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                contract.contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+            (account_entry(&signer_account_id), None),
+        ];
+        ledger_entries.push((
+            nonce_entry(&signer_address, stored_nonce),
+            Some(nonce_live_until),
+        ));
+
+        invoke_host_function_helper(
+            true,
+            &host_fn,
+            &resources(100_000_000, ro_keys, rw_keys),
+            &source_account,
+            vec![signed_auth],
+            &ledger_info,
+            ledger_entries,
+            &prng_seed(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_nonce_collision_fails_auth() {
+        let collision_nonce: i64 = 12345;
+        let res = invoke_with_nonces([111; 32], collision_nonce, collision_nonce);
+
+        // Should fail because nonce already exists (replay attack detected)
+        assert!(HostError::result_matches_err(
+            res.invoke_result,
+            (ScErrorType::Auth, ScErrorCode::ExistingValue)
+        ));
+    }
+
+    #[test]
+    fn test_nonce_without_collision_succeeds() {
+        let res = invoke_with_nonces([222; 32], 22222, 11111);
+
+        // Should succeed because auth uses a different nonce
+        assert!(res.invoke_result.is_ok());
+    }
 }
