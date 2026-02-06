@@ -709,6 +709,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27573eac26f4dd11e2b1916c3fe1baa56407c83c71a773a8ba17ec0bca03b6b7"
 
 [[package]]
+name = "flagset"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1683,7 +1689,8 @@ dependencies = [
  "textplots",
  "thousands",
  "tracy-client",
- "wasm-encoder",
+ "wasm-encoder 0.36.2",
+ "wasm-smith",
  "wasmparser",
  "wasmprinter",
  "wycheproof",
@@ -1726,7 +1733,7 @@ dependencies = [
  "soroban-env-common",
  "soroban-env-macros",
  "stellar-xdr",
- "wasm-encoder",
+ "wasm-encoder 0.36.2",
  "wasmparser",
  "wasmprinter",
 ]
@@ -2116,6 +2123,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "822b645bf4f2446b949776ffca47e2af60b167209ffb70814ef8779d299cd421"
 dependencies = [
  "leb128",
+]
+
+[[package]]
+name = "wasm-encoder"
+version = "0.38.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ad2b51884de9c7f4fe2fd1043fccb8dcad4b1e29558146ee57a144d15779f3f"
+dependencies = [
+ "leb128",
+]
+
+[[package]]
+name = "wasm-smith"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58273756970c82a1769b11e13a05bd21f95a767e4a2fab03afd0cff0085ae89d"
+dependencies = [
+ "arbitrary",
+ "flagset",
+ "indexmap 2.0.2",
+ "leb128",
+ "wasm-encoder 0.38.1",
 ]
 
 [[package]]
