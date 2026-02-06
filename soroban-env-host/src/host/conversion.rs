@@ -11,10 +11,10 @@ use crate::{
     host_object::{HostMap, HostObject, HostVec},
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     xdr::{
-        self, int128_helpers, AccountId, ContractCostType, ContractDataDurability, Hash,
-        Int128Parts, Int256Parts, LedgerKey, LedgerKeyContractData, ScAddress, ScBytes,
-        ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScSymbol, ScVal, ScVec, UInt128Parts,
-        UInt256Parts, Uint256, VecM,
+        self, int128_helpers, AccountId, ContractCostType, ContractDataDurability, ContractId,
+        Hash, Int128Parts, Int256Parts, LedgerKey, LedgerKeyContractData, MuxedEd25519Account,
+        PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScSymbol,
+        ScVal, ScVec, UInt128Parts, UInt256Parts, Uint256, VecM,
     },
     AddressObject, BytesObject, Convert, Host, HostError, Object, ScValObjRef, ScValObject, Symbol,
     SymbolObject, TryFromVal, TryIntoVal, U256Val, U32Val, Val, VecObject,
@@ -654,5 +654,164 @@ impl Host {
                 &[],
             )),
         }
+    }
+
+    pub(crate) fn non_muxed_sc_address_to_strkey(
+        &self,
+        addr: &ScAddress,
+    ) -> Result<String, HostError> {
+        // Approximate the strkey encoding cost with two vector allocations:
+        // one for the payload size (32-byte key/hash + 3 bytes for
+        // version/checksum) and another one for the base32 encoding of
+        // the payload.
+        const PAYLOAD_LEN: u64 = 32 + 3;
+        Vec::<u8>::charge_bulk_init_cpy(PAYLOAD_LEN + (PAYLOAD_LEN * 8).div_ceil(5), self)?;
+        let strkey = match addr {
+            ScAddress::Account(acc_id) => {
+                let AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(ed25519))) = acc_id;
+                stellar_strkey::Strkey::PublicKeyEd25519(stellar_strkey::ed25519::PublicKey(
+                    ed25519.metered_clone(self)?,
+                ))
+            }
+            ScAddress::Contract(ContractId(Hash(h))) => {
+                stellar_strkey::Strkey::Contract(stellar_strkey::Contract(h.metered_clone(self)?))
+            }
+            _ => {
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::InternalError,
+                    "Unexpected ScAddress type for strkey encoding",
+                    &[],
+                ))
+            }
+        };
+        Ok(strkey.to_string())
+    }
+
+    pub(crate) fn muxed_sc_address_to_strkey(
+        &self,
+        muxed_addr: &MuxedScAddress,
+    ) -> Result<String, HostError> {
+        // Approximate the strkey encoding cost for muxed accounts
+        // (32-byte key + 8-byte id + 3 bytes for version/checksum)
+        const MUXED_PAYLOAD_LEN: u64 = 32 + 8 + 3;
+        Vec::<u8>::charge_bulk_init_cpy(
+            MUXED_PAYLOAD_LEN + (MUXED_PAYLOAD_LEN * 8).div_ceil(5),
+            self,
+        )?;
+        match &muxed_addr.0 {
+            ScAddress::MuxedAccount(muxed_account) => {
+                let strkey = stellar_strkey::Strkey::MuxedAccountEd25519(
+                    stellar_strkey::ed25519::MuxedAccount {
+                        id: muxed_account.id,
+                        ed25519: muxed_account.ed25519.0.metered_clone(self)?,
+                    },
+                );
+                Ok(strkey.to_string())
+            }
+            _ => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::InternalError,
+                "MuxedAddressObject is used to represent a regular address",
+                &[],
+            )),
+        }
+    }
+
+    /// Parses a strkey from a String or Bytes object into an ScAddress.
+    ///
+    /// When `allow_muxed` is true, accepts Account, Contract, and MuxedAccount strkeys.
+    /// When `allow_muxed` is false, only accepts Account and Contract strkeys.
+    pub(crate) fn strkey_to_scaddress(
+        &self,
+        strkey_obj: Val,
+        allow_muxed: bool,
+    ) -> Result<ScAddress, HostError> {
+        let strkey_obj = Object::try_from(strkey_obj).map_err(|_| {
+            self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "strkey is not an object",
+                &[strkey_obj],
+            )
+        })?;
+
+        self.visit_obj_untyped(strkey_obj, |key_obj: &HostObject| {
+            let key = match key_obj {
+                HostObject::Bytes(b) => b.as_slice(),
+                HostObject::String(s) => s.as_slice(),
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Value,
+                        ScErrorCode::UnexpectedType,
+                        "strkey is not a string or bytes object",
+                        &[strkey_obj.to_val()],
+                    ));
+                }
+            };
+            // Expected strkey lengths:
+            // - Account/Contract: PAYLOAD_LEN = 32 + 3 = 35 bytes → 56 chars in base32
+            // - Muxed account: MUXED_PAYLOAD_LEN = 32 + 8 + 3 = 43 bytes → 69 chars in base32
+            const PAYLOAD_LEN: u64 = 32 + 3;
+            const MUXED_PAYLOAD_LEN: u64 = 32 + 8 + 3;
+            let expected_key_len = (PAYLOAD_LEN * 8).div_ceil(5);
+            let expected_muxed_key_len = (MUXED_PAYLOAD_LEN * 8).div_ceil(5);
+            let key_len = key.len() as u64;
+
+            let (valid_length, payload_len) = if allow_muxed {
+                if key_len == expected_key_len {
+                    (true, PAYLOAD_LEN)
+                } else if key_len == expected_muxed_key_len {
+                    (true, MUXED_PAYLOAD_LEN)
+                } else {
+                    (false, 0)
+                }
+            } else {
+                (key_len == expected_key_len, PAYLOAD_LEN)
+            };
+            if !valid_length {
+                return Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "unexpected strkey length",
+                    &[strkey_obj.to_val()],
+                ));
+            }
+
+            // Charge for the key copy to string.
+            Vec::<u8>::charge_bulk_init_cpy(key_len, self)?;
+            let key_str = String::from_utf8_lossy(key);
+            // Approximate the decoding cost as two vector allocations for the
+            // payload length (the strkey library does one extra copy).
+            Vec::<u8>::charge_bulk_init_cpy(payload_len * 2, self)?;
+            let strkey = stellar_strkey::Strkey::from_string(&key_str).map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "couldn't process the string as strkey",
+                    &[strkey_obj.to_val()],
+                )
+            })?;
+            match strkey {
+                stellar_strkey::Strkey::PublicKeyEd25519(pk) => Ok(ScAddress::Account(AccountId(
+                    PublicKey::PublicKeyTypeEd25519(Uint256(pk.0)),
+                ))),
+                stellar_strkey::Strkey::Contract(c) => {
+                    Ok(ScAddress::Contract(ContractId(Hash(c.0))))
+                }
+                stellar_strkey::Strkey::MuxedAccountEd25519(m) if allow_muxed => {
+                    Ok(ScAddress::MuxedAccount(MuxedEd25519Account {
+                        id: m.id,
+                        ed25519: Uint256(m.ed25519),
+                    }))
+                }
+                _ => Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "incorrect strkey type",
+                    &[strkey_obj.to_val()],
+                )),
+            }
+        })
     }
 }

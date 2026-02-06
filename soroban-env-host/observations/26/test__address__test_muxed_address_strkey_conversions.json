@@ -1,0 +1,20 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call muxed_address_to_strkey(MuxedAddress(obj#1))": "cpu:442, mem:80, objs:-/1@a096b37d",
+  "   2 ret muxed_address_to_strkey -> Ok(String(obj#3))": "cpu:1662, mem:288, objs:-/2@55f17a6d",
+  "   3 call strkey_to_muxed_address(String(obj#3))": "cpu:1723",
+  "   4 ret strkey_to_muxed_address -> Ok(MuxedAddress(obj#5))": "cpu:3426, mem:555, objs:-/3@80e59cab",
+  "   5 call obj_cmp(MuxedAddress(obj#1), MuxedAddress(obj#5))": "",
+  "   6 ret obj_cmp -> Ok(0)": "cpu:3720",
+  "   7 call muxed_address_to_strkey(MuxedAddress(obj#7))": "cpu:4162, mem:635, objs:-/4@4e063fbe",
+  "   8 ret muxed_address_to_strkey -> Ok(String(obj#9))": "cpu:5382, mem:843, objs:-/5@b34fae67",
+  "   9 call strkey_to_muxed_address(String(obj#9))": "",
+  "  10 ret strkey_to_muxed_address -> Ok(MuxedAddress(obj#11))": "cpu:7085, mem:1110, objs:-/6@eb541a81",
+  "  11 call obj_cmp(MuxedAddress(obj#7), MuxedAddress(obj#11))": "",
+  "  12 ret obj_cmp -> Ok(0)": "cpu:7379",
+  "  13 call strkey_to_muxed_address(Bytes(obj#13))": "cpu:7821, mem:1190, objs:-/7@4c6a7bf7",
+  "  14 ret strkey_to_muxed_address -> Ok(MuxedAddress(obj#15))": "cpu:9524, mem:1457, objs:-/8@b8e8504e",
+  "  15 call obj_cmp(MuxedAddress(obj#1), MuxedAddress(obj#15))": "",
+  "  16 ret obj_cmp -> Ok(0)": "cpu:9818",
+  "  17 end": "cpu:9818, mem:1457, prngs:-/-, objs:-/8@b8e8504e, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
