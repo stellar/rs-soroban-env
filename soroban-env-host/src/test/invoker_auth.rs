@@ -1054,6 +1054,7 @@ fn gen_random_call_tree(
 #[test]
 fn test_randomized_invoker_auth_trees() {
     let test = InvokerAuthTest::setup(5);
+    // Fixed arbitrary seed for reproducible randomized tests; numeric value has no date semantics.
     let mut rng = StdRng::seed_from_u64(20250205);
 
     let iterations = 250;
