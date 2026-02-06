@@ -1987,7 +1987,7 @@ mod cap_58_constructor {
                             ),
                         ),
                         resources: SubInvocationResources {
-                            instructions: 2403909,
+                            instructions: 2404497,
                             mem_bytes: 5948080,
                             disk_read_entries: 0,
                             memory_read_entries: 8,
@@ -2013,7 +2013,7 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 913796,
+                                    instructions: 914384,
                                     mem_bytes: 2387055,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
@@ -2039,7 +2039,7 @@ mod cap_58_constructor {
                                             ),
                                         ),
                                         resources: SubInvocationResources {
-                                            instructions: 349975,
+                                            instructions: 350269,
                                             mem_bytes: 1207735,
                                             disk_read_entries: 0,
                                             memory_read_entries: 2,
