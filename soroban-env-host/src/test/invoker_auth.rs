@@ -1058,7 +1058,7 @@ fn test_randomized_invoker_auth_trees() {
     let mut rng = StdRng::seed_from_u64(20250205);
 
     let iterations = 250;
-    for i in 0..iterations {
+    for _ in 0..iterations {
         let mut node_count = 0u32;
         let mut fail_count = 0u32;
         let call = gen_random_call_tree(
