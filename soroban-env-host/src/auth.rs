@@ -878,12 +878,22 @@ impl AuthorizationManager {
         address: AddressObject,
         function: &AuthorizedFunction,
     ) -> Result<bool, HostError> {
+        let curr_contract_address;
         {
             let call_stack = self.try_borrow_call_stack(host)?;
             // If stack has just one call there can't be invoker.
             if call_stack.len() < 2 {
                 return Ok(false);
             }
+            // Get current contract address if the current frame is a contract
+            // call. Note, that this can be `None` for host fn frames, that's
+            // fine and expected as curr_contract_address is only used for
+            // skipping the invoker contract tracker created by the current
+            // contract.
+            curr_contract_address = match call_stack.last() {
+                Some(AuthStackFrame::Contract(c)) => Some(c.contract_address),
+                _ => None,
+            };
 
             // Try matching the direct invoker contract first. It is considered to
             // have authorized any direct calls.
@@ -906,6 +916,14 @@ impl AuthorizationManager {
         // to never require auth (any `require_auth` calls would be matched by
         // logic above).
         for tracker in invoker_contract_trackers.iter_mut() {
+            // Skip trackers created by the current contract — invoker
+            // contract auth is for authorizing sub-contract calls, a
+            // contract cannot use it to authorize itself.
+            if let Some(curr_addr) = curr_contract_address {
+                if host.compare(&tracker.contract_address, &curr_addr)?.is_eq() {
+                    continue;
+                }
+            }
             if host.compare(&tracker.contract_address, &address)?.is_eq()
                 && tracker.maybe_authorize_invocation(host, function)?
             {
@@ -1666,6 +1684,14 @@ impl InvocationTracker {
         function: &AuthorizedFunction,
         allow_matching_root: bool,
     ) -> Result<bool, HostError> {
+        if self.match_stack.is_empty() {
+            return Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "match_stack should not be empty in maybe_extend_invocation_match",
+                &[],
+            ));
+        }
         if self.current_frame_is_already_matched() {
             return Ok(false);
         }

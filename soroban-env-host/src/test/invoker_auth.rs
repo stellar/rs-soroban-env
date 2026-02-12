@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_test_wasms::INVOKER_AUTH_TEST_CONTRACT;
 
@@ -28,14 +29,14 @@ struct InvokerCallNodeContractType {
     pub children: HostVec,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct InvokerAuthNode {
     contract: usize,
     arg: i32,
     children: Vec<InvokerAuthNode>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct InvokerCallNode {
     contract: usize,
     try_call: bool,
@@ -251,6 +252,29 @@ impl InvokerAuthTest {
                 &test_vec![&self.host, scenario],
                 expected_error,
             );
+        }
+    }
+
+    /// Run all failure-point scenarios for the given call tree and assert that
+    /// the result is never an `InternalError`. The call may succeed or fail
+    /// with any other error — we only care that the host never hits an
+    /// internal invariant violation.
+    fn test_auth_fn_no_internal_error(&self, call: &InvokerCallNode) {
+        let scenarios = call.generate_failure_scenarios(&self);
+        for scenario in scenarios {
+            self.host.set_authorization_entries(vec![]).unwrap();
+            let res = self.host.call(
+                self.contracts[0].clone().into(),
+                Symbol::try_from_val(&self.host, &"auth_fn").unwrap(),
+                test_vec![&self.host, scenario].into(),
+            );
+            if let Err(ref he) = res {
+                assert!(
+                    !he.error.is_code(ScErrorCode::InternalError),
+                    "got InternalError: {:?}",
+                    he
+                );
+            }
         }
     }
 }
@@ -885,4 +909,168 @@ fn test_multi_invoker_auth_deep_stack_with_rollbacks() {
         ],
     );
     test.test_auth_fn(&call_with_rollbacks, None);
+}
+
+#[test]
+fn test_self_invoker_auth() {
+    let test = InvokerAuthTest::setup(2);
+    // Contract 0 calls contract 1.
+    // Contract 1 calls `authorize_as_curr_contract` with an auth entry
+    // referencing itself (contract 1, fn "auth_fn", args (42,)).
+    let self_auth_call = InvokerCallNode::no_fail(
+        0,
+        vec![],
+        vec![],
+        vec![InvokerCallNode::no_fail(
+            1,
+            // auth: contract 1 authorizes itself
+            vec![InvokerAuthNode {
+                contract: 1,
+                arg: 42,
+                children: vec![],
+            }],
+            // authorize: require_auth on contract 1 (self)
+            vec![(1, 42)],
+            vec![],
+        )],
+    );
+    test.test_auth_fn(
+        &self_auth_call,
+        Some((ScErrorType::Auth, ScErrorCode::InvalidAction)),
+    );
+}
+
+fn gen_random_auth_node(
+    rng: &mut StdRng,
+    contract_count: usize,
+    remaining_depth: u32,
+) -> InvokerAuthNode {
+    let contract = rng.gen_range(0..contract_count);
+    let arg = rng.gen_range(0..10i32);
+    let child_count = if remaining_depth == 0 {
+        0
+    } else {
+        // 0-2 children, biased toward 0 to keep trees small.
+        match rng.gen_range(0..6u32) {
+            0..=3 => 0,
+            4 => 1,
+            _ => 2,
+        }
+    };
+    let children = (0..child_count)
+        .map(|_| gen_random_auth_node(rng, contract_count, remaining_depth - 1))
+        .collect();
+    InvokerAuthNode {
+        contract,
+        arg,
+        children,
+    }
+}
+
+fn gen_random_call_tree(
+    rng: &mut StdRng,
+    contract_count: usize,
+    remaining_depth: u32,
+    node_count: &mut u32,
+    max_nodes: u32,
+    fail_count: &mut u32,
+    max_fail: u32,
+    is_root: bool,
+) -> InvokerCallNode {
+    *node_count += 1;
+
+    let contract = if is_root {
+        0
+    } else {
+        rng.gen_range(0..contract_count)
+    };
+    let try_call = if is_root {
+        false
+    } else {
+        rng.gen_range(0..5u32) == 0
+    };
+    let fail = if is_root || *fail_count >= max_fail {
+        false
+    } else {
+        let f = rng.gen_range(0..5u32) == 0;
+        if f {
+            *fail_count += 1;
+        }
+        f
+    };
+
+    // 0-3 random authorize entries.
+    let authorize_count = rng.gen_range(0..4u32);
+    let authorize: Vec<(usize, i32)> = (0..authorize_count)
+        .map(|_| (rng.gen_range(0..contract_count), rng.gen_range(0..10i32)))
+        .collect();
+
+    // 0-2 random auth entries with depth 0-2.
+    let auth_count = rng.gen_range(0..3u32);
+    let auth: Vec<InvokerAuthNode> = (0..auth_count)
+        .map(|_| {
+            let depth = rng.gen_range(0..3u32);
+            gen_random_auth_node(rng, contract_count, depth)
+        })
+        .collect();
+
+    // 0-3 children, biased toward fewer; stop at depth 0 or node cap.
+    let child_count = if remaining_depth == 0 || *node_count >= max_nodes {
+        0
+    } else {
+        let c = match rng.gen_range(0..10u32) {
+            0..=3 => 0,
+            4..=6 => 1,
+            7..=8 => 2,
+            _ => 3,
+        };
+        c.min(max_nodes - *node_count)
+    };
+    let children: Vec<InvokerCallNode> = (0..child_count)
+        .map(|_| {
+            gen_random_call_tree(
+                rng,
+                contract_count,
+                remaining_depth - 1,
+                node_count,
+                max_nodes,
+                fail_count,
+                max_fail,
+                false,
+            )
+        })
+        .collect();
+
+    InvokerCallNode {
+        contract,
+        try_call,
+        fail,
+        authorize,
+        auth,
+        children,
+    }
+}
+
+#[test]
+fn test_randomized_invoker_auth_trees() {
+    let test = InvokerAuthTest::setup(5);
+    // Fixed arbitrary seed for reproducible randomized tests; numeric value has no date semantics.
+    let mut rng = StdRng::seed_from_u64(20250205);
+
+    let iterations = 250;
+    for _ in 0..iterations {
+        let mut node_count = 0u32;
+        let mut fail_count = 0u32;
+        let call = gen_random_call_tree(
+            &mut rng,
+            5,
+            4,
+            &mut node_count,
+            10,
+            &mut fail_count,
+            4,
+            true,
+        );
+        test.test_auth_fn_no_internal_error(&call);
+    }
 }
