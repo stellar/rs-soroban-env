@@ -434,8 +434,9 @@ fn transfer_account_balance(
 
         let mut ae = match &le.data {
             LedgerEntryData::Account(ae) => Ok(ae.metered_clone(host)?),
-            _ => Err(host.error(
-                ContractError::InternalError.into(),
+            _ => Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "unexpected entry found",
                 &[],
             )),
@@ -516,8 +517,9 @@ fn transfer_trustline_balance(
 
         let mut tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl.metered_clone(host)?),
-            _ => Err(host.error(
-                ContractError::InternalError.into(),
+            _ => Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "unexpected entry found",
                 &[],
             )),
@@ -558,8 +560,9 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
 
         let ae = match &le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
-            _ => Err(host.error(
-                ContractError::InternalError.into(),
+            _ => Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "unexpected entry found",
                 &[],
             )),
@@ -567,15 +570,17 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
 
         let (min, max) = get_min_max_account_balance(host, ae)?;
         if ae.balance < min {
-            return Err(host.error(
-                ContractError::InternalError.into(),
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "account has balance < minimum",
                 &[],
             ));
         }
         if ae.balance > max {
-            return Err(host.error(
-                ContractError::InternalError.into(),
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "account has balance > maximum",
                 &[],
             ));
@@ -587,8 +592,9 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostEr
 // Metering: covered by components.
 fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64), HostError> {
     if ae.balance < 0 {
-        return Err(e.error(
-            ContractError::InternalError.into(),
+        return Err(e.err(
+            ScErrorType::Storage,
+            ScErrorCode::InternalError,
             "initial balance is negative",
             &[],
         ));
@@ -625,8 +631,9 @@ fn get_trustline_balance(
 
         let tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl.metered_clone(host)?),
-            _ => Err(host.error(
-                ContractError::InternalError.into(),
+            _ => Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "unexpected entry found",
                 &[],
             )),
@@ -634,15 +641,17 @@ fn get_trustline_balance(
 
         let (min, max) = get_min_max_trustline_balance(host, &tl)?;
         if tl.balance < min {
-            return Err(host.error(
-                ContractError::InternalError.into(),
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "trustline has balance < minimum",
                 &[],
             ));
         }
         if tl.balance > max {
-            return Err(host.error(
-                ContractError::InternalError.into(),
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "trustline has balance > maximum",
                 &[],
             ));
@@ -654,8 +663,9 @@ fn get_trustline_balance(
 // Metering: covered by components.
 fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, i64), HostError> {
     if tl.balance < 0 {
-        return Err(e.error(
-            ContractError::InternalError.into(),
+        return Err(e.err(
+            ScErrorType::Storage,
+            ScErrorCode::InternalError,
             "initial balance is negative",
             &[],
         ));
@@ -664,8 +674,9 @@ fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, 
     if let TrustLineEntryExt::V1(ext1) = &tl.ext {
         let min_balance = ext1.liabilities.selling;
         if tl.limit < ext1.liabilities.buying {
-            return Err(e.error(
-                ContractError::InternalError.into(),
+            return Err(e.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "limit is lower than liabilities",
                 &[],
             ));
@@ -716,8 +727,9 @@ fn get_trustline_flags(
 
         let tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
-            _ => Err(host.error(
-                ContractError::InternalError.into(),
+            _ => Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "unexpected entry found",
                 &[],
             )),
@@ -783,8 +795,9 @@ fn set_trustline_authorization(
 
         let mut tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl.metered_clone(host)?),
-            _ => Err(host.error(
-                ContractError::InternalError.into(),
+            _ => Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
                 "unexpected entry found",
                 &[],
             )),

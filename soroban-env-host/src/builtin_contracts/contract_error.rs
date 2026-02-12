@@ -7,7 +7,10 @@ use soroban_env_common::Error;
 // not clear how to distinguish them if multiple built-in contracts are involved.
 #[derive(Debug, FromPrimitive, PartialEq, Eq)]
 pub(crate) enum ContractError {
-    InternalError = 1,
+    // Value 1 is reserved (was InternalError, now use host internal error
+    // instead).
+    #[allow(dead_code)]
+    _Reserved1 = 1,
     OperationNotSupportedError = 2,
     AlreadyInitializedError = 3,
 
