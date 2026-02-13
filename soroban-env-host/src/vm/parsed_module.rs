@@ -294,6 +294,21 @@ impl ParsedModule {
         wasmi_engine: &wasmi::Engine,
         wasm: &[u8],
     ) -> Result<(wasmi::Module, u32), HostError> {
+        // Do a quick pre-validation of the module before exposing it
+        // to wasmi. Unfortunately for compatibility with our previous
+        // choices of "which wasmi errors to bother translating" (see
+        // From<wasmi::Error> in soroban_env_common::error) we need to
+        // translate pre-validation errors into the catchall code
+        // (WasmVm,InvalidAction) that we use in that From, rather than
+        // the InvalidInput that might otherwise make more sense here.
+        context.map_err(wasmparser::validate(wasm).map_err(|_| {
+            soroban_env_common::Error::from_type_and_code(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidAction,
+            )
+        }))?;
+
+        // Then re-parse/re-validate running wasmi code as well.
         let module = {
             let _span = tracy_span!("wasmi::Module::new");
             context.map_err(wasmi::Module::new(&wasmi_engine, wasm))?
