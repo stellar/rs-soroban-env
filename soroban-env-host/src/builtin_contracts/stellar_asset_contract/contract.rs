@@ -9,8 +9,9 @@ use crate::{
             allowance::{read_allowance, spend_allowance, write_allowance},
             asset_info::{has_asset_info, read_asset_info, validate_asset, write_asset_info},
             balance::{
-                check_clawbackable, is_authorized, read_balance, receive_balance, spend_balance,
-                spend_balance_no_authorization_check, write_authorization,
+                check_clawbackable, create_trustline_if_needed, is_authorized, read_balance,
+                receive_balance, spend_balance, spend_balance_no_authorization_check,
+                write_authorization,
             },
             event,
             metadata::{read_name, read_symbol, set_metadata, DECIMAL},
@@ -386,5 +387,27 @@ impl StellarAssetContract {
     pub(crate) fn symbol(e: &Host) -> Result<String, HostError> {
         let _span = tracy_span!("SAC symbol");
         read_symbol(e)
+    }
+
+    /// Creates this contract asset's unlimited trustline for the provided address.
+    ///
+    /// This is a no-op if the input address is a C-address, or if provided G-address
+    /// already has the respective trustline.
+    ///
+    /// If the trustline is actually created, this will require
+    /// authorization from `address` (i.e. `address.require_auth` will be called).
+    ///
+    /// Panics only during trustline creation if the asset issuer does not exist, or
+    /// when a new trustline cannot be created.
+    // Metering: covered by components
+    pub(crate) fn trust(e: &Host, addr: Address) -> Result<(), HostError> {
+        let _span = tracy_span!("SAC trust");
+
+        e.extend_current_contract_instance_and_code_ttl(
+            INSTANCE_TTL_THRESHOLD.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
+        )?;
+
+        create_trustline_if_needed(e, addr)
     }
 }
