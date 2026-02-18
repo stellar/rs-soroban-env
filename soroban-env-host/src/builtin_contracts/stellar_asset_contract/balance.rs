@@ -447,9 +447,9 @@ fn transfer_account_balance(
                 // Account exists - update the balance
                 let mut ae = match &le.data {
                     LedgerEntryData::Account(ae) => Ok(ae.metered_clone(host)?),
-            _ => Err(host.err(
-                ScErrorType::Storage,
-                ScErrorCode::InternalError,
+                    _ => Err(host.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::InternalError,
                         "unexpected entry found",
                         &[],
                     )),
