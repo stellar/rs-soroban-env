@@ -280,6 +280,51 @@ impl Host {
         Ok(())
     }
 
+    pub(crate) fn extend_contract_code_ttl_v2(
+        &self,
+        instance_key: &Rc<LedgerKey>,
+        extend_to: u32,
+        min_extension: u32,
+        max_extension: u32,
+    ) -> Result<(), HostError> {
+        match self
+            .retrieve_contract_instance_from_storage(instance_key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.try_borrow_storage_mut()?.extend_ttl_v2(
+                    self,
+                    key,
+                    extend_to,
+                    min_extension,
+                    max_extension,
+                    None,
+                )?;
+            }
+            ContractExecutable::StellarAsset => {}
+        }
+        Ok(())
+    }
+
+    pub(crate) fn extend_contract_instance_ttl_v2(
+        &self,
+        instance_key: Rc<LedgerKey>,
+        extend_to: u32,
+        min_extension: u32,
+        max_extension: u32,
+    ) -> Result<(), HostError> {
+        self.try_borrow_storage_mut()?.extend_ttl_v2(
+            self,
+            instance_key,
+            extend_to,
+            min_extension,
+            max_extension,
+            None,
+        )?;
+        Ok(())
+    }
+
     // metering: covered by components
     pub(crate) fn get_full_contract_id_preimage(
         &self,

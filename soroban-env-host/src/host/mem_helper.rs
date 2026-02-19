@@ -265,7 +265,11 @@ impl Host {
         Ok(())
     }
 
-    fn metered_copy_byte_slice(&self, dst: &mut [u8], src: &[u8]) -> Result<(), HostError> {
+    pub(crate) fn metered_copy_byte_slice(
+        &self,
+        dst: &mut [u8],
+        src: &[u8],
+    ) -> Result<(), HostError> {
         if src.len() != dst.len() {
             // This should be impossible on all caller codepaths, but we check just in case
             // since copy_from_slice below will panic if there's a size mismatch.

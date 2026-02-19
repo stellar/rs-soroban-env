@@ -84,10 +84,7 @@ impl NetworkConfig {
     ///
     /// This may only fail in case when provided snapshot doesn't contain
     /// all the necessary entries or when these entries are mis-configured.
-    pub fn load_from_snapshot(
-        snapshot: &impl SnapshotSource,
-        #[cfg(not(feature = "unstable-next-api"))] _bucket_list_size: u64,
-    ) -> Result<Self> {
+    pub fn load_from_snapshot(snapshot: &impl SnapshotSource) -> Result<Self> {
         let compute = load_setting!(snapshot, ContractComputeV0);
         let ledger_cost = load_setting!(snapshot, ContractLedgerCostV0);
         let ledger_cost_ext = load_setting!(snapshot, ContractLedgerCostExtV0);

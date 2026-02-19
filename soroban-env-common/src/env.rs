@@ -4,10 +4,10 @@ use crate::Object;
 
 use super::Symbol;
 use super::{
-    AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
-    I64Object, MapObject, MuxedAddressObject, StorageType, StringObject, SymbolObject,
-    TimepointObject, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject,
-    Void,
+    AddressObject, Bool, BytesObject, ContractTTLExtension, DurationObject, Error, I128Object,
+    I256Object, I256Val, I64Object, MapObject, MuxedAddressObject, StorageType, StringObject,
+    SymbolObject, TimepointObject, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val,
+    VecObject, Void,
 };
 use crate::xdr::{ScErrorCode, ScErrorType};
 
@@ -248,6 +248,7 @@ pub trait CheckedEnvArg: Sized {
 impl CheckedEnvArg for i64 {}
 impl CheckedEnvArg for u64 {}
 impl CheckedEnvArg for StorageType {}
+impl CheckedEnvArg for ContractTTLExtension {}
 
 macro_rules! impl_checkedenvarg_for_val_or_wrapper {
     ($type:ty) => {

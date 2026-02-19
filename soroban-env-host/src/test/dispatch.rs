@@ -7,12 +7,12 @@ use crate::{
         ContractId, Duration, Hash, MuxedEd25519Account, ScAddress, ScBytes, ScErrorCode,
         ScErrorType, ScString, ScSymbol, TimePoint, Uint256,
     },
-    AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Env, Error, Host,
-    HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object,
-    I64Small, MapObject, MuxedAddressObject, StorageType, StringObject, Symbol, SymbolObject,
-    SymbolSmall, TimepointObject, TimepointSmall, TimepointVal, U128Object, U128Small, U128Val,
-    U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val, VecObject, Void,
-    I256, U256,
+    AddressObject, Bool, BytesObject, ContractTTLExtension, DurationObject, DurationSmall,
+    DurationVal, Env, Error, Host, HostError, I128Object, I128Small, I128Val, I256Object,
+    I256Small, I256Val, I32Val, I64Object, I64Small, MapObject, MuxedAddressObject, StorageType,
+    StringObject, Symbol, SymbolObject, SymbolSmall, TimepointObject, TimepointSmall, TimepointVal,
+    U128Object, U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small,
+    U64Val, Val, VecObject, Void, I256, U256,
 };
 
 use soroban_env_macros::generate_synth_dispatch_host_fn_tests;
@@ -237,6 +237,12 @@ impl TestVal for Val {
 impl TestVal for StorageType {
     fn test_val() -> Val {
         Val::from_u32(StorageType::Persistent as u32).to_val()
+    }
+}
+
+impl TestVal for ContractTTLExtension {
+    fn test_val() -> Val {
+        Val::from_u32(ContractTTLExtension::InstanceAndCode as u32).to_val()
     }
 }
 

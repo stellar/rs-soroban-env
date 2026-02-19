@@ -182,6 +182,20 @@ pub struct Storage {
     pub map: StorageMap,
 }
 
+/// Helper struct holding common state for TTL extension operations.
+struct TtlExtensionInfo {
+    entry: Rc<LedgerEntry>,
+    old_live_until: u32,
+    current_ttl: u32,
+    max_live_until: u32,
+}
+
+impl TtlExtensionInfo {
+    fn max_network_extension(&self) -> u32 {
+        self.max_live_until.saturating_sub(self.old_live_until)
+    }
+}
+
 // Notes on metering: all storage operations: `put`, `get`, `del`, `has` are
 // covered by the underlying [MeteredOrdMap] and the [Footprint]'s own map.
 impl Storage {
@@ -414,45 +428,23 @@ impl Storage {
         Ok(self.try_get_full(key, host, key_val)?.is_some())
     }
 
-    /// Extends `key` to live `extend_to` ledgers from now (not counting the
-    /// current ledger) if the current `live_until_ledger_seq` for the entry is
-    /// `threshold` ledgers or less away from the current ledger.
-    ///
-    /// If attempting to extend an entry past `Host::max_live_until_ledger()`
-    /// - if the entry is `Persistent`, the entries's new
-    ///   `live_until_ledger_seq` is clamped to it.
-    /// - if the entry is `Temporary`, returns error.
-    ///
-    /// This operation is only defined within a host as it relies on ledger
-    /// state.
-    ///
-    /// This operation does not modify any ledger entries, but does change the
-    /// internal storage
-    pub(crate) fn extend_ttl(
+    /// Common setup for TTL extension operations. Returns the entry info
+    /// needed to compute and apply the TTL extension.
+    fn prepare_extend_ttl(
         &mut self,
         host: &Host,
-        key: Rc<LedgerKey>,
-        threshold: u32,
+        key: &Rc<LedgerKey>,
         extend_to: u32,
         key_val: Option<Val>,
-    ) -> Result<(), HostError> {
-        let _span = tracy_span!("extend key");
-        Self::check_supported_ledger_key_type(&key)?;
+    ) -> Result<TtlExtensionInfo, HostError> {
+        Self::check_supported_ledger_key_type(key)?;
 
-        if threshold > extend_to {
-            return Err(host.err(
-                ScErrorType::Storage,
-                ScErrorCode::InvalidInput,
-                "threshold must be <= extend_to",
-                &[threshold.into(), extend_to.into()],
-            ));
-        }
         #[cfg(any(test, feature = "recording_mode"))]
-        self.handle_maybe_expired_entry(&key, host)?;
+        self.handle_maybe_expired_entry(key, host)?;
 
         // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
-        let (entry, old_live_until) = self.get_with_live_until_ledger(&key, &host, key_val)?;
+        let (entry, old_live_until) = self.get_with_live_until_ledger(key, host, key_val)?;
         let old_live_until = old_live_until.ok_or_else(|| {
             host.err(
                 ScErrorType::Storage,
@@ -472,6 +464,92 @@ impl Storage {
             ));
         }
 
+        let max_live_until = host.max_live_until_ledger()?;
+
+        let durability = get_key_durability(key).ok_or_else(|| {
+            host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "durability is missing",
+                &[],
+            )
+        })?;
+        let max_ttl = max_live_until.saturating_sub(ledger_seq);
+        if matches!(durability, ContractDataDurability::Temporary) && extend_to > max_ttl {
+            //  for `Temporary` entries TTL has to be exact - most of
+            //  the time entry has to live until the exact specified
+            //  ledger, or else something bad would happen (e.g. nonce
+            //  expiring before the corresponding signature, thus
+            //  allowing replay and double spend).
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidAction,
+                "trying to extend temporary entry past max TTL allowed by network: {} > {}",
+                &[extend_to.into(), max_ttl.into()],
+            ));
+        }
+        let current_ttl = old_live_until.saturating_sub(ledger_seq);
+        Ok(TtlExtensionInfo {
+            entry,
+            old_live_until,
+            current_ttl,
+            max_live_until,
+        })
+    }
+
+    /// Updates the storage map with a new live_until value if it extends the TTL.
+    fn apply_ttl_extension(
+        &mut self,
+        host: &Host,
+        key: Rc<LedgerKey>,
+        ttl_ext_info: TtlExtensionInfo,
+        new_live_until: u32,
+    ) -> Result<(), HostError> {
+        if new_live_until > ttl_ext_info.old_live_until {
+            self.map = self.map.insert(
+                key,
+                Some((ttl_ext_info.entry, Some(new_live_until))),
+                host.budget_ref(),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Extends `key` to live `extend_to` ledgers from now (not counting the
+    /// current ledger) if the current `live_until_ledger_seq` for the entry is
+    /// `threshold` ledgers or less away from the current ledger.
+    ///
+    /// If attempting to extend an entry past `Host::max_live_until_ledger()`
+    /// - if the entry is `Persistent`, the entries's new
+    ///   `live_until_ledger_seq` is clamped to it.
+    /// - if the entry is `Temporary`, returns error.
+    ///
+    /// This operation is only defined within a host as it relies on ledger
+    /// state.
+    ///
+    /// This operation does not modify any ledger entries, but does change the
+    /// internal storage.
+    pub(crate) fn extend_ttl(
+        &mut self,
+        host: &Host,
+        key: Rc<LedgerKey>,
+        threshold: u32,
+        extend_to: u32,
+        key_val: Option<Val>,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("extend key");
+
+        if threshold > extend_to {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidInput,
+                "threshold must be <= extend_to",
+                &[threshold.into(), extend_to.into()],
+            ));
+        }
+
+        let ttl_ext_info = self.prepare_extend_ttl(host, &key, extend_to, key_val)?;
+
         let mut new_live_until = host.with_ledger_info(|li| {
             li.sequence_number.checked_add(extend_to).ok_or_else(|| {
                 // overflowing here means a misconfiguration of the network (the
@@ -485,42 +563,83 @@ impl Storage {
             })
         })?;
 
-        if new_live_until > host.max_live_until_ledger()? {
-            if let Some(durability) = get_key_durability(&key) {
-                if matches!(durability, ContractDataDurability::Persistent) {
-                    new_live_until = host.max_live_until_ledger()?;
-                } else {
-                    //  for `Temporary` entries TTL has to be exact - most of
-                    //  the time entry has to live until the exact specified
-                    //  ledger, or else something bad would happen (e.g. nonce
-                    //  expiring before the corresponding signature, thus
-                    //  allowing replay and double spend).
-                    return Err(host.err(
-                        ScErrorType::Storage,
-                        ScErrorCode::InvalidAction,
-                        "trying to extend past max live_until ledger",
-                        &[new_live_until.into()],
-                    ));
-                }
-            } else {
-                return Err(host.err(
-                    ScErrorType::Storage,
-                    ScErrorCode::InternalError,
-                    "durability is missing",
-                    &[],
-                ));
-            }
-        }
+        // Clamp persistent entries to max network TTL (temporary entries
+        // wouldn't get here).
+        new_live_until = new_live_until.min(ttl_ext_info.max_live_until);
 
-        if new_live_until > old_live_until && old_live_until.saturating_sub(ledger_seq) <= threshold
-        {
-            self.map = self.map.insert(
-                key,
-                Some((entry.clone(), Some(new_live_until))),
-                host.budget_ref(),
-            )?;
+        if ttl_ext_info.current_ttl <= threshold {
+            self.apply_ttl_extension(host, key, ttl_ext_info, new_live_until)?;
         }
         Ok(())
+    }
+
+    /// Extends TTL of a ledger entry with min/max extension controls.
+    ///
+    /// The function extends the TTL to be up to `extend_to` ledgers from
+    /// current ledger. The TTL extension only actually happens if the
+    /// amount of extension ledgers is at least `min_extension`; otherwise this
+    /// function is a no-op. The amount of extension ledgers will not exceed
+    /// `max_extension` ledgers.
+    ///
+    /// If attempting to extend an entry past `Host::max_live_until_ledger()`
+    /// - if the entry is `Persistent`, the entry's new
+    ///   `live_until_ledger_seq` is clamped to it.
+    /// - if the entry is `Temporary`, returns error.
+    ///
+    /// This operation is only defined within a host as it relies on ledger
+    /// state.
+    ///
+    /// This operation does not modify any ledger entries, but does change the
+    /// internal storage.
+    pub(crate) fn extend_ttl_v2(
+        &mut self,
+        host: &Host,
+        key: Rc<LedgerKey>,
+        extend_to: u32,
+        min_extension: u32,
+        max_extension: u32,
+        key_val: Option<Val>,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("extend key v2");
+
+        if max_extension < min_extension {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidInput,
+                "max_extension must be >= min_extension",
+                &[max_extension.into(), min_extension.into()],
+            ));
+        }
+
+        let ttl_ext_info = self.prepare_extend_ttl(host, &key, extend_to, key_val)?;
+
+        // Compute the initial TTL extension and clamp to not exceed
+        // network/argument limits
+        let ttl_ext_init = extend_to.saturating_sub(ttl_ext_info.current_ttl);
+        let ttl_ext_final = ttl_ext_init
+            .min(max_extension)
+            .min(ttl_ext_info.max_network_extension());
+
+        // If final extension < min_extension, return without changes
+        if ttl_ext_final < min_extension {
+            return Ok(());
+        }
+
+        let new_live_until = ttl_ext_info
+            .old_live_until
+            .checked_add(ttl_ext_final)
+            .ok_or_else(|| {
+                // overflowing here means a misconfiguration of the network (the
+                // ttl is too large), in which case we immediately flag it as an
+                // unrecoverable `InternalError`, even though the source is
+                // external to the host.
+                HostError::from(Error::from_type_and_code(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                ))
+            })?;
+
+        self.apply_ttl_extension(host, key, ttl_ext_info, new_live_until)
     }
 
     #[cfg(any(test, feature = "recording_mode"))]

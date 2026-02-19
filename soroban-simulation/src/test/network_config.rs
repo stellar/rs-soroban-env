@@ -141,9 +141,6 @@ fn test_load_config_from_snapshot() {
     ])
     .unwrap();
 
-    #[cfg(not(feature = "unstable-next-api"))]
-    let network_config = NetworkConfig::load_from_snapshot(&snapshot_source, 0).unwrap();
-    #[cfg(feature = "unstable-next-api")]
     let network_config = NetworkConfig::load_from_snapshot(&snapshot_source).unwrap();
 
     // From tests/resources `test_compute_rent_write_fee`

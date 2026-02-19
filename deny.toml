@@ -90,7 +90,12 @@ ignore = [
 
     # This ignores the advisory re unmaintained `paste` crate that is a
     # transitive dependency of several crates we depend on.
-    "RUSTSEC-2024-0436"
+    "RUSTSEC-2024-0436",
+    # Ignores 'Unsoundness in opt-in ARMv8 assembly backend for `keccak`'
+    # advisory, this shouldn't impact us as we don't support ARM, and
+    # we link `keccak` transitively through `sha3`.
+    # This should be removed after `sha3` update to >10.8 version.
+    "RUSTSEC-2026-0012"
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

@@ -1,6 +1,7 @@
 use crate::{
     budget::AsBudget,
     crypto::metered_scalar::MeteredScalar,
+    crypto::PointValidationMode,
     host_object::HostVec,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
     Bool, BytesObject, Env, Host, HostError, TryFromVal, U256Val, Val, VecObject,
@@ -181,8 +182,8 @@ impl Host {
     pub(crate) fn affine_deserialize<const EXPECTED_SIZE: usize, P: SWCurveConfig>(
         &self,
         bo: BytesObject,
+        validation_mode: PointValidationMode,
         ct_curve: ContractCostType,
-        subgroup_check: bool,
         ct_subgroup: ContractCostType,
         tag: &str,
     ) -> Result<Affine<P>, HostError> {
@@ -212,7 +213,17 @@ impl Host {
             // makes sure any value >= prime modulus results in an error.
             self.deserialize_uncompressed_no_validate::<EXPECTED_SIZE, _>(bytes.as_slice(), tag)
         })?;
-        if !self.check_point_is_on_curve(&pt, &ct_curve)? {
+
+        let check_on_curve = matches!(
+            validation_mode,
+            PointValidationMode::CheckOnCurve | PointValidationMode::CheckOnCurveAndInSubgroup
+        );
+        let check_subgroup = matches!(
+            validation_mode,
+            PointValidationMode::CheckOnCurveAndInSubgroup
+        );
+
+        if check_on_curve && !self.check_point_is_on_curve(&pt, &ct_curve)? {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
@@ -220,7 +231,7 @@ impl Host {
                 &[],
             ));
         }
-        if subgroup_check && !self.check_point_is_in_subgroup(&pt, &ct_subgroup)? {
+        if check_subgroup && !self.check_point_is_in_subgroup(&pt, &ct_subgroup)? {
             return Err(self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
@@ -234,12 +245,12 @@ impl Host {
     pub(crate) fn g1_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
-        subgroup_check: bool,
+        validation_mode: PointValidationMode,
     ) -> Result<G1Affine, HostError> {
         self.affine_deserialize::<G1_SERIALIZED_SIZE, G1Config>(
             bo,
+            validation_mode,
             ContractCostType::Bls12381G1CheckPointOnCurve,
-            subgroup_check,
             ContractCostType::Bls12381G1CheckPointInSubgroup,
             "G1",
         )
@@ -248,12 +259,12 @@ impl Host {
     pub(crate) fn g2_affine_deserialize_from_bytesobj(
         &self,
         bo: BytesObject,
-        subgroup_check: bool,
+        validation_mode: PointValidationMode,
     ) -> Result<G2Affine, HostError> {
         self.affine_deserialize::<G2_SERIALIZED_SIZE, G2Config>(
             bo,
+            validation_mode,
             ContractCostType::Bls12381G2CheckPointOnCurve,
-            subgroup_check,
             ContractCostType::Bls12381G2CheckPointInSubgroup,
             "G2",
         )
@@ -357,9 +368,9 @@ impl Host {
                     ],
                 ));
             }
-            self.charge_budget(ContractCostType::MemCpy, Some(EXPECTED_SIZE as u64))?;
             let mut buf = [0u8; EXPECTED_SIZE];
-            buf.copy_from_slice(bytes);
+            self.metered_copy_byte_slice(&mut buf, bytes)?;
+
             buf.reverse();
 
             // The field element here an either be a Fp<P, N=6> (base field
@@ -434,7 +445,6 @@ impl Host {
         &self,
         vp: VecObject,
         ct_curve: ContractCostType,
-        subgroup_check: bool,
         ct_subgroup: ContractCostType,
         tag: &str,
     ) -> Result<Vec<Affine<P>>, HostError> {
@@ -448,8 +458,8 @@ impl Host {
             for p in vp.iter() {
                 let pp = self.affine_deserialize::<EXPECTED_SIZE, P>(
                     BytesObject::try_from_val(self, p)?,
+                    PointValidationMode::CheckOnCurveAndInSubgroup,
                     ct_curve,
-                    subgroup_check,
                     ct_subgroup,
                     tag,
                 )?;
@@ -467,7 +477,6 @@ impl Host {
         self.affine_vec_from_vecobj::<G1_SERIALIZED_SIZE, G1Config>(
             vp,
             ContractCostType::Bls12381G1CheckPointOnCurve,
-            true,
             ContractCostType::Bls12381G1CheckPointInSubgroup,
             "G1",
         )
@@ -480,7 +489,6 @@ impl Host {
         self.affine_vec_from_vecobj::<G2_SERIALIZED_SIZE, G2Config>(
             vp,
             ContractCostType::Bls12381G2CheckPointOnCurve,
-            true,
             ContractCostType::Bls12381G2CheckPointInSubgroup,
             "G2",
         )
