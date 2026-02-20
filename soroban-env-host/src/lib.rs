@@ -68,5 +68,13 @@ pub mod testutils;
 #[cfg(any(test, feature = "testutils"))]
 #[doc(hidden)]
 pub mod e2e_testutils;
+
+// The fuzz module provides fuzz target entry points for external harnesses.
+// It's gated by testutils since fuzz targets need testutils functionality,
+// and we want fuzz smoke tests to run in normal test builds.
+#[cfg(feature = "testutils")]
+#[doc(hidden)]
+pub mod fuzz;
+
 #[cfg(test)]
 mod test;

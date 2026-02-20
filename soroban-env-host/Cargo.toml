@@ -56,6 +56,12 @@ ark-ec = { version = "0.5.0"}
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "0.17.0", features = ["enable", "timer-fallback"], default-features = false, optional = true }
 
+# Dependencies for testutils/fuzz targets
+# These are used by the fuzz module which is now enabled under testutils
+arbitrary = { version = "1.3.2", features = ["derive"], optional = true }
+soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm", features = ["testutils"], optional = true }
+wasm-smith = { version = "0.13.1", optional = true }
+
 [dev-dependencies]
 hex = "0.4.3"
 itertools = "0.13.0"
@@ -96,12 +102,18 @@ features = ["arbitrary",
 ]
 
 [features]
-testutils = ["soroban-env-common/testutils", "recording_mode"]
+# testutils enables test-only functionality including fuzz target entry points.
+# The fuzz module (soroban_env_host::fuzz) is compiled under this feature to allow
+# external harnesses like stellar-core to run fuzz smoke tests in normal test builds.
+testutils = ["soroban-env-common/testutils", "recording_mode", "dep:arbitrary", "dep:soroban-synth-wasm", "dep:wasm-smith"]
 backtrace = ["dep:backtrace"]
 next = ["soroban-env-common/next"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_mode = []
 bench = ["testutils"]
+# The fuzz feature is kept for backward compatibility and for any future
+# instrumentation-specific code. It now just enables testutils.
+fuzz = ["testutils"]
 # This feature guards the work-in-progress changes in soroban-env-host
 # API. Its main purpose is to be able to make API changes without bumping
 # the crate version.
