@@ -176,6 +176,26 @@ impl Host {
             )?;
         }
 
+        // Validate that the ID preimage type matches the executable type:
+        // - Address preimage must pair with Wasm executable
+        // - Asset preimage must pair with StellarAsset executable
+        match (&args.contract_id_preimage, &args.executable) {
+            (ContractIdPreimage::Address(_), ContractExecutable::Wasm(_))
+            | (ContractIdPreimage::Asset(_), ContractExecutable::StellarAsset) => Ok(()),
+            (ContractIdPreimage::Address(_), ContractExecutable::StellarAsset) => Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "address preimage is not allowed for StellarAsset executable",
+                &[],
+            )),
+            (ContractIdPreimage::Asset(_), ContractExecutable::Wasm(_)) => Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "asset preimage is not allowed for Wasm executable",
+                &[],
+            )),
+        }?;
+
         let id_preimage =
             self.get_full_contract_id_preimage(args.contract_id_preimage.metered_clone(self)?)?;
         let contract_id = ContractId(Hash(self.metered_hash_xdr(&id_preimage)?));

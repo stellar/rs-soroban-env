@@ -2609,6 +2609,95 @@ mod cap_58_constructor {
     }
 }
 
+mod preimage_executable_mismatch {
+    use super::*;
+    use crate::xdr::Asset;
+
+    #[test]
+    fn address_preimage_with_stellar_asset_executable_fails() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        let source_account = generate_account_id(&host);
+        let salt = generate_bytes_array(&host);
+        host.set_source_account(source_account.clone()).unwrap();
+        host.switch_to_recording_auth(true).unwrap();
+
+        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+            address: ScAddress::Account(source_account.clone()),
+            salt: Uint256(salt.to_vec().try_into().unwrap()),
+        });
+
+        let res = host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
+            contract_id_preimage,
+            executable: ContractExecutable::StellarAsset,
+            constructor_args: Default::default(),
+        }));
+        assert!(res.is_err());
+        let err = res.err().unwrap().error;
+        assert!(err.is_type(ScErrorType::Value));
+        assert!(err.is_code(ScErrorCode::InvalidInput));
+    }
+
+    #[test]
+    fn asset_preimage_with_wasm_executable_fails() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        host.switch_to_recording_auth(true).unwrap();
+
+        // Upload wasm so we have a valid hash
+        let wasm_hash_obj: Val = host
+            .invoke_function(HostFunction::UploadContractWasm(
+                ADD_I32.to_vec().try_into().unwrap(),
+            ))
+            .unwrap()
+            .try_into_val(&*host)
+            .unwrap();
+        let wasm_hash = host
+            .hash_from_bytesobj_input("wasm_hash", wasm_hash_obj.try_into().unwrap())
+            .unwrap();
+
+        let res = host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
+            contract_id_preimage: ContractIdPreimage::Asset(Asset::Native),
+            executable: ContractExecutable::Wasm(wasm_hash),
+            constructor_args: Default::default(),
+        }));
+        assert!(res.is_err());
+        let err = res.err().unwrap().error;
+        assert!(err.is_type(ScErrorType::Value));
+        assert!(err.is_code(ScErrorCode::InvalidInput));
+    }
+
+    #[test]
+    fn address_preimage_with_wasm_executable_succeeds() {
+        let host = test_host();
+        let source_account = generate_account_id(&host);
+        let salt = generate_bytes_array(&host);
+        // This is the happy path for wasm contracts - already covered
+        // extensively, but included here for completeness.
+        let res = create_contract_with_constructor(
+            &host,
+            source_account,
+            salt,
+            ADD_I32,
+            &vec![],
+            Default::default(),
+        );
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn asset_preimage_with_stellar_asset_executable_succeeds() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        host.switch_to_recording_auth(true).unwrap();
+
+        // This is the happy path for SAC - create an asset contract.
+        let res = host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
+            contract_id_preimage: ContractIdPreimage::Asset(Asset::Native),
+            executable: ContractExecutable::StellarAsset,
+            constructor_args: Default::default(),
+        }));
+        assert!(res.is_ok());
+    }
+}
+
 mod cap_68_executable_getter {
     use soroban_env_common::TryFromVal;
 
