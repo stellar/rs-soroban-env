@@ -2623,7 +2623,7 @@ mod preimage_executable_mismatch {
 
         let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
             address: ScAddress::Account(source_account.clone()),
-            salt: Uint256(salt.to_vec().try_into().unwrap()),
+            salt: Uint256(salt),
         });
 
         let res = host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
@@ -2667,7 +2667,7 @@ mod preimage_executable_mismatch {
 
     #[test]
     fn address_preimage_with_wasm_executable_succeeds() {
-        let host = test_host();
+        let host = observe_host!(Host::test_host_with_recording_footprint());
         let source_account = generate_account_id(&host);
         let salt = generate_bytes_array(&host);
         // This is the happy path for wasm contracts - already covered

@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 push UploadContractWasm:()": "cpu:16181, mem:560, stk:1@41146a5",
+  "   2 pop UploadContractWasm: -> Ok(Bytes(obj#1))": "cpu:1552266, mem:1431540, objs:-/1@5e4e09d6, store:-/1@5def401a, foot:1@14beddde",
+  "   3 push CreateContractV2:()": "cpu:1555643, mem:1432344, objs:-/2@35d1fefd, stk:1@b12cde0f",
+  "   4 pop CreateContractV2: -> Err(Error(Value, InvalidInput))": "cpu:1556166, mem:1432360",
+  "   5 end": "cpu:1556166, mem:1432360, prngs:-/9b4a753, objs:-/2@35d1fefd, vm:-/-, evt:-, store:-/1@5def401a, foot:1@14beddde, stk:-, auth:-/-"
+}
