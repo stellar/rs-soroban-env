@@ -683,17 +683,29 @@ fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64)
     let base_reserve = e.with_ledger_info(|li| Ok(li.base_reserve))? as i64;
     if let AccountEntryExt::V1(ext1) = &ae.ext {
         let net_entries = if let AccountEntryExtensionV1Ext::V2(ext2) = &ext1.ext {
-            2i64 + (ae.num_sub_entries as i64) + (ext2.num_sponsoring as i64)
-                - (ext2.num_sponsored as i64)
+            2i64.checked_add(ae.num_sub_entries as i64)
+                .and_then(|v| v.checked_add(ext2.num_sponsoring as i64))
+                .and_then(|v| v.checked_sub(ext2.num_sponsored as i64))
+                .ok_or_else(|| e.err_arith_overflow())?
         } else {
-            2i64 + ae.num_sub_entries as i64
+            2i64.checked_add(ae.num_sub_entries as i64)
+                .ok_or_else(|| e.err_arith_overflow())?
         };
-        let min_balance = net_entries * base_reserve + ext1.liabilities.selling;
-        let max_balance = i64::MAX - ext1.liabilities.buying;
+        let min_balance = net_entries
+            .checked_mul(base_reserve)
+            .and_then(|v| v.checked_add(ext1.liabilities.selling))
+            .ok_or_else(|| e.err_arith_overflow())?;
+        let max_balance = i64::MAX
+            .checked_sub(ext1.liabilities.buying)
+            .ok_or_else(|| e.err_arith_overflow())?;
         Ok((min_balance, max_balance))
     } else {
-        let net_entries = 2i64 + (ae.num_sub_entries as i64);
-        let min_balance = net_entries * base_reserve;
+        let net_entries = 2i64
+            .checked_add(ae.num_sub_entries as i64)
+            .ok_or_else(|| e.err_arith_overflow())?;
+        let min_balance = net_entries
+            .checked_mul(base_reserve)
+            .ok_or_else(|| e.err_arith_overflow())?;
         let max_balance = i64::MAX;
         Ok((min_balance, max_balance))
     }
