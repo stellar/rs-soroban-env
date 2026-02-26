@@ -8,7 +8,8 @@ use crate::{
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     host_object::{HostMap, HostObject, HostVec, MuxedScAddress},
     impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_bls12_381_fr_arith_host_fns,
-    impl_bn254_fr_arith_host_fns, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
+    impl_bn254_fr_arith_host_fns, impl_checked_bignum_host_fns,
+    impl_checked_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
     storage::Storage,
     vm::ModuleCache,
@@ -1620,6 +1621,16 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns_rhs_u32!(i256_pow, checked_pow, I256, I256Val, Int256Pow);
     impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, I256Val, Int256Shift);
     impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, I256Val, Int256Shift);
+
+    impl_checked_bignum_host_fns!(u256_checked_add, checked_add, U256, U256Val, Int256AddSub);
+    impl_checked_bignum_host_fns!(u256_checked_sub, checked_sub, U256, U256Val, Int256AddSub);
+    impl_checked_bignum_host_fns!(u256_checked_mul, checked_mul, U256, U256Val, Int256Mul);
+    impl_checked_bignum_host_fns_rhs_u32!(u256_checked_pow, checked_pow, U256, U256Val, Int256Pow);
+
+    impl_checked_bignum_host_fns!(i256_checked_add, checked_add, I256, I256Val, Int256AddSub);
+    impl_checked_bignum_host_fns!(i256_checked_sub, checked_sub, I256, I256Val, Int256AddSub);
+    impl_checked_bignum_host_fns!(i256_checked_mul, checked_mul, I256, I256Val, Int256Mul);
+    impl_checked_bignum_host_fns_rhs_u32!(i256_checked_pow, checked_pow, I256, I256Val, Int256Pow);
 
     // endregion: "int" module functions
     // region: "map" module functions
