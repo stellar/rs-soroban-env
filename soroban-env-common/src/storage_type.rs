@@ -37,10 +37,10 @@ declare_wasmi_marshal_for_enum!(StorageType);
 /// to specify which entries should have their TTL extended.
 #[repr(u64)]
 #[derive(Debug, FromPrimitive, PartialEq, Eq, Clone, Copy)]
-pub enum ContractTTLExtension {
+pub enum ContractTtlExtension {
     InstanceAndCode = 0,
     Instance = 1,
     Code = 2,
 }
 
-declare_wasmi_marshal_for_enum!(ContractTTLExtension);
+declare_wasmi_marshal_for_enum!(ContractTtlExtension);
