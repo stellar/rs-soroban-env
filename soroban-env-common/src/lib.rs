@@ -100,7 +100,7 @@ pub use num::{
 };
 pub use num::{I256, U256};
 
-pub use storage_type::{ContractTTLExtension, StorageType};
+pub use storage_type::{ContractTtlExtension, StorageType};
 
 // Re-export the XDR definitions of a specific version -- curr or next -- of the xdr crate.
 // next should be used while the protocol is in development.

@@ -3,7 +3,7 @@ use core::convert::Infallible;
 use soroban_env_common::call_macro_with_all_host_functions;
 
 use super::{
-    AddressObject, Bool, BytesObject, ContractTTLExtension, DurationObject, Error, I128Object,
+    AddressObject, Bool, BytesObject, ContractTtlExtension, DurationObject, Error, I128Object,
     I256Object, I256Val, I64Object, MapObject, MuxedAddressObject, StorageType, StringObject,
     SymbolObject, TimepointObject, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val,
     VecObject, Void,
@@ -336,7 +336,7 @@ macro_rules! generate_extern_modules {
                 #[allow(unused_imports)]
                 use crate::{Val,Object,Symbol,Error,MapObject,VecObject,BytesObject};
                 #[allow(unused_imports)]
-                use crate::{I128Object, I256Object, I256Val, I64Object, I64Val, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, StorageType, ContractTTLExtension, TimepointObject, DurationObject};
+                use crate::{I128Object, I256Object, I256Val, I64Object, I64Val, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, StorageType, ContractTtlExtension, TimepointObject, DurationObject};
                 #[allow(unused_imports)]
                 use crate::{Void,AddressObject,MuxedAddressObject,SymbolObject,StringObject,Bool};
                 #[link(wasm_import_module = $mod_str)]

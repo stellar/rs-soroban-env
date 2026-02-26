@@ -18,7 +18,7 @@ use crate::{
         LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
         ScSymbol, ScVal, TimePoint,
     },
-    AddressObject, Bool, BytesObject, Compare, ContractTTLExtension, ConversionError, EnvBase,
+    AddressObject, Bool, BytesObject, Compare, ContractTtlExtension, ConversionError, EnvBase,
     Error, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject,
     SymbolSmall, TryFromVal, TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
 };
@@ -2351,7 +2351,7 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
-        extension_scope: ContractTTLExtension,
+        extension_scope: ContractTtlExtension,
         extend_to: U32Val,
         min_extension: U32Val,
         max_extension: U32Val,
@@ -2359,7 +2359,7 @@ impl VmCallerEnv for Host {
         let contract_id = self.contract_id_from_address(contract)?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
 
-        if extension_scope != ContractTTLExtension::Instance {
+        if extension_scope != ContractTtlExtension::Instance {
             self.extend_contract_code_ttl_v2(
                 &key,
                 extend_to.into(),
@@ -2367,7 +2367,7 @@ impl VmCallerEnv for Host {
                 max_extension.into(),
             )?;
         }
-        if extension_scope != ContractTTLExtension::Code {
+        if extension_scope != ContractTtlExtension::Code {
             self.extend_contract_instance_ttl_v2(
                 key,
                 extend_to.into(),

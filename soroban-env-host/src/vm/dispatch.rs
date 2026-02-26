@@ -4,7 +4,7 @@ use crate::{
     CheckedEnvArg, EnvBase, Host, HostError, VmCaller, VmCallerEnv,
 };
 use crate::{
-    AddressObject, Bool, BytesObject, ContractTTLExtension, DurationObject, Error, ErrorHandler,
+    AddressObject, Bool, BytesObject, ContractTtlExtension, DurationObject, Error, ErrorHandler,
     I128Object, I256Object, I256Val, I64Object, MapObject, MuxedAddressObject, StorageType,
     StringObject, Symbol, SymbolObject, TimepointObject, U128Object, U256Object, U256Val, U32Val,
     U64Object, U64Val, Val, VecObject, Void,
@@ -135,7 +135,7 @@ impl RelativeObjectConversion for Void {}
 impl RelativeObjectConversion for Bool {}
 impl RelativeObjectConversion for Error {}
 impl RelativeObjectConversion for StorageType {}
-impl RelativeObjectConversion for ContractTTLExtension {}
+impl RelativeObjectConversion for ContractTtlExtension {}
 impl RelativeObjectConversion for U32Val {}
 
 ///////////////////////////////////////////////////////////////////////////////
