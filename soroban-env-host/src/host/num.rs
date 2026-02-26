@@ -68,6 +68,52 @@ macro_rules! impl_bignum_host_fns_rhs_u32 {
 }
 
 #[macro_export]
+macro_rules! impl_checked_bignum_host_fns {
+    ($checked_fn:ident, $fn_err:ident, $valty:ty) => {
+        fn $checked_fn(
+            &self,
+            vmcaller: &mut VmCaller<Self::VmUserState>,
+            lhs_val: $valty,
+            rhs_val: $valty,
+        ) -> Result<Val, Self::Error> {
+            match self.$fn_err(vmcaller, lhs_val, rhs_val) {
+                Ok(v) => Ok(v.to_val()),
+                Err(e)
+                    if e.error.is_type(ScErrorType::Object)
+                        && e.error.is_code(ScErrorCode::ArithDomain) =>
+                {
+                    Ok(Val::VOID.to_val())
+                }
+                Err(e) => Err(e),
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_checked_bignum_host_fns_rhs_u32 {
+    ($checked_fn:ident, $fn_err:ident, $valty:ty) => {
+        fn $checked_fn(
+            &self,
+            vmcaller: &mut VmCaller<Self::VmUserState>,
+            lhs_val: $valty,
+            rhs_val: U32Val,
+        ) -> Result<Val, Self::Error> {
+            match self.$fn_err(vmcaller, lhs_val, rhs_val) {
+                Ok(v) => Ok(v.to_val()),
+                Err(e)
+                    if e.error.is_type(ScErrorType::Object)
+                        && e.error.is_code(ScErrorCode::ArithDomain) =>
+                {
+                    Ok(Val::VOID.to_val())
+                }
+                Err(e) => Err(e),
+            }
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! impl_bls12_381_fr_arith_host_fns {
     ($host_fn: ident, $method: ident) => {
         fn $host_fn(
