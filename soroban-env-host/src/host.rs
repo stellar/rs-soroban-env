@@ -1622,15 +1622,15 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, I256Val, Int256Shift);
     impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, I256Val, Int256Shift);
 
-    impl_checked_bignum_host_fns!(u256_checked_add, checked_add, U256, U256Val, Int256AddSub);
-    impl_checked_bignum_host_fns!(u256_checked_sub, checked_sub, U256, U256Val, Int256AddSub);
-    impl_checked_bignum_host_fns!(u256_checked_mul, checked_mul, U256, U256Val, Int256Mul);
-    impl_checked_bignum_host_fns_rhs_u32!(u256_checked_pow, checked_pow, U256, U256Val, Int256Pow);
+    impl_checked_bignum_host_fns!(u256_checked_add, u256_add, U256Val);
+    impl_checked_bignum_host_fns!(u256_checked_sub, u256_sub, U256Val);
+    impl_checked_bignum_host_fns!(u256_checked_mul, u256_mul, U256Val);
+    impl_checked_bignum_host_fns_rhs_u32!(u256_checked_pow, u256_pow, U256Val);
 
-    impl_checked_bignum_host_fns!(i256_checked_add, checked_add, I256, I256Val, Int256AddSub);
-    impl_checked_bignum_host_fns!(i256_checked_sub, checked_sub, I256, I256Val, Int256AddSub);
-    impl_checked_bignum_host_fns!(i256_checked_mul, checked_mul, I256, I256Val, Int256Mul);
-    impl_checked_bignum_host_fns_rhs_u32!(i256_checked_pow, checked_pow, I256, I256Val, Int256Pow);
+    impl_checked_bignum_host_fns!(i256_checked_add, i256_add, I256Val);
+    impl_checked_bignum_host_fns!(i256_checked_sub, i256_sub, I256Val);
+    impl_checked_bignum_host_fns!(i256_checked_mul, i256_mul, I256Val);
+    impl_checked_bignum_host_fns_rhs_u32!(i256_checked_pow, i256_pow, I256Val);
 
     // endregion: "int" module functions
     // region: "map" module functions

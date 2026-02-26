@@ -69,23 +69,22 @@ macro_rules! impl_bignum_host_fns_rhs_u32 {
 
 #[macro_export]
 macro_rules! impl_checked_bignum_host_fns {
-    ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $cost: ident) => {
-        fn $host_fn(
+    ($checked_fn:ident, $fn_err:ident, $valty:ty) => {
+        fn $checked_fn(
             &self,
-            _vmcaller: &mut VmCaller<Self::VmUserState>,
+            vmcaller: &mut VmCaller<Self::VmUserState>,
             lhs_val: $valty,
             rhs_val: $valty,
         ) -> Result<Val, Self::Error> {
-            use soroban_env_common::TryIntoVal;
-            self.charge_budget(ContractCostType::$cost, None)?;
-            let lhs: $num = lhs_val.to_val().try_into_val(self)?;
-            let rhs: $num = rhs_val.to_val().try_into_val(self)?;
-            match lhs.$method(rhs) {
-                Some(res) => {
-                    let v: $valty = res.try_into_val(self)?;
-                    Ok(v.to_val())
+            match self.$fn_err(vmcaller, lhs_val, rhs_val) {
+                Ok(v) => Ok(v.to_val()),
+                Err(e)
+                    if e.error.is_type(ScErrorType::Object)
+                        && e.error.is_code(ScErrorCode::ArithDomain) =>
+                {
+                    Ok(Val::VOID.to_val())
                 }
-                None => Ok(Val::VOID.to_val()),
+                Err(e) => Err(e),
             }
         }
     };
@@ -93,22 +92,22 @@ macro_rules! impl_checked_bignum_host_fns {
 
 #[macro_export]
 macro_rules! impl_checked_bignum_host_fns_rhs_u32 {
-    ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $cost: ident) => {
-        fn $host_fn(
+    ($checked_fn:ident, $fn_err:ident, $valty:ty) => {
+        fn $checked_fn(
             &self,
-            _vmcaller: &mut VmCaller<Self::VmUserState>,
+            vmcaller: &mut VmCaller<Self::VmUserState>,
             lhs_val: $valty,
             rhs_val: U32Val,
         ) -> Result<Val, Self::Error> {
-            use soroban_env_common::TryIntoVal;
-            self.charge_budget(ContractCostType::$cost, None)?;
-            let lhs: $num = lhs_val.to_val().try_into_val(self)?;
-            match lhs.$method(rhs_val.into()) {
-                Some(res) => {
-                    let v: $valty = res.try_into_val(self)?;
-                    Ok(v.to_val())
+            match self.$fn_err(vmcaller, lhs_val, rhs_val) {
+                Ok(v) => Ok(v.to_val()),
+                Err(e)
+                    if e.error.is_type(ScErrorType::Object)
+                        && e.error.is_code(ScErrorCode::ArithDomain) =>
+                {
+                    Ok(Val::VOID.to_val())
                 }
-                None => Ok(Val::VOID.to_val()),
+                Err(e) => Err(e),
             }
         }
     };
