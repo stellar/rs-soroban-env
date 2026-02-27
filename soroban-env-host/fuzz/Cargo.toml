@@ -7,13 +7,17 @@ edition = "2021"
 [package.metadata]
 cargo-fuzz = true
 
+[lib]
+name = "soroban_env_host_fuzz"
+path = "src/lib.rs"
+
 [dependencies]
-libfuzzer-sys = "=0.4.7"
-arbitrary = { version = "=1.3.2", features = ["derive"] }
-soroban-env-host = { path = "..", features = ["testutils"]}
-soroban-synth-wasm = { path = "../../soroban-synth-wasm", features = ["testutils"]}
-wasmi = { package = "soroban-wasmi", version = "=0.31.1-soroban.20.0.0" }
-wasm-smith = "=0.13.1"
+libfuzzer-sys = { version = "=0.4.7", optional = true }
+soroban-env-host = { path = "..", features = ["fuzz"]}
+
+[features]
+default = ["libfuzzer"]
+libfuzzer = ["dep:libfuzzer-sys"]
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -27,9 +31,11 @@ name = "expr"
 path = "fuzz_targets/expr.rs"
 test = false
 doc = false
+required-features = ["libfuzzer"]
 
 [[bin]]
 name = "wasmi"
 path = "fuzz_targets/wasmi.rs"
 test = false
 doc = false
+required-features = ["libfuzzer"]
