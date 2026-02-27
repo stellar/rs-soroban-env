@@ -9,6 +9,8 @@ use super::{
     VecObject, Void,
 };
 use super::{Env, EnvBase, Symbol};
+#[cfg(feature = "testutils")]
+use super::EnvBaseTestUtils;
 use static_assertions as sa;
 
 // Just the smallest possible version of a runtime assertion-or-panic.
@@ -31,11 +33,6 @@ impl EnvBase for Guest {
     type Error = Infallible;
 
     fn error_from_error_val(&self, _e: crate::Error) -> Self::Error {
-        core::arch::wasm32::unreachable()
-    }
-
-    #[cfg(feature = "testutils")]
-    fn escalate_error_to_panic(&self, _e: Self::Error) -> ! {
         core::arch::wasm32::unreachable()
     }
 
@@ -184,6 +181,13 @@ impl EnvBase for Guest {
     }
 
     fn check_protocol_version_upper_bound(&self, _upper_bound: u32) -> Result<(), Self::Error> {
+        core::arch::wasm32::unreachable()
+    }
+}
+
+#[cfg(feature = "testutils")]
+impl EnvBaseTestUtils for Guest {
+    fn escalate_error_to_panic(&self, _e: Self::Error) -> ! {
         core::arch::wasm32::unreachable()
     }
 }
