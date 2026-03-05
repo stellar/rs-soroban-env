@@ -895,19 +895,6 @@ impl EnvBase for Host {
     // To get it to do that, we have to call `panic!()`, not `panic_any`.
     // Personally I think this is a glaring weakness of `panic_any` but we are
     // not in a position to improve it.
-    #[cfg(feature = "testutils")]
-    fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
-        let _ = self.with_current_frame_opt(|f| {
-            if let Some(Frame::TestContract(frame)) = f {
-                if let Ok(mut panic) = frame.panic.try_borrow_mut() {
-                    *panic = Some(e.error);
-                }
-            }
-            Ok(())
-        });
-        let escalation = self.error(e.error, "escalating error to panic", &[]);
-        panic!("{:?}", escalation)
-    }
 
     fn augment_err_result<T>(&self, mut x: Result<T, Self::Error>) -> Result<T, Self::Error> {
         if let Err(e) = &mut x {
@@ -1182,6 +1169,22 @@ impl EnvBase for Host {
                 Ok(())
             }
         })
+    }
+}
+
+#[cfg(feature = "testutils")]
+impl crate::EnvBaseTestUtils for Host {
+    fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
+        let _ = self.with_current_frame_opt(|f| {
+            if let Some(Frame::TestContract(frame)) = f {
+                if let Ok(mut panic) = frame.panic.try_borrow_mut() {
+                    *panic = Some(e.error);
+                }
+            }
+            Ok(())
+        });
+        let escalation = self.error(e.error, "escalating error to panic", &[]);
+        panic!("{:?}", escalation)
     }
 }
 
