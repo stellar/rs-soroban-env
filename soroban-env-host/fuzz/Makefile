@@ -30,11 +30,14 @@ LLVM_COV_OUTPUTS := fuzz-lcov.info coverage-full.txt coverage-summary.txt
 # There might be some other approach that works, say involving musl, but this
 # seems like an acceptable compromise for now.
 
+all: fuzz-check
+
 DISABLE_ASLR := setarch $(shell uname -m) --addr-no-randomize
 
 CUSTOM_GETRANDOM_LIB := $(shell pwd)/custom_getrandom.so
 CUSTOM_GETRANDOM_SRC := $(shell pwd)/custom_getrandom.c
 
+$(CUSTOM_GETRANDOM_LIB): export LD_PRELOAD := 
 $(CUSTOM_GETRANDOM_LIB): $(CUSTOM_GETRANDOM_SRC)
 	gcc -shared -fPIC -o $@ $<
 

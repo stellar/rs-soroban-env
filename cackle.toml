@@ -553,3 +553,9 @@ allow_apis = [
 
 [pkg.allocator-api2]
 allow_unsafe = true
+
+[pkg.flagset]
+allow_unsafe = true
+
+[pkg.wasm-smith]
+allow_unsafe = true
