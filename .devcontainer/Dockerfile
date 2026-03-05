@@ -26,7 +26,11 @@ RUN rustup toolchain install nightly --profile minimal \
 ARG STELLAR_BINARIES_REF=v54
 RUN ARCH="$(uname -m)" \
     && mkdir -p "${HOME}/.cargo/bin" \
-    && case "$ARCH" in x86_64) ARCH=X64 ;; aarch64) ARCH=ARM64 ;; esac \
+    && case "$ARCH" in \
+         x86_64) ARCH=X64 ;; \
+         aarch64) ARCH=ARM64 ;; \
+         *) echo "Unsupported architecture: ${ARCH}. Only x86_64 and aarch64 are supported for stellar/binaries downloads." >&2; exit 1 ;; \
+       esac \
     && BASE=https://github.com/stellar/binaries/releases/download/${STELLAR_BINARIES_REF} \
     && for tool in \
          cargo-hack-0.6.35 \
