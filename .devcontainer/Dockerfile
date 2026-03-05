@@ -39,7 +39,10 @@ RUN ARCH="$(uname -m)" \
          cargo-semver-checks-0.46.0 \
        ; do \
          echo "Installing ${tool}..." \
-         && curl -fL "${BASE}/${tool}-Linux-${ARCH}.tar.gz" | tar xz -C "${HOME}/.cargo/bin" \
+         && tmp="$(mktemp)" \
+         && curl -fL "${BASE}/${tool}-Linux-${ARCH}.tar.gz" -o "$tmp" \
+         && tar xz -C "${HOME}/.cargo/bin" -f "$tmp" \
+         && rm -f "$tmp" \
        ; done
 
 # Install remaining cargo extensions not available in stellar/binaries
