@@ -409,7 +409,7 @@ fn muxed_address_storage_key_conversion() {
         .add_host_object(muxed_address.clone())
         .unwrap()
         .to_val();
-    // Conversion to storage Val should fail.
+    // Conversion for use as a storage key should fail.
     let res = host.from_host_val_for_storage(muxed_address_val);
 
     assert!(HostError::result_matches_err(
