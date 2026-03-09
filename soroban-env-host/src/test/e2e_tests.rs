@@ -390,16 +390,17 @@ fn invoke_host_function_typed_helper(
     prng_seed: &[u8; 32],
 ) -> Result<InvokeHostFunctionTypedResult, HostError> {
     let restored_contracts = HashSet::new();
-    let module_cache =
-        build_module_cache_for_entries(ledger_info, ledger_entries_with_ttl.clone(), &restored_contracts)?;
+    let module_cache = build_module_cache_for_entries(
+        ledger_info,
+        ledger_entries_with_ttl.clone(),
+        &restored_contracts,
+    )?;
 
-    let typed_ledger_entries = ledger_entries_with_ttl
-        .into_iter()
-        .map(|(entry, opt_ttl)| {
-            let key = ledger_entry_to_ledger_key(&entry, &Budget::default()).unwrap();
-            let opt_ttl_entry = opt_ttl.map(|ttl| Rc::new(ttl_entry(&key, ttl)));
-            (Rc::new(entry), opt_ttl_entry)
-        });
+    let typed_ledger_entries = ledger_entries_with_ttl.into_iter().map(|(entry, opt_ttl)| {
+        let key = ledger_entry_to_ledger_key(&entry, &Budget::default()).unwrap();
+        let opt_ttl_entry = opt_ttl.map(|ttl| Rc::new(ttl_entry(&key, ttl)));
+        (Rc::new(entry), opt_ttl_entry)
+    });
 
     let budget = Budget::default();
     budget
