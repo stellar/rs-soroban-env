@@ -399,6 +399,30 @@ fn test_nested_bump() {
 }
 
 #[test]
+fn muxed_address_storage_key_conversion() {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let muxed_address = MuxedScAddress(ScAddress::MuxedAccount(MuxedEd25519Account {
+        id: 42,
+        ed25519: Uint256([7; 32]),
+    }));
+    let muxed_address_val = host
+        .add_host_object(muxed_address.clone())
+        .unwrap()
+        .to_val();
+    // Conversion for use as a storage key should fail.
+    let res = host.from_host_val_for_storage(muxed_address_val);
+
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Storage, ScErrorCode::InvalidInput)
+    ));
+
+    // Conversion to regular ScVal should succeed.
+    let res_non_storage = host.from_host_val(muxed_address_val);
+    assert!(res_non_storage.is_ok());
+}
+
+#[test]
 fn test_muxed_account_is_not_allowed_as_storage_key() {
     let host = Host::test_host_with_recording_footprint();
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_WITH_VALS);
