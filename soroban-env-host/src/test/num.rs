@@ -1,7 +1,7 @@
 use soroban_env_common::{
     num::*,
     xdr::{ScErrorCode, ScErrorType, ScVal},
-    Compare, Env, EnvBase, TryFromVal, TryIntoVal, I256,
+    Compare, Env, EnvBase, I256Val, TryFromVal, TryIntoVal, U256Val, I256,
 };
 
 use crate::{budget::AsBudget, Host, HostError, Val};
@@ -435,5 +435,850 @@ fn test_u256_bytes_roundtrip() -> Result<(), HostError> {
     host.bytes_copy_to_slice(bo_back, U32Val::from(0), buf.as_mut_slice())?;
     let num_back = U256::from_be_bytes(buf);
     assert_eq!(num, num_back);
+    Ok(())
+}
+
+// --- Checked arithmetic test helpers ---
+
+fn check_num_checked_arith_ok<T, V, F>(
+    host: &Host,
+    lhs: T,
+    rhs: T,
+    f: F,
+    expected: T,
+) -> Result<(), HostError>
+where
+    V: TryFromVal<Host, T> + Into<Val>,
+    HostError: From<<V as TryFromVal<Host, T>>::Error>,
+    F: FnOnce(&Host, V, V) -> Result<Val, HostError>,
+{
+    let exp: V = V::try_from_val(host, &expected)?;
+    let lhs: V = V::try_from_val(host, &lhs)?;
+    let rhs: V = V::try_from_val(host, &rhs)?;
+    let res: Val = f(host, lhs, rhs)?;
+    assert!(!res.is_void());
+    assert_eq!(host.compare(&exp.into(), &res).unwrap(), Ordering::Equal);
+    Ok(())
+}
+
+fn check_num_checked_arith_returns_void<T, V, F>(
+    host: &Host,
+    lhs: T,
+    rhs: T,
+    f: F,
+) -> Result<(), HostError>
+where
+    V: TryFromVal<Host, T> + Into<Val>,
+    HostError: From<<V as TryFromVal<Host, T>>::Error>,
+    F: FnOnce(&Host, V, V) -> Result<Val, HostError>,
+{
+    let lhs: V = V::try_from_val(host, &lhs)?;
+    let rhs: V = V::try_from_val(host, &rhs)?;
+    let res: Val = f(host, lhs, rhs)?;
+    assert!(res.is_void());
+    Ok(())
+}
+
+fn check_num_checked_arith_rhs_u32_ok<T, V, F>(
+    host: &Host,
+    lhs: T,
+    rhs: u32,
+    f: F,
+    expected: T,
+) -> Result<(), HostError>
+where
+    V: TryFromVal<Host, T> + Into<Val>,
+    HostError: From<<V as TryFromVal<Host, T>>::Error>,
+    F: FnOnce(&Host, V, U32Val) -> Result<Val, HostError>,
+{
+    let exp: V = V::try_from_val(host, &expected)?;
+    let lhs: V = V::try_from_val(host, &lhs)?;
+    let res: Val = f(host, lhs, U32Val::from(rhs))?;
+    assert!(!res.is_void());
+    assert_eq!(host.compare(&exp.into(), &res).unwrap(), Ordering::Equal);
+    Ok(())
+}
+
+fn check_num_checked_arith_rhs_u32_returns_void<T, V, F>(
+    host: &Host,
+    lhs: T,
+    rhs: u32,
+    f: F,
+) -> Result<(), HostError>
+where
+    V: TryFromVal<Host, T> + Into<Val>,
+    HostError: From<<V as TryFromVal<Host, T>>::Error>,
+    F: FnOnce(&Host, V, U32Val) -> Result<Val, HostError>,
+{
+    let lhs: V = V::try_from_val(host, &lhs)?;
+    let res: Val = f(host, lhs, U32Val::from(rhs))?;
+    assert!(res.is_void());
+    Ok(())
+}
+
+// --- U256 checked arithmetic tests ---
+
+#[test]
+fn test_u256_checked_add() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Success cases
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        U256::ZERO,
+        Host::u256_checked_add,
+        U256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(1),
+        U256::ZERO,
+        Host::u256_checked_add,
+        U256::new(1),
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        U256::new(1),
+        Host::u256_checked_add,
+        U256::new(1),
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(100),
+        U256::new(200),
+        Host::u256_checked_add,
+        U256::new(300),
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::MAX - 1,
+        U256::new(1),
+        Host::u256_checked_add,
+        U256::MAX,
+    )?;
+
+    // Overflow -> Void
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        U256::new(1),
+        Host::u256_checked_add,
+    )?;
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::MAX - 2,
+        U256::new(3),
+        Host::u256_checked_add,
+    )?;
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        U256::MAX,
+        Host::u256_checked_add,
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_u256_checked_sub() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Success cases
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        U256::ZERO,
+        Host::u256_checked_sub,
+        U256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(1),
+        U256::ZERO,
+        Host::u256_checked_sub,
+        U256::new(1),
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(1),
+        U256::new(1),
+        Host::u256_checked_sub,
+        U256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(300),
+        U256::new(200),
+        Host::u256_checked_sub,
+        U256::new(100),
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        U256::MAX,
+        Host::u256_checked_sub,
+        U256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        U256::ZERO,
+        Host::u256_checked_sub,
+        U256::MAX,
+    )?;
+
+    // Underflow -> Void
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        U256::new(1),
+        Host::u256_checked_sub,
+    )?;
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        U256::MAX,
+        Host::u256_checked_sub,
+    )?;
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::new(1),
+        U256::new(2),
+        Host::u256_checked_sub,
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_u256_checked_mul() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Success cases
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        U256::ZERO,
+        Host::u256_checked_mul,
+        U256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(5),
+        U256::ZERO,
+        Host::u256_checked_mul,
+        U256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        U256::new(5),
+        Host::u256_checked_mul,
+        U256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(5),
+        U256::new(1),
+        Host::u256_checked_mul,
+        U256::new(5),
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(1),
+        U256::new(5),
+        Host::u256_checked_mul,
+        U256::new(5),
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::new(3),
+        U256::new(7),
+        Host::u256_checked_mul,
+        U256::new(21),
+    )?;
+    check_num_checked_arith_ok::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        U256::new(1),
+        Host::u256_checked_mul,
+        U256::MAX,
+    )?;
+
+    // Overflow -> Void
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        U256::new(2),
+        Host::u256_checked_mul,
+    )?;
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::MAX / 2 + 1,
+        U256::new(2),
+        Host::u256_checked_mul,
+    )?;
+    check_num_checked_arith_returns_void::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        U256::MAX,
+        Host::u256_checked_mul,
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_u256_checked_pow() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Success cases
+    check_num_checked_arith_rhs_u32_ok::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        0,
+        Host::u256_checked_pow,
+        U256::new(1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, U256Val, _>(
+        &host,
+        U256::ZERO,
+        1,
+        Host::u256_checked_pow,
+        U256::ZERO,
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, U256Val, _>(
+        &host,
+        U256::new(1),
+        0,
+        Host::u256_checked_pow,
+        U256::new(1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, U256Val, _>(
+        &host,
+        U256::new(1),
+        u32::MAX,
+        Host::u256_checked_pow,
+        U256::new(1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, U256Val, _>(
+        &host,
+        U256::new(2),
+        0,
+        Host::u256_checked_pow,
+        U256::new(1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, U256Val, _>(
+        &host,
+        U256::new(2),
+        5,
+        Host::u256_checked_pow,
+        U256::new(32),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, U256Val, _>(
+        &host,
+        U256::new(2),
+        8,
+        Host::u256_checked_pow,
+        U256::new(256),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        1,
+        Host::u256_checked_pow,
+        U256::MAX,
+    )?;
+
+    // Overflow -> Void
+    check_num_checked_arith_rhs_u32_returns_void::<_, U256Val, _>(
+        &host,
+        U256::MAX,
+        2,
+        Host::u256_checked_pow,
+    )?;
+    check_num_checked_arith_rhs_u32_returns_void::<_, U256Val, _>(
+        &host,
+        U256::new(2),
+        256,
+        Host::u256_checked_pow,
+    )?;
+    check_num_checked_arith_rhs_u32_returns_void::<_, U256Val, _>(
+        &host,
+        U256::new(10),
+        78,
+        Host::u256_checked_pow,
+    )?;
+
+    Ok(())
+}
+
+// --- I256 checked arithmetic tests ---
+
+#[test]
+fn test_i256_checked_add() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Success cases
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::ZERO,
+        I256::ZERO,
+        Host::i256_checked_add,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(1),
+        I256::new(-1),
+        Host::i256_checked_add,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-1),
+        I256::new(1),
+        Host::i256_checked_add,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(100),
+        I256::new(200),
+        Host::i256_checked_add,
+        I256::new(300),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-100),
+        I256::new(-200),
+        Host::i256_checked_add,
+        I256::new(-300),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MAX - 1,
+        I256::new(1),
+        Host::i256_checked_add,
+        I256::MAX,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MIN + 1,
+        I256::new(-1),
+        Host::i256_checked_add,
+        I256::MIN,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::MIN,
+        Host::i256_checked_add,
+        I256::new(-1),
+    )?;
+
+    // Positive overflow -> Void
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::new(1),
+        Host::i256_checked_add,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MAX - 2,
+        I256::new(3),
+        Host::i256_checked_add,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::MAX,
+        Host::i256_checked_add,
+    )?;
+
+    // Negative overflow -> Void
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::new(-1),
+        Host::i256_checked_add,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN + 2,
+        I256::new(-3),
+        Host::i256_checked_add,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::MIN,
+        Host::i256_checked_add,
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_i256_checked_sub() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Success cases
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::ZERO,
+        I256::ZERO,
+        Host::i256_checked_sub,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(1),
+        I256::new(1),
+        Host::i256_checked_sub,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-1),
+        I256::new(-1),
+        Host::i256_checked_sub,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(300),
+        I256::new(200),
+        Host::i256_checked_sub,
+        I256::new(100),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-100),
+        I256::new(-200),
+        Host::i256_checked_sub,
+        I256::new(100),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::MAX,
+        Host::i256_checked_sub,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::MIN,
+        Host::i256_checked_sub,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MIN + 1,
+        I256::new(1),
+        Host::i256_checked_sub,
+        I256::MIN,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MAX - 1,
+        I256::new(-1),
+        Host::i256_checked_sub,
+        I256::MAX,
+    )?;
+
+    // Positive overflow -> Void (result > I256::MAX)
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::new(-1),
+        Host::i256_checked_sub,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::MIN,
+        Host::i256_checked_sub,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::new(1),
+        I256::MIN + 1,
+        Host::i256_checked_sub,
+    )?;
+
+    // Negative overflow -> Void (result < I256::MIN)
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::new(1),
+        Host::i256_checked_sub,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN + 2,
+        I256::new(3),
+        Host::i256_checked_sub,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::MAX,
+        Host::i256_checked_sub,
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_i256_checked_mul() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Success cases
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::ZERO,
+        I256::ZERO,
+        Host::i256_checked_mul,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(5),
+        I256::ZERO,
+        Host::i256_checked_mul,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::ZERO,
+        I256::new(5),
+        Host::i256_checked_mul,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(5),
+        I256::new(1),
+        Host::i256_checked_mul,
+        I256::new(5),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-5),
+        I256::new(1),
+        Host::i256_checked_mul,
+        I256::new(-5),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-1),
+        I256::new(-1),
+        Host::i256_checked_mul,
+        I256::new(1),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(3),
+        I256::new(7),
+        Host::i256_checked_mul,
+        I256::new(21),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-3),
+        I256::new(7),
+        Host::i256_checked_mul,
+        I256::new(-21),
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::new(1),
+        Host::i256_checked_mul,
+        I256::MAX,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::new(1),
+        Host::i256_checked_mul,
+        I256::MIN,
+    )?;
+    check_num_checked_arith_ok::<_, I256Val, _>(
+        &host,
+        I256::MIN + 1,
+        I256::new(-1),
+        Host::i256_checked_mul,
+        I256::MAX,
+    )?;
+
+    // Positive overflow -> Void
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::new(2),
+        Host::i256_checked_mul,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::new(-1),
+        Host::i256_checked_mul,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::new(-2),
+        Host::i256_checked_mul,
+    )?;
+
+    // Negative overflow -> Void
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        I256::new(-2),
+        Host::i256_checked_mul,
+    )?;
+    check_num_checked_arith_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        I256::new(2),
+        Host::i256_checked_mul,
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_i256_checked_pow() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host());
+
+    // Success cases
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::ZERO,
+        0,
+        Host::i256_checked_pow,
+        I256::new(1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::ZERO,
+        1,
+        Host::i256_checked_pow,
+        I256::ZERO,
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(1),
+        0,
+        Host::i256_checked_pow,
+        I256::new(1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-1),
+        0,
+        Host::i256_checked_pow,
+        I256::new(1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-1),
+        1,
+        Host::i256_checked_pow,
+        I256::new(-1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-1),
+        2,
+        Host::i256_checked_pow,
+        I256::new(1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-1),
+        u32::MAX,
+        Host::i256_checked_pow,
+        I256::new(-1),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(2),
+        5,
+        Host::i256_checked_pow,
+        I256::new(32),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-2),
+        3,
+        Host::i256_checked_pow,
+        I256::new(-8),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(-2),
+        4,
+        Host::i256_checked_pow,
+        I256::new(16),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::new(8),
+        2,
+        Host::i256_checked_pow,
+        I256::new(64),
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        1,
+        Host::i256_checked_pow,
+        I256::MAX,
+    )?;
+    check_num_checked_arith_rhs_u32_ok::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        1,
+        Host::i256_checked_pow,
+        I256::MIN,
+    )?;
+
+    // Positive overflow -> Void
+    check_num_checked_arith_rhs_u32_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MAX,
+        2,
+        Host::i256_checked_pow,
+    )?;
+    check_num_checked_arith_rhs_u32_returns_void::<_, I256Val, _>(
+        &host,
+        I256::new(-2),
+        256,
+        Host::i256_checked_pow,
+    )?;
+
+    // Negative overflow -> Void
+    check_num_checked_arith_rhs_u32_returns_void::<_, I256Val, _>(
+        &host,
+        I256::MIN,
+        3,
+        Host::i256_checked_pow,
+    )?;
+    check_num_checked_arith_rhs_u32_returns_void::<_, I256Val, _>(
+        &host,
+        I256::new(-2),
+        257,
+        Host::i256_checked_pow,
+    )?;
+
     Ok(())
 }

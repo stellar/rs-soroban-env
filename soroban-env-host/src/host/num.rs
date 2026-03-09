@@ -18,51 +18,53 @@ macro_rules! impl_wrapping_obj_to_num {
 
 #[macro_export]
 macro_rules! impl_bignum_host_fns {
-    ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $cost: ident) => {
+    (@core $host: ident, $lhs_val: ident, $rhs_val: ident, $maybe_res: ident,
+           $method: ident, $num: ty, $cost: ident) => {
+        $host.charge_budget(ContractCostType::$cost, None)?;
+        let lhs: $num = $lhs_val.to_val().try_into_val($host)?;
+        let rhs = $rhs_val.to_val().try_into_val($host)?;
+        $maybe_res = lhs.$method(rhs);
+    };
+    ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $operand_valty: ty, $cost: ident) => {
         fn $host_fn(
             &self,
             _vmcaller: &mut VmCaller<Self::VmUserState>,
             lhs_val: $valty,
-            rhs_val: $valty,
+            rhs_val: $operand_valty,
         ) -> Result<$valty, Self::Error> {
-            use soroban_env_common::TryIntoVal;
-            self.charge_budget(ContractCostType::$cost, None)?;
-            let lhs: $num = lhs_val.to_val().try_into_val(self)?;
-            let rhs: $num = rhs_val.to_val().try_into_val(self)?;
-            let res: $num = lhs.$method(rhs).ok_or_else(|| {
-                self.err(
+            let host = self;
+            let maybe_res: Option<$num>;
+            impl_bignum_host_fns!(@core host, lhs_val, rhs_val, maybe_res,
+                                         $method, $num, $cost);
+            let res = maybe_res.ok_or_else(|| {
+                host.err(
                     ScErrorType::Object,
                     ScErrorCode::ArithDomain,
-                    "overflow has occured",
+                    "overflow has occurred",
                     &[lhs_val.to_val(), rhs_val.to_val()],
                 )
             })?;
-            Ok(res.try_into_val(self)?)
+            Ok(res.try_into_val(host)?)
         }
     };
-}
-
-#[macro_export]
-macro_rules! impl_bignum_host_fns_rhs_u32 {
-    ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $cost: ident) => {
+    ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $operand_valty: ty, $cost: ident, checked) => {
         fn $host_fn(
             &self,
             _vmcaller: &mut VmCaller<Self::VmUserState>,
             lhs_val: $valty,
-            rhs_val: U32Val,
-        ) -> Result<$valty, Self::Error> {
-            use soroban_env_common::TryIntoVal;
-            self.charge_budget(ContractCostType::$cost, None)?;
-            let lhs: $num = lhs_val.to_val().try_into_val(self)?;
-            let res = lhs.$method(rhs_val.into()).ok_or_else(|| {
-                self.err(
-                    ScErrorType::Object,
-                    ScErrorCode::ArithDomain,
-                    "overflow has occured",
-                    &[lhs_val.to_val(), rhs_val.to_val()],
-                )
-            })?;
-            Ok(res.try_into_val(self)?)
+            rhs_val: $operand_valty,
+        ) -> Result<Val, Self::Error> {
+            let host = self;
+            let maybe_res: Option<$num>;
+            impl_bignum_host_fns!(@core host, lhs_val, rhs_val, maybe_res,
+                                         $method, $num, $cost);
+            match maybe_res {
+                Some(res) => {
+                    let v: $valty = res.try_into_val(host)?;
+                    Ok(v.to_val())
+                }
+                None => Ok(Val::VOID.to_val()),
+            }
         }
     };
 }
