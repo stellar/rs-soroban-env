@@ -10,9 +10,11 @@ use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::testutils::TestSigner,
     e2e_invoke::{
-        entry_size_for_rent, invoke_host_function, invoke_host_function_in_recording_mode,
-        invoke_host_function_typed, ledger_entry_to_ledger_key, InvokeHostFunctionTypedResult,
-        LedgerEntryChange, LedgerEntryLiveUntilChange, RecordingInvocationAuthMode,
+        build_storage_footprint_from_xdr, build_storage_map_from_typed_ledger_entries,
+        entry_size_for_rent, get_ledger_changes_typed, invoke_host_function,
+        invoke_host_function_in_recording_mode, invoke_host_function_typed,
+        ledger_entry_to_ledger_key, InvokeHostFunctionTypedResult, LedgerEntryChange,
+        LedgerEntryLiveUntilChange, RecordingInvocationAuthMode,
     },
     e2e_testutils::{
         auth_contract_invocation, create_contract_auth, default_ledger_info, get_account_id,
@@ -21,14 +23,15 @@ use crate::{
     },
     testutils::MockSnapshotSource,
     xdr::{
-        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable,
-        ContractId, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
-        DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryType,
-        LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr,
-        ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
-        SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedInvocation,
-        SorobanCredentials, SorobanResources, TtlEntry, Uint256, WriteXdr,
+        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractEventType,
+        ContractExecutable, ContractId, ContractIdPreimage, ContractIdPreimageFromAddress,
+        CreateContractArgs, DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage,
+        HashIdPreimageSorobanAuthorization, HostFunction, InvokeContractArgs, LedgerEntry,
+        LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey, LedgerKeyContractCode,
+        LedgerKeyContractData, Limits, ReadXdr, ScAddress, ScContractInstance, ScErrorCode,
+        ScErrorType, ScMap, ScNonceKey, ScVal, ScVec, SorobanAddressCredentials,
+        SorobanAuthorizationEntry, SorobanAuthorizedInvocation, SorobanCredentials,
+        SorobanResources, TtlEntry, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -3536,4 +3539,347 @@ fn test_typed_api_matches_xdr_api_for_wasm_upload() {
 
     // Both APIs should produce the same invoke result.
     assert_eq!(xdr_result.invoke_result, typed_result.invoke_result);
+}
+
+#[test]
+fn test_typed_api_matches_xdr_api_for_contract_creation() {
+    let cd = CreateContractData::new([111; 32], ADD_I32);
+    let ledger_info = default_ledger_info();
+    let res = resources(
+        10_000_000,
+        vec![cd.wasm_key.clone()],
+        vec![cd.contract_key.clone()],
+    );
+
+    let xdr_result = invoke_host_function_helper(
+        false,
+        &cd.host_fn,
+        &res,
+        &cd.deployer,
+        vec![cd.auth_entry.clone()],
+        &ledger_info,
+        vec![(
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100),
+        )],
+        &prng_seed(),
+    )
+    .unwrap();
+
+    let typed_result = invoke_host_function_typed_helper(
+        false,
+        &cd.host_fn,
+        &res,
+        &cd.deployer,
+        vec![cd.auth_entry],
+        &ledger_info,
+        vec![(
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100),
+        )],
+        &prng_seed(),
+    )
+    .unwrap();
+
+    // Both return ScVal::Address for contract creation.
+    assert_eq!(xdr_result.invoke_result, typed_result.invoke_result);
+    assert_eq!(
+        typed_result.invoke_result.unwrap(),
+        ScVal::Address(cd.contract_address)
+    );
+
+    // ttl_map should be populated (wasm key is present).
+    let budget = Budget::default();
+    budget.reset_unlimited().unwrap();
+    assert!(typed_result
+        .ttl_map
+        .get::<LedgerKey>(&cd.wasm_key, &budget)
+        .unwrap()
+        .is_some());
+
+    // No restored keys for a fresh creation.
+    assert!(typed_result.restored_keys.is_none());
+}
+
+#[test]
+fn test_typed_api_contract_invocation_with_storage() {
+    let cd = CreateContractData::new([111; 32], CONTRACT_STORAGE);
+    let ledger_info = default_ledger_info();
+    let key = symbol_sc_val("key");
+    let val = u64_sc_val(u64::MAX);
+    let host_fn = invoke_contract_host_fn(
+        &cd.contract_address,
+        "put_temporary",
+        vec![key.clone(), val.clone()],
+    );
+    let data_key = contract_data_key(
+        &cd.contract_address,
+        &key,
+        ContractDataDurability::Temporary,
+    );
+
+    let res = resources(
+        10_000_000,
+        vec![cd.contract_key.clone(), cd.wasm_key.clone()],
+        vec![data_key.clone()],
+    );
+
+    let xdr_result = invoke_host_function_helper(
+        false,
+        &host_fn,
+        &res,
+        &cd.deployer,
+        vec![],
+        &ledger_info,
+        vec![
+            (
+                cd.wasm_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                cd.contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+        ],
+        &prng_seed(),
+    )
+    .unwrap();
+
+    let typed_result = invoke_host_function_typed_helper(
+        false,
+        &host_fn,
+        &res,
+        &cd.deployer,
+        vec![],
+        &ledger_info,
+        vec![
+            (
+                cd.wasm_entry.clone(),
+                Some(ledger_info.sequence_number + 100),
+            ),
+            (
+                cd.contract_entry.clone(),
+                Some(ledger_info.sequence_number + 1000),
+            ),
+        ],
+        &prng_seed(),
+    )
+    .unwrap();
+
+    // Both return Void.
+    assert_eq!(xdr_result.invoke_result, typed_result.invoke_result);
+    assert_eq!(typed_result.invoke_result.unwrap(), ScVal::Void);
+
+    // The typed storage should contain the written data key with the correct value.
+    let budget = Budget::default();
+    budget.reset_unlimited().unwrap();
+    let data_key_rc = Rc::new(data_key);
+    let stored = typed_result
+        .storage
+        .map
+        .get::<LedgerKey>(&data_key_rc, &budget)
+        .unwrap()
+        .unwrap();
+    let (entry, _) = stored.as_ref().unwrap();
+    match &entry.data {
+        LedgerEntryData::ContractData(cd) => {
+            assert_eq!(cd.val, val);
+        }
+        _ => panic!("expected ContractData"),
+    }
+}
+
+#[test]
+fn test_typed_api_events_match_xdr_api() {
+    // Contract creation produces system events; use it to compare event output.
+    let cd = CreateContractData::new([111; 32], ADD_I32);
+    let ledger_info = default_ledger_info();
+    let res = resources(
+        10_000_000,
+        vec![cd.wasm_key.clone()],
+        vec![cd.contract_key.clone()],
+    );
+
+    let xdr_result = invoke_host_function_helper(
+        true,
+        &cd.host_fn,
+        &res,
+        &cd.deployer,
+        vec![cd.auth_entry.clone()],
+        &ledger_info,
+        vec![(
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100),
+        )],
+        &prng_seed(),
+    )
+    .unwrap();
+
+    let typed_result = invoke_host_function_typed_helper(
+        true,
+        &cd.host_fn,
+        &res,
+        &cd.deployer,
+        vec![cd.auth_entry],
+        &ledger_info,
+        vec![(
+            cd.wasm_entry.clone(),
+            Some(ledger_info.sequence_number + 100),
+        )],
+        &prng_seed(),
+    )
+    .unwrap();
+
+    // Filter typed events: non-diagnostic, non-failed-call events.
+    let typed_contract_events: Vec<&ContractEvent> = typed_result
+        .events
+        .0
+        .iter()
+        .filter(|e| !e.failed_call)
+        .filter(|e| e.event.type_ != ContractEventType::Diagnostic)
+        .map(|e| &e.event)
+        .collect();
+
+    // Decode XDR contract events.
+    let xdr_contract_events: Vec<ContractEvent> = xdr_result
+        .contract_events
+        .iter()
+        .map(|e| e.clone())
+        .collect();
+
+    assert_eq!(typed_contract_events.len(), xdr_contract_events.len());
+    for (typed_ev, xdr_ev) in typed_contract_events.iter().zip(xdr_contract_events.iter()) {
+        assert_eq!(*typed_ev, xdr_ev);
+    }
+}
+
+#[test]
+fn test_typed_api_budget_exhaustion() {
+    let host_fn = upload_wasm_host_fn(ADD_I32);
+    let ledger_info = default_ledger_info();
+    let source_account = get_account_id([123; 32]);
+    // Use too few instructions to trigger budget exhaustion.
+    let res = resources(100, vec![], vec![]);
+
+    let xdr_result = invoke_host_function_helper(
+        false,
+        &host_fn,
+        &res,
+        &source_account,
+        vec![],
+        &ledger_info,
+        vec![],
+        &prng_seed(),
+    );
+
+    let typed_result = invoke_host_function_typed_helper(
+        false,
+        &host_fn,
+        &res,
+        &source_account,
+        vec![],
+        &ledger_info,
+        vec![],
+        &prng_seed(),
+    );
+
+    // Both should fail with budget exhaustion at the top level.
+    assert!(HostError::result_matches_err(
+        xdr_result,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+    assert!(HostError::result_matches_err(
+        typed_result,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
+}
+
+#[test]
+fn test_get_ledger_changes_typed_matches_xdr() {
+    let cd = CreateContractData::new([111; 32], ADD_I32);
+    let ledger_info = default_ledger_info();
+    let ledger_entries_with_ttl = vec![(
+        cd.wasm_entry.clone(),
+        Some(ledger_info.sequence_number + 100),
+    )];
+    let res = resources(
+        10_000_000,
+        vec![cd.wasm_key.clone()],
+        vec![cd.contract_key.clone()],
+    );
+
+    // Get XDR result (which includes ledger_changes).
+    let xdr_result = invoke_host_function_helper(
+        false,
+        &cd.host_fn,
+        &res,
+        &cd.deployer,
+        vec![cd.auth_entry.clone()],
+        &ledger_info,
+        ledger_entries_with_ttl.clone(),
+        &prng_seed(),
+    )
+    .unwrap();
+
+    // Get typed result.
+    let typed_result = invoke_host_function_typed_helper(
+        false,
+        &cd.host_fn,
+        &res,
+        &cd.deployer,
+        vec![cd.auth_entry],
+        &ledger_info,
+        ledger_entries_with_ttl.clone(),
+        &prng_seed(),
+    )
+    .unwrap();
+
+    // Reconstruct init_storage_map from the same inputs.
+    let budget = Budget::default();
+    budget.reset_unlimited().unwrap();
+    let footprint = build_storage_footprint_from_xdr(&budget, res.footprint.clone()).unwrap();
+    let typed_ledger_entries = ledger_entries_with_ttl.into_iter().map(|(entry, opt_ttl)| {
+        let key = ledger_entry_to_ledger_key(&entry, &budget).unwrap();
+        let opt_ttl_entry = opt_ttl.map(|ttl| Rc::new(ttl_entry(&key, ttl)));
+        (Rc::new(entry), opt_ttl_entry)
+    });
+    let (init_storage_map, _) = build_storage_map_from_typed_ledger_entries(
+        &budget,
+        &footprint,
+        typed_ledger_entries,
+        ledger_info.sequence_number,
+    )
+    .unwrap();
+
+    // Compute min_live_until_ledger the same way invoke_host_function does.
+    let min_live_until_ledger = ledger_info
+        .min_live_until_ledger_checked(ContractDataDurability::Persistent)
+        .unwrap();
+
+    let typed_changes = get_ledger_changes_typed(
+        &budget,
+        &typed_result.storage,
+        &init_storage_map,
+        &typed_result.ttl_map,
+        min_live_until_ledger,
+        &typed_result.restored_keys,
+    )
+    .unwrap();
+
+    // Compare field-by-field with XDR ledger changes.
+    assert_eq!(xdr_result.ledger_changes.len(), typed_changes.len());
+    for (xdr_change, typed_change) in xdr_result.ledger_changes.iter().zip(typed_changes.iter()) {
+        // Decode XDR key and compare.
+        assert_eq!(xdr_change.key, *typed_change.key);
+        assert_eq!(xdr_change.read_only, typed_change.read_only);
+        assert_eq!(
+            xdr_change.old_entry_size_bytes_for_rent,
+            typed_change.old_entry_size_bytes_for_rent
+        );
+        assert_eq!(
+            xdr_change.new_value,
+            typed_change.new_entry.as_ref().map(|e| e.as_ref().clone())
+        );
+        assert_eq!(xdr_change.ttl_change, typed_change.ttl_change);
+    }
 }

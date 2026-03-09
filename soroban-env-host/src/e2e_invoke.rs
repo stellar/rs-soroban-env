@@ -36,8 +36,8 @@ use crate::{storage::EntryWithLiveUntil, vm::wasm_module_memory_cost};
 #[cfg(any(test, feature = "recording_mode"))]
 use sha2::{Digest, Sha256};
 
-type TtlEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<TtlEntry>, Budget>;
-type RestoredKeySet = MeteredOrdMap<Rc<LedgerKey>, (), Budget>;
+pub type TtlEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<TtlEntry>, Budget>;
+pub type RestoredKeySet = MeteredOrdMap<Rc<LedgerKey>, (), Budget>;
 
 /// Result of invoking a single host function prepared for embedder consumption.
 pub struct InvokeHostFunctionResult {
@@ -72,6 +72,10 @@ pub struct InvokeHostFunctionTypedResult {
     pub storage: Storage,
     /// All the events (contract + diagnostic) emitted during invocation.
     pub events: Events,
+    /// Initial TTL entries for rent computation (key hashes, old live_until_ledger).
+    pub ttl_map: TtlEntryMap,
+    /// Keys restored from archived state. Needed to zero out old sizes/TTLs for rent.
+    pub restored_keys: Option<RestoredKeySet>,
 }
 
 /// Result of invoking a single host function prepared for embedder consumption.
@@ -147,6 +151,23 @@ pub struct LedgerEntryLiveUntilChange {
     /// Live until ledger of the new entry. Guaranteed to always be greater than
     /// or equal to `old_live_until_ledger`.
     pub new_live_until_ledger: u32,
+}
+
+/// Represents a change of the ledger entry from 'old' value to the 'new' one,
+/// using typed `Rc<LedgerKey>` / `Rc<LedgerEntry>` instead of encoded bytes.
+pub struct TypedLedgerEntryChange {
+    /// Whether the ledger entry is read-only, as defined by the footprint.
+    pub read_only: bool,
+    /// The ledger key for this entry.
+    pub key: Rc<LedgerKey>,
+    /// Size of the 'old' entry to use in the rent computations.
+    pub old_entry_size_bytes_for_rent: u32,
+    /// New value of the ledger entry, or `None` if removed or read-only.
+    pub new_entry: Option<Rc<LedgerEntry>>,
+    /// Size of the 'new' entry to use in the rent computations.
+    pub new_entry_size_bytes_for_rent: u32,
+    /// Change of the live until state of the entry.
+    pub ttl_change: Option<LedgerEntryLiveUntilChange>,
 }
 
 // Builds a set for metered lookups of keys for entries that were restored from
@@ -275,6 +296,117 @@ fn get_ledger_changes(
                     entry_change.new_entry_size_bytes_for_rent =
                         entry_size_for_rent(budget, &entry, entry_buf.len() as u32)?;
                     entry_change.encoded_new_value = Some(entry_buf);
+
+                    if let Some(restored_keys) = &restored_keys {
+                        if restored_keys.contains_key::<LedgerKey>(key, budget)? {
+                            entry_change.old_entry_size_bytes_for_rent = 0;
+                            if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
+                                ttl_change.old_live_until_ledger = 0;
+                                ttl_change.new_live_until_ledger =
+                                    max(ttl_change.new_live_until_ledger, min_live_until_ledger);
+                            }
+                        }
+                    }
+                }
+            }
+            None => {
+                return Err(internal_error());
+            }
+        }
+        changes.push(entry_change);
+    }
+    Ok(changes)
+}
+
+/// Returns the difference between the `storage` and its initial snapshot as
+/// `TypedLedgerEntryChange`s, using typed Rc values instead of encoded bytes.
+///
+/// This is the typed counterpart to `get_ledger_changes` for pure-Rust
+/// embedders that don't need XDR-encoded keys/values.
+///
+/// Takes `&StorageMap` directly instead of `&impl SnapshotSource`.
+/// Enforcing-mode only (no `current_ledger_seq` parameter).
+pub fn get_ledger_changes_typed(
+    budget: &Budget,
+    storage: &Storage,
+    init_storage_map: &StorageMap,
+    init_ttl_entries: &TtlEntryMap,
+    min_live_until_ledger: u32,
+    restored_keys: &Option<RestoredKeySet>,
+) -> Result<Vec<TypedLedgerEntryChange>, HostError> {
+    let mut changes = Vec::with_capacity(storage.map.len());
+
+    let footprint_map = &storage.footprint.0;
+    let internal_error = || {
+        HostError::from(Error::from_type_and_code(
+            ScErrorType::Storage,
+            ScErrorCode::InternalError,
+        ))
+    };
+    for (key, entry_with_live_until_ledger) in storage.map.iter(budget)? {
+        let mut entry_change = TypedLedgerEntryChange {
+            read_only: false,
+            key: Rc::clone(key),
+            old_entry_size_bytes_for_rent: 0,
+            new_entry: None,
+            new_entry_size_bytes_for_rent: 0,
+            ttl_change: None,
+        };
+        let durability = get_key_durability(key);
+
+        if let Some(durability) = durability {
+            let mut encoded_key = vec![];
+            metered_write_xdr(budget, key.as_ref(), &mut encoded_key)?;
+            let key_hash = match init_ttl_entries.get::<Rc<LedgerKey>>(key, budget)? {
+                Some(ttl_entry) => ttl_entry.key_hash.0.to_vec(),
+                None => sha256_hash_from_bytes(encoded_key.as_slice(), budget)?,
+            };
+
+            entry_change.ttl_change = Some(LedgerEntryLiveUntilChange {
+                key_hash,
+                entry_type: key.discriminant(),
+                durability,
+                old_live_until_ledger: 0,
+                new_live_until_ledger: 0,
+            });
+        }
+        // Look up old entry from the init storage map directly.
+        let entry_with_live_until = init_storage_map
+            .get::<Rc<LedgerKey>>(key, budget)?
+            .and_then(|opt| opt.as_ref().map(|(e, ttl)| (e, ttl)));
+        if let Some((old_entry, old_live_until_ledger)) = entry_with_live_until {
+            let mut buf = vec![];
+            metered_write_xdr(budget, old_entry.as_ref(), &mut buf)?;
+
+            entry_change.old_entry_size_bytes_for_rent =
+                entry_size_for_rent(budget, old_entry, buf.len() as u32)?;
+
+            if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
+                ttl_change.old_live_until_ledger =
+                    old_live_until_ledger.ok_or_else(internal_error)?;
+            }
+        }
+        if let Some((_, new_live_until_ledger)) = entry_with_live_until_ledger {
+            if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
+                ttl_change.new_live_until_ledger = max(
+                    new_live_until_ledger.ok_or_else(internal_error)?,
+                    ttl_change.old_live_until_ledger,
+                );
+            }
+        }
+        let maybe_access_type: Option<AccessType> =
+            footprint_map.get::<Rc<LedgerKey>>(key, budget)?.copied();
+        match maybe_access_type {
+            Some(AccessType::ReadOnly) => {
+                entry_change.read_only = true;
+            }
+            Some(AccessType::ReadWrite) => {
+                if let Some((entry, _)) = entry_with_live_until_ledger {
+                    let mut entry_buf = vec![];
+                    metered_write_xdr(budget, entry.as_ref(), &mut entry_buf)?;
+                    entry_change.new_entry_size_bytes_for_rent =
+                        entry_size_for_rent(budget, entry, entry_buf.len() as u32)?;
+                    entry_change.new_entry = Some(Rc::clone(entry));
 
                     if let Some(restored_keys) = &restored_keys {
                         if restored_keys.contains_key::<LedgerKey>(key, budget)? {
@@ -558,7 +690,7 @@ fn invoke_host_function_core(
     Ok((result, storage, events))
 }
 
-fn build_storage_map_from_typed_ledger_entries(
+pub(crate) fn build_storage_map_from_typed_ledger_entries(
     budget: &Budget,
     footprint: &Footprint,
     ledger_entries: impl ExactSizeIterator<Item = (Rc<LedgerEntry>, Option<Rc<TtlEntry>>)>,
@@ -639,10 +771,10 @@ pub fn invoke_host_function_typed(
 ) -> Result<InvokeHostFunctionTypedResult, HostError> {
     let _span0 = tracy_span!("invoke_host_function_typed");
 
-    let _restored_keys = build_restored_key_set(budget, &resources, restored_rw_entry_indices)?;
+    let restored_keys = build_restored_key_set(budget, &resources, restored_rw_entry_indices)?;
     let footprint = build_storage_footprint_from_xdr(budget, resources.footprint)?;
     let current_ledger_seq = ledger_info.sequence_number;
-    let (storage_map, _ttl_map) = build_storage_map_from_typed_ledger_entries(
+    let (storage_map, ttl_map) = build_storage_map_from_typed_ledger_entries(
         budget,
         &footprint,
         ledger_entries,
@@ -670,6 +802,8 @@ pub fn invoke_host_function_typed(
         invoke_result: result,
         storage,
         events,
+        ttl_map,
+        restored_keys,
     })
 }
 
@@ -1082,7 +1216,7 @@ pub(crate) fn ledger_entry_to_ledger_key(
     }
 }
 
-fn build_storage_footprint_from_xdr(
+pub(crate) fn build_storage_footprint_from_xdr(
     budget: &Budget,
     footprint: LedgerFootprint,
 ) -> Result<Footprint, HostError> {
