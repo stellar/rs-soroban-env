@@ -422,11 +422,12 @@ impl Host {
     pub(crate) fn from_host_val_for_storage(&self, val: Val) -> Result<ScVal, HostError> {
         let _span = tracy_span!("Val to ScVal");
         *self.try_borrow_storage_key_conversion_active_mut()? = true;
-        let scval = self.budget_cloned().with_limited_depth(|_| {
+        let scval_res = self.budget_cloned().with_limited_depth(|_| {
             ScVal::try_from_val(self, &val)
                 .map_err(|cerr| self.error(cerr, "failed to convert host value to ScVal", &[val]))
-        })?;
+        });
         *self.try_borrow_storage_key_conversion_active_mut()? = false;
+        let scval = scval_res?;
         self.check_val_representable_scval(&scval)?;
         Ok(scval)
     }
