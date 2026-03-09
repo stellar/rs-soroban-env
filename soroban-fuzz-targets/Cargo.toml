@@ -1,0 +1,18 @@
+[package]
+name = "soroban-fuzz-targets"
+description = "Shared Soroban fuzz target bodies callable from external harnesses."
+homepage = "https://github.com/stellar/rs-soroban-env"
+repository = "https://github.com/stellar/rs-soroban-env"
+authors = ["Stellar Development Foundation <info@stellar.org>"]
+license = "Apache-2.0"
+version.workspace = true
+edition = "2021"
+rust-version = "1.84.0"
+publish = false
+
+[dependencies]
+arbitrary = { version = "1.3.2", features = ["derive"] }
+soroban-env-host = { path = "../soroban-env-host", features = ["testutils"] }
+soroban-synth-wasm = { path = "../soroban-synth-wasm", features = ["testutils"] }
+wasm-smith = "0.13.1"
+wasmi = { workspace = true }

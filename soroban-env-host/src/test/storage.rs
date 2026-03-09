@@ -549,7 +549,7 @@ fn test_large_instance_key() {
 mod ttl_extension_v2_tests {
     use super::*;
     use crate::xdr::{ContractDataDurability, LedgerKeyContractData, ScSymbol, ScVal};
-    use soroban_env_common::{ContractTTLExtension, StorageType};
+    use soroban_env_common::{ContractTtlExtension, StorageType};
     use soroban_test_wasms::CONTRACT_STORAGE_P26;
 
     fn setup_host() -> Host {
@@ -796,7 +796,7 @@ mod ttl_extension_v2_tests {
             )
         };
 
-        let extend = |scope: ContractTTLExtension, extend_to: u32| {
+        let extend = |scope: ContractTtlExtension, extend_to: u32| {
             let (inst_before, code_before) = get_ttls();
             host.extend_contract_instance_and_code_ttl_v2(
                 contract_id,
@@ -811,10 +811,10 @@ mod ttl_extension_v2_tests {
         };
 
         assert_eq!(
-            extend(ContractTTLExtension::InstanceAndCode, 8000),
+            extend(ContractTtlExtension::InstanceAndCode, 8000),
             (500, 500)
         );
-        assert_eq!(extend(ContractTTLExtension::Instance, 9000), (500, 0));
-        assert_eq!(extend(ContractTTLExtension::Code, 10000), (0, 500));
+        assert_eq!(extend(ContractTtlExtension::Instance, 9000), (500, 0));
+        assert_eq!(extend(ContractTtlExtension::Code, 10000), (0, 500));
     }
 }

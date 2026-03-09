@@ -7,7 +7,7 @@ use crate::{
         ContractId, Duration, Hash, MuxedEd25519Account, ScAddress, ScBytes, ScErrorCode,
         ScErrorType, ScString, ScSymbol, TimePoint, Uint256,
     },
-    AddressObject, Bool, BytesObject, ContractTTLExtension, DurationObject, DurationSmall,
+    AddressObject, Bool, BytesObject, ContractTtlExtension, DurationObject, DurationSmall,
     DurationVal, Env, Error, Host, HostError, I128Object, I128Small, I128Val, I256Object,
     I256Small, I256Val, I32Val, I64Object, I64Small, MapObject, MuxedAddressObject, StorageType,
     StringObject, Symbol, SymbolObject, SymbolSmall, TimepointObject, TimepointSmall, TimepointVal,
@@ -240,9 +240,9 @@ impl TestVal for StorageType {
     }
 }
 
-impl TestVal for ContractTTLExtension {
+impl TestVal for ContractTtlExtension {
     fn test_val() -> Val {
-        Val::from_u32(ContractTTLExtension::InstanceAndCode as u32).to_val()
+        Val::from_u32(ContractTtlExtension::InstanceAndCode as u32).to_val()
     }
 }
 
