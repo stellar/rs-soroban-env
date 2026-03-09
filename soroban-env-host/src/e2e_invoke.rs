@@ -76,6 +76,8 @@ pub struct InvokeHostFunctionTypedResult {
     pub ttl_map: TtlEntryMap,
     /// Keys restored from archived state. Needed to zero out old sizes/TTLs for rent.
     pub restored_keys: Option<RestoredKeySet>,
+    /// Snapshot of the storage map before invocation, for computing ledger changes.
+    pub init_storage_map: StorageMap,
 }
 
 /// Result of invoking a single host function prepared for embedder consumption.
@@ -780,6 +782,7 @@ pub fn invoke_host_function_typed(
         ledger_entries,
         current_ledger_seq,
     )?;
+    let init_storage_map = storage_map.metered_clone(budget)?;
 
     let (result, storage, events) = invoke_host_function_core(
         budget,
@@ -804,6 +807,7 @@ pub fn invoke_host_function_typed(
         events,
         ttl_map,
         restored_keys,
+        init_storage_map,
     })
 }
 
