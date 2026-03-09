@@ -40,7 +40,7 @@ macro_rules! impl_bignum_host_fns {
                 host.err(
                     ScErrorType::Object,
                     ScErrorCode::ArithDomain,
-                    "overflow has occured",
+                    "overflow has occurred",
                     &[lhs_val.to_val(), rhs_val.to_val()],
                 )
             })?;
