@@ -11,8 +11,8 @@ use crate::{
     builtin_contracts::testutils::TestSigner,
     e2e_invoke::{
         entry_size_for_rent, invoke_host_function, invoke_host_function_in_recording_mode,
-        ledger_entry_to_ledger_key, LedgerEntryChange, LedgerEntryLiveUntilChange,
-        RecordingInvocationAuthMode,
+        invoke_host_function_typed, ledger_entry_to_ledger_key, InvokeHostFunctionTypedResult,
+        LedgerEntryChange, LedgerEntryLiveUntilChange, RecordingInvocationAuthMode,
     },
     e2e_testutils::{
         auth_contract_invocation, create_contract_auth, default_ledger_info, get_account_id,
@@ -376,6 +376,50 @@ fn invoke_host_function_helper(
         ledger_entries_with_ttl,
         prng_seed,
         &[],
+    )
+}
+
+fn invoke_host_function_typed_helper(
+    enable_diagnostics: bool,
+    host_fn: &HostFunction,
+    resources: &SorobanResources,
+    source_account: &AccountId,
+    auth_entries: Vec<SorobanAuthorizationEntry>,
+    ledger_info: &LedgerInfo,
+    ledger_entries_with_ttl: Vec<(LedgerEntry, Option<u32>)>,
+    prng_seed: &[u8; 32],
+) -> Result<InvokeHostFunctionTypedResult, HostError> {
+    let restored_contracts = HashSet::new();
+    let module_cache =
+        build_module_cache_for_entries(ledger_info, ledger_entries_with_ttl.clone(), &restored_contracts)?;
+
+    let typed_ledger_entries = ledger_entries_with_ttl
+        .into_iter()
+        .map(|(entry, opt_ttl)| {
+            let key = ledger_entry_to_ledger_key(&entry, &Budget::default()).unwrap();
+            let opt_ttl_entry = opt_ttl.map(|ttl| Rc::new(ttl_entry(&key, ttl)));
+            (Rc::new(entry), opt_ttl_entry)
+        });
+
+    let budget = Budget::default();
+    budget
+        .reset_cpu_limit(resources.instructions as u64)
+        .unwrap();
+    let mut diagnostic_events = Vec::<DiagnosticEvent>::new();
+    invoke_host_function_typed(
+        &budget,
+        enable_diagnostics,
+        host_fn.clone(),
+        resources.clone(),
+        &[],
+        source_account.clone(),
+        auth_entries,
+        ledger_info.clone(),
+        typed_ledger_entries,
+        *prng_seed,
+        &mut diagnostic_events,
+        None,
+        Some(module_cache),
     )
 }
 
@@ -3455,4 +3499,40 @@ mod nonce_collision_tests {
         // Should succeed because auth uses a different nonce
         assert!(res.invoke_result.is_ok());
     }
+}
+
+#[test]
+fn test_typed_api_matches_xdr_api_for_wasm_upload() {
+    let ledger_key = get_wasm_key(ADD_I32);
+    let ledger_info = default_ledger_info();
+    let host_fn = upload_wasm_host_fn(ADD_I32);
+    let res = resources(10_000_000, vec![], vec![ledger_key.clone()]);
+    let source_account = get_account_id([123; 32]);
+
+    let xdr_result = invoke_host_function_helper(
+        false,
+        &host_fn,
+        &res,
+        &source_account,
+        vec![],
+        &ledger_info,
+        vec![],
+        &prng_seed(),
+    )
+    .unwrap();
+
+    let typed_result = invoke_host_function_typed_helper(
+        false,
+        &host_fn,
+        &res,
+        &source_account,
+        vec![],
+        &ledger_info,
+        vec![],
+        &prng_seed(),
+    )
+    .unwrap();
+
+    // Both APIs should produce the same invoke result.
+    assert_eq!(xdr_result.invoke_result, typed_result.invoke_result);
 }

@@ -7,12 +7,13 @@ use std::{cmp::max, rc::Rc};
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
     auth::RecordedAuthPayload,
+    budget::AsBudget,
     storage::is_persistent_key,
-    xdr::{ContractEvent, ReadXdr, ScVal, SorobanAddressCredentials, SorobanCredentials, WriteXdr},
+    xdr::{ContractEvent, ReadXdr, SorobanAddressCredentials, SorobanCredentials, WriteXdr},
     DEFAULT_XDR_RW_LIMITS,
 };
 use crate::{
-    budget::{AsBudget, Budget},
+    budget::Budget,
     crypto::sha256_hash_from_bytes,
     events::Events,
     fees::LedgerEntryRentChange,
@@ -26,7 +27,7 @@ use crate::{
         AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
         LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
         LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine,
-        ScErrorCode, ScErrorType, SorobanAuthorizationEntry, SorobanResources, TtlEntry,
+        ScErrorCode, ScErrorType, ScVal, SorobanAuthorizationEntry, SorobanResources, TtlEntry,
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
@@ -56,6 +57,21 @@ pub struct InvokeHostFunctionResult {
     ///
     /// Empty when invocation fails.
     pub encoded_contract_events: Vec<Vec<u8>>,
+}
+
+/// Result of invoking a single host function with typed (non-XDR-encoded)
+/// inputs and outputs.
+///
+/// Unlike `InvokeHostFunctionResult`, this avoids redundant XDR
+/// serialization/deserialization round-trips for pure-Rust embedders that
+/// already have typed XDR objects.
+pub struct InvokeHostFunctionTypedResult {
+    /// Result value of the function, or error.
+    pub invoke_result: Result<ScVal, HostError>,
+    /// The storage after invocation, containing all ledger entry modifications.
+    pub storage: Storage,
+    /// All the events (contract + diagnostic) emitted during invocation.
+    pub events: Events,
 }
 
 /// Result of invoking a single host function prepared for embedder consumption.
@@ -437,41 +453,33 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
 
     let init_storage_map = storage_map.metered_clone(budget)?;
 
-    let storage = Storage::with_enforcing_footprint_and_map(footprint, storage_map);
-    let host = Host::with_storage_and_budget(storage, budget.clone());
-    let have_trace_hook = trace_hook.is_some();
-    if let Some(th) = trace_hook {
-        host.set_trace_hook(Some(th))?;
-    }
-    let auth_entries = host.build_auth_entries_from_xdr(encoded_auth_entries)?;
-    let host_function: HostFunction = host.metered_from_xdr(encoded_host_fn.as_ref())?;
-    let source_account: AccountId = host.metered_from_xdr(encoded_source_account.as_ref())?;
-    host.set_source_account(source_account)?;
-    host.set_ledger_info(ledger_info)?;
-    host.set_authorization_entries(auth_entries)?;
-    let seed32: [u8; 32] = base_prng_seed.as_ref().try_into().map_err(|_| {
-        host.err(
-            ScErrorType::Context,
-            ScErrorCode::InternalError,
-            "base PRNG seed is not 32-bytes long",
-            &[],
-        )
-    })?;
-    host.set_base_prng_seed(seed32)?;
-    if enable_diagnostics {
-        host.set_diagnostic_level(DiagnosticLevel::Debug)?;
-    }
-    if let Some(module_cache) = module_cache {
-        host.set_module_cache(module_cache)?;
-    }
-    let result = {
-        let _span1 = tracy_span!("Host::invoke_function");
-        host.invoke_function(host_function)
-    };
-    if have_trace_hook {
-        host.set_trace_hook(None)?;
-    }
-    let (storage, events) = host.try_finish()?;
+    let auth_entries: Vec<SorobanAuthorizationEntry> = encoded_auth_entries
+        .map(|buf| metered_from_xdr_with_budget(buf.as_ref(), budget))
+        .metered_collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>(budget)??;
+    let host_function: HostFunction =
+        metered_from_xdr_with_budget(encoded_host_fn.as_ref(), budget)?;
+    let source_account: AccountId =
+        metered_from_xdr_with_budget(encoded_source_account.as_ref(), budget)?;
+
+    let (result, storage, events) = invoke_host_function_core(
+        budget,
+        enable_diagnostics,
+        footprint,
+        storage_map,
+        host_function,
+        source_account,
+        auth_entries,
+        ledger_info,
+        base_prng_seed.as_ref().try_into().map_err(|_| {
+            HostError::from(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+            ))
+        })?,
+        trace_hook,
+        module_cache,
+    )?;
+
     if enable_diagnostics {
         extract_diagnostic_events(&events, diagnostic_events);
     }
@@ -507,6 +515,162 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
             encoded_contract_events: vec![],
         })
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn invoke_host_function_core(
+    budget: &Budget,
+    enable_diagnostics: bool,
+    footprint: Footprint,
+    storage_map: StorageMap,
+    host_function: HostFunction,
+    source_account: AccountId,
+    auth_entries: Vec<SorobanAuthorizationEntry>,
+    ledger_info: LedgerInfo,
+    base_prng_seed: [u8; 32],
+    trace_hook: Option<TraceHook>,
+    module_cache: Option<ModuleCache>,
+) -> Result<(Result<ScVal, HostError>, Storage, Events), HostError> {
+    let storage = Storage::with_enforcing_footprint_and_map(footprint, storage_map);
+    let host = Host::with_storage_and_budget(storage, budget.clone());
+    let have_trace_hook = trace_hook.is_some();
+    if let Some(th) = trace_hook {
+        host.set_trace_hook(Some(th))?;
+    }
+    host.set_source_account(source_account)?;
+    host.set_ledger_info(ledger_info)?;
+    host.set_authorization_entries(auth_entries)?;
+    host.set_base_prng_seed(base_prng_seed)?;
+    if enable_diagnostics {
+        host.set_diagnostic_level(DiagnosticLevel::Debug)?;
+    }
+    if let Some(module_cache) = module_cache {
+        host.set_module_cache(module_cache)?;
+    }
+    let result = {
+        let _span1 = tracy_span!("Host::invoke_function");
+        host.invoke_function(host_function)
+    };
+    if have_trace_hook {
+        host.set_trace_hook(None)?;
+    }
+    let (storage, events) = host.try_finish()?;
+    Ok((result, storage, events))
+}
+
+fn build_storage_map_from_typed_ledger_entries(
+    budget: &Budget,
+    footprint: &Footprint,
+    ledger_entries: impl ExactSizeIterator<Item = (Rc<LedgerEntry>, Option<Rc<TtlEntry>>)>,
+    ledger_num: u32,
+) -> Result<(StorageMap, TtlEntryMap), HostError> {
+    let mut storage_map = StorageMap::new();
+    let mut ttl_map = TtlEntryMap::new();
+
+    for (le, opt_ttl) in ledger_entries {
+        let mut live_until_ledger: Option<u32> = None;
+
+        let key = Rc::metered_new(ledger_entry_to_ledger_key(&le, budget)?, budget)?;
+        if let Some(ttl_entry) = opt_ttl {
+            if ttl_entry.live_until_ledger_seq < ledger_num {
+                return Err(Error::from_type_and_code(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
+                )
+                .into());
+            }
+
+            live_until_ledger = Some(ttl_entry.live_until_ledger_seq);
+
+            ttl_map = ttl_map.insert(key.clone(), ttl_entry, budget)?;
+        } else if matches!(le.as_ref().data, LedgerEntryData::ContractData(_))
+            || matches!(le.as_ref().data, LedgerEntryData::ContractCode(_))
+        {
+            return Err(Error::from_type_and_code(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+            )
+            .into());
+        }
+
+        if !footprint.0.contains_key::<LedgerKey>(&key, budget)? {
+            return Err(Error::from_type_and_code(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+            )
+            .into());
+        }
+        storage_map = storage_map.insert(key, Some((le, live_until_ledger)), budget)?;
+    }
+
+    // Add non-existing entries from the footprint to the storage.
+    for k in footprint.0.keys(budget)? {
+        if !storage_map.contains_key::<LedgerKey>(k, budget)? {
+            storage_map = storage_map.insert(Rc::clone(k), None, budget)?;
+        }
+    }
+    Ok((storage_map, ttl_map))
+}
+
+/// Invokes a host function within a fresh host instance using typed
+/// (non-XDR-encoded) inputs.
+///
+/// This is equivalent to [`invoke_host_function`] but accepts already-decoded
+/// XDR types, avoiding redundant serialization/deserialization round-trips for
+/// pure-Rust embedders.
+///
+/// The caller is responsible for diffing storage against their own snapshot;
+/// this function does **not** compute `LedgerEntryChange` or encode results.
+#[allow(clippy::too_many_arguments)]
+pub fn invoke_host_function_typed(
+    budget: &Budget,
+    enable_diagnostics: bool,
+    host_function: HostFunction,
+    resources: SorobanResources,
+    restored_rw_entry_indices: &[u32],
+    source_account: AccountId,
+    auth_entries: Vec<SorobanAuthorizationEntry>,
+    ledger_info: LedgerInfo,
+    ledger_entries: impl ExactSizeIterator<Item = (Rc<LedgerEntry>, Option<Rc<TtlEntry>>)>,
+    base_prng_seed: [u8; 32],
+    diagnostic_events: &mut Vec<DiagnosticEvent>,
+    trace_hook: Option<TraceHook>,
+    module_cache: Option<ModuleCache>,
+) -> Result<InvokeHostFunctionTypedResult, HostError> {
+    let _span0 = tracy_span!("invoke_host_function_typed");
+
+    let _restored_keys = build_restored_key_set(budget, &resources, restored_rw_entry_indices)?;
+    let footprint = build_storage_footprint_from_xdr(budget, resources.footprint)?;
+    let current_ledger_seq = ledger_info.sequence_number;
+    let (storage_map, _ttl_map) = build_storage_map_from_typed_ledger_entries(
+        budget,
+        &footprint,
+        ledger_entries,
+        current_ledger_seq,
+    )?;
+
+    let (result, storage, events) = invoke_host_function_core(
+        budget,
+        enable_diagnostics,
+        footprint,
+        storage_map,
+        host_function,
+        source_account,
+        auth_entries,
+        ledger_info,
+        base_prng_seed,
+        trace_hook,
+        module_cache,
+    )?;
+
+    if enable_diagnostics {
+        extract_diagnostic_events(&events, diagnostic_events);
+    }
+    Ok(InvokeHostFunctionTypedResult {
+        invoke_result: result,
+        storage,
+        events,
+    })
 }
 
 #[cfg(any(test, feature = "recording_mode"))]
@@ -1040,6 +1204,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     Ok((storage_map, ttl_map))
 }
 
+#[cfg(any(test, feature = "recording_mode"))]
 impl Host {
     fn build_auth_entries_from_xdr<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
         &self,
