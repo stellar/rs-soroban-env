@@ -104,8 +104,8 @@ pub use storage_type::{ContractTtlExtension, StorageType};
 
 // Re-export the XDR definitions of a specific version -- curr or next -- of the xdr crate.
 // next should be used while the protocol is in development.
-//pub use stellar_xdr::curr as xdr;
-pub use stellar_xdr::next as xdr;
+pub use stellar_xdr::curr as xdr;
+//pub use stellar_xdr::next as xdr;
 
 // Val is the 64-bit transparent type.
 pub use val::{ConversionError, Tag, Val};
