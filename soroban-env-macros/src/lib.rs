@@ -13,8 +13,8 @@ use syn::{parse::Parse, parse_macro_input, Ident, LitInt, LitStr, Token};
 
 // Import the XDR definitions of a specific version -- curr or next -- of the xdr crate.
 // next should be used while the protocol is in development.
-//use stellar_xdr::curr as xdr;
-use stellar_xdr::next as xdr;
+use stellar_xdr::curr as xdr;
+//use stellar_xdr::next as xdr;
 
 use crate::xdr::{Limits, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion, WriteXdr};
 
