@@ -9,8 +9,7 @@ use crate::{
     auth::RecordedAuthPayload,
     budget::AsBudget,
     storage::is_persistent_key,
-    xdr::{ContractEvent, ReadXdr, SorobanAddressCredentials, SorobanCredentials, WriteXdr},
-    DEFAULT_XDR_RW_LIMITS,
+    xdr::{ContractEvent, ReadXdr, SorobanAddressCredentials, SorobanCredentials},
 };
 use crate::{
     budget::Budget,
@@ -24,12 +23,13 @@ use crate::{
     },
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
     xdr::{
-        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
-        LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
+        AccountId, ContractCostType, ContractDataDurability, ContractEventType, DiagnosticEvent,
+        HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
         LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine,
         ScErrorCode, ScErrorType, ScVal, SorobanAuthorizationEntry, SorobanResources, TtlEntry,
+        WriteXdr,
     },
-    DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
+    DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap, DEFAULT_XDR_RW_LIMITS,
 };
 use crate::{ledger_info::get_key_durability, ModuleCache};
 use crate::{storage::EntryWithLiveUntil, vm::wasm_module_memory_cost};
@@ -704,6 +704,13 @@ pub(crate) fn build_storage_map_from_typed_ledger_entries(
     for (le, opt_ttl) in ledger_entries {
         let mut live_until_ledger: Option<u32> = None;
 
+        // Charge ValDeser for the ledger entry and TTL entry, matching the
+        // non-typed API's metered_from_xdr_with_budget calls.
+        charge_val_deser_for_typed(budget, le.as_ref())?;
+        if let Some(ref ttl) = opt_ttl {
+            charge_val_deser_for_typed(budget, ttl.as_ref())?;
+        }
+
         let key = Rc::metered_new(ledger_entry_to_ledger_key(&le, budget)?, budget)?;
         if let Some(ttl_entry) = opt_ttl {
             if ttl_entry.live_until_ledger_seq < ledger_num {
@@ -746,6 +753,28 @@ pub(crate) fn build_storage_map_from_typed_ledger_entries(
     Ok((storage_map, ttl_map))
 }
 
+/// Charges the `ValDeser` budget cost for a typed value as if it had been
+/// deserialized from XDR bytes.
+///
+/// The non-typed API (`invoke_host_function`) passes XDR-encoded bytes through
+/// `metered_from_xdr_with_budget`, which charges `ContractCostType::ValDeser`
+/// proportional to byte length.  The typed API receives pre-deserialized values,
+/// but must still account for the same budget cost to maintain parity with
+/// stellar-core (which always deserializes from XDR).
+///
+/// This function serializes the value to XDR (non-metered) solely to determine
+/// its byte length, then charges the equivalent `ValDeser` cost.
+fn charge_val_deser_for_typed<T: WriteXdr>(budget: &Budget, val: &T) -> Result<(), HostError> {
+    let bytes = val.to_xdr(DEFAULT_XDR_RW_LIMITS).map_err(|_| {
+        HostError::from(Error::from_type_and_code(
+            ScErrorType::Value,
+            ScErrorCode::InternalError,
+        ))
+    })?;
+    budget.charge(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
+    Ok(())
+}
+
 /// Invokes a host function within a fresh host instance using typed
 /// (non-XDR-encoded) inputs.
 ///
@@ -773,6 +802,10 @@ pub fn invoke_host_function_typed(
 ) -> Result<InvokeHostFunctionTypedResult, HostError> {
     let _span0 = tracy_span!("invoke_host_function_typed");
 
+    // Charge ValDeser for resources to match the non-typed API which
+    // deserializes encoded_resources via metered_from_xdr_with_budget.
+    charge_val_deser_for_typed(budget, &resources)?;
+
     let restored_keys = build_restored_key_set(budget, &resources, restored_rw_entry_indices)?;
     let footprint = build_storage_footprint_from_xdr(budget, resources.footprint)?;
     let current_ledger_seq = ledger_info.sequence_number;
@@ -783,6 +816,14 @@ pub fn invoke_host_function_typed(
         current_ledger_seq,
     )?;
     let init_storage_map = storage_map.metered_clone(budget)?;
+
+    // Charge ValDeser for auth entries, host function, and source account
+    // to match the non-typed API's metered_from_xdr_with_budget calls.
+    for auth in &auth_entries {
+        charge_val_deser_for_typed(budget, auth)?;
+    }
+    charge_val_deser_for_typed(budget, &host_function)?;
+    charge_val_deser_for_typed(budget, &source_account)?;
 
     let (result, storage, events) = invoke_host_function_core(
         budget,

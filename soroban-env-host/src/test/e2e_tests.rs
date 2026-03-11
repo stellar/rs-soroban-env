@@ -3883,3 +3883,69 @@ fn test_get_ledger_changes_typed_matches_xdr() {
         assert_eq!(xdr_change.ttl_change, typed_change.ttl_change);
     }
 }
+
+/// Regression test for VE-14: the typed API must charge `ValDeser` for each
+/// typed input to maintain budget parity with stellar-core, which always
+/// deserializes from XDR via `metered_from_xdr_with_budget`.
+#[test]
+fn test_typed_api_charges_val_deser_for_inputs() {
+    use soroban_env_common::xdr::ContractCostType;
+
+    let cd = CreateContractData::new([111; 32], ADD_I32);
+    let ledger_info = default_ledger_info();
+    let ledger_entries_with_ttl = vec![(
+        cd.wasm_entry.clone(),
+        Some(ledger_info.sequence_number + 100),
+    )];
+    let res = resources(
+        10_000_000,
+        vec![cd.wasm_key.clone()],
+        vec![cd.contract_key.clone()],
+    );
+
+    // Call the typed API and capture the budget.
+    let restored_contracts = HashSet::new();
+    let module_cache = build_module_cache_for_entries(
+        &ledger_info,
+        ledger_entries_with_ttl.clone(),
+        &restored_contracts,
+    )
+    .unwrap();
+
+    let typed_ledger_entries = ledger_entries_with_ttl.into_iter().map(|(entry, opt_ttl)| {
+        let key = ledger_entry_to_ledger_key(&entry, &Budget::default()).unwrap();
+        let opt_ttl_entry = opt_ttl.map(|ttl| Rc::new(ttl_entry(&key, ttl)));
+        (Rc::new(entry), opt_ttl_entry)
+    });
+
+    let budget = Budget::default();
+    budget.reset_cpu_limit(res.instructions as u64).unwrap();
+    let mut diagnostic_events = Vec::<DiagnosticEvent>::new();
+    let _typed_result = invoke_host_function_typed(
+        &budget,
+        false,
+        cd.host_fn.clone(),
+        res.clone(),
+        &[],
+        cd.deployer.clone(),
+        vec![cd.auth_entry],
+        ledger_info,
+        typed_ledger_entries,
+        prng_seed(),
+        &mut diagnostic_events,
+        None,
+        Some(module_cache),
+    )
+    .unwrap();
+
+    // ValDeser must have been charged (non-zero iterations and cpu).
+    let tracker = budget.get_tracker(ContractCostType::ValDeser).unwrap();
+    assert!(
+        tracker.iterations > 0,
+        "ValDeser should have been charged at least once, got 0 iterations"
+    );
+    assert!(
+        tracker.inputs.unwrap_or(0) > 0,
+        "ValDeser should have non-zero input bytes"
+    );
+}
