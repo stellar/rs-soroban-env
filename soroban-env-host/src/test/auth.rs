@@ -1,25 +1,37 @@
+use crate::{
+    builtin_contracts::{
+        account_contract::ContractAuthorizationContext,
+        base_types::{Address, Vec as ContractVec},
+        invoker_contract_auth::{
+            invoker_contract_auth_to_authorized_invocation, InvokerContractAuthEntry,
+            SubContractInvocation,
+        },
+        testutils::{
+            create_account, generate_signing_key, sign_payload_for_account,
+            signing_key_to_account_id,
+        },
+    },
+    xdr::{
+        AccountId, ContractDataDurability, ContractId, Hash, HashIdPreimage,
+        HashIdPreimageSorobanAuthorization, InvokeContractArgs, PublicKey, ScAddress, ScBytes,
+        ScErrorCode, ScErrorType, ScNonceKey, ScSymbol, ScVal, SorobanAddressCredentials,
+        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+        SorobanCredentials, Uint256, VecM,
+    },
+    HostError, TryFromVal, DEFAULT_HOST_DEPTH_LIMIT,
+};
 use ed25519_dalek::SigningKey;
 use expect_test::expect;
 use rand::Rng;
 use soroban_builtin_sdk_macros::contracttype;
-use soroban_env_common::xdr::{
-    AccountId, ContractDataDurability, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-    InvokeContractArgs, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScNonceKey,
-    ScSymbol, ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
-};
 use soroban_test_wasms::{
     AUTH_TEST_CONTRACT, CHECK_AUTH_INSTANCE_STORAGE_TEST_CONTRACT,
     CONDITIONAL_ACCOUNT_TEST_CONTRACT, DELEGATED_ACCOUNT_TEST_CONTRACT,
 };
 
 use crate::auth::RecordedAuthPayload;
-use crate::builtin_contracts::base_types::Address;
-use crate::builtin_contracts::testutils::{
-    create_account, generate_signing_key, sign_payload_for_account, signing_key_to_account_id,
-};
 use crate::{Host, LedgerInfo};
-use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryFromVal, TryIntoVal};
+use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryIntoVal};
 
 use crate::builtin_contracts::base_types::Vec as HostVec;
 
@@ -2194,6 +2206,45 @@ fn test_invoker_subcontract_auth_without_subcontract_calls() {
         args.clone(),
         true,
     );
+}
+
+#[test]
+fn test_invoker_auth_depth_limit() {
+    let host = Host::test_host();
+    let sc_addr = ScAddress::Contract(ContractId(Hash([0u8; 32])));
+    let addr_obj = host.add_host_object(sc_addr).unwrap();
+    let addr = Address::try_from_val(&host, &addr_obj).unwrap();
+    let fn_name = Symbol::try_from_small_str("f").unwrap();
+    let args = ContractVec::new(&host).unwrap();
+
+    let context = ContractAuthorizationContext {
+        contract: addr,
+        fn_name,
+        args,
+    };
+
+    let leaf = InvokerContractAuthEntry::Contract(SubContractInvocation {
+        context: context.clone(),
+        sub_invocations: ContractVec::new(&host).unwrap(),
+    });
+    let mut tree_val = leaf.try_into_val(&host).unwrap();
+
+    for _ in 0..DEFAULT_HOST_DEPTH_LIMIT + 1 {
+        let mut subs: ContractVec = ContractVec::new(&host).unwrap();
+        subs.push(&tree_val).unwrap();
+        let entry = InvokerContractAuthEntry::Contract(SubContractInvocation {
+            context: context.clone(),
+            sub_invocations: subs,
+        });
+        tree_val = entry.try_into_val(&host).unwrap();
+    }
+    let sc_addr = ScAddress::Contract(ContractId(Hash([0u8; 32])));
+
+    let result = invoker_contract_auth_to_authorized_invocation(&host, &sc_addr, tree_val);
+    assert!(HostError::result_matches_err(
+        result,
+        (ScErrorType::Context, ScErrorCode::ExceededLimit)
+    ));
 }
 
 #[test]

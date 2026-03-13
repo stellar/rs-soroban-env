@@ -1,6 +1,6 @@
 use crate::{
     auth::{AuthorizedFunction, AuthorizedInvocation, ContractFunction},
-    budget::AsBudget,
+    budget::{AsBudget, DepthLimiter},
     builtin_contracts::{
         account_contract::{
             ContractAuthorizationContext, CreateContractHostFnContext,
@@ -45,7 +45,7 @@ impl InvokerContractAuthEntry {
         host: &Host,
         invoker_contract_addr: &ScAddress,
     ) -> Result<AuthorizedInvocation, HostError> {
-        match &self {
+        host.budget_cloned().with_limited_depth(|_| match &self {
             InvokerContractAuthEntry::Contract(contract_invocation) => {
                 let function = AuthorizedFunction::ContractFn(ContractFunction {
                     contract_address: contract_invocation.context.contract.as_object(),
@@ -133,7 +133,7 @@ impl InvokerContractAuthEntry {
                 });
                 Ok(AuthorizedInvocation::new(function, vec![]))
             }
-        }
+        })
     }
 }
 
