@@ -32,7 +32,7 @@ pub const DEFAULT_XDR_RW_LIMITS: Limits = Limits {
 };
 
 /// - `DEFAULT_HOST_DEPTH_LIMIT`: This limit applies to the host environment. It
-///   guards recursion paths involving the `Env` and `Budget`, particularly
+///   guars recursion paths involving the `Env` and `Budget`, particularly
 ///   during operations like conversion, comparison, and deep cloning. The limit
 ///   is strategically checked at critical recursion points, such as when
 ///   encountering a `Val`. As the actual stack usage can be higher,
