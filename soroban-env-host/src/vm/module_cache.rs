@@ -147,14 +147,13 @@ impl ModuleCache {
             wasm,
             context.as_budget(),
         )?);
+        let cost_inputs = ParsedModule::extract_refined_contract_cost_inputs(context, wasm)?;
         self.parse_and_cache_module(
             context,
             curr_ledger_protocol,
             &contract_id,
             wasm,
-            VersionedContractCodeCostInputs::V0 {
-                wasm_bytes: wasm.len(),
-            },
+            VersionedContractCodeCostInputs::V1(cost_inputs),
         )
     }
 
