@@ -10,6 +10,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 
 # Switch to the non-root user that the base image provides
 USER vscode
+ENV HOME=/home/vscode
 
 # Install rustup components from rust-toolchain.toml
 RUN rustup component add rustfmt clippy rust-src
@@ -46,10 +47,10 @@ RUN ARCH="$(uname -m)" \
        ; done
 
 # Install remaining cargo extensions not available in stellar/binaries
-RUN cargo install --locked --version 8.5.2 cargo-watch \
-    && cargo install --locked --version 0.6.10 cargo-llvm-cov \
-    && cargo install --locked --version 0.3.0 cargo-acl \
-    && cargo install --locked --version 0.3.0 lcov-summary
+RUN cargo install --locked cargo-watch \
+    && cargo install --locked cargo-llvm-cov \
+    && cargo install --locked cargo-acl \
+    && cargo install --locked lcov-summary
 
 ENV PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:${PATH}"
 
