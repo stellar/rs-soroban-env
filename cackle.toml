@@ -342,7 +342,7 @@ build.allow_apis = [
     "env",
 ]
 allow_unsafe = true
-from.test.allow_apis = [
+allow_apis = [
     "hash",
 ]
 
@@ -411,7 +411,8 @@ allow_unsafe = true
 
 [pkg.wasmparser]
 allow_unsafe = true
-from.test.allow_apis = [
+allow_apis = [
+    "hash",
 ]
 
 [pkg.crate-git-revision]
