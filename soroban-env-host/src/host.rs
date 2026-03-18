@@ -16,7 +16,7 @@ use crate::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration,
         LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
-        ScSymbol, ScVal, TimePoint,
+        ScSymbol, ScVal, TimePoint, VecM,
     },
     AddressObject, Bool, BytesObject, Compare, ContractTtlExtension, ConversionError, EnvBase,
     Error, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject,
@@ -771,23 +771,16 @@ impl Host {
             ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
         let (constructor_args, constructor_args_vec) = if let Some(v) = constructor_args {
             (
-                self.vecobject_to_scval_vec(v)?.to_vec(),
+                self.vecobject_to_scval_vec(v)?,
                 self.call_args_from_obj(v)?,
             )
         } else {
-            (vec![], vec![])
+            (VecM::default(), vec![])
         };
         let args = CreateContractArgsV2 {
             contract_id_preimage,
             executable,
-            constructor_args: constructor_args.try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InternalError,
-                    "couldn't convert constructor args vector to XDR",
-                    &[],
-                )
-            })?,
+            constructor_args,
         };
         self.create_contract_internal(Some(deployer), args, constructor_args_vec)
     }
