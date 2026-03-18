@@ -199,7 +199,7 @@ impl Host {
         let id_preimage =
             self.get_full_contract_id_preimage(args.contract_id_preimage.metered_clone(self)?)?;
         let contract_id = ContractId(Hash(self.metered_hash_xdr(&id_preimage)?));
-        self.create_contract_with_id(contract_id.metered_clone(self)?, args.executable.clone())?;
+        self.create_contract_with_id(contract_id.metered_clone(self)?, args.executable.metered_clone(self)?)?;
         self.maybe_initialize_stellar_asset_contract(&contract_id, &args.contract_id_preimage)?;
         if matches!(args.executable, ContractExecutable::Wasm(_)) {
             self.call_constructor(&contract_id, constructor_args)?;
