@@ -217,6 +217,13 @@ impl Compare<ScVec> for Budget {
     fn compare(&self, a: &ScVec, b: &ScVec) -> Result<Ordering, Self::Error> {
         let a: &Vec<ScVal> = a;
         let b: &Vec<ScVal> = b;
+        self.charge(
+            ContractCostType::MemCpy,
+            Some(
+                <ScVal as DeclaredSizeForMetering>::DECLARED_SIZE
+                    .saturating_mul(a.len().min(b.len()) as u64),
+            ),
+        )?;
         self.compare(a, b)
     }
 }
@@ -227,6 +234,13 @@ impl Compare<ScMap> for Budget {
     fn compare(&self, a: &ScMap, b: &ScMap) -> Result<Ordering, Self::Error> {
         let a: &Vec<ScMapEntry> = a;
         let b: &Vec<ScMapEntry> = b;
+        self.charge(
+            ContractCostType::MemCpy,
+            Some(
+                <ScMapEntry as DeclaredSizeForMetering>::DECLARED_SIZE
+                    .saturating_mul(a.len().min(b.len()) as u64),
+            ),
+        )?;
         self.compare(a, b)
     }
 }
