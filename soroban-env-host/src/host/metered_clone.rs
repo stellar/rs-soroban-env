@@ -26,14 +26,16 @@ use crate::{
     host_object::MuxedScAddress,
     storage::AccessType,
     xdr::{
-        AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
+        AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, Asset, BytesM,
+        ContractCodeCostInputs, ContractCodeEntry,
         ContractCodeEntryExt, ContractCodeEntryV1, ContractCostType, ContractExecutable,
         ContractId, ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash,
         InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
         LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
         ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        SorobanAuthorizedInvocation, SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset,
+        TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -326,6 +328,7 @@ impl MeteredClone for ContractCodeCostInputs {}
 impl MeteredClone for ContractCodeEntryV1 {}
 impl MeteredClone for ContractExecutable {}
 impl MeteredClone for AccountId {}
+impl MeteredClone for SponsorshipDescriptor {}
 impl MeteredClone for ScAddress {}
 impl MeteredClone for MuxedScAddress {}
 impl MeteredClone for ScNonceKey {}
@@ -622,7 +625,16 @@ impl MeteredClone for AccountEntry {
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
         self.home_domain.charge_for_substructure(budget.clone())?;
-        self.signers.charge_for_substructure(budget)
+        self.signers.charge_for_substructure(budget.clone())?;
+        match &self.ext {
+            AccountEntryExt::V0 => Ok(()),
+            AccountEntryExt::V1(v1) => match &v1.ext {
+                AccountEntryExtensionV1Ext::V0 => Ok(()),
+                AccountEntryExtensionV1Ext::V2(v2) => {
+                    v2.signer_sponsoring_i_ds.charge_for_substructure(budget)
+                }
+            },
+        }
     }
 }
 
