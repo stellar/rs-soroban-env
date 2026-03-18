@@ -9,6 +9,6 @@
   "   7 call map_keys(Map(obj#5))": "",
   "   8 ret map_keys -> Ok(Vec(obj#7))": "cpu:4287, mem:456, objs:-/4@32778b44",
   "   9 call obj_cmp(Vec(obj#7), Vec(obj#9))": "cpu:5254, mem:568, objs:-/5@385fecf8",
-  "  10 ret obj_cmp -> Ok(0)": "cpu:5542",
-  "  11 end": "cpu:5542, mem:568, prngs:-/-, objs:-/5@385fecf8, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  10 ret obj_cmp -> Ok(0)": "cpu:5588",
+  "  11 end": "cpu:5588, mem:568, prngs:-/-, objs:-/5@385fecf8, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

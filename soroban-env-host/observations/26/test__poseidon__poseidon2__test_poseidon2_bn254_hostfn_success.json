@@ -177,12 +177,12 @@
   " 175 call obj_from_u256_pieces(2220927263756194542, 17897713257879862354, 16600463138969888716, 9667366114215489224)": "cpu:1069946, mem:96696",
   " 176 ret obj_from_u256_pieces -> Ok(U256(obj#307))": "cpu:1070449, mem:96776, objs:-/154@ebdfd359",
   " 177 call obj_cmp(Vec(obj#301), Vec(obj#309))": "cpu:1071418, mem:96896, objs:-/155@eabea049",
-  " 178 call obj_cmp(U256(obj#295), U256(obj#303))": "cpu:1071707",
-  " 179 ret obj_cmp -> Ok(0)": "cpu:1071999",
+  " 178 call obj_cmp(U256(obj#295), U256(obj#303))": "cpu:1071754",
+  " 179 ret obj_cmp -> Ok(0)": "cpu:1072046",
   " 180 call obj_cmp(U256(obj#297), U256(obj#305))": "",
-  " 181 ret obj_cmp -> Ok(0)": "cpu:1072291",
+  " 181 ret obj_cmp -> Ok(0)": "cpu:1072338",
   " 182 call obj_cmp(U256(obj#299), U256(obj#307))": "",
-  " 183 ret obj_cmp -> Ok(0)": "cpu:1072583",
+  " 183 ret obj_cmp -> Ok(0)": "cpu:1072630",
   " 184 ret obj_cmp -> Ok(0)": "",
-  " 185 end": "cpu:1072583, mem:96896, prngs:-/-, objs:-/155@eabea049, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  " 185 end": "cpu:1072630, mem:96896, prngs:-/-, objs:-/155@eabea049, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }
