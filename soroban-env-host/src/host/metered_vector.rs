@@ -343,11 +343,21 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        // Here covers the cost of accessing number of map entries. The cost of
-        // comparing entries is covered by the `compare` call below.
+        let min_len = a.vec.len().min(b.vec.len()) as u64;
+        // Charge for accessing the vector entries in memory.
         self.as_budget().charge(
             ContractCostType::MemCpy,
-            Some(Elt::DECLARED_SIZE.saturating_mul(a.vec.len().min(b.vec.len()) as u64)),
+            Some(Elt::DECLARED_SIZE.saturating_mul(min_len)),
+        )?;
+        // Charge for the worst-case per-element comparison dispatch overhead.
+        // The element-by-element loop performs real CPU work (function calls,
+        // tag extraction, pattern matching) per element, but inline Val types
+        // (Void, Bool, U32Val, Small variants) do not individually charge the
+        // budget. This bulk MemCmp charge is a gross estimation to cover that
+        // unmetered per-element work in the worst case (mismatch at last element).
+        self.as_budget().charge(
+            ContractCostType::MemCmp,
+            Some(Elt::DECLARED_SIZE.saturating_mul(min_len)),
         )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
@@ -364,11 +374,17 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        // Here covers the cost of accessing number of map entries. The cost of
-        // comparing entries is covered by the `compare` call below.
+        let min_len = a.vec.len().min(b.vec.len()) as u64;
+        // Charge for accessing the vector entries in memory.
         self.as_budget().charge(
             ContractCostType::MemCpy,
-            Some(Elt::DECLARED_SIZE.saturating_mul(a.vec.len().min(b.vec.len()) as u64)),
+            Some(Elt::DECLARED_SIZE.saturating_mul(min_len)),
+        )?;
+        // Charge for the worst-case per-element comparison dispatch overhead.
+        // See comment in the Budget impl above for details.
+        self.as_budget().charge(
+            ContractCostType::MemCmp,
+            Some(Elt::DECLARED_SIZE.saturating_mul(min_len)),
         )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
