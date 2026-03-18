@@ -1,6 +1,5 @@
 use crate::{
     budget::{AsBudget, Budget},
-    err,
     host::metered_clone::MeteredContainer,
     meta,
     xdr::{
@@ -527,19 +526,17 @@ impl ParsedModule {
 
     // Do a second, manual parse of the Wasm blob to extract cost parameters we're
     // interested in.
-    pub fn extract_refined_contract_cost_inputs(
-        host: &Host,
+    pub fn extract_refined_contract_cost_inputs<Ctx: CompilationContext>(
+        ctx: &Ctx,
         wasm: &[u8],
     ) -> Result<crate::xdr::ContractCodeCostInputs, HostError> {
         use wasmparser::{ElementItems, ElementKind, Parser, Payload::*, TableInit};
 
+        let invalid_input =
+            crate::Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidInput);
+
         if !Parser::is_core_wasm(wasm) {
-            return Err(host.err(
-                ScErrorType::WasmVm,
-                ScErrorCode::InvalidInput,
-                "unsupported non-core wasm module",
-                &[],
-            ));
+            return Err(ctx.error(invalid_input, "unsupported non-core wasm module", &[]));
         }
 
         let mut costs = crate::xdr::ContractCodeCostInputs {
@@ -560,7 +557,7 @@ impl ParsedModule {
         let mut elements: u32 = 0;
         let mut available_memory: u32 = 0;
         for section in parser.parse_all(wasm) {
-            let section = host.map_err(section)?;
+            let section = ctx.map_err(section)?;
             match section {
                 // Ignored sections.
                 Version { .. }
@@ -584,44 +581,24 @@ impl ParsedModule {
                 | ComponentExportSection(_)
                 | TagSection(_)
                 | UnknownSection { .. } => {
-                    return Err(host.err(
-                        ScErrorType::WasmVm,
-                        ScErrorCode::InvalidInput,
-                        "unsupported wasm section type",
-                        &[],
-                    ))
+                    return Err(ctx.error(invalid_input, "unsupported wasm section type", &[]))
                 }
 
                 MemorySection(s) => {
                     for mem in s {
-                        let mem = host.map_err(mem)?;
+                        let mem = ctx.map_err(mem)?;
                         if mem.memory64 {
-                            return Err(host.err(
-                                ScErrorType::WasmVm,
-                                ScErrorCode::InvalidInput,
-                                "unsupported 64-bit memory",
-                                &[],
-                            ));
+                            return Err(ctx.error(invalid_input, "unsupported 64-bit memory", &[]));
                         }
                         if mem.shared {
-                            return Err(host.err(
-                                ScErrorType::WasmVm,
-                                ScErrorCode::InvalidInput,
-                                "unsupported shared memory",
-                                &[],
-                            ));
+                            return Err(ctx.error(invalid_input, "unsupported shared memory", &[]));
                         }
                         if mem
                             .initial
                             .saturating_mul(crate::vm::WASM_STD_MEM_PAGE_SIZE_IN_BYTES as u64)
                             > u32::MAX as u64
                         {
-                            return Err(host.err(
-                                ScErrorType::WasmVm,
-                                ScErrorCode::InvalidInput,
-                                "unsupported memory size",
-                                &[],
-                            ));
+                            return Err(ctx.error(invalid_input, "unsupported memory size", &[]));
                         }
                         available_memory = available_memory.saturating_add(
                             (mem.initial as u32)
@@ -637,13 +614,13 @@ impl ParsedModule {
                 }
                 TableSection(s) => {
                     for table in s {
-                        let table = host.map_err(table)?;
+                        let table = ctx.map_err(table)?;
                         costs.n_table_entries =
                             costs.n_table_entries.saturating_add(table.ty.initial);
                         match table.init {
                             TableInit::RefNull => (),
                             TableInit::Expr(ref expr) => {
-                                Self::check_const_expr_simple(&host, &expr)?;
+                                Self::check_const_expr_simple(ctx, &expr)?;
                             }
                         }
                     }
@@ -651,19 +628,19 @@ impl ParsedModule {
                 GlobalSection(s) => {
                     costs.n_globals = costs.n_globals.saturating_add(s.count());
                     for global in s {
-                        let global = host.map_err(global)?;
-                        Self::check_const_expr_simple(&host, &global.init_expr)?;
+                        let global = ctx.map_err(global)?;
+                        Self::check_const_expr_simple(ctx, &global.init_expr)?;
                     }
                 }
                 ExportSection(s) => costs.n_exports = costs.n_exports.saturating_add(s.count()),
                 ElementSection(s) => {
                     costs.n_elem_segments = costs.n_elem_segments.saturating_add(s.count());
                     for elem in s {
-                        let elem = host.map_err(elem)?;
+                        let elem = ctx.map_err(elem)?;
                         match elem.kind {
                             ElementKind::Declared | ElementKind::Passive => (),
                             ElementKind::Active { offset_expr, .. } => {
-                                Self::check_const_expr_simple(&host, &offset_expr)?
+                                Self::check_const_expr_simple(ctx, &offset_expr)?
                             }
                         }
                         match elem.items {
@@ -673,8 +650,8 @@ impl ParsedModule {
                             ElementItems::Expressions(_, exprs) => {
                                 elements = elements.saturating_add(exprs.count());
                                 for expr in exprs {
-                                    let expr = host.map_err(expr)?;
-                                    Self::check_const_expr_simple(&host, &expr)?;
+                                    let expr = ctx.map_err(expr)?;
+                                    Self::check_const_expr_simple(ctx, &expr)?;
                                 }
                             }
                         }
@@ -683,11 +660,10 @@ impl ParsedModule {
                 DataSection(s) => {
                     costs.n_data_segments = costs.n_data_segments.saturating_add(s.count());
                     for d in s {
-                        let d = host.map_err(d)?;
+                        let d = ctx.map_err(d)?;
                         if d.data.len() > u32::MAX as usize {
-                            return Err(host.err(
-                                ScErrorType::WasmVm,
-                                ScErrorCode::InvalidInput,
+                            return Err(ctx.error(
+                                invalid_input,
                                 "data segment exceeds u32::MAX",
                                 &[],
                             ));
@@ -697,51 +673,59 @@ impl ParsedModule {
                             .saturating_add(d.data.len() as u32);
                         match d.kind {
                             wasmparser::DataKind::Active { offset_expr, .. } => {
-                                Self::check_const_expr_simple(&host, &offset_expr)?
+                                Self::check_const_expr_simple(ctx, &offset_expr)?
                             }
                             wasmparser::DataKind::Passive => (),
                         }
                     }
                 }
                 CodeSectionEntry(s) => {
-                    let ops = host.map_err(s.get_operators_reader())?;
-                    for _op in ops {
+                    let ops = ctx.map_err(s.get_operators_reader())?;
+                    for op in ops {
+                        let _ = ctx.map_err(op)?;
                         costs.n_instructions = costs.n_instructions.saturating_add(1);
                     }
                 }
             }
         }
         if costs.n_data_segment_bytes > available_memory {
-            return Err(err!(
-                host,
-                (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+            return Err(ctx.error(
+                invalid_input,
                 "data segment(s) content exceeds memory size",
-                costs.n_data_segment_bytes,
-                available_memory
+                &[
+                    Val::from_u32(costs.n_data_segment_bytes).into(),
+                    Val::from_u32(available_memory).into(),
+                ],
             ));
         }
         if elements > costs.n_table_entries {
-            return Err(err!(
-                host,
-                (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+            return Err(ctx.error(
+                invalid_input,
                 "elem segments(s) content exceeds table size",
-                elements,
-                costs.n_table_entries
+                &[
+                    Val::from_u32(elements).into(),
+                    Val::from_u32(costs.n_table_entries).into(),
+                ],
             ));
         }
         Ok(costs)
     }
 
-    fn check_const_expr_simple(host: &Host, expr: &wasmparser::ConstExpr) -> Result<(), HostError> {
+    fn check_const_expr_simple<Ctx: CompilationContext>(
+        ctx: &Ctx,
+        expr: &wasmparser::ConstExpr,
+    ) -> Result<(), HostError> {
         use wasmparser::Operator::*;
         let mut op = expr.get_operators_reader();
         while !op.eof() {
-            match host.map_err(op.read())? {
+            match ctx.map_err(op.read())? {
                 I32Const { .. } | I64Const { .. } | RefFunc { .. } | RefNull { .. } | End => (),
                 _ => {
-                    return Err(host.err(
-                        ScErrorType::WasmVm,
-                        ScErrorCode::InvalidInput,
+                    return Err(ctx.error(
+                        crate::Error::from_type_and_code(
+                            ScErrorType::WasmVm,
+                            ScErrorCode::InvalidInput,
+                        ),
                         "unsupported complex Wasm constant expression",
                         &[],
                     ))
