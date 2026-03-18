@@ -770,10 +770,7 @@ impl Host {
         let executable =
             ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
         let (constructor_args, constructor_args_vec) = if let Some(v) = constructor_args {
-            (
-                self.vecobject_to_scval_vec(v)?,
-                self.call_args_from_obj(v)?,
-            )
+            (self.vecobject_to_scval_vec(v)?, self.call_args_from_obj(v)?)
         } else {
             (VecM::default(), vec![])
         };
