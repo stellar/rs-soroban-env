@@ -666,7 +666,8 @@ impl ParsedModule {
                 }
                 CodeSectionEntry(s) => {
                     let ops = ctx.map_err(s.get_operators_reader())?;
-                    for _op in ops {
+                    for op in ops {
+                        let _ = ctx.map_err(op)?;
                         costs.n_instructions = costs.n_instructions.saturating_add(1);
                     }
                 }
