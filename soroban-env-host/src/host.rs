@@ -1832,10 +1832,11 @@ impl VmCallerEnv for Host {
         let vals_pos: u32 = vals_pos.into();
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
-        // charge for conversion from bytes to `Val`s
+        // charge for conversion from bytes to `Val`s (1x) and for per-element
+        // relative-to-absolute object handle translation (1x), hence 2 * len
         self.charge_budget(
             ContractCostType::MemCpy,
-            Some((len as u64).saturating_mul(8)),
+            Some((2u64.saturating_mul(len as u64)).saturating_mul(8)),
         )?;
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
@@ -2131,10 +2132,11 @@ impl VmCallerEnv for Host {
         let MemFnArgs { vm, pos, len } = self.get_mem_fn_args(vals_pos, len)?;
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
-        // charge for conversion from bytes to `Val`s
+        // charge for conversion from bytes to `Val`s (1x) and for per-element
+        // relative-to-absolute object handle translation (1x), hence 2 * len
         self.charge_budget(
             ContractCostType::MemCpy,
-            Some((len as u64).saturating_mul(8)),
+            Some((2u64.saturating_mul(len as u64)).saturating_mul(8)),
         )?;
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
