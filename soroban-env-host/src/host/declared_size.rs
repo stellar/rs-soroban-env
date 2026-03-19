@@ -19,8 +19,8 @@ use crate::{
         LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
         ScContractInstance, ScError, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
         ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, TtlEntry,
-        UInt128Parts, UInt256Parts, Uint256, SCSYMBOL_LIMIT,
+        SorobanAuthorizedInvocation, SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset,
+        TrustLineEntry, TtlEntry, UInt128Parts, UInt256Parts, Uint256, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -151,6 +151,7 @@ impl_declared_size_type!(Int256Parts, 32);
 impl_declared_size_type!(UInt256Parts, 32);
 impl_declared_size_type!(ContractExecutable, 33);
 impl_declared_size_type!(AccountId, 32);
+impl_declared_size_type!(SponsorshipDescriptor, 33);
 impl_declared_size_type!(ScAddress, 48);
 impl_declared_size_type!(MuxedScAddress, 48);
 impl_declared_size_type!(ScNonceKey, 33);
@@ -502,6 +503,7 @@ mod test {
         expect!["32"].assert_eq(size_of::<UInt256Parts>().to_string().as_str());
         expect!["33"].assert_eq(size_of::<ContractExecutable>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<AccountId>().to_string().as_str());
+        expect!["33"].assert_eq(size_of::<SponsorshipDescriptor>().to_string().as_str());
         expect!["48"].assert_eq(size_of::<ScAddress>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<ScNonceKey>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<PublicKey>().to_string().as_str());
@@ -695,6 +697,7 @@ mod test {
         assert_mem_size_le_declared_size!(UInt128Parts);
         assert_mem_size_le_declared_size!(ContractExecutable);
         assert_mem_size_le_declared_size!(AccountId);
+        assert_mem_size_le_declared_size!(SponsorshipDescriptor);
         assert_mem_size_le_declared_size!(ScAddress);
         assert_mem_size_le_declared_size!(ScNonceKey);
         assert_mem_size_le_declared_size!(PublicKey);

@@ -6,8 +6,8 @@ use crate::{
     storage::Storage,
     xdr::{
         AccountId, ContractCostType, ContractDataDurability, ContractExecutable,
-        CreateContractArgs, CreateContractArgsV2, Duration, Hash, Int128Parts, Int256Parts,
-        LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash, Int128Parts,
+        Int256Parts, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
         LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScError, ScErrorCode,
         ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset,
         UInt128Parts, UInt256Parts, Uint256,
@@ -191,8 +191,9 @@ impl_compare_fixed_size_ord_type!(ScNonceKey);
 impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
 impl_compare_fixed_size_ord_type!(ContractDataDurability);
+impl_compare_fixed_size_ord_type!(ContractIdPreimage);
 impl_compare_fixed_size_ord_type!(CreateContractArgs);
-impl_compare_fixed_size_ord_type!(CreateContractArgsV2);
+// NB: CreateContractArgsV2 is not here: it has a variable-size constructor_args ScVec.
 
 impl_compare_fixed_size_ord_type!(LedgerKeyAccount);
 impl_compare_fixed_size_ord_type!(LedgerKeyTrustLine);
@@ -216,6 +217,13 @@ impl Compare<ScVec> for Budget {
     fn compare(&self, a: &ScVec, b: &ScVec) -> Result<Ordering, Self::Error> {
         let a: &Vec<ScVal> = a;
         let b: &Vec<ScVal> = b;
+        self.charge(
+            ContractCostType::MemCpy,
+            Some(
+                <ScVal as DeclaredSizeForMetering>::DECLARED_SIZE
+                    .saturating_mul(a.len().min(b.len()) as u64),
+            ),
+        )?;
         self.compare(a, b)
     }
 }
@@ -226,6 +234,13 @@ impl Compare<ScMap> for Budget {
     fn compare(&self, a: &ScMap, b: &ScMap) -> Result<Ordering, Self::Error> {
         let a: &Vec<ScMapEntry> = a;
         let b: &Vec<ScMapEntry> = b;
+        self.charge(
+            ContractCostType::MemCpy,
+            Some(
+                <ScMapEntry as DeclaredSizeForMetering>::DECLARED_SIZE
+                    .saturating_mul(a.len().min(b.len()) as u64),
+            ),
+        )?;
         self.compare(a, b)
     }
 }
@@ -238,6 +253,40 @@ impl Compare<ScMapEntry> for Budget {
             Ordering::Equal => self.compare(&a.val, &b.val),
             cmp => Ok(cmp),
         }
+    }
+}
+
+impl Compare<CreateContractArgsV2> for Budget {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &CreateContractArgsV2,
+        b: &CreateContractArgsV2,
+    ) -> Result<Ordering, Self::Error> {
+        match self.compare(&a.contract_id_preimage, &b.contract_id_preimage)? {
+            Ordering::Equal => match self.compare(&a.executable, &b.executable)? {
+                Ordering::Equal => {
+                    let a_args: &Vec<ScVal> = &a.constructor_args;
+                    let b_args: &Vec<ScVal> = &b.constructor_args;
+                    self.compare(a_args, b_args)
+                }
+                cmp => Ok(cmp),
+            },
+            cmp => Ok(cmp),
+        }
+    }
+}
+
+impl Compare<CreateContractArgsV2> for Host {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &CreateContractArgsV2,
+        b: &CreateContractArgsV2,
+    ) -> Result<Ordering, Self::Error> {
+        self.as_budget().compare(a, b)
     }
 }
 

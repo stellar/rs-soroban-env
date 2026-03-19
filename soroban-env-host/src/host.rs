@@ -16,7 +16,7 @@ use crate::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration,
         LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
-        ScSymbol, ScVal, TimePoint,
+        ScSymbol, ScVal, TimePoint, VecM,
     },
     AddressObject, Bool, BytesObject, Compare, ContractTtlExtension, ConversionError, EnvBase,
     Error, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject,
@@ -770,24 +770,14 @@ impl Host {
         let executable =
             ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
         let (constructor_args, constructor_args_vec) = if let Some(v) = constructor_args {
-            (
-                self.vecobject_to_scval_vec(v)?.to_vec(),
-                self.call_args_from_obj(v)?,
-            )
+            (self.vecobject_to_scval_vec(v)?, self.call_args_from_obj(v)?)
         } else {
-            (vec![], vec![])
+            (VecM::default(), vec![])
         };
         let args = CreateContractArgsV2 {
             contract_id_preimage,
             executable,
-            constructor_args: constructor_args.try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InternalError,
-                    "couldn't convert constructor args vector to XDR",
-                    &[],
-                )
-            })?,
+            constructor_args,
         };
         self.create_contract_internal(Some(deployer), args, constructor_args_vec)
     }
@@ -1839,10 +1829,12 @@ impl VmCallerEnv for Host {
         let vals_pos: u32 = vals_pos.into();
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
-        // charge for conversion from bytes to `Val`s
+        // The full slice memcpy is charged twice (2 *):
+        // - charge for conversion from bytes to `Val`s (1x)
+        // - for per-element relative-to-absolute object handle translation (1x)
         self.charge_budget(
             ContractCostType::MemCpy,
-            Some((len as u64).saturating_mul(8)),
+            Some((len as u64).saturating_mul(2 * 8)),
         )?;
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
@@ -2138,10 +2130,11 @@ impl VmCallerEnv for Host {
         let MemFnArgs { vm, pos, len } = self.get_mem_fn_args(vals_pos, len)?;
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
-        // charge for conversion from bytes to `Val`s
+        // charge for conversion from bytes to `Val`s (1x) and for per-element
+        // relative-to-absolute object handle translation (1x), hence 2 * len
         self.charge_budget(
             ContractCostType::MemCpy,
-            Some((len as u64).saturating_mul(8)),
+            Some((2u64.saturating_mul(len as u64)).saturating_mul(8)),
         )?;
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,

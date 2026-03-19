@@ -11,14 +11,14 @@
   "   9 ret obj_cmp -> Ok(0)": "cpu:6406936",
   "  10 call get_ledger_network_id()": "cpu:6406988, auth:1@ce7cb9d4/1@80c115a7",
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:6408020, mem:1035246, objs:-/6@521cbf18",
-  "  12 call symbol_new_from_slice(13)": "cpu:8657218, mem:2451773, store:-/2@687803ec, foot:2@c1cfb4c4",
-  "  13 ret symbol_new_from_slice -> Ok(Symbol(obj#13))": "cpu:8658228, mem:2451882, objs:-/7@880a2455",
-  "  14 push VM:98c9b02f:sym#13()": "cpu:10892242, mem:3866247, objs:-/8@9044223e, vm:65536@b1cd98b9/2@2f94d90d, stk:1@3d9d1b64, auth:2@8e0d617f/1@c8ea9a1e",
-  "  15 call symbol_len(Symbol(obj#13))": "cpu:10894711, mem:3866277",
-  "  16 ret symbol_len -> Ok(U32(13))": "cpu:10894833",
+  "  12 call symbol_new_from_slice(13)": "cpu:8657264, mem:2451773, store:-/2@687803ec, foot:2@c1cfb4c4",
+  "  13 ret symbol_new_from_slice -> Ok(Symbol(obj#13))": "cpu:8658274, mem:2451882, objs:-/7@880a2455",
+  "  14 push VM:98c9b02f:sym#13()": "cpu:10892288, mem:3866247, objs:-/8@9044223e, vm:65536@b1cd98b9/2@2f94d90d, stk:1@3d9d1b64, auth:2@8e0d617f/1@c8ea9a1e",
+  "  15 call symbol_len(Symbol(obj#13))": "cpu:10894757, mem:3866277",
+  "  16 ret symbol_len -> Ok(U32(13))": "cpu:10894879",
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
-  "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:10894937",
+  "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:10894983",
   "  19 pop VM:98c9b02f:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:10895440, mem:3866357, objs:-/9@670114ab, vm:-/-, stk:-, auth:-/-",
-  "  21 end": "cpu:10895440, mem:3866357, prngs:-/9b4a753, objs:-/9@670114ab, vm:-/-, evt:-, store:-/2@687803ec, foot:2@c1cfb4c4, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:10895486, mem:3866357, objs:-/9@670114ab, vm:-/-, stk:-, auth:-/-",
+  "  21 end": "cpu:10895486, mem:3866357, prngs:-/9b4a753, objs:-/9@670114ab, vm:-/-, evt:-, store:-/2@687803ec, foot:2@c1cfb4c4, stk:-, auth:-/-"
 }

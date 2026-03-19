@@ -976,7 +976,7 @@ fn test_two_authorized_trees() {
                 ),
             ),
             resources: SubInvocationResources {
-                instructions: 3534535,
+                instructions: 3534571,
                 mem_bytes: 8481766,
                 disk_read_entries: 1,
                 memory_read_entries: 8,
@@ -1002,7 +1002,7 @@ fn test_two_authorized_trees() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1573320,
+                        instructions: 1573332,
                         mem_bytes: 3636258,
                         disk_read_entries: 1,
                         memory_read_entries: 4,
@@ -1084,7 +1084,7 @@ fn test_two_authorized_trees() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1574840,
+                        instructions: 1574852,
                         mem_bytes: 3636425,
                         disk_read_entries: 0,
                         memory_read_entries: 2,
@@ -2419,7 +2419,7 @@ fn test_require_auth_within_check_auth() {
                 ),
             ),
             resources: SubInvocationResources {
-                instructions: 1433206,
+                instructions: 1434110,
                 mem_bytes: 3621468,
                 disk_read_entries: 1,
                 memory_read_entries: 10,
@@ -2445,7 +2445,7 @@ fn test_require_auth_within_check_auth() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1049588,
+                        instructions: 1050492,
                         mem_bytes: 2405669,
                         disk_read_entries: 1,
                         memory_read_entries: 7,
@@ -2471,7 +2471,7 @@ fn test_require_auth_within_check_auth() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 733141,
+                                instructions: 733593,
                                 mem_bytes: 1202616,
                                 disk_read_entries: 1,
                                 memory_read_entries: 3,
