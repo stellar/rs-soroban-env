@@ -182,7 +182,7 @@ impl BudgetTracker {
                 ScErrorCode::InternalError,
             ))
         })?;
-        *t += duration;
+        *t = t.saturating_add(duration);
         Ok(())
     }
 

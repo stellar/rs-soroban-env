@@ -54,7 +54,9 @@ impl<S: MeteredScalar> PoseidonParams<S> {
             ));
         }
         let r = rounds_f / 2;
-        let rounds = rounds_f + rounds_p;
+        let rounds = rounds_f
+            .checked_add(rounds_p)
+            .ok_or_else(|| host.err_arith_overflow())?;
         if round_constants.len() != rounds as usize {
             return Err(host.error(
                 INVALID_INPUT,

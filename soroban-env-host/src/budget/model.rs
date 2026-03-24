@@ -39,6 +39,7 @@ pub trait HostCostModel {
 /// digits. Thus to get the cost from the raw input, we need to scale the result
 /// back by the same factor.
 const COST_MODEL_LIN_TERM_SCALE_BITS: u32 = 7;
+const COST_MODEL_LIN_TERM_SCALE: u64 = 1 << COST_MODEL_LIN_TERM_SCALE_BITS;
 
 /// A helper type that wraps an u64 to signify the wrapped value have been scaled.
 #[derive(Clone, Copy, Default, Debug)]
@@ -46,7 +47,7 @@ pub struct ScaledU64(pub(crate) u64);
 
 impl ScaledU64 {
     pub const fn from_unscaled_u64(u: u64) -> Self {
-        ScaledU64(u << COST_MODEL_LIN_TERM_SCALE_BITS)
+        ScaledU64(u.saturating_mul(COST_MODEL_LIN_TERM_SCALE))
     }
 
     pub const fn unscale(self) -> u64 {

@@ -35,6 +35,7 @@ impl ResourceLimiter for Host {
             .get_mem_bytes_remaining()
             .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
 
+        // NB: if desired < current this is considered a 0-cost shrink.
         let delta = (desired as u64).saturating_sub(current as u64);
         let allow = if delta > host_limit {
             false
@@ -82,7 +83,7 @@ impl ResourceLimiter for Host {
             Err(errors::TableError::GrowOutOfBounds {
                 maximum: maximum.unwrap_or(u32::MAX),
                 current,
-                delta: desired - current,
+                delta: desired.saturating_sub(current),
             })
         }
     }

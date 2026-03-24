@@ -169,6 +169,14 @@ fn build_restored_key_set(
     Ok(Some(key_set))
 }
 
+fn saturating_usize_to_u32(value: usize) -> u32 {
+    value.try_into().unwrap_or(u32::MAX)
+}
+
+fn saturating_u64_to_u32(value: u64) -> u32 {
+    value.try_into().unwrap_or(u32::MAX)
+}
+
 /// Returns the difference between the `storage` and its initial snapshot as
 /// `LedgerEntryChanges`.
 /// Returns an entry for every item in `storage` footprint.
@@ -220,7 +228,7 @@ fn get_ledger_changes(
             metered_write_xdr(budget, old_entry.as_ref(), &mut buf)?;
 
             entry_change.old_entry_size_bytes_for_rent =
-                entry_size_for_rent(budget, &old_entry, buf.len() as u32)?;
+                entry_size_for_rent(budget, &old_entry, saturating_usize_to_u32(buf.len()))?;
 
             if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
                 ttl_change.old_live_until_ledger =
@@ -256,8 +264,11 @@ fn get_ledger_changes(
                 if let Some((entry, _)) = entry_with_live_until_ledger {
                     let mut entry_buf = vec![];
                     metered_write_xdr(budget, entry.as_ref(), &mut entry_buf)?;
-                    entry_change.new_entry_size_bytes_for_rent =
-                        entry_size_for_rent(budget, &entry, entry_buf.len() as u32)?;
+                    entry_change.new_entry_size_bytes_for_rent = entry_size_for_rent(
+                        budget,
+                        &entry,
+                        saturating_usize_to_u32(entry_buf.len()),
+                    )?;
                     entry_change.encoded_new_value = Some(entry_buf);
 
                     if let Some(restored_keys) = &restored_keys {
@@ -369,7 +380,7 @@ pub fn entry_size_for_rent(
 ) -> Result<u32, HostError> {
     Ok(match &entry.data {
         LedgerEntryData::ContractCode(contract_code_entry) => entry_xdr_size.saturating_add(
-            wasm_module_memory_cost(budget, contract_code_entry)?.min(u32::MAX as u64) as u32,
+            saturating_u64_to_u32(wasm_module_memory_cost(budget, contract_code_entry)?),
         ),
         _ => entry_xdr_size,
     })
@@ -682,7 +693,7 @@ pub fn invoke_host_function_in_recording_mode(
         let mut encoded_result_sc_val = vec![];
         metered_write_xdr(&budget, res, &mut encoded_result_sc_val)?;
         contract_events_and_return_value_size = contract_events_and_return_value_size
-            .saturating_add(encoded_result_sc_val.len() as u32);
+            .saturating_add(saturating_usize_to_u32(encoded_result_sc_val.len()));
     }
 
     let mut output_auth = if let RecordingInvocationAuthMode::Enforcing(auth_entries) = auth_mode {
@@ -737,8 +748,8 @@ pub fn invoke_host_function_in_recording_mode(
                                         )));
                                     }
                                     // Auto-restored entries are counted towards disk read bytes.
-                                    disk_read_bytes =
-                                        disk_read_bytes.saturating_add(encoded_le.len() as u32);
+                                    disk_read_bytes = disk_read_bytes
+                                        .saturating_add(saturating_usize_to_u32(encoded_le.len()));
                                     restored_rw_entry_ids.push(current_rw_id);
                                     restored_keys =
                                         restored_keys.insert(lk.clone(), (), &budget)?;
@@ -747,8 +758,8 @@ pub fn invoke_host_function_in_recording_mode(
                         }
                         _ => {
                             // Non-Soroban entries are counted towards disk read bytes.
-                            disk_read_bytes =
-                                disk_read_bytes.saturating_add(encoded_le.len() as u32);
+                            disk_read_bytes = disk_read_bytes
+                                .saturating_add(saturating_usize_to_u32(encoded_le.len()));
                         }
                     }
 
@@ -824,8 +835,8 @@ pub fn invoke_host_function_in_recording_mode(
 
         let encoded_contract_events = encode_contract_events(budget, &events)?;
         for e in &encoded_contract_events {
-            contract_events_and_return_value_size =
-                contract_events_and_return_value_size.saturating_add(e.len() as u32);
+            contract_events_and_return_value_size = contract_events_and_return_value_size
+                .saturating_add(saturating_usize_to_u32(e.len()));
         }
         let contract_events: Vec<ContractEvent> = events
             .0
@@ -838,12 +849,13 @@ pub fn invoke_host_function_in_recording_mode(
     } else {
         (vec![], vec![])
     };
-    resources.instructions = budget.get_cpu_insns_consumed()? as u32;
+    resources.instructions = saturating_u64_to_u32(budget.get_cpu_insns_consumed()?);
     for ledger_change in &ledger_changes {
         if !ledger_change.read_only {
             if let Some(new_entry) = &ledger_change.encoded_new_value {
-                resources.write_bytes =
-                    resources.write_bytes.saturating_add(new_entry.len() as u32);
+                resources.write_bytes = resources
+                    .write_bytes
+                    .saturating_add(saturating_usize_to_u32(new_entry.len()));
             }
         }
     }
