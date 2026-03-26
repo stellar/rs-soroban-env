@@ -859,26 +859,22 @@ impl Host {
         if self.in_storage_recording_mode()? {
             if let Some((parsed_module, wasmi_linker)) =
                 self.budget_ref().with_observable_shadow_mode(|| {
-                    use crate::vm::ParsedModule;
+                    use crate::vm::{ParsedModule, VersionedContractCodeCostInputs};
                     let wasm_key = self.contract_code_ledger_key(wasm_hash)?;
                     let is_key_live_in_snapshot = self
                         .try_borrow_storage_mut()?
                         .is_key_live_in_snapshot(self, &wasm_key)?;
                     if is_key_live_in_snapshot {
                         let (code, _costs) = self.retrieve_wasm_from_storage(&wasm_hash)?;
-                        // Currently only v0 costs are used by the inter-ledger
-                        // module cache. Note, that when key is not in the live
-                        // snapshot, the inter-ledger cache won't be used
-                        // either, so we'll end up in the "cache miss" case
-                        // below and then correctly charge the instantiation
-                        // costs in `Vm::new_with_cost_inputs`.
-                        let costs_v0 = crate::vm::VersionedContractCodeCostInputs::V0 {
-                            wasm_bytes: code.len(),
-                        };
+                        // Always extract and use v1 cost inputs, matching what
+                        // the real module cache does in enforcement mode via
+                        // `parse_and_cache_module_simple`.
+                        let cost_inputs =
+                            ParsedModule::extract_refined_contract_cost_inputs(self, &code)?;
                         let parsed_module = ParsedModule::new_with_isolated_engine(
                             self,
                             code.as_slice(),
-                            costs_v0,
+                            VersionedContractCodeCostInputs::V1(cost_inputs),
                         )?;
                         let wasmi_linker = parsed_module.make_wasmi_linker(self)?;
                         Ok(Some((parsed_module, wasmi_linker)))

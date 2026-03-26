@@ -5,7 +5,6 @@ use crate::e2e_testutils::{
     upload_wasm_host_fn,
 };
 use crate::testutils::simple_account_sign_fn;
-use crate::vm::VersionedContractCodeCostInputs;
 use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::testutils::TestSigner,
@@ -394,18 +393,7 @@ fn build_module_cache_for_entries(
             if restored_contracts.contains(&contract_id) {
                 continue;
             }
-            // Currently module cache always uses V0 cost inputs, so the parsed
-            // module will also use them during instantiation.
-            let code_cost_inputs = VersionedContractCodeCostInputs::V0 {
-                wasm_bytes: cd.code.len(),
-            };
-            cache.parse_and_cache_module(
-                &ctx,
-                ledger_info.protocol_version,
-                &contract_id,
-                &cd.code,
-                code_cost_inputs,
-            )?;
+            cache.parse_and_cache_module_simple(&ctx, ledger_info.protocol_version, &cd.code)?;
         }
     }
     Ok(cache)
@@ -1397,7 +1385,7 @@ fn test_create_contract_success_in_recording_mode() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    expect!["639648"].assert_eq(&res.resources.instructions.to_string());
+    expect!["663629"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1535,7 +1523,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    expect!["1046806"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1070787"].assert_eq(&res.resources.instructions.to_string());
     expect!["176"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1606,7 +1594,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    expect!["641135"].assert_eq(&res.resources.instructions.to_string());
+    expect!["665116"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -2045,7 +2033,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         ]
     );
     assert!(res.restored_rw_entry_ids.is_empty());
-    expect!["791047"].assert_eq(&res.resources.instructions.to_string());
+    expect!["898006"].assert_eq(&res.resources.instructions.to_string());
     expect!["80"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -2112,7 +2100,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    expect!["902901"].assert_eq(&extend_res.resources.instructions.to_string());
+    expect!["1009860"].assert_eq(&extend_res.resources.instructions.to_string());
     assert_eq!(
         extend_res.resources,
         SorobanResources {
@@ -2555,7 +2543,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
         ]
     );
 
-    expect!["921385"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1028344"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
