@@ -2222,6 +2222,48 @@ mod cap_58_constructor {
                     .unwrap();
                 assert_eq!(res, 303);
             }
+
+            #[test]
+            fn test_constructor_supports_test_invocation_hooks() {
+                let host = test_host();
+
+                let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::<&'static str>::new()));
+                let captured_events = std::rc::Rc::clone(&events);
+                host.set_top_contract_invocation_hook(Some(std::rc::Rc::new(
+                    move |_host, event| {
+                        captured_events.borrow_mut().push(match event {
+                            crate::host::ContractInvocationEvent::Start => "start",
+                            crate::host::ContractInvocationEvent::Finish => "finish",
+                        });
+                    },
+                )))
+                .unwrap();
+
+                let contract_id = create_contract_with_constructor(
+                    &host,
+                    generate_account_id(&host),
+                    generate_bytes_array(&host),
+                    NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22,
+                    &vec![],
+                    CreateContractTestParams {
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+
+                assert_eq!(&*events.borrow(), &["start", "finish"]);
+                let res: u32 = host
+                    .call(
+                        host.add_host_object(ScAddress::Contract(contract_id))
+                            .unwrap(),
+                        Symbol::try_from_small_str("get_data").unwrap(),
+                        test_vec![&host, Symbol::try_from_small_str("key").unwrap()].as_object(),
+                    )
+                    .unwrap()
+                    .try_into_val(&host)
+                    .unwrap();
+                assert_eq!(res, 6);
+            }
         }
 
         #[test]

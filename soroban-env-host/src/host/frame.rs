@@ -437,18 +437,16 @@ impl Host {
             }
         }
         #[cfg(any(test, feature = "testutils"))]
-        let mut is_top_contract_invocation = false;
-        #[cfg(any(test, feature = "testutils"))]
         {
-            if self.try_borrow_context_stack()?.len() == 1 {
-                if let Some(ctx) = self.try_borrow_context_stack()?.first() {
+            if !*self.try_borrow_top_contract_invocation_active()? {
+                // No contract has been invoked yet. Check if the most recent frame is a
+                // contract invocation frame, and if so, call the hook with a Start event.
+                if let Some(ctx) = self.try_borrow_context_stack()?.last() {
                     match ctx.frame {
-                        // Don't call the contract invocation hook for
-                        // the host functions.
                         Frame::HostFunction(_) => (),
                         // Everything else is some sort of contract call.
                         _ => {
-                            is_top_contract_invocation = true;
+                            *self.try_borrow_top_contract_invocation_active_mut()? = true;
                             if let Some(contract_invocation_hook) =
                                 self.try_borrow_top_contract_invocation_hook()?.as_ref()
                             {
@@ -583,7 +581,14 @@ impl Host {
             self.try_borrow_authorization_manager_mut()?.reset();
 
             // Call the contract invocation hook for contract invocations only.
-            if is_top_contract_invocation {
+            // Always reset the top contract invocation active flag
+            let should_finish_top_contract_invocation = {
+                let mut active = self.try_borrow_top_contract_invocation_active_mut()?;
+                let should_finish = *active;
+                *active = false;
+                should_finish
+            };
+            if should_finish_top_contract_invocation {
                 if let Some(top_contract_invocation_hook) =
                     self.try_borrow_top_contract_invocation_hook()?.as_ref()
                 {

@@ -154,6 +154,11 @@ struct HostImpl {
     #[doc(hidden)]
     #[cfg(any(test, feature = "testutils"))]
     top_contract_invocation_hook: RefCell<Option<ContractInvocationHook>>,
+    // Tracks whether a top-level contract invocation has started and still
+    // needs a matching finish notification when the enclosing operation exits.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "testutils"))]
+    top_contract_invocation_active: RefCell<bool>,
 
     // A utility to help us measure certain key events we're interested
     // in observing the coverage of. Only written-to, never read, it
@@ -314,6 +319,14 @@ impl_checked_borrow_helpers!(
 
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
+    top_contract_invocation_active,
+    bool,
+    try_borrow_top_contract_invocation_active,
+    try_borrow_top_contract_invocation_active_mut
+);
+
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
     coverage_scoreboard,
     CoverageScoreboard,
     try_borrow_coverage_scoreboard,
@@ -382,6 +395,8 @@ impl Host {
             disable_tracing: RefCell::new(false),
             #[cfg(any(test, feature = "testutils"))]
             top_contract_invocation_hook: RefCell::new(None),
+            #[cfg(any(test, feature = "testutils"))]
+            top_contract_invocation_active: RefCell::new(false),
             #[cfg(any(test, feature = "testutils"))]
             coverage_scoreboard: Default::default(),
             #[cfg(any(test, feature = "recording_mode"))]
@@ -3868,9 +3883,11 @@ impl Host {
     /// Sets a hook to track top-level contract invocations.
     /// The hook triggers right before the top-level contract invocation
     /// starts and right after it ends.
-    /// 'Top-level contract invocation' happens when the host creates
-    /// the first context frame that belongs to a contract, which includes
-    /// both direct host function calls (`call`/`try_call`), and test
+    /// 'Top-level contract invocation' happens when the host starts the
+    /// first contract-owned frame within an outer invocation, even when
+    /// that frame is nested under a host-function frame such as
+    /// `InvokeContract` or `CreateContractV2`. This includes both direct
+    /// host function calls (`call`/`try_call`), and test
     /// utilities such as `with_test_contract_frame` or
     /// `call_account_contract_check_auth`.
     pub fn set_top_contract_invocation_hook(
