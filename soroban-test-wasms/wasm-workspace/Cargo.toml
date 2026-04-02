@@ -68,7 +68,7 @@ lto = true
 rust-version = "1.84.0"
 
 [workspace.dependencies.soroban-sdk]
-version = "=25.0.0-rc.1"
+version = "=25.0.2"
 # git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]

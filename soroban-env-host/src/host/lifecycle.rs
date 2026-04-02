@@ -8,7 +8,8 @@ use crate::{
     xdr::{
         Asset, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractId,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, ExtensionPoint,
-        Hash, LedgerKey, LedgerKeyContractCode, ScAddress, ScErrorCode, ScErrorType,
+        Hash, LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScAddress, ScErrorCode,
+        ScErrorType,
     },
     AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val,
 };
@@ -51,7 +52,7 @@ impl Host {
                 ));
             }
         }
-        self.store_contract_instance(Some(contract_executable), None, contract_id, &storage_key)?;
+        self.create_contract_instance(contract_executable, None, contract_id, &storage_key)?;
         Ok(())
     }
 
@@ -295,37 +296,38 @@ impl Host {
         )?;
 
         let mut storage = self.try_borrow_storage_mut()?;
+        let ext_discriminant = ext.discriminant();
 
-        // We will definitely put the contract in the ledger if it isn't there yet.
-        #[allow(unused_mut)]
-        let mut should_put_contract = !storage.has(&code_key, self, None)?;
-
-        // We may also, in the cache-supporting protocol, overwrite the contract if its ext field changed.
-        if !should_put_contract {
-            let entry = storage.get(&code_key, self, None)?;
-            if let crate::xdr::LedgerEntryData::ContractCode(ContractCodeEntry {
-                ext: old_ext,
-                ..
-            }) = &entry.data
-            {
-                should_put_contract = *old_ext != ext;
+        storage.modify_or_create_entry(&code_key, self, |entry| match entry {
+            None => {
+                let data = ContractCodeEntry {
+                    hash: Hash(hash_bytes),
+                    ext,
+                    code: wasm_bytes_m,
+                };
+                let code_entry = Host::new_contract_code(self, data)?;
+                let live_until =
+                    Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?);
+                Ok(Some((code_entry, live_until)))
             }
-        }
-
-        if should_put_contract {
-            let data = ContractCodeEntry {
-                hash: Hash(hash_bytes),
-                ext,
-                code: wasm_bytes_m,
-            };
-            storage.put(
-                &code_key,
-                &Host::new_contract_code(self, data)?,
-                Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
-                self,
-                None,
-            )?;
-        }
+            Some(entry) => {
+                if let LedgerEntryData::ContractCode(ContractCodeEntry { ext: old_ext, .. }) =
+                    &mut entry.data
+                {
+                    if old_ext.discriminant() != ext_discriminant {
+                        *old_ext = ext;
+                    }
+                    Ok(None)
+                } else {
+                    Err(self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::InternalError,
+                        "unexpected entry type for contract code key",
+                        &[],
+                    ))
+                }
+            }
+        })?;
         Ok(hash_obj)
     }
 }
@@ -368,6 +370,19 @@ impl Host {
 
         let contract_id = self.contract_id_from_address(contract_address)?;
         let instance_key = self.contract_instance_ledger_key(&contract_id)?;
+        // Check if contract already exists - create_contract_instance doesn't
+        // allow overwriting the existing contract as an invariant.
+        if self
+            .try_borrow_storage_mut()?
+            .has(&instance_key, self, None)?
+        {
+            return Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExistingValue,
+                "contract already exists",
+                &[],
+            ));
+        }
         let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
         let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;
         // Use the empty Wasm as an executable to a) mark that the contract
@@ -375,8 +390,8 @@ impl Host {
         // the same ledger entries as for 'real' contracts that consist of Wasm
         // entry and the instance entry, so that instance-related host functions
         // work properly.
-        self.store_contract_instance(
-            Some(ContractExecutable::Wasm(wasm_hash)),
+        self.create_contract_instance(
+            ContractExecutable::Wasm(wasm_hash),
             None,
             contract_id.clone(),
             &instance_key,

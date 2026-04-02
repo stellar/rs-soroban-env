@@ -63,17 +63,17 @@ mod separate_instance_code_extension {
         assert!(host
             .extend_contract_instance_ttl(contract_id, 5.into(), 5000.into())
             .is_ok());
-        let entry_with_live_until = host
+        let live_until = host
             .try_borrow_storage_mut()
             .unwrap()
-            .get_with_live_until_ledger(
+            .get_live_until(
                 &host.contract_instance_ledger_key(&contract).unwrap(),
                 &host,
                 None,
             )
             .unwrap();
 
-        assert_eq!(entry_with_live_until.1, Some(9090));
+        assert_eq!(live_until, Some(9090));
     }
 
     #[test]
@@ -88,13 +88,13 @@ mod separate_instance_code_extension {
         assert!(host
             .extend_contract_code_ttl(contract_id, 5.into(), 5000.into())
             .is_ok());
-        let entry_with_live_until = host
+        let live_until = host
             .try_borrow_storage_mut()
             .unwrap()
-            .get_with_live_until_ledger(&host.contract_code_ledger_key(&code).unwrap(), &host, None)
+            .get_live_until(&host.contract_code_ledger_key(&code).unwrap(), &host, None)
             .unwrap();
 
-        assert_eq!(entry_with_live_until.1, Some(9090));
+        assert_eq!(live_until, Some(9090));
     }
 
     #[test]
@@ -109,24 +109,24 @@ mod separate_instance_code_extension {
         assert!(host
             .extend_contract_instance_and_code_ttl(contract_id, 5.into(), 5000.into())
             .is_ok());
-        let code_entry_with_live_until = host
+        let code_live_until = host
             .try_borrow_storage_mut()
             .unwrap()
-            .get_with_live_until_ledger(&host.contract_code_ledger_key(&code).unwrap(), &host, None)
+            .get_live_until(&host.contract_code_ledger_key(&code).unwrap(), &host, None)
             .unwrap();
 
-        assert_eq!(code_entry_with_live_until.1, Some(9090));
+        assert_eq!(code_live_until, Some(9090));
 
-        let instance_entry_with_live_until = host
+        let instance_live_until = host
             .try_borrow_storage_mut()
             .unwrap()
-            .get_with_live_until_ledger(
+            .get_live_until(
                 &host.contract_instance_ledger_key(&contract).unwrap(),
                 &host,
                 None,
             )
             .unwrap();
 
-        assert_eq!(instance_entry_with_live_until.1, Some(9090));
+        assert_eq!(instance_live_until, Some(9090));
     }
 }

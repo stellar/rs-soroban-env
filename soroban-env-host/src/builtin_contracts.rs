@@ -3,7 +3,6 @@ pub(crate) mod common_types;
 pub(crate) mod contract_error;
 pub(crate) mod invoker_contract_auth;
 pub(crate) mod stellar_asset_contract;
-pub(crate) mod storage_utils;
 
 use crate::host::{Host, HostError};
 use soroban_env_common::{Symbol, Val};

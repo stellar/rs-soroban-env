@@ -172,8 +172,10 @@ where
     Error: From<T>,
 {
     fn from(error: T) -> Self {
-        let error = error.into();
-        Self { error, info: None }
+        Self {
+            error: error.into(),
+            info: None,
+        }
     }
 }
 

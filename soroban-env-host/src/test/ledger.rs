@@ -1,16 +1,11 @@
 use soroban_env_common::{xdr::ScBytes, Env};
 
-use crate::{
-    budget::Budget,
-    storage::{Footprint, Storage, StorageMap},
-    Host, HostError,
-};
+use crate::{budget::Budget, storage::Storage, Host, HostError};
 
 #[test]
 fn ledger_network_id() -> Result<(), HostError> {
     let budget = Budget::default();
-    let storage =
-        Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new());
+    let storage = Storage::with_enforcing_footprint_and_map(Default::default());
 
     let host = Host::with_storage_and_budget(storage, budget);
     host.set_test_ledger_info_with_current_test_protocol();
