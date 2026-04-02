@@ -2250,7 +2250,7 @@ mod cap_58_constructor {
                 // We should see hook events for both `UploadContractWasm` and
                 // `CreateContractV2` host function calls
                 assert_eq!(
-                    *events.borrow(),
+                    events.borrow().as_slice(),
                     [
                         InvocationEvent::Start,
                         InvocationEvent::Finish,

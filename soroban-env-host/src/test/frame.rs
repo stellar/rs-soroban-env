@@ -84,7 +84,7 @@ fn invocation_hook_tracks_top_frame() -> Result<(), HostError> {
     )?;
 
     assert_eq!(
-        *events.borrow(),
+        events.borrow().as_slice(),
         [InvocationEvent::Start, InvocationEvent::Finish,]
     );
     Ok(())
