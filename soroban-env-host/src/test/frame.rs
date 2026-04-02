@@ -3,7 +3,7 @@ use soroban_env_common::{Env, StorageType};
 use crate::{
     host::HostError,
     xdr::{ContractId, Hash, ScAddress, ScErrorCode, ScErrorType},
-    Compare, ContractFunctionSet, EnvBase, Error, Host, Symbol, Val,
+    Compare, ContractFunctionSet, EnvBase, Error, Host, InvocationEvent, Symbol, Val,
 };
 
 use std::cell::RefCell;
@@ -53,7 +53,7 @@ fn has_frame() -> Result<(), HostError> {
 }
 
 #[test]
-fn top_contract_invocation_hook_tracks_top_frame() -> Result<(), HostError> {
+fn invocation_hook_tracks_top_frame() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
 
     let outer_id = ContractId(Hash([0u8; 32]));
@@ -64,13 +64,10 @@ fn top_contract_invocation_hook_tracks_top_frame() -> Result<(), HostError> {
     let inner_address = host.add_host_object(ScAddress::Contract(inner_id.clone()))?;
     host.register_test_contract(inner_address, Rc::new(NoopContractFunctionSet))?;
 
-    let events = Rc::new(RefCell::new(Vec::<&'static str>::new()));
+    let events = Rc::new(RefCell::new(Vec::<InvocationEvent>::new()));
     let hook_events = Rc::clone(&events);
-    host.set_top_contract_invocation_hook(Some(Rc::new(move |_host, event| {
-        hook_events.borrow_mut().push(match event {
-            crate::host::ContractInvocationEvent::Start => "start",
-            crate::host::ContractInvocationEvent::Finish => "finish",
-        });
+    host.set_invocation_hook(Some(Rc::new(move |_host, event| {
+        hook_events.borrow_mut().push(event)
     })))?;
 
     host.with_test_contract_frame(
@@ -86,7 +83,10 @@ fn top_contract_invocation_hook_tracks_top_frame() -> Result<(), HostError> {
         },
     )?;
 
-    assert_eq!(&*events.borrow(), &["start", "finish"]);
+    assert_eq!(
+        *events.borrow(),
+        [InvocationEvent::Start, InvocationEvent::Finish,]
+    );
     Ok(())
 }
 

@@ -11,12 +11,13 @@ use crate::{
         ScErrorCode, ScErrorType, ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry,
         SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
     },
-    Env, Host, LedgerInfo, Symbol, DEFAULT_XDR_RW_LIMITS,
+    Env, Host, InvocationEvent, LedgerInfo, Symbol, DEFAULT_XDR_RW_LIMITS,
 };
 use pretty_assertions::assert_eq;
 use sha2::{Digest, Sha256};
 use soroban_env_common::{EnvBase, StorageType, TryIntoVal, Val, VecObject};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::testutils::{generate_account_id, generate_bytes_array};
 
@@ -2227,16 +2228,11 @@ mod cap_58_constructor {
             fn test_constructor_supports_test_invocation_hooks() {
                 let host = test_host();
 
-                let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::<&'static str>::new()));
-                let captured_events = std::rc::Rc::clone(&events);
-                host.set_top_contract_invocation_hook(Some(std::rc::Rc::new(
-                    move |_host, event| {
-                        captured_events.borrow_mut().push(match event {
-                            crate::host::ContractInvocationEvent::Start => "start",
-                            crate::host::ContractInvocationEvent::Finish => "finish",
-                        });
-                    },
-                )))
+                let events = Rc::new(RefCell::new(Vec::<InvocationEvent>::new()));
+                let captured_events = Rc::clone(&events);
+                host.set_invocation_hook(Some(Rc::new(move |_host, event| {
+                    captured_events.borrow_mut().push(event)
+                })))
                 .unwrap();
 
                 let contract_id = create_contract_with_constructor(
@@ -2251,7 +2247,17 @@ mod cap_58_constructor {
                 )
                 .unwrap();
 
-                assert_eq!(&*events.borrow(), &["start", "finish"]);
+                // We should see hook events for both `UploadContractWasm` and
+                // `CreateContractV2` host function calls
+                assert_eq!(
+                    *events.borrow(),
+                    [
+                        InvocationEvent::Start,
+                        InvocationEvent::Finish,
+                        InvocationEvent::Start,
+                        InvocationEvent::Finish,
+                    ]
+                );
                 let res: u32 = host
                     .call(
                         host.add_host_object(ScAddress::Contract(contract_id))

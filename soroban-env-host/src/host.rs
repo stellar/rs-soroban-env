@@ -70,14 +70,22 @@ use rand_chacha::ChaCha20Rng;
 use invocation_metering::InvocationMeter;
 
 #[cfg(any(test, feature = "testutils"))]
-#[derive(Clone, Copy)]
-pub enum ContractInvocationEvent {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvocationEvent {
     Start,
     Finish,
 }
 
 #[cfg(any(test, feature = "testutils"))]
-pub type ContractInvocationHook = Rc<dyn for<'a> Fn(&'a Host, ContractInvocationEvent) -> ()>;
+pub type InvocationHook = Rc<dyn for<'a> Fn(&'a Host, InvocationEvent)>;
+
+#[cfg(any(test, feature = "testutils"))]
+#[deprecated(note = "replaced by InvocationEvent")]
+pub type ContractInvocationEvent = InvocationEvent;
+
+#[cfg(any(test, feature = "testutils"))]
+#[deprecated(note = "replaced by InvocationHook")]
+pub type ContractInvocationHook = InvocationHook;
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Clone, Default)]
@@ -148,18 +156,13 @@ struct HostImpl {
     // calls in debug mode.
     #[doc(hidden)]
     disable_tracing: RefCell<bool>,
-    // Store a simple contract invocation hook for public usage.
-    // The hook triggers when the top-level contract invocation
-    // starts and when it ends.
+    // Store a simple invocation hook for public usage. The hook triggers
+    // when a new top-level invocation starts with an InvocationEvent::Start
+    // event, and when that invocation finishes with an InvocationEvent::Finish
+    // event.
     #[doc(hidden)]
     #[cfg(any(test, feature = "testutils"))]
-    top_contract_invocation_hook: RefCell<Option<ContractInvocationHook>>,
-    // Tracks whether a top-level contract invocation has started and still
-    // needs a matching finish notification when the enclosing operation exits.
-    #[doc(hidden)]
-    #[cfg(any(test, feature = "testutils"))]
-    top_contract_invocation_active: RefCell<bool>,
-
+    invocation_hook: RefCell<Option<InvocationHook>>,
     // A utility to help us measure certain key events we're interested
     // in observing the coverage of. Only written-to, never read, it
     // exists only so that we can observe in aggregated code-coverage
@@ -311,18 +314,10 @@ impl_checked_borrow_helpers!(
 
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
-    top_contract_invocation_hook,
-    Option<ContractInvocationHook>,
-    try_borrow_top_contract_invocation_hook,
-    try_borrow_top_contract_invocation_hook_mut
-);
-
-#[cfg(any(test, feature = "testutils"))]
-impl_checked_borrow_helpers!(
-    top_contract_invocation_active,
-    bool,
-    try_borrow_top_contract_invocation_active,
-    try_borrow_top_contract_invocation_active_mut
+    invocation_hook,
+    Option<InvocationHook>,
+    try_borrow_invocation_hook,
+    try_borrow_invocation_hook_mut
 );
 
 #[cfg(any(test, feature = "testutils"))]
@@ -394,9 +389,7 @@ impl Host {
             trace_hook: RefCell::new(None),
             disable_tracing: RefCell::new(false),
             #[cfg(any(test, feature = "testutils"))]
-            top_contract_invocation_hook: RefCell::new(None),
-            #[cfg(any(test, feature = "testutils"))]
-            top_contract_invocation_active: RefCell::new(false),
+            invocation_hook: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             coverage_scoreboard: Default::default(),
             #[cfg(any(test, feature = "recording_mode"))]
@@ -3880,21 +3873,31 @@ impl Host {
 
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
-    /// Sets a hook to track top-level contract invocations.
-    /// The hook triggers right before the top-level contract invocation
-    /// starts and right after it ends.
-    /// 'Top-level contract invocation' happens when the host starts the
-    /// first contract-owned frame within an outer invocation, even when
-    /// that frame is nested under a host-function frame such as
-    /// `InvokeContract` or `CreateContractV2`. This includes both direct
-    /// host function calls (`call`/`try_call`), and test
-    /// utilities such as `with_test_contract_frame` or
+    /// Sets a hook to track top-level invocations.
+    /// The hook triggers right before the top-level invocation
+    /// starts and right after it ends. 'Top-level invocation' happens
+    /// when the host starts the first frame within an outer invocation.
+    /// This includes both direct host function calls (`call`/`try_call`),
+    /// and test utilities such as `with_test_contract_frame` or
     /// `call_account_contract_check_auth`.
+    #[deprecated(note = "replaced by set_invocation_hook")]
     pub fn set_top_contract_invocation_hook(
         &self,
-        hook: Option<ContractInvocationHook>,
+        hook: Option<InvocationHook>,
     ) -> Result<(), HostError> {
-        *self.try_borrow_top_contract_invocation_hook_mut()? = hook;
+        *self.try_borrow_invocation_hook_mut()? = hook;
+        Ok(())
+    }
+
+    /// Sets a hook to track top-level invocations.
+    /// The hook triggers right before the top-level invocation
+    /// starts and right after it ends. 'Top-level invocation' happens
+    /// when the host starts the first frame within an outer invocation.
+    /// This includes both direct host function calls (`call`/`try_call`),
+    /// and test utilities such as `with_test_contract_frame` or
+    /// `call_account_contract_check_auth`.
+    pub fn set_invocation_hook(&self, hook: Option<InvocationHook>) -> Result<(), HostError> {
+        *self.try_borrow_invocation_hook_mut()? = hook;
         Ok(())
     }
 
