@@ -1830,7 +1830,7 @@ impl Storage {
         key_val: Option<Val>,
     ) -> Result<Option<u32>, HostError> {
         self.with_entry_for_read(key, host, key_val, |opt| {
-            Ok(opt.map(|(_, live_until)| live_until).flatten())
+            Ok(opt.and_then(|(_, live_until)| live_until))
         })
     }
 

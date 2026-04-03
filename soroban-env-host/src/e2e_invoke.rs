@@ -941,6 +941,7 @@ pub(crate) fn ledger_entry_to_ledger_key(
 /// Builds an empty storage map and a footprint key vector from XDR footprint.
 /// Values in the storage map will be populated later by
 /// [Host::populate_storage_from_xdr].
+#[allow(clippy::type_complexity)]
 fn build_storage_map_and_footprint_from_xdr(
     budget: &Budget,
     footprint: LedgerFootprint,
@@ -1082,7 +1083,7 @@ impl Host {
 
         // Add entries for footprint keys not present in the input (non-existing entries).
         for (k, _) in key_order {
-            if !init_entries.get(k, budget)?.is_some() {
+            if init_entries.get(k, budget)?.is_none() {
                 init_entries.insert(Rc::clone(k), None, budget)?;
             }
         }

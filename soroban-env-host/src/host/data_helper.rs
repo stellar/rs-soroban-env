@@ -620,7 +620,7 @@ impl Host {
                             .current_value(self)
                             .ok()
                             .flatten()
-                            .map(|e| e.to_ledger_entry(&*k, self).unwrap()),
+                            .map(|e| e.to_ledger_entry(k, self).unwrap()),
                     )
                 })
                 .collect())
