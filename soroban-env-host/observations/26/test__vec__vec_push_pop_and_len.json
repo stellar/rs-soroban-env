@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call vec_len(Vec(obj#1))": "cpu:963, mem:96, objs:-/1@3e25b2a0",
   "   2 ret vec_len -> Ok(U32(0))": "cpu:1085",
   "   3 call vec_push_back(Vec(obj#1), U32(1))": "",
@@ -16,5 +16,5 @@
   "  14 ret vec_pop_back -> Ok(Vec(obj#9))": "cpu:5921, mem:512, objs:-/5@6fa6fd61",
   "  15 call vec_len(Vec(obj#9))": "",
   "  16 ret vec_len -> Ok(U32(0))": "cpu:6043",
-  "  17 end": "cpu:6043, mem:512, prngs:-/-, objs:-/5@6fa6fd61, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  17 end": "cpu:6043, mem:512, prngs:-/-, objs:-/5@6fa6fd61, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

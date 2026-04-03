@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call bytes_insert(Bytes(obj#3), U32(96), U32(0))": "cpu:4618, mem:384, objs:-/2@a5d3f802",
   "   2 ret bytes_insert -> Ok(Bytes(obj#5))": "cpu:5788, mem:577, objs:-/3@7b4d6097",
   "   3 call bls12_381_g1_add(Bytes(obj#5), Bytes(obj#1))": "",
@@ -88,5 +88,5 @@
   "  86 ret bls12_381_g1_add -> Ok(Bytes(obj#103))": "cpu:2071847, mem:9986, objs:-/52@ef372ebe",
   "  87 call obj_cmp(Bytes(obj#103), Bytes(obj#105))": "cpu:2074156, mem:10178, objs:-/53@b789aa09",
   "  88 ret obj_cmp -> Ok(0)": "cpu:2074456",
-  "  89 end": "cpu:2074456, mem:10178, prngs:-/-, objs:-/53@b789aa09, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  89 end": "cpu:2074456, mem:10178, prngs:-/-, objs:-/53@b789aa09, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

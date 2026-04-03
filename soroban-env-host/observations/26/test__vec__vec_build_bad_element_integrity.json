@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call vec_put(Vec(obj#1), U32(1), Vec(obj#1))": "cpu:969, mem:120, objs:-/1@c38361c",
   "   2 ret vec_put -> Ok(Vec(obj#3))": "cpu:2225, mem:240, objs:-/2@4bf24109",
   "   3 call vec_push_front(Vec(obj#1), Vec(obj#1))": "",
@@ -16,5 +16,5 @@
   "  14 call vec_push_front(Vec(obj#1), Vec(obj#16711681))": "cpu:6753",
   "  15 call vec_push_back(Vec(obj#1), Vec(obj#16711681))": "cpu:6875",
   "  16 call vec_new_from_slice(1)": "cpu:6997",
-  "  17 end": "cpu:7581, mem:648, prngs:-/-, objs:-/5@e9381547, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  17 end": "cpu:7581, mem:648, prngs:-/-, objs:-/5@e9381547, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

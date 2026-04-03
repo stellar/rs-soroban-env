@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call bytes_new_from_slice(1)": "",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:963, mem:97, objs:-/1@14491895",
   "   3 call bytes_append(Bytes(obj#1), Bytes(obj#1))": "",
@@ -58,5 +58,5 @@
   "  56 ret bytes_append -> Ok(Bytes(obj#55))": "cpu:67144061, mem:268438143, objs:-/28@e46fd67d",
   "  57 call bytes_append(Bytes(obj#55), Bytes(obj#55))": "",
   "  58 ret bytes_append -> Err(Error(Budget, ExceededLimit))": "cpu:100699216",
-  "  59 end": "cpu:100699216, mem:268438143, prngs:-/-, objs:-/28@e46fd67d, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  59 end": "cpu:100699216, mem:268438143, prngs:-/-, objs:-/28@e46fd67d, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

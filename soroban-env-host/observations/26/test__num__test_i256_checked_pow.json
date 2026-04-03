@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call i256_checked_pow(I256(0), U32(0))": "",
   "   2 ret i256_checked_pow -> Ok(I256(1))": "cpu:4286, mem:99",
   "   3 call i256_checked_pow(I256(0), U32(1))": "",
@@ -86,5 +86,5 @@
   "  84 ret i256_checked_pow -> Ok(Void)": "",
   "  85 call i256_checked_pow(I256(-2), U32(257))": "",
   "  86 ret i256_checked_pow -> Ok(Void)": "cpu:79788, mem:2323",
-  "  87 end": "cpu:79788, mem:2323, prngs:-/-, objs:-/8@478d8ad, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  87 end": "cpu:79788, mem:2323, prngs:-/-, objs:-/8@478d8ad, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

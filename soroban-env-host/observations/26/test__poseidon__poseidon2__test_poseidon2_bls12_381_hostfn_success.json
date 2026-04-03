@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call obj_from_u256_pieces(7998527443991704484, 5324461158818681700, 5336434876888042694, 2947960996209207413)": "cpu:11646, mem:2240, objs:-/2@cb1d83ca",
   "   2 ret obj_from_u256_pieces -> Ok(U256(obj#5))": "cpu:12149, mem:2320, objs:-/3@aa08aeb",
   "   3 call obj_from_u256_pieces(3894897278759880509, 3836893775856210163, 5652323399268055920, 6292527197429326595)": "cpu:13304, mem:2568",
@@ -184,5 +184,5 @@
   " 182 call obj_cmp(U256(obj#299), U256(obj#307))": "",
   " 183 ret obj_cmp -> Ok(0)": "cpu:1071031",
   " 184 ret obj_cmp -> Ok(0)": "",
-  " 185 end": "cpu:1071031, mem:84080, prngs:-/-, objs:-/155@6a75e16d, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  " 185 end": "cpu:1071031, mem:84080, prngs:-/-, objs:-/155@6a75e16d, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call serialize_to_bytes(U64(5))": "",
   "   2 ret serialize_to_bytes -> Ok(Bytes(obj#1))": "cpu:964, mem:600, objs:-/1@85c2c81e",
   "   3 call deserialize_from_bytes(Bytes(obj#1))": "",
@@ -86,5 +86,5 @@
   "  84 ret deserialize_from_bytes -> Err(Error(Object, UnexpectedType))": "cpu:1419602, mem:20096",
   "  85 call deserialize_from_bytes(Bytes(obj#71))": "cpu:1420044, mem:20176, objs:-/36@3d599208",
   "  86 ret deserialize_from_bytes -> Err(Error(Value, UnexpectedType))": "cpu:1479343, mem:20188",
-  "  87 end": "cpu:1479343, mem:20188, prngs:-/-, objs:-/36@3d599208, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  87 end": "cpu:1479343, mem:20188, prngs:-/-, objs:-/36@3d599208, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

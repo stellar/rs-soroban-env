@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call vec_push_back(Vec(obj#3), Vec(obj#1))": "cpu:1926, mem:192, objs:-/2@14339b3d",
   "   2 ret vec_push_back -> Ok(Vec(obj#5))": "cpu:3135, mem:296, objs:-/3@b1b3ca0b",
   "   3 call vec_push_back(Vec(obj#7), Vec(obj#5))": "cpu:4098, mem:392, objs:-/4@c8f81f1d",
@@ -2000,5 +2000,5 @@
   "1998 ret vec_push_back -> Ok(Vec(obj#3997))": "cpu:2170791, mem:199896, objs:-/1999@9ac8c53a",
   "1999 call vec_push_back(Vec(obj#3999), Vec(obj#3997))": "cpu:2171754, mem:199992, objs:-/2000@94ddbab",
   "2000 ret vec_push_back -> Ok(Vec(obj#4001))": "cpu:2172963, mem:200096, objs:-/2001@1c7caf96",
-  "2001 end": "cpu:2233361, mem:208176, prngs:-/-, objs:-/2001@1c7caf96, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "2001 end": "cpu:2233361, mem:208176, prngs:-/-, objs:-/2001@1c7caf96, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

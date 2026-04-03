@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call u256_val_from_be_bytes(Bytes(obj#3))": "cpu:1950, mem:288, objs:-/2@4c72e72f",
   "   2 call obj_from_u256_pieces(0, 0, 0, 1230482048326178242)": "cpu:2118",
   "   3 ret obj_from_u256_pieces -> Ok(U256(obj#5))": "cpu:2621, mem:368, objs:-/3@a2c706e9",
@@ -176,5 +176,5 @@
   " 174 ret bn254_g1_mul -> Ok(Bytes(obj#173))": "cpu:22043746",
   " 175 call obj_cmp(Bytes(obj#173), Bytes(obj#175))": "cpu:22044725, mem:12512, objs:-/88@91d0d2e5",
   " 176 ret obj_cmp -> Ok(0)": "cpu:22045021",
-  " 177 end": "cpu:22045021, mem:12512, prngs:-/-, objs:-/88@91d0d2e5, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  " 177 end": "cpu:22045021, mem:12512, prngs:-/-, objs:-/88@91d0d2e5, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

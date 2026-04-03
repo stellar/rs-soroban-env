@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call bytes_new_from_slice(64)": "cpu:688",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1667, mem:160, objs:-/1@33e03491",
   "   3 call bytes_copy_to_slice(Bytes(obj#1), U32(0), 64)": "",
@@ -40,5 +40,5 @@
   "  38 ret bytes_new_from_slice -> Ok(Bytes(obj#37))": "cpu:27029, mem:3040, objs:-/19@e3a7db9a",
   "  39 call bytes_copy_to_slice(Bytes(obj#37), U32(0), 64)": "",
   "  40 ret bytes_copy_to_slice -> Ok(())": "cpu:27140",
-  "  41 end": "cpu:28180, mem:3200, prngs:-/-, objs:-/20@dbec9ab, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  41 end": "cpu:28180, mem:3200, prngs:-/-, objs:-/20@dbec9ab, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }
