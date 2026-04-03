@@ -11,12 +11,13 @@ use crate::{
         ScErrorCode, ScErrorType, ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry,
         SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
     },
-    Env, Host, LedgerInfo, Symbol, DEFAULT_XDR_RW_LIMITS,
+    Env, Host, InvocationEvent, LedgerInfo, Symbol, DEFAULT_XDR_RW_LIMITS,
 };
 use pretty_assertions::assert_eq;
 use sha2::{Digest, Sha256};
 use soroban_env_common::{EnvBase, StorageType, TryIntoVal, Val, VecObject};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::testutils::{generate_account_id, generate_bytes_array};
 
@@ -2221,6 +2222,53 @@ mod cap_58_constructor {
                     .try_into_val(&host)
                     .unwrap();
                 assert_eq!(res, 303);
+            }
+
+            #[test]
+            fn test_constructor_supports_test_invocation_hooks() {
+                let host = test_host();
+
+                let events = Rc::new(RefCell::new(Vec::<InvocationEvent>::new()));
+                let captured_events = Rc::clone(&events);
+                host.set_invocation_hook(Some(Rc::new(move |_host, event| {
+                    captured_events.borrow_mut().push(event)
+                })))
+                .unwrap();
+
+                let contract_id = create_contract_with_constructor(
+                    &host,
+                    generate_account_id(&host),
+                    generate_bytes_array(&host),
+                    NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22,
+                    &vec![],
+                    CreateContractTestParams {
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+
+                // We should see hook events for both `UploadContractWasm` and
+                // `CreateContractV2` host function calls
+                assert_eq!(
+                    events.borrow().as_slice(),
+                    [
+                        InvocationEvent::Start,
+                        InvocationEvent::Finish,
+                        InvocationEvent::Start,
+                        InvocationEvent::Finish,
+                    ]
+                );
+                let res: u32 = host
+                    .call(
+                        host.add_host_object(ScAddress::Contract(contract_id))
+                            .unwrap(),
+                        Symbol::try_from_small_str("get_data").unwrap(),
+                        test_vec![&host, Symbol::try_from_small_str("key").unwrap()].as_object(),
+                    )
+                    .unwrap()
+                    .try_into_val(&host)
+                    .unwrap();
+                assert_eq!(res, 6);
             }
         }
 

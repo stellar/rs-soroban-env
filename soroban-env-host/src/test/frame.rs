@@ -3,9 +3,10 @@ use soroban_env_common::{Env, StorageType};
 use crate::{
     host::HostError,
     xdr::{ContractId, Hash, ScAddress, ScErrorCode, ScErrorType},
-    Compare, ContractFunctionSet, EnvBase, Error, Host, Symbol, Val,
+    Compare, ContractFunctionSet, EnvBase, Error, Host, InvocationEvent, Symbol, Val,
 };
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 struct NoopContractFunctionSet;
@@ -48,6 +49,44 @@ fn has_frame() -> Result<(), HostError> {
     // Host has no frame outside of executing a contract.
     assert!(!host.has_frame()?);
 
+    Ok(())
+}
+
+#[test]
+fn invocation_hook_tracks_top_frame() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+
+    let outer_id = ContractId(Hash([0u8; 32]));
+    let outer_address = host.add_host_object(ScAddress::Contract(outer_id.clone()))?;
+    host.register_test_contract(outer_address, Rc::new(NoopContractFunctionSet))?;
+
+    let inner_id = ContractId(Hash([1u8; 32]));
+    let inner_address = host.add_host_object(ScAddress::Contract(inner_id.clone()))?;
+    host.register_test_contract(inner_address, Rc::new(NoopContractFunctionSet))?;
+
+    let events = Rc::new(RefCell::new(Vec::<InvocationEvent>::new()));
+    let hook_events = Rc::clone(&events);
+    host.set_invocation_hook(Some(Rc::new(move |_host, event| {
+        hook_events.borrow_mut().push(event)
+    })))?;
+
+    host.with_test_contract_frame(
+        outer_id,
+        Symbol::try_from_small_str("call").unwrap(),
+        || {
+            host.with_test_contract_frame(
+                inner_id.clone(),
+                Symbol::try_from_small_str("subcall").unwrap(),
+                || Ok(().into()),
+            )?;
+            Ok(().into())
+        },
+    )?;
+
+    assert_eq!(
+        events.borrow().as_slice(),
+        [InvocationEvent::Start, InvocationEvent::Finish,]
+    );
     Ok(())
 }
 

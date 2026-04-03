@@ -59,7 +59,11 @@ pub use host::{TraceEvent, TraceHook, TraceRecord, TraceState};
 pub mod cost_runner;
 
 #[cfg(any(test, feature = "testutils"))]
-pub use host::{ContractFunctionSet, ContractInvocationEvent};
+#[allow(deprecated)]
+pub use host::{
+    ContractFunctionSet, ContractInvocationEvent, ContractInvocationHook, InvocationEvent,
+    InvocationHook,
+};
 
 #[cfg(any(test, feature = "testutils"))]
 #[doc(hidden)]

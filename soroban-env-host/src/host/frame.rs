@@ -437,28 +437,11 @@ impl Host {
             }
         }
         #[cfg(any(test, feature = "testutils"))]
-        let mut is_top_contract_invocation = false;
-        #[cfg(any(test, feature = "testutils"))]
         {
+            // Call the invocation hook whenever a new top-level invocation starts.
             if self.try_borrow_context_stack()?.len() == 1 {
-                if let Some(ctx) = self.try_borrow_context_stack()?.first() {
-                    match ctx.frame {
-                        // Don't call the contract invocation hook for
-                        // the host functions.
-                        Frame::HostFunction(_) => (),
-                        // Everything else is some sort of contract call.
-                        _ => {
-                            is_top_contract_invocation = true;
-                            if let Some(contract_invocation_hook) =
-                                self.try_borrow_top_contract_invocation_hook()?.as_ref()
-                            {
-                                contract_invocation_hook(
-                                    self,
-                                    crate::host::ContractInvocationEvent::Start,
-                                );
-                            }
-                        }
-                    }
+                if let Some(invocation_hook) = self.try_borrow_invocation_hook()?.as_ref() {
+                    invocation_hook(self, crate::host::InvocationEvent::Start);
                 }
             }
         }
@@ -582,16 +565,8 @@ impl Host {
                 Some(self.try_borrow_authorization_manager()?.clone());
             self.try_borrow_authorization_manager_mut()?.reset();
 
-            // Call the contract invocation hook for contract invocations only.
-            if is_top_contract_invocation {
-                if let Some(top_contract_invocation_hook) =
-                    self.try_borrow_top_contract_invocation_hook()?.as_ref()
-                {
-                    top_contract_invocation_hook(
-                        self,
-                        crate::host::ContractInvocationEvent::Finish,
-                    );
-                }
+            if let Some(invocation_hook) = self.try_borrow_invocation_hook()?.as_ref() {
+                invocation_hook(self, crate::host::InvocationEvent::Finish);
             }
         }
         res
