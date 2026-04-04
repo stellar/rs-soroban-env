@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call bytes_new_from_slice(65)": "",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:979, mem:161, objs:-/1@b2474f93",
   "   3 call bytes_new_from_slice(32)": "",
@@ -152,5 +152,5 @@
   " 150 ret bytes_new_from_slice -> Ok(Bytes(obj#113))": "cpu:5826, mem:449, objs:-/57@c14426c",
   " 151 call verify_sig_ecdsa_secp256r1(Bytes(obj#109), Bytes(obj#111), Bytes(obj#113))": "cpu:0, mem:0",
   " 152 ret verify_sig_ecdsa_secp256r1 -> Err(Error(Crypto, InvalidInput))": "cpu:3003910",
-  " 153 end": "cpu:3003910, mem:0, prngs:-/-, objs:-/57@c14426c, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  " 153 end": "cpu:3003910, mem:0, prngs:-/-, objs:-/57@c14426c, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

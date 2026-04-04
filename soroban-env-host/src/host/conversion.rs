@@ -751,8 +751,8 @@ impl Host {
                 }
             };
             // Expected strkey lengths:
-            // - Account/Contract: PAYLOAD_LEN = 32 + 3 = 35 bytes → 56 chars in base32
-            // - Muxed account: MUXED_PAYLOAD_LEN = 32 + 8 + 3 = 43 bytes → 69 chars in base32
+            // - Account/Contract: PAYLOAD_LEN = 32 + 3 = 35 bytes -> 56 chars in base32
+            // - Muxed account: MUXED_PAYLOAD_LEN = 32 + 8 + 3 = 43 bytes -> 69 chars in base32
             const PAYLOAD_LEN: u64 = 32 + 3;
             const MUXED_PAYLOAD_LEN: u64 = 32 + 8 + 3;
             let expected_key_len = (PAYLOAD_LEN * 8).div_ceil(5);

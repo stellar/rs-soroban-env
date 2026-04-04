@@ -1,11 +1,7 @@
 use soroban_env_common::xdr::{ScBytes, ScErrorCode, ScErrorType};
 use soroban_env_common::Val;
 
-use crate::{
-    budget::Budget,
-    storage::{Footprint, Storage, StorageMap},
-    Env, Host, HostError,
-};
+use crate::{budget::Budget, storage::Storage, Env, Host, HostError};
 
 #[test]
 fn is_same_host_impl() {
@@ -22,8 +18,7 @@ fn is_same_host_impl() {
 fn invalid_object_handles() -> Result<(), HostError> {
     let create_host = || -> Result<Host, HostError> {
         let budget = Budget::default();
-        let storage =
-            Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new());
+        let storage = Storage::with_enforcing_footprint_and_map(Default::default());
 
         let host = Host::with_storage_and_budget(storage, budget);
         host.set_test_ledger_info_with_current_test_protocol();

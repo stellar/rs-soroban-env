@@ -129,4 +129,82 @@ impl Contract {
             .persistent()
             .extend_ttl(&key, threshold, extend_to)
     }
+
+    /// Performs a series of storage operations on the same key within a single
+    /// contract call. This exercises the copy-on-write semantics and ensures
+    /// that multiple modifications at the same frame depth don't create duplicate
+    /// frames in the entry and TTL stacks.
+    ///
+    /// storage_type: 0 = Temporary, 1 = Persistent, 2 = Instance
+    pub fn stress_storage(e: Env, storage_type: u32, key: Symbol) {
+        match storage_type {
+            0 => {
+                // Temporary storage
+                let storage = e.storage().temporary();
+                // Write initial value
+                storage.set(&key, &1_u64);
+                // Read it back
+                let _v: u64 = storage.get(&key).unwrap();
+                // Overwrite with new value
+                storage.set(&key, &2_u64);
+                // Extend TTL
+                storage.extend_ttl(&key, 100, 1000);
+                // Overwrite again
+                storage.set(&key, &3_u64);
+                // Extend TTL again (same frame depth)
+                storage.extend_ttl(&key, 100, 2000);
+                // Delete
+                storage.remove(&key);
+                // Write again (re-create after deletion)
+                storage.set(&key, &4_u64);
+                // Extend TTL after re-creation
+                storage.extend_ttl(&key, 100, 3000);
+            }
+            1 => {
+                // Persistent storage
+                let storage = e.storage().persistent();
+                // Write initial value
+                storage.set(&key, &1_u64);
+                // Read it back
+                let _v: u64 = storage.get(&key).unwrap();
+                // Overwrite with new value
+                storage.set(&key, &2_u64);
+                // Extend TTL
+                storage.extend_ttl(&key, 100, 1000);
+                // Overwrite again
+                storage.set(&key, &3_u64);
+                // Extend TTL again (same frame depth)
+                storage.extend_ttl(&key, 100, 2000);
+                // Delete
+                storage.remove(&key);
+                // Write again (re-create after deletion)
+                storage.set(&key, &4_u64);
+                // Extend TTL after re-creation
+                storage.extend_ttl(&key, 100, 3000);
+            }
+            2 => {
+                // Instance storage
+                let storage = e.storage().instance();
+                // Write initial value
+                storage.set(&key, &1_u64);
+                // Read it back
+                let _v: u64 = storage.get(&key).unwrap();
+                // Overwrite with new value
+                storage.set(&key, &2_u64);
+                // Extend instance TTL
+                e.storage().instance().extend_ttl(100, 1000);
+                // Overwrite again
+                storage.set(&key, &3_u64);
+                // Extend instance TTL again (same frame depth)
+                e.storage().instance().extend_ttl(100, 2000);
+                // Delete
+                storage.remove(&key);
+                // Write again (re-create after deletion)
+                storage.set(&key, &4_u64);
+                // Extend instance TTL after re-creation
+                e.storage().instance().extend_ttl(100, 3000);
+            }
+            _ => panic!("invalid storage_type"),
+        }
+    }
 }

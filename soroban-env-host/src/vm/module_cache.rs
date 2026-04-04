@@ -97,39 +97,48 @@ impl ModuleCache {
 
     #[cfg(any(test, feature = "testutils"))]
     pub fn add_stored_contracts(&self, host: &Host) -> Result<(), HostError> {
+        use crate::storage::StorageLedgerEntryData;
         use crate::xdr::{ContractCodeEntry, ContractCodeEntryExt, LedgerEntryData, LedgerKey};
         let storage = host.try_borrow_storage()?;
-        for (k, v) in storage.map.iter(host.as_budget())? {
+        for (k, storage_entry) in storage.map.iter_non_metered() {
             if let LedgerKey::ContractCode(_) = &**k {
-                if let Some((e, _)) = v {
-                    if let LedgerEntryData::ContractCode(ContractCodeEntry { code, hash, ext }) =
-                        &e.data
-                    {
-                        // We allow empty contracts in testing mode; they exist
-                        // to exercise as much of the contract-code-storage
-                        // infrastructure as possible, while still redirecting
-                        // the actual execution into a `ContractFunctionSet`.
-                        // They should never be called, so we do not have to go
-                        // as far as making a fake `ParsedModule` for them.
-                        if code.as_slice().is_empty() {
-                            continue;
-                        }
-
-                        let code_cost_inputs = match ext {
-                            ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
-                                wasm_bytes: code.len(),
-                            },
-                            ContractCodeEntryExt::V1(v1) => VersionedContractCodeCostInputs::V1(
-                                v1.cost_inputs.metered_clone(host.as_budget())?,
-                            ),
-                        };
-                        self.parse_and_cache_module(
-                            host,
-                            host.get_ledger_protocol_version()?,
-                            hash,
+                // Get the current value from the storage entry
+                if let Some(data) = storage_entry.current_value(host)? {
+                    if let StorageLedgerEntryData::Entry(e) = data {
+                        if let LedgerEntryData::ContractCode(ContractCodeEntry {
                             code,
-                            code_cost_inputs,
-                        )?;
+                            hash,
+                            ext,
+                        }) = &e.borrow().data
+                        {
+                            // We allow empty contracts in testing mode; they exist
+                            // to exercise as much of the contract-code-storage
+                            // infrastructure as possible, while still redirecting
+                            // the actual execution into a `ContractFunctionSet`.
+                            // They should never be called, so we do not have to go
+                            // as far as making a fake `ParsedModule` for them.
+                            if code.as_slice().is_empty() {
+                                continue;
+                            }
+
+                            let code_cost_inputs = match ext {
+                                ContractCodeEntryExt::V0 => VersionedContractCodeCostInputs::V0 {
+                                    wasm_bytes: code.len(),
+                                },
+                                ContractCodeEntryExt::V1(v1) => {
+                                    VersionedContractCodeCostInputs::V1(
+                                        v1.cost_inputs.metered_clone(host.as_budget())?,
+                                    )
+                                }
+                            };
+                            self.parse_and_cache_module(
+                                host,
+                                host.get_ledger_protocol_version()?,
+                                hash,
+                                code,
+                                code_cost_inputs,
+                            )?;
+                        }
                     }
                 }
             }

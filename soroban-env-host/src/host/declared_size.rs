@@ -10,17 +10,21 @@ use crate::{
     },
     host::{frame::Context, Events},
     host_object::{HostObject, MuxedScAddress},
-    storage::AccessType,
+    storage::{
+        AccessType, EntryTTLFrame, StorageEntry, StorageEntryData, StorageEntryFrame,
+        StorageLedgerEntryData,
+    },
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
         ContractCodeEntryV1, ContractDataDurability, ContractEvent, ContractExecutable, ContractId,
         ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, ExtensionPoint,
-        Hash, Int128Parts, Int256Parts, InvokeContractArgs, LedgerEntry, LedgerEntryExt, LedgerKey,
-        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
-        ScContractInstance, ScError, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
-        ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset,
-        TrustLineEntry, TtlEntry, UInt128Parts, UInt256Parts, Uint256, SCSYMBOL_LIMIT,
+        Hash, Int128Parts, Int256Parts, InvokeContractArgs, LedgerEntry, LedgerEntryExt,
+        LedgerFootprint, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine,
+        PublicKey, ScAddress, ScBytes, ScContractInstance, ScError, ScMap, ScMapEntry, ScNonceKey,
+        ScString, ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry,
+        SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SponsorshipDescriptor, StringM,
+        TimePoint, TrustLineAsset, TrustLineEntry, TtlEntry, UInt128Parts, UInt256Parts, Uint256,
+        SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -115,10 +119,16 @@ impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
 impl_declared_size_type!(HostObject, 64);
 impl_declared_size_type!(HostError, 16);
-impl_declared_size_type!(Context, 512);
+impl_declared_size_type!(Context, 560);
 impl_declared_size_type!(Address, 16);
 
 impl_declared_size_type!(AccessType, 1);
+impl_declared_size_type!(StorageLedgerEntryData, 16);
+impl_declared_size_type!(EntryTTLFrame, 12);
+impl_declared_size_type!(StorageEntryFrame, 24);
+impl_declared_size_type!(StorageEntryData, 24);
+impl_declared_size_type!(StorageEntry, 48);
+
 impl_declared_size_type!(InternalContractEvent, 40);
 impl_declared_size_type!(HostEvent, 136);
 impl_declared_size_type!(Events, 24);
@@ -168,11 +178,13 @@ impl_declared_size_type!(TrustLineEntry, 128);
 impl_declared_size_type!(ContractCodeCostInputs, 40);
 impl_declared_size_type!(ContractCodeEntry, 64);
 impl_declared_size_type!(ContractCodeEntryV1, 40);
-// TtlEntry must be declared as it's used in e2e to build
-// The TtlEntryMap, but is not otherwise cloned anywhere.
+// TtlEntry must be declared as it's used in e2e to decode
+// TTL entries from XDR during storage population.
 impl_declared_size_type!(TtlEntry, 36);
 impl_declared_size_type!(LedgerKey, 120);
 impl_declared_size_type!(LedgerEntry, 256);
+
+impl_declared_size_type!(LedgerFootprint, 48);
 impl_declared_size_type!(ContractEvent, 128);
 impl_declared_size_type!(ScBytes, 24);
 impl_declared_size_type!(ScString, 24);
@@ -270,7 +282,7 @@ impl_declared_size_type!(BnScalar, 32);
 
 // Rc is an exception, nothing is being cloned. We approximate ref counter bump with the cost of
 // cloning 16 bytes.
-impl<T> DeclaredSizeForMetering for Rc<T> {
+impl<T: DeclaredSizeForMetering> DeclaredSizeForMetering for Rc<T> {
     const DECLARED_SIZE: u64 = 16;
 }
 
@@ -462,6 +474,12 @@ mod test {
         expect!["40"].assert_eq(size_of::<InternalEvent>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<EventError>().to_string().as_str());
 
+        expect!["16"].assert_eq(size_of::<StorageLedgerEntryData>().to_string().as_str());
+        expect!["12"].assert_eq(size_of::<EntryTTLFrame>().to_string().as_str());
+        expect!["24"].assert_eq(size_of::<StorageEntryFrame>().to_string().as_str());
+        expect!["24"].assert_eq(size_of::<StorageEntryData>().to_string().as_str());
+        expect!["48"].assert_eq(size_of::<StorageEntry>().to_string().as_str());
+
         expect!["16"].assert_eq(size_of::<ContractInvocation>().to_string().as_str());
         expect!["176"].assert_eq(size_of::<AuthorizedInvocation>().to_string().as_str());
         expect!["32"].assert_eq(
@@ -522,6 +540,7 @@ mod test {
         expect!["104"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<ContractCodeEntryV1>().to_string().as_str());
         expect!["36"].assert_eq(size_of::<TtlEntry>().to_string().as_str());
+        expect!["48"].assert_eq(size_of::<LedgerFootprint>().to_string().as_str());
 
         // NB: a couple structs shrank between rust 1.75 and 1.76 but this is harmless
         // from a metering perspective -- we're just overcharging slightly.
@@ -666,6 +685,12 @@ mod test {
         assert_mem_size_le_declared_size!(Address);
 
         assert_mem_size_le_declared_size!(AccessType);
+        assert_mem_size_le_declared_size!(StorageLedgerEntryData);
+        assert_mem_size_le_declared_size!(EntryTTLFrame);
+        assert_mem_size_le_declared_size!(StorageEntryFrame);
+        assert_mem_size_le_declared_size!(StorageEntryData);
+        assert_mem_size_le_declared_size!(StorageEntry);
+
         assert_mem_size_le_declared_size!(InternalContractEvent);
         assert_mem_size_le_declared_size!(HostEvent);
         assert_mem_size_le_declared_size!(Events);
@@ -731,6 +756,7 @@ mod test {
         assert_mem_size_le_declared_size!(SorobanAuthorizationEntry);
         assert_mem_size_le_declared_size!(SorobanAuthorizedInvocation);
         assert_mem_size_le_declared_size!(SorobanAuthorizedFunction);
+        assert_mem_size_le_declared_size!(LedgerFootprint);
 
         // composite types
         assert_mem_size_le_declared_size!(Rc<ScVal>);

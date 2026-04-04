@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call bytes_new_from_slice(47)": "cpu:661",
   "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1634, mem:143, objs:-/1@705fbc72",
   "   3 call bls12_381_map_fp_to_g1(Bytes(obj#1))": "",
@@ -92,5 +92,5 @@
   "  90 ret bls12_381_map_fp_to_g1 -> Ok(Bytes(obj#65))": "cpu:10266420, mem:33040, objs:-/33@8a8027cd",
   "  91 call obj_cmp(Bytes(obj#65), Bytes(obj#61))": "",
   "  92 ret obj_cmp -> Ok(0)": "cpu:10266720",
-  "  93 end": "cpu:10266720, mem:33040, prngs:-/-, objs:-/33@8a8027cd, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  93 end": "cpu:10266720, mem:33040, prngs:-/-, objs:-/33@8a8027cd, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

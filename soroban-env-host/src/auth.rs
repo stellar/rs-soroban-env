@@ -2143,36 +2143,37 @@ impl AccountAuthorizationTracker {
             }
             ScAddress::Contract(contract_id) => {
                 let instance_key = host.contract_instance_ledger_key(&contract_id)?;
-                let entry = host
-                    .try_borrow_storage_mut()?
-                    .try_get(&instance_key, host, None)?;
                 // In test scenarios we often may not have any actual instance, which is fine most
                 // of the time, so we don't return any errors.
                 // In simulation scenarios the instance will likely be there, and when it's
                 // not, we still make our best effort and include at least the necessary instance key
                 // into the footprint.
-                let instance = if let Some(entry) = entry {
-                    match &entry.data {
-                        LedgerEntryData::ContractData(e) => match &e.val {
-                            ScVal::ContractInstance(instance) => instance.metered_clone(host)?,
-                            _ => {
-                                return Ok(());
-                            }
+                let instance = host.try_borrow_storage_mut()?.with_ledger_entry(
+                    &instance_key,
+                    host,
+                    |opt| match opt {
+                        Some(entry) => match &entry.data {
+                            LedgerEntryData::ContractData(e) => match &e.val {
+                                ScVal::ContractInstance(instance) => {
+                                    Ok(Some(instance.metered_clone(host)?))
+                                }
+                                _ => Ok(None),
+                            },
+                            _ => Ok(None),
                         },
-                        _ => {
-                            return Ok(());
-                        }
-                    }
-                } else {
+                        None => Ok(None),
+                    },
+                )?;
+
+                let Some(instance) = instance else {
                     return Ok(());
                 };
 
                 match &instance.executable {
                     ContractExecutable::Wasm(wasm_hash) => {
                         let wasm_key = host.contract_code_ledger_key(wasm_hash)?;
-                        let _ = host
-                            .try_borrow_storage_mut()?
-                            .try_get(&wasm_key, host, None)?;
+                        // Just access the key to include it in footprint
+                        host.try_borrow_storage_mut()?.has(&wasm_key, host, None)?;
                     }
                     ContractExecutable::StellarAsset => (),
                 }
@@ -2324,13 +2325,8 @@ impl Host {
                 data,
                 ext: LedgerEntryExt::V0,
             };
-            storage.put(
-                &nonce_key,
-                &Rc::metered_new(entry, self)?,
-                Some(live_until_ledger),
-                self,
-                None,
-            )
+            let entry_rc = Rc::metered_new(entry, self)?;
+            storage.create_entry(&nonce_key, &entry_rc, Some(live_until_ledger), self)
         })
     }
 

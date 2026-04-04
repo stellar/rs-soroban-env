@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call map_key_by_pos(Map(obj#1), U32(0))": "cpu:1023, mem:144, objs:-/1@e281b9c8",
   "   2 ret map_key_by_pos -> Ok(U32(1))": "cpu:1190",
   "   3 call map_key_by_pos(Map(obj#1), U32(1))": "",
@@ -12,5 +12,5 @@
   "  10 ret map_val_by_pos -> Ok(U32(8))": "cpu:1858",
   "  11 call map_val_by_pos(Map(obj#1), U32(2))": "",
   "  12 ret map_val_by_pos -> Err(Error(Object, IndexBounds))": "cpu:2025",
-  "  13 end": "cpu:2025, mem:144, prngs:-/-, objs:-/1@e281b9c8, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  13 end": "cpu:2025, mem:144, prngs:-/-, objs:-/1@e281b9c8, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

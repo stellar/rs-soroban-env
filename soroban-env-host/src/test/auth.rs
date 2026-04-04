@@ -313,12 +313,9 @@ impl AuthTest {
             .unwrap();
         self.host
             .with_mut_storage(|storage| {
-                if !storage.has(&nonce_key, &self.host, None)? {
-                    return Ok(None);
-                }
-                let (_, live_until_ledger) =
-                    storage.get_with_live_until_ledger(&nonce_key, &self.host, None)?;
-                Ok(live_until_ledger)
+                // Use get_from_map to get both entry and live_until
+                let entry = storage.get_from_map(&nonce_key, &self.host)?;
+                Ok(entry.map(|(_, live_until)| live_until).flatten())
             })
             .unwrap()
     }
@@ -988,12 +985,12 @@ fn test_two_authorized_trees() {
                 ),
             ),
             resources: SubInvocationResources {
-                instructions: 3534571,
-                mem_bytes: 8481766,
-                disk_read_entries: 1,
-                memory_read_entries: 8,
+                instructions: 3560970,
+                mem_bytes: 8472684,
+                disk_read_entries: 0,
+                memory_read_entries: 2,
                 write_entries: 2,
-                disk_read_bytes: 132,
+                disk_read_bytes: 0,
                 write_bytes: 152,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
@@ -1014,12 +1011,12 @@ fn test_two_authorized_trees() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1573332,
-                        mem_bytes: 3636258,
-                        disk_read_entries: 1,
-                        memory_read_entries: 4,
+                        instructions: 1585007,
+                        mem_bytes: 3632144,
+                        disk_read_entries: 0,
+                        memory_read_entries: 1,
                         write_entries: 1,
-                        disk_read_bytes: 132,
+                        disk_read_bytes: 0,
                         write_bytes: 76,
                         contract_events_size_bytes: 0,
                         persistent_rent_ledger_bytes: 0,
@@ -1040,10 +1037,10 @@ fn test_two_authorized_trees() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 362050,
-                                mem_bytes: 1208266,
+                                instructions: 365422,
+                                mem_bytes: 1207452,
                                 disk_read_entries: 0,
-                                memory_read_entries: 1,
+                                memory_read_entries: 0,
                                 write_entries: 0,
                                 disk_read_bytes: 0,
                                 write_bytes: 0,
@@ -1067,10 +1064,10 @@ fn test_two_authorized_trees() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 361465,
-                                mem_bytes: 1208291,
+                                instructions: 365128,
+                                mem_bytes: 1207452,
                                 disk_read_entries: 0,
-                                memory_read_entries: 1,
+                                memory_read_entries: 0,
                                 write_entries: 0,
                                 disk_read_bytes: 0,
                                 write_bytes: 0,
@@ -1096,10 +1093,10 @@ fn test_two_authorized_trees() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1574852,
-                        mem_bytes: 3636425,
+                        instructions: 1586477,
+                        mem_bytes: 3632144,
                         disk_read_entries: 0,
-                        memory_read_entries: 2,
+                        memory_read_entries: 1,
                         write_entries: 1,
                         disk_read_bytes: 0,
                         write_bytes: 76,
@@ -1122,10 +1119,10 @@ fn test_two_authorized_trees() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 363603,
-                                mem_bytes: 1208409,
+                                instructions: 366010,
+                                mem_bytes: 1207452,
                                 disk_read_entries: 0,
-                                memory_read_entries: 1,
+                                memory_read_entries: 0,
                                 write_entries: 0,
                                 disk_read_bytes: 0,
                                 write_bytes: 0,
@@ -1149,8 +1146,8 @@ fn test_two_authorized_trees() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 361801,
-                                mem_bytes: 1208168,
+                                instructions: 365716,
+                                mem_bytes: 1207452,
                                 disk_read_entries: 0,
                                 memory_read_entries: 0,
                                 write_entries: 0,
@@ -2470,12 +2467,12 @@ fn test_require_auth_within_check_auth() {
                 ),
             ),
             resources: SubInvocationResources {
-                instructions: 1434110,
-                mem_bytes: 3621468,
-                disk_read_entries: 1,
-                memory_read_entries: 10,
+                instructions: 1446313,
+                mem_bytes: 3612972,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
                 write_entries: 3,
-                disk_read_bytes: 132,
+                disk_read_bytes: 0,
                 write_bytes: 220,
                 contract_events_size_bytes: 0,
                 persistent_rent_ledger_bytes: 0,
@@ -2496,12 +2493,12 @@ fn test_require_auth_within_check_auth() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1050492,
-                        mem_bytes: 2405669,
-                        disk_read_entries: 1,
-                        memory_read_entries: 7,
+                        instructions: 1059810,
+                        mem_bytes: 2399902,
+                        disk_read_entries: 0,
+                        memory_read_entries: 2,
                         write_entries: 2,
-                        disk_read_bytes: 132,
+                        disk_read_bytes: 0,
                         write_bytes: 148,
                         contract_events_size_bytes: 0,
                         persistent_rent_ledger_bytes: 0,
@@ -2522,12 +2519,12 @@ fn test_require_auth_within_check_auth() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 733593,
-                                mem_bytes: 1202616,
-                                disk_read_entries: 1,
-                                memory_read_entries: 3,
+                                instructions: 738430,
+                                mem_bytes: 1199713,
+                                disk_read_entries: 0,
+                                memory_read_entries: 1,
                                 write_entries: 1,
-                                disk_read_bytes: 132,
+                                disk_read_bytes: 0,
                                 write_bytes: 76,
                                 contract_events_size_bytes: 0,
                                 persistent_rent_ledger_bytes: 0,

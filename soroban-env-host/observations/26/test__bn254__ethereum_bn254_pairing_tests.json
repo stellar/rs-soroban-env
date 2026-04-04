@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call vec_new_from_slice(2)": "cpu:1958, mem:320, objs:-/2@aaa715ed",
   "   2 ret vec_new_from_slice -> Ok(Vec(obj#5))": "cpu:3047, mem:432, objs:-/3@5c979ef9",
   "   3 call vec_new_from_slice(2)": "cpu:5037, mem:880, objs:-/5@903a5612",
@@ -120,5 +120,5 @@
   " 118 call vec_len(Vec(obj#215))": "cpu:11205, mem:1136",
   " 119 ret vec_len -> Ok(U32(2))": "cpu:11327",
   " 120 ret bn254_multi_pairing_check -> Ok(True)": "cpu:14830305, mem:100612",
-  " 121 end": "cpu:14830305, mem:100612, prngs:-/-, objs:-/108@bc321c3f, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  " 121 end": "cpu:14830305, mem:100612, prngs:-/-, objs:-/108@bc321c3f, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }

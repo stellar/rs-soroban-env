@@ -1,5 +1,5 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-",
   "   1 call bytes_insert(Bytes(obj#1), U32(96), U32(0))": "cpu:2309, mem:192, objs:-/1@2142c5f5",
   "   2 ret bytes_insert -> Ok(Bytes(obj#3))": "cpu:3479, mem:385, objs:-/2@9a3f90d4",
   "   3 call bls12_381_g1_is_on_curve(Bytes(obj#3))": "",
@@ -92,5 +92,5 @@
   "  90 ret bls12_381_g1_is_on_curve -> Ok(True)": "cpu:258610",
   "  91 call bls12_381_g1_is_on_curve(Bytes(obj#127))": "cpu:263228, mem:12307, objs:-/64@b671ac46",
   "  92 ret bls12_381_g1_is_on_curve -> Ok(True)": "cpu:267254",
-  "  93 end": "cpu:267254, mem:12307, prngs:-/-, objs:-/64@b671ac46, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  93 end": "cpu:267254, mem:12307, prngs:-/-, objs:-/64@b671ac46, vm:-/-, evt:-, store:-/-, stk:-, auth:-/-"
 }
