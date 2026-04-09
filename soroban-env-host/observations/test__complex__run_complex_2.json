@@ -17,7 +17,7 @@
   "  15 call get_ledger_network_id()": "cpu:2947330, mem:4020752, vm:-/-",
   "  16 ret get_ledger_network_id -> Ok(Bytes(obj#19))": "cpu:2952603, mem:4020880, objs:-/10@e159b064",
   "  17 call get_ledger_version()": "cpu:2953099, mem:4020904, objs:1@7f18fa80/10@e159b064, stk:1@31469f88",
-  "  18 ret get_ledger_version -> Ok(U32(26))": "cpu:2953409",
+  "  18 ret get_ledger_version -> Ok(U32(27))": "cpu:2953409",
   "  19 call get_ledger_sequence()": "",
   "  20 ret get_ledger_sequence -> Ok(U32(1234))": "cpu:2953719",
   "  21 call get_ledger_timestamp()": "",
@@ -41,10 +41,10 @@
   "  39 ret symbol_new_from_slice -> Ok(Symbol(obj#33))": "cpu:2973026, mem:4021899, objs:6@e37e9bd8/17@82f590b9",
   "  40 call obj_cmp(Symbol(obj#33), Symbol(seq))": "cpu:2974311, mem:4022059",
   "  41 ret obj_cmp -> Ok(-1)": "cpu:2974477",
-  "  42 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:2974919, mem:4022139, objs:6@e37e9bd8/18@6d444c70",
-  "  43 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:2975415, mem:4022163, objs:7@929806d2/18@6d444c70, stk:1@8b608bf2",
-  "  44 ret put_contract_data -> Ok(Void)": "cpu:2980902, mem:4023393, store:-/3@705c76a9",
-  "  45 pop VM:2c0dcac5:go -> Ok(Void)": " vm:1114112@5da575dd/5@8d05851",
-  "  46 ret call -> Ok(Void)": " objs:-/18@6d444c70, vm:-/-, stk:-, auth:-/-",
-  "  47 end": "cpu:2980902, mem:4023393, prngs:-/-, objs:-/18@6d444c70, vm:-/-, evt:1@4403228c, store:-/3@705c76a9, foot:3@2f0e11c9, stk:-, auth:-/-"
+  "  42 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:2974919, mem:4022139, objs:6@e37e9bd8/18@149a6d91",
+  "  43 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:2975415, mem:4022163, objs:7@929806d2/18@149a6d91, stk:1@8b608bf2",
+  "  44 ret put_contract_data -> Ok(Void)": "cpu:2980902, mem:4023393, store:-/3@665b0f68",
+  "  45 pop VM:2c0dcac5:go -> Ok(Void)": " vm:1114112@82ec4bd4/5@8d05851",
+  "  46 ret call -> Ok(Void)": " objs:-/18@149a6d91, vm:-/-, stk:-, auth:-/-",
+  "  47 end": "cpu:2980902, mem:4023393, prngs:-/-, objs:-/18@149a6d91, vm:-/-, evt:1@4403228c, store:-/3@665b0f68, foot:3@2f0e11c9, stk:-, auth:-/-"
 }
