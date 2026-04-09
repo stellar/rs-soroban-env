@@ -36,12 +36,9 @@ wasmparser = "=0.116.1"
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]
 version = "=26.0.0"
-#git = "https://github.com/stellar/rs-stellar-xdr"
-#rev = "99c73b18ccd68bc3439be30801da6261b193d2da"
+git = "https://github.com/stellar/rs-stellar-xdr"
+rev = "f0ed902950d517ec3cc31d5af7c268e2f025d093"
 default-features = false
-# env should be pinned to next while the next protocol is in development. Switch to curr when it is updated.
-features = ["curr"]
-#features = ["next"]
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"

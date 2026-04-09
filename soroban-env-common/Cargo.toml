@@ -40,6 +40,8 @@ testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
 next = ["soroban-env-macros/next"]
 tracy = ["dep:tracy-client"]
 shallow-val-hash = []
+cap_0071 = ["stellar-xdr/cap_0071"]
+test_feature = ["stellar-xdr/test_feature"]
 
 [package.metadata.docs.rs]
 all-features = true

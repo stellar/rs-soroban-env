@@ -1828,6 +1828,11 @@ impl AccountAuthorizationTracker {
                     host.to_host_val(&address_creds.signature)?,
                     false,
                 ),
+                // TODO: Implement CAP-0071 delegate credentials
+                #[cfg(feature = "cap_0071")]
+                SorobanCredentials::AddressWithDelegates(_) => {
+                    unimplemented!("CAP-0071 AddressWithDelegates credentials")
+                }
             };
         Ok(Self {
             address,
