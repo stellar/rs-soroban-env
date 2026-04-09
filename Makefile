@@ -12,20 +12,6 @@ test:
 test-opt:
 	cargo hack --locked --each-feature test --profile test-opt
 
-MIN_PROTOCOL := 26
-MAX_PROTOCOL := 26
-
-test-all-protocols:
-	for i in $$(seq $(MIN_PROTOCOL) $$(($(MAX_PROTOCOL) + 1))); do \
-		if [ $$i -le $(MAX_PROTOCOL) ]; then \
-		  	echo "Testing protocol $$i for vCurr host build..."; \
-			TEST_PROTOCOL=$$i cargo hack test -p soroban-env-host --locked --features testutils; \
-			TEST_PROTOCOL=$$i cargo hack test -p soroban-simulation --locked --features testutils; \
-		fi; \
-		echo "Testing protocol $$i for vNext host build..."; \
-		TEST_PROTOCOL=$$i cargo hack test -p soroban-env-host --locked --features testutils,next; \
-		TEST_PROTOCOL=$$i cargo hack test -p soroban-simulation --locked --features testutils,next; \
-	done
 
 # Note: we use wasm32-unknown-unknown here for the workspace build, not
 # wasm32v1-none, because we are testing the ability to build the soroban host
@@ -58,9 +44,7 @@ regenerate-test-wasms:
 	make -C soroban-test-wasms regenerate-test-wasms
 
 reobserve-tests:
-	for i in $$(seq $(MIN_PROTOCOL) $(MAX_PROTOCOL)); do \
-		TEST_PROTOCOL=$$i UPDATE_OBSERVATIONS=1 cargo test --locked -p soroban-env-host --features testutils --profile test-opt; \
-	done
+	UPDATE_OBSERVATIONS=1 cargo test --locked -p soroban-env-host --features testutils --profile test-opt
 
 # Requires: `cargo install cargo-llvm-cov`
 coverage:

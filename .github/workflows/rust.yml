@@ -76,7 +76,6 @@ jobs:
     strategy:
       matrix:
         rust: [msrv, latest]
-        test-protocol: [26]
         sys:
         - os: ubuntu-latest
           target: wasm32-unknown-unknown
@@ -123,8 +122,6 @@ jobs:
       run: cargo hack --each-feature clippy --locked --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
       run: cargo hack --each-feature test --profile test-opt --locked --target ${{ matrix.sys.target }}
-      env:
-        TEST_PROTOCOL: ${{ matrix.test-protocol }}
 
   publish-dry-run:
     if: github.event_name == 'push' || startsWith(github.head_ref, 'release/')

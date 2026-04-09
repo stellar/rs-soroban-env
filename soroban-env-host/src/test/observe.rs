@@ -23,7 +23,7 @@ use crate::{
 use itertools::Itertools;
 use std::{cell::RefCell, collections::BTreeMap, env, fs::File, path::PathBuf, rc::Rc};
 
-fn full_path(protocol: u32, testname: &str) -> PathBuf {
+fn full_path(testname: &str) -> PathBuf {
     let testname = if let Some((_, rest)) = testname.split_once("::") {
         rest.to_string()
     } else {
@@ -38,7 +38,6 @@ fn full_path(protocol: u32, testname: &str) -> PathBuf {
             .join("soroban-env-host"),
     };
     root.join("observations")
-        .join(protocol.to_string())
         .join(filename)
         .with_extension("json")
 }
@@ -57,8 +56,8 @@ fn diff_line(last: &String, new: &String) -> String {
 
 #[cfg(all(not(feature = "next"), feature = "testutils"))]
 impl Observations {
-    fn load(protocol: u32, testname: &str) -> Self {
-        let path = full_path(protocol, testname);
+    fn load(testname: &str) -> Self {
+        let path = full_path(testname);
         let obs: BTreeMap<String, String> = if path.exists() {
             println!("reading {}", path.display());
             let file =
@@ -71,8 +70,8 @@ impl Observations {
         Self(obs)
     }
 
-    fn save(&self, protocol: u32, testname: &str) {
-        let path = full_path(protocol, testname);
+    fn save(&self, testname: &str) {
+        let path = full_path(testname);
         println!("writing {}", path.display());
         let file =
             File::create(&path).unwrap_or_else(|_| panic!("unable to create {}", path.display()));
@@ -88,13 +87,7 @@ impl Observations {
     // _not_ in update_observations mode (i.e. it's enforcing) it also calls
     // assert_eq! on the observations at this point, which will cause an
     // observed test to fail if there were differences from the old recording.
-    fn check(
-        old: &Observations,
-        new: &mut Observations,
-        protocol: u32,
-        name: &'static str,
-        tr: TraceRecord,
-    ) {
+    fn check(old: &Observations, new: &mut Observations, name: &'static str, tr: TraceRecord) {
         let mut disagreement: Option<(usize, String, String)> = None;
 
         if tr.event.is_begin() {
@@ -144,7 +137,7 @@ impl Observations {
                 }
             }
             if update_observations() {
-                new.save(protocol, &name);
+                new.save(&name);
             } else {
                 if let Some((i, old, new)) = disagreement {
                     assert_eq!(
@@ -166,13 +159,11 @@ pub(crate) struct ObservedHost {
     old_obs: Rc<RefCell<Observations>>,
     new_obs: Rc<RefCell<Observations>>,
     host: Host,
-    protocol: u32,
 }
 
 impl ObservedHost {
     #[cfg(any(feature = "next", not(feature = "testutils")))]
     pub(crate) fn new(testname: &'static str, host: Host) -> Self {
-        let protocol = 0;
         let old_obs = Rc::new(RefCell::new(Observations::default()));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
         Self {
@@ -180,21 +171,18 @@ impl ObservedHost {
             new_obs,
             testname,
             host,
-            protocol,
         }
     }
 
     #[cfg(all(not(feature = "next"), feature = "testutils"))]
     pub(crate) fn new(testname: &'static str, host: Host) -> Self {
-        let protocol = Host::current_test_protocol();
-        let old_obs = Rc::new(RefCell::new(Observations::load(protocol, testname)));
+        let old_obs = Rc::new(RefCell::new(Observations::load(testname)));
         let new_obs = Rc::new(RefCell::new(Observations::default()));
         let oh = Self {
             old_obs,
             new_obs,
             testname,
             host,
-            protocol,
         };
         oh.host
             .set_trace_hook(Some(oh.make_obs_hook()))
@@ -209,16 +197,9 @@ impl ObservedHost {
         let old_obs = self.old_obs.clone();
         let new_obs = self.new_obs.clone();
         let testname = self.testname;
-        let protocol = self.protocol;
         Rc::new(move |host, evt| {
             let tr = TraceRecord::new(host, evt).expect("observing host");
-            Observations::check(
-                &old_obs.borrow(),
-                &mut new_obs.borrow_mut(),
-                protocol,
-                testname,
-                tr,
-            );
+            Observations::check(&old_obs.borrow(), &mut new_obs.borrow_mut(), testname, tr);
             Ok(())
         })
     }
