@@ -1,7 +1,6 @@
 use crate::FuncEmitter;
 use soroban_env_common::xdr::{Limits, ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion, WriteXdr};
-use std::str::FromStr;
-use std::{borrow::Cow, collections::BTreeMap, env};
+use std::{borrow::Cow, collections::BTreeMap};
 #[cfg(feature = "adversarial")]
 use wasm_encoder::StartSection;
 use wasm_encoder::{
@@ -127,15 +126,10 @@ impl ModEmitter {
         )
     }
 
-    /// Calls [`Self::add_protocol_version_meta`] with a number specified by
-    /// either the environment variable `TEST_PROTOCOL`, or the value of
-    /// [`soroban_env_common::meta::INTERFACE_VERSION`] if the environment
-    /// variable is not set.
+    /// Calls [`Self::add_protocol_version_meta`] with the value of
+    /// [`soroban_env_common::meta::INTERFACE_VERSION`].
     pub fn add_test_protocol_version_meta(&mut self) -> &mut Self {
-        let protocol_version = env::var("TEST_PROTOCOL")
-            .map(|v| u32::from_str(&v).unwrap())
-            .unwrap_or(soroban_env_common::meta::INTERFACE_VERSION.protocol);
-        self.add_protocol_version_meta(protocol_version)
+        self.add_protocol_version_meta(soroban_env_common::meta::INTERFACE_VERSION.protocol)
     }
 
     /// Creates an empty `ModEmitter`, which does not even have a

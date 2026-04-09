@@ -93,9 +93,6 @@ pub struct CoverageScoreboard {
     pub vm_to_vm_calls: usize,
 }
 
-// The soroban 26.x host only supports protocol 26 and later.
-pub(crate) const MIN_LEDGER_PROTOCOL_VERSION: u32 = 26;
-
 #[derive(Clone, Default)]
 struct HostImpl {
     module_cache: RefCell<Option<ModuleCache>>,
@@ -575,7 +572,7 @@ impl Host {
         // with the new VM and thereby (subtly!) replaying its execution costs
         // wrong.
         #[cfg(not(test))]
-        if proto < MIN_LEDGER_PROTOCOL_VERSION {
+        if proto < meta::INTERFACE_VERSION.protocol {
             return Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
