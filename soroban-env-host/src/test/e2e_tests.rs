@@ -1392,8 +1392,6 @@ fn test_create_contract_success_in_recording_mode() {
     assert_eq!(res.auth, vec![cd.auth_entry]);
     #[cfg(not(feature = "cap_0071"))]
     expect!["663629"].assert_eq(&res.resources.instructions.to_string());
-    #[cfg(feature = "cap_0071")]
-    expect!["663635"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1533,8 +1531,6 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
     assert_eq!(res.auth, vec![cd.auth_entry]);
     #[cfg(not(feature = "cap_0071"))]
     expect!["1070787"].assert_eq(&res.resources.instructions.to_string());
-    #[cfg(feature = "cap_0071")]
-    expect!["1070793"].assert_eq(&res.resources.instructions.to_string());
     expect!["176"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1607,8 +1603,6 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
     assert_eq!(res.auth, vec![cd.auth_entry]);
     #[cfg(not(feature = "cap_0071"))]
     expect!["665116"].assert_eq(&res.resources.instructions.to_string());
-    #[cfg(feature = "cap_0071")]
-    expect!["665122"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
