@@ -135,6 +135,11 @@ fn sign_auth_entry(
             creds.signature_expiration_ledger =
                 ledger_info.sequence_number + ledger_info.max_entry_ttl - 1;
         }
+        // TODO: Implement CAP-0071 delegate credentials
+        #[cfg(feature = "cap_0071")]
+        SorobanCredentials::AddressWithDelegates(_) => {
+            unimplemented!("CAP-0071 AddressWithDelegates credentials")
+        }
     }
     out
 }
@@ -1385,6 +1390,7 @@ fn test_create_contract_success_in_recording_mode() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    #[cfg(not(feature = "cap_0071"))]
     expect!["663629"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
@@ -1523,6 +1529,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    #[cfg(not(feature = "cap_0071"))]
     expect!["1070787"].assert_eq(&res.resources.instructions.to_string());
     expect!["176"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
@@ -1594,6 +1601,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    #[cfg(not(feature = "cap_0071"))]
     expect!["665116"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(

@@ -598,6 +598,11 @@ fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
             address_creds.signature = ScVal::Void;
         }
         SorobanCredentials::SourceAccount => {}
+        // TODO: Implement CAP-0071 delegate credentials
+        #[cfg(feature = "cap_0071")]
+        SorobanCredentials::AddressWithDelegates(_) => {
+            unimplemented!("CAP-0071 AddressWithDelegates credentials")
+        }
     }
 }
 

@@ -258,6 +258,9 @@ impl_declared_size_type!(ContractDataDurability, 4);
 impl_declared_size_type!(ExtensionPoint, 0);
 
 impl_declared_size_type!(ScContractInstance, 64);
+#[cfg(feature = "cap_0071")]
+impl_declared_size_type!(SorobanAuthorizationEntry, 320);
+#[cfg(not(feature = "cap_0071"))]
 impl_declared_size_type!(SorobanAuthorizationEntry, 296);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 168);
 impl_declared_size_type!(SorobanAuthorizedFunction, 144);
@@ -551,6 +554,9 @@ mod test {
         expect!["4"].assert_eq(size_of::<ContractDataDurability>().to_string().as_str());
         expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ScContractInstance>().to_string().as_str());
+        #[cfg(feature = "cap_0071")]
+        expect!["320"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
+        #[cfg(not(feature = "cap_0071"))]
         expect!["296"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
         expect!["168"].assert_eq(
             size_of::<SorobanAuthorizedInvocation>()

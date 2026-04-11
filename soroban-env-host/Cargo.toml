@@ -112,6 +112,8 @@ bench = ["testutils"]
 # When bumping the major version of any crates in this repo all the code
 # guarded by this feature should be enabled unconditionally.
 unstable-next-api = []
+cap_0071 = ["soroban-env-common/cap_0071"]
+test_feature = ["soroban-env-common/test_feature"]
 
 [[bench]]
 required-features = ["bench"]

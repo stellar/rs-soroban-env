@@ -16,6 +16,7 @@ publish = true
 [features]
 testutils = ["soroban-env-host/testutils"]
 unstable-next-api = ["soroban-env-host/unstable-next-api"]
+cap_0071 = ["soroban-env-host/cap_0071"]
 
 [dependencies]
 anyhow = { version = "1.0.75", features = [] }
