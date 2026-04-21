@@ -95,7 +95,11 @@ ignore = [
     # advisory, this shouldn't impact us as we don't support ARM, and
     # we link `keccak` transitively through `sha3`.
     # This should be removed after `sha3` update to >10.8 version.
-    "RUSTSEC-2026-0012"
+    "RUSTSEC-2026-0012",
+    # Ignores 'Rand is unsound with a custom logger using rand::rng()' advisory.
+    # `rand` 0.8.5 is only vulnerable when its `log` + `thread_rng` path is
+    # enabled with a custom logger, which we don't use
+    "RUSTSEC-2026-0097"
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
