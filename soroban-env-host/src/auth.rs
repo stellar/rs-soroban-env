@@ -2676,7 +2676,7 @@ impl AccountAuthorizationTracker {
             .try_borrow_authentication_stack_mut(host)?
             .push(AuthenticationFrame {
                 delegated_auth_tracker: self.credentials.delegated_auth_tracker_rc(),
-                signature_payload: signature_payload.clone(),
+                signature_payload,
                 context,
             });
         let auth_res = match sc_addr {
