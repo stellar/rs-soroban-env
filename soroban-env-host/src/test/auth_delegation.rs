@@ -3,7 +3,7 @@ use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::Compare;
-use soroban_test_wasms::DELEGATED_AUTH_TEST_CONTRACT;
+use soroban_test_wasms::{AUTH_TEST_CONTRACT, DELEGATED_AUTH_TEST_CONTRACT};
 
 use crate::builtin_contracts::account_contract::{
     AuthorizationContext, ContractAuthorizationContext,
@@ -73,8 +73,10 @@ struct AuthBuilder {
     // Various flags that allow building incorrect or customized auth entries
     // for the error testing.
     use_preimage_with_address: Option<bool>,
+    preimage_address_override: Option<Address>,
     force_credential_with_delegates: bool,
     shuffle_builtin_delegated_signers: bool,
+    extra_delegates: Vec<SorobanDelegateSignature>,
 }
 
 impl AuthBuilder {
@@ -85,9 +87,11 @@ impl AuthBuilder {
             signatures: vec![],
             has_builtin_delegated_signers: false,
             use_preimage_with_address: None,
+            preimage_address_override: None,
             force_credential_with_delegates: false,
             shuffle_builtin_delegated_signers: false,
             preserve_signature_order: false,
+            extra_delegates: vec![],
         }
     }
 
@@ -222,8 +226,23 @@ impl AuthBuilder {
         self
     }
 
+    fn force_preimage_address(mut self, address: &Address) -> Self {
+        self.preimage_address_override = Some(address.clone());
+        self
+    }
+
     fn force_credential_with_delegates(mut self) -> Self {
         self.force_credential_with_delegates = true;
+        self
+    }
+
+    fn add_unused_delegated_signer(mut self, address: &Address) -> Self {
+        self.has_builtin_delegated_signers = true;
+        self.extra_delegates.push(SorobanDelegateSignature {
+            address: address.to_sc_address().unwrap(),
+            signature: ScVal::Void,
+            nested_delegates: vec![].try_into().unwrap(),
+        });
         self
     }
 
@@ -290,7 +309,12 @@ impl AuthBuilder {
                 HashIdPreimageSorobanAuthorizationWithAddress {
                     network_id,
                     invocation: root_invocation.clone(),
-                    address: self.address.to_sc_address().unwrap(),
+                    address: self
+                        .preimage_address_override
+                        .as_ref()
+                        .unwrap_or(&self.address)
+                        .to_sc_address()
+                        .unwrap(),
                     nonce,
                     signature_expiration_ledger,
                 },
@@ -360,6 +384,7 @@ impl AuthBuilder {
                 &mut builtin_delegated_signers,
             ));
         }
+        builtin_delegated_signers.extend(self.extra_delegates.iter().cloned());
         let mut signature_vals: Vec<Val> = signatures
             .iter()
             .map(|s| s.try_into_val(&self.host).unwrap())
@@ -561,6 +586,16 @@ fn test_credential_with_delegates_uses_preimage_with_address() {
                 .force_preimage_with_address(false)
                 .expect_valid_payload()
                 .sign_builtin_delegated(test.new_auth_builder(2))
+        ),
+        (ScErrorType::Auth, ScErrorCode::InvalidAction)
+    ));
+    // Delegated signer signatures must be bound to the top-level account
+    // address, not to the delegate address.
+    assert!(HostError::result_matches_err(
+        test.call_auth_fn(
+            test.new_auth_builder(1)
+                .force_preimage_address(&test.contracts[2])
+                .sign_builtin_delegated(test.new_auth_builder(2).expect_valid_payload())
         ),
         (ScErrorType::Auth, ScErrorCode::InvalidAction)
     ));
@@ -1037,6 +1072,57 @@ fn test_delegate_account_auth_is_not_reused() {
 }
 
 #[test]
+fn test_multiple_auth_entries_with_delegates_for_same_account() {
+    let test = DelegatedAuthTest::setup(4);
+    test.update_delegated_signers(1, &[2, 3]);
+    let auth_contract: Address = test
+        .host
+        .register_test_contract_wasm(AUTH_TEST_CONTRACT)
+        .try_into_val(&test.host)
+        .unwrap();
+    let child_contract: Address = test
+        .host
+        .register_test_contract_wasm(AUTH_TEST_CONTRACT)
+        .try_into_val(&test.host)
+        .unwrap();
+
+    // Prepare 2 auth entries: for `order_fn`` and for `do_auth``. `order_fn`
+    // calls `do_auth` first, so 2 detached auth entries are needed, which is
+    // what we want to test here.
+    let mut auth_entries = test
+        .new_auth_builder(1)
+        .sign_builtin_delegated(test.new_auth_builder(3).expect_valid_payload())
+        .build_auth_entries(
+            &child_contract,
+            "do_auth",
+            &[
+                ScVal::Address(test.contracts[1].to_sc_address().unwrap()),
+                10_u32.into(),
+            ],
+        );
+    auth_entries.extend(
+        test.new_auth_builder(1)
+            .sign_builtin_delegated(test.new_auth_builder(2).expect_valid_payload())
+            .build_auth_entries(
+                &auth_contract,
+                "order_fn",
+                &[
+                    ScVal::Address(test.contracts[1].to_sc_address().unwrap()),
+                    ScVal::Address(child_contract.to_sc_address().unwrap()),
+                ],
+            ),
+    );
+    test.host.set_authorization_entries(auth_entries).unwrap();
+
+    let res = test.host.call(
+        auth_contract.as_object(),
+        Symbol::try_from_val(&test.host, &"order_fn").unwrap(),
+        test_vec![&test.host, &test.contracts[1], &child_contract].into(),
+    );
+    assert!(res.is_ok());
+}
+
+#[test]
 fn test_builtin_delegate_can_be_repeated_at_different_levels() {
     let test = DelegatedAuthTest::setup(5);
     test.update_delegated_signers(1, &[2, 3, 4]);
@@ -1081,6 +1167,16 @@ fn test_delegated_signers_getter() {
             test.new_auth_builder(1)
                 .force_credential_with_delegates()
                 .expect_delegated_signers(&[])
+        )
+        .is_ok());
+    // Extra delegate credentials are user inputs: the getter exposes them, but
+    // the host doesn't require an account contract to consume every one.
+    assert!(test
+        .call_auth_fn(
+            test.new_auth_builder(1)
+                .add_unused_delegated_signer(&test.contracts[2])
+                .expect_valid_payload()
+                .expect_delegated_signers(&[&test.contracts[2]])
         )
         .is_ok());
     // Some valid delegated signers at different tree levels
@@ -1487,7 +1583,7 @@ fn test_failed_nested_auth_does_not_change_current_auth_frame() {
     test.update_delegated_signers(1, &[2, 4]);
     test.update_delegated_signers(2, &[3]);
     // Make sure that after gracefully handling an auth failure in a nested call
-    // we can still successfully authenticated a delegated signer (i.e. that 
+    // we can still successfully authenticated a delegated signer (i.e. that
     // failed frames have no impact on the current frame).
     let res = test.call_auth_fn(
         test.new_auth_builder(1)
