@@ -484,7 +484,7 @@ fn test_simulate_invoke_contract_with_auth() {
                 root_invocation: expected_auth_tree.clone(),
             },
             SorobanAuthorizationEntry {
-                credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                credentials: SorobanCredentials::AddressV2(SorobanAddressCredentials {
                     address: other_account_address.clone(),
                     nonce: other_account_nonce,
                     signature_expiration_ledger: 0,

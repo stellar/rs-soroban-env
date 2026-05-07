@@ -572,7 +572,7 @@ impl RecordedAuthPayload {
 
         match (self.address, self.nonce) {
             (Some(address), Some(nonce)) => Ok(SorobanAuthorizationEntry {
-                credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                credentials: SorobanCredentials::AddressV2(SorobanAddressCredentials {
                     address,
                     nonce,
                     signature_expiration_ledger: 0,

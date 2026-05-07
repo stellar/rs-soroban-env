@@ -249,7 +249,7 @@ pub fn create_contract_auth_for_address(
     wasm: &[u8],
 ) -> SorobanAuthorizationEntry {
     let credentials = if let Some((address, nonce)) = address_and_nonce {
-        SorobanCredentials::Address(SorobanAddressCredentials {
+        SorobanCredentials::AddressV2(SorobanAddressCredentials {
             address,
             nonce,
             signature_expiration_ledger: 0,
