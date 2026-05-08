@@ -92,7 +92,7 @@ impl StellarAssetContractTest {
         let issuer_id = signing_key_to_account_id(&self.issuer_key);
         self.create_account(
             &issuer_id,
-            vec![(&self.issuer_key, 100)],
+            &[(&self.issuer_key, 100)],
             10_000_000,
             1,
             [1, 0, 0, 0],
@@ -112,12 +112,12 @@ impl StellarAssetContractTest {
     fn create_default_account(&self, user: &TestSigner) {
         let signers = match user {
             TestSigner::AccountInvoker(_) => vec![],
-            TestSigner::Account(acc_signer) => acc_signer.signers.iter().map(|s| (*s, 1)).collect(),
+            TestSigner::Account(acc_signer) => acc_signer.signers.iter().map(|s| (s, 1)).collect(),
             TestSigner::AccountContract(_) | TestSigner::ContractInvoker(_) => unreachable!(),
         };
         self.create_account(
             &user.account_id(),
-            signers,
+            &signers,
             0,
             1,
             [1, 0, 0, 0],
@@ -157,7 +157,7 @@ impl StellarAssetContractTest {
     fn create_account(
         &self,
         account_id: &AccountId,
-        signers: Vec<(&SigningKey, u32)>,
+        signers: &[(&SigningKey, u32)],
         balance: i64,
         num_sub_entries: u32,
         thresholds: [u8; 4],
@@ -325,14 +325,16 @@ impl StellarAssetContractTest {
     /// Useful for tests that only care about the balance.
     fn create_account_with_balance(&self, user: &TestSigner, balance: i64) {
         let signers = match user {
-            TestSigner::Account(acc_signer) => {
-                acc_signer.signers.iter().map(|s| (*s, 100)).collect()
-            }
+            TestSigner::Account(acc_signer) => acc_signer
+                .signers
+                .iter()
+                .map(|s| (s, 100))
+                .collect::<Vec<_>>(),
             _ => vec![],
         };
         self.create_account(
             &user.account_id(),
-            signers,
+            &signers,
             balance,
             0,
             [1, 0, 0, 0],
@@ -381,7 +383,7 @@ fn test_stellar_asset_contract_smart_roundtrip() {
     let account_id = signing_key_to_account_id(&test.user_key);
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         100_000_000,
         1,
         [1, 0, 0, 0],
@@ -461,7 +463,7 @@ fn test_asset_init(testname: &'static str, asset_code: &[u8]) {
     let account_id = signing_key_to_account_id(&test.user_key);
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         10_000_000,
         1,
         [1, 0, 0, 0],
@@ -902,7 +904,7 @@ fn test_native_self_transfer() {
     let user_id = user.account_id();
     test.create_account(
         &user_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         100_000_000,
         0,
         [1, 0, 0, 0],
@@ -1478,7 +1480,7 @@ fn test_cannot_burn_native() {
 
     test.create_account(
         &user_acc_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         100_000_000,
         1,
         [1, 0, 0, 0],
@@ -2019,7 +2021,7 @@ fn test_account_balance() {
 
     test.create_account(
         &user_acc_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         100_000_000,
         1,
         [1, 0, 0, 0],
@@ -2044,7 +2046,7 @@ fn test_trustline_auth() {
 
     test.create_account(
         &admin_acc_id,
-        vec![(&test.issuer_key, 100)],
+        &[(&test.issuer_key, 100)],
         10_000_000,
         1,
         [1, 0, 0, 0],
@@ -2054,7 +2056,7 @@ fn test_trustline_auth() {
     );
     test.create_account(
         &user_acc_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         10_000_000,
         1,
         [1, 0, 0, 0],
@@ -2107,7 +2109,7 @@ fn test_trustline_auth() {
     // Add RevocableFlag to the issuer
     test.create_account(
         &admin_acc_id,
-        vec![(&test.issuer_key, 100)],
+        &[(&test.issuer_key, 100)],
         10_000_000,
         1,
         [1, 0, 0, 0],
@@ -2203,7 +2205,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
 
     test.create_account(
         &admin_acc,
-        vec![(&test.issuer_key, 100)],
+        &[(&test.issuer_key, 100)],
         10_000_000,
         1,
         [1, 0, 0, 0],
@@ -2213,7 +2215,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
     );
     test.create_account(
         &user_acc,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         10_000_000,
         1,
         [1, 0, 0, 0],
@@ -2634,7 +2636,7 @@ fn test_auth_rejected_for_bad_signature_type() {
     // Use incorrectly typed value for the signature.
     let admin_bad_val_signer = TestSigner::AccountContract(AccountContractSigner {
         address: admin.address(&test.host),
-        sign: Box::new(|_| Val::VOID.into()),
+        sign: Rc::new(|_| Val::VOID.into()),
     });
     authorize_single_invocation(
         &test.host,
@@ -2663,7 +2665,7 @@ fn test_classic_account_multisig_auth() {
     let account_id = signing_key_to_account_id(&test.user_key);
     test.create_account(
         &account_id,
-        vec![
+        &[
             (&test.user_key_2, u32::MAX),
             (&test.user_key_3, 60),
             (&test.user_key_4, 59),
@@ -2841,10 +2843,10 @@ fn test_classic_account_multisig_auth() {
 
     // Failure: out of order signers
     let mut out_of_order_signers = vec![
-        &test.user_key,
-        &test.user_key_2,
-        &test.user_key_3,
-        &test.user_key_4,
+        test.user_key,
+        test.user_key_2,
+        test.user_key_3,
+        test.user_key_4,
     ];
     out_of_order_signers.sort_by_key(|k| *k.verifying_key().as_bytes());
     out_of_order_signers.swap(1, 2);
@@ -2957,7 +2959,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries(
         TestSigner::account_with_multisig(&new_balance_acc, vec![&new_balance_key]);
     test.create_account(
         &new_balance_acc,
-        vec![(&new_balance_key, 100)],
+        &[(&new_balance_key, 100)],
         10_000_000,
         0,
         [1, 0, 0, 0],
@@ -3010,7 +3012,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries(
         TestSigner::account_with_multisig(&large_balance_acc, vec![&large_balance_key]);
     test.create_account(
         &large_balance_acc,
-        vec![(&large_balance_key, 100)],
+        &[(&large_balance_key, 100)],
         i64::MAX,
         0,
         [1, 0, 0, 0],
@@ -3057,7 +3059,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_simple() {
     // Account with no liabilities/sponsorships.
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         100_000_000,
         5,
         [1, 0, 0, 0],
@@ -3084,7 +3086,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_with_liabilities() {
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         1_000_000_000,
         8,
         [1, 0, 0, 0],
@@ -3113,7 +3115,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_with_sponsorships() {
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         100_000_000,
         5,
         [1, 0, 0, 0],
@@ -3141,7 +3143,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_with_sponsorships_and_
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         1_000_000_000,
         5,
         [1, 0, 0, 0],
@@ -3170,7 +3172,7 @@ fn test_stellar_asset_contract_classic_balance_boundaries_with_large_values() {
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         i64::MAX - i64::MAX / 4,
         u32::MAX,
         [1, 0, 0, 0],
@@ -3204,7 +3206,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         10_000_000,
         0,
         [1, 0, 0, 0],
@@ -3217,7 +3219,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     let user2 = TestSigner::account_with_multisig(&account_id2, vec![&test.user_key_2]);
     test.create_account(
         &account_id2,
-        vec![(&test.user_key_2, 100)],
+        &[(&test.user_key_2, 100)],
         10_000_000,
         0,
         [1, 0, 0, 0],
@@ -3230,7 +3232,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     let issuer = TestSigner::account_with_multisig(&issuer_id, vec![&test.issuer_key]);
     test.create_account(
         &issuer_id,
-        vec![(&test.issuer_key, 100)],
+        &[(&test.issuer_key, 100)],
         10_000_000,
         0,
         [1, 0, 0, 0],
@@ -3430,7 +3432,7 @@ fn test_transfer_without_destination_trustline_fails() {
     let source = TestSigner::account(&test.user_key);
     test.create_account(
         &source.account_id(),
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         100_000_000,
         1,
         [1, 0, 0, 0],
@@ -3465,7 +3467,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     let user = TestSigner::account(&test.user_key);
     test.create_account(
         &account_id,
-        vec![(&test.user_key, 100)],
+        &[(&test.user_key, 100)],
         10_000_000,
         0,
         [1, 0, 0, 0],
@@ -3628,8 +3630,8 @@ fn test_custom_account_auth() {
                 ),
             ),
             resources: SubInvocationResources {
-                instructions: 829360,
-                mem_bytes: 1216862,
+                instructions: 831444,
+                mem_bytes: 1217566,
                 disk_read_entries: 1,
                 memory_read_entries: 5,
                 write_entries: 2,
@@ -3654,8 +3656,8 @@ fn test_custom_account_auth() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 713281,
-                        mem_bytes: 1197596,
+                        instructions: 713295,
+                        mem_bytes: 1197652,
                         disk_read_entries: 0,
                         memory_read_entries: 3,
                         write_entries: 0,
@@ -3872,7 +3874,7 @@ fn test_sac_reentry_is_not_allowed() {
 
     let account_signer = TestSigner::AccountContract(AccountContractSigner {
         address: account_contract_addr.clone(),
-        sign: Box::new(|_| Val::VOID.into()),
+        sign: Rc::new(|_| Val::VOID.into()),
     });
     test.host
         .call(
@@ -4026,7 +4028,7 @@ mod cap_73 {
         let user = TestSigner::account(&test.user_key);
         test.create_account(
             &user.account_id(),
-            vec![(&test.user_key, 100)],
+            &[(&test.user_key, 100)],
             20_000_000,
             1, // Already has 1 sub-entry
             [1, 0, 0, 0],
@@ -4112,7 +4114,7 @@ mod cap_73 {
         // Create account at the sub-entry limit (1000)
         test.create_account(
             &user.account_id(),
-            vec![(&test.user_key, 100)],
+            &[(&test.user_key, 100)],
             100_000_000_000,
             1000, // At the limit
             [1, 0, 0, 0],
@@ -4140,7 +4142,7 @@ mod cap_73 {
         let issuer_id = signing_key_to_account_id(&test.issuer_key);
         test.create_account(
             &issuer_id,
-            vec![(&test.issuer_key, 100)],
+            &[(&test.issuer_key, 100)],
             10_000_000,
             1,
             [1, 0, 0, 0],

@@ -23,9 +23,10 @@ use crate::{
         AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable,
         ContractId, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
         DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryType,
-        LedgerFootprint, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr,
-        ScAddress, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
+        HashIdPreimageSorobanAuthorizationWithAddress, HostFunction, InvokeContractArgs,
+        LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
+        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
         SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedInvocation,
         SorobanCredentials, SorobanResources, TtlEntry, Uint256, WriteXdr,
     },
@@ -105,6 +106,18 @@ fn u32_sc_val(v: u32) -> ScVal {
     ScVal::U32(v)
 }
 
+fn sign_auth_payload(
+    dummy_host: &Host,
+    signers: &[TestSigner],
+    address: &ScAddress,
+    payload_preimage: HashIdPreimage,
+) -> ScVal {
+    let signature_payload: [u8; 32] =
+        Sha256::digest(&payload_preimage.to_xdr(Limits::none()).unwrap()).into();
+    let signer = signers.iter().find(|s| s.sc_address() == *address).unwrap();
+    signer.sign(dummy_host, &signature_payload)
+}
+
 fn sign_auth_entry(
     dummy_host: &Host,
     ledger_info: &LedgerInfo,
@@ -112,36 +125,80 @@ fn sign_auth_entry(
     auth_entry: SorobanAuthorizationEntry,
 ) -> SorobanAuthorizationEntry {
     let mut out = auth_entry;
+    let signature_expiration_ledger = ledger_info.sequence_number + ledger_info.max_entry_ttl - 1;
+    let network_id = ledger_info.network_id.try_into().unwrap();
+    let root_invocation = out.root_invocation.clone();
 
     match &mut out.credentials {
         SorobanCredentials::SourceAccount => {}
         SorobanCredentials::Address(creds) => {
-            let signature_payload_preimage =
+            creds.signature = sign_auth_payload(
+                dummy_host,
+                signers,
+                &creds.address,
                 HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
-                    network_id: ledger_info.network_id.try_into().unwrap(),
-                    invocation: out.root_invocation.clone(),
+                    network_id,
+                    invocation: root_invocation.clone(),
                     nonce: creds.nonce,
-                    signature_expiration_ledger: ledger_info.sequence_number
-                        + ledger_info.max_entry_ttl
-                        - 1,
-                });
-            let signature_payload: [u8; 32] =
-                Sha256::digest(&signature_payload_preimage.to_xdr(Limits::none()).unwrap()).into();
-            let signer = signers
-                .iter()
-                .find(|s| s.sc_address() == creds.address)
-                .unwrap();
-            creds.signature = signer.sign(&dummy_host, &signature_payload);
-            creds.signature_expiration_ledger =
-                ledger_info.sequence_number + ledger_info.max_entry_ttl - 1;
+                    signature_expiration_ledger,
+                }),
+            );
+            creds.signature_expiration_ledger = signature_expiration_ledger;
         }
-        // TODO: Implement CAP-0071 delegate credentials
-        #[cfg(feature = "cap_0071")]
-        SorobanCredentials::AddressWithDelegates(_) => {
-            unimplemented!("CAP-0071 AddressWithDelegates credentials")
+        SorobanCredentials::AddressV2(creds) => {
+            creds.signature = sign_auth_payload(
+                dummy_host,
+                signers,
+                &creds.address,
+                HashIdPreimage::SorobanAuthorizationWithAddress(
+                    HashIdPreimageSorobanAuthorizationWithAddress {
+                        address: creds.address.clone(),
+                        network_id,
+                        invocation: root_invocation.clone(),
+                        nonce: creds.nonce,
+                        signature_expiration_ledger,
+                    },
+                ),
+            );
+            creds.signature_expiration_ledger = signature_expiration_ledger;
+        }
+        SorobanCredentials::AddressWithDelegates(creds) => {
+            creds.address_credentials.signature = sign_auth_payload(
+                dummy_host,
+                signers,
+                &creds.address_credentials.address,
+                HashIdPreimage::SorobanAuthorizationWithAddress(
+                    HashIdPreimageSorobanAuthorizationWithAddress {
+                        network_id,
+                        address: creds.address_credentials.address.clone(),
+                        invocation: root_invocation,
+                        nonce: creds.address_credentials.nonce,
+                        signature_expiration_ledger,
+                    },
+                ),
+            );
+            creds.address_credentials.signature_expiration_ledger = signature_expiration_ledger;
         }
     }
     out
+}
+
+fn nonce_key(address: &ScAddress, nonce: i64) -> LedgerKey {
+    LedgerKey::ContractData(LedgerKeyContractData {
+        contract: address.clone(),
+        key: ScVal::LedgerKeyNonce(ScNonceKey { nonce }),
+        durability: ContractDataDurability::Temporary,
+    })
+}
+
+fn nonce_entry(address: &ScAddress, nonce: i64) -> LedgerEntry {
+    ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
+        ext: ExtensionPoint::V0,
+        contract: address.clone(),
+        key: ScVal::LedgerKeyNonce(ScNonceKey { nonce }),
+        durability: ContractDataDurability::Temporary,
+        val: ScVal::Void,
+    }))
 }
 
 impl PartialEq<Self> for HostError {
@@ -1390,8 +1447,7 @@ fn test_create_contract_success_in_recording_mode() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    #[cfg(not(feature = "cap_0071"))]
-    expect!["663629"].assert_eq(&res.resources.instructions.to_string());
+    expect!["663637"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1529,8 +1585,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    #[cfg(not(feature = "cap_0071"))]
-    expect!["1070787"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1070795"].assert_eq(&res.resources.instructions.to_string());
     expect!["176"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1601,8 +1656,7 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    #[cfg(not(feature = "cap_0071"))]
-    expect!["665116"].assert_eq(&res.resources.instructions.to_string());
+    expect!["665138"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -3332,24 +3386,6 @@ fn test_create_contract_authorized_by_custom_account() {
 mod nonce_collision_tests {
     use super::*;
 
-    fn nonce_key(address: &ScAddress, nonce: i64) -> LedgerKey {
-        LedgerKey::ContractData(LedgerKeyContractData {
-            contract: address.clone(),
-            key: ScVal::LedgerKeyNonce(ScNonceKey { nonce }),
-            durability: ContractDataDurability::Temporary,
-        })
-    }
-
-    fn nonce_entry(address: &ScAddress, nonce: i64) -> LedgerEntry {
-        ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
-            ext: ExtensionPoint::V0,
-            contract: address.clone(),
-            key: ScVal::LedgerKeyNonce(ScNonceKey { nonce }),
-            durability: ContractDataDurability::Temporary,
-            val: ScVal::Void,
-        }))
-    }
-
     fn account_key(account_id: &AccountId) -> LedgerKey {
         LedgerKey::Account(crate::xdr::LedgerKeyAccount {
             account_id: account_id.clone(),
@@ -3450,5 +3486,305 @@ mod nonce_collision_tests {
 
         // Should succeed because auth uses a different nonce
         assert!(res.invoke_result.is_ok());
+    }
+}
+
+mod delegated_auth_tests {
+    use super::*;
+    use crate::xdr::{
+        ClaimableBalanceId, MuxedEd25519Account, PoolId, ScContractInstance, ScMap,
+        SorobanAddressCredentialsWithDelegates, SorobanDelegateSignature, Uint256,
+    };
+    use soroban_test_wasms::DELEGATED_AUTH_TEST_CONTRACT;
+
+    fn delegated_signer_key(delegate: &ScAddress) -> ScVal {
+        ScVal::Vec(Some(
+            vec![
+                ScVal::Symbol("DelegatedSigner".try_into().unwrap()),
+                ScVal::Address(delegate.clone()),
+            ]
+            .try_into()
+            .unwrap(),
+        ))
+    }
+
+    fn builtin_delegated_signature(addr: &ScAddress) -> ScVal {
+        ScVal::Vec(Some(
+            vec![
+                ScVal::Symbol("BuiltinDelegated".try_into().unwrap()),
+                ScVal::Address(addr.clone()),
+            ]
+            .try_into()
+            .unwrap(),
+        ))
+    }
+
+    fn payload_signature(payload: &[u8; 32]) -> ScVal {
+        ScVal::Vec(Some(
+            vec![
+                ScVal::Symbol("Payload".try_into().unwrap()),
+                ScVal::Bytes(payload.to_vec().try_into().unwrap()),
+            ]
+            .try_into()
+            .unwrap(),
+        ))
+    }
+
+    fn contract_instance_entry_with_delegated_signer(
+        contract: &ScAddress,
+        wasm: &[u8],
+        delegate: &ScAddress,
+    ) -> LedgerEntry {
+        let storage =
+            ScMap::sorted_from([(delegated_signer_key(delegate), ScVal::Bool(true))]).unwrap();
+        ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
+            ext: ExtensionPoint::V0,
+            contract: contract.clone(),
+            key: ScVal::LedgerKeyContractInstance,
+            durability: ContractDataDurability::Persistent,
+            val: ScVal::ContractInstance(ScContractInstance {
+                executable: ContractExecutable::Wasm(get_wasm_hash(wasm).try_into().unwrap()),
+                storage: Some(storage),
+            }),
+        }))
+    }
+
+    struct RunOpts {
+        delegate_payload_override: Option<[u8; 32]>,
+        delegate_address_override: Option<ScAddress>,
+        nonce: i64,
+        expiration_offset: i32,
+        pre_existing_nonce: bool,
+        use_delegate_contract_setup: bool,
+    }
+
+    impl Default for RunOpts {
+        fn default() -> Self {
+            Self {
+                delegate_payload_override: None,
+                delegate_address_override: None,
+                nonce: 123,
+                expiration_offset: 100,
+                pre_existing_nonce: false,
+                use_delegate_contract_setup: true,
+            }
+        }
+    }
+
+    fn run_delegated_auth(opts: RunOpts) -> Result<InvokeHostFunctionHelperResult, HostError> {
+        let account_contract = CreateContractData::new([1; 32], DELEGATED_AUTH_TEST_CONTRACT);
+        let delegate_account_contract =
+            CreateContractData::new([2; 32], DELEGATED_AUTH_TEST_CONTRACT);
+        let auth_contract = CreateContractData::new([3; 32], AUTH_TEST_CONTRACT);
+
+        let tree = AuthContractInvocationNode {
+            address: auth_contract.contract_address.clone(),
+            children: vec![],
+        };
+        let host_fn = auth_contract_invocation(
+            vec![account_contract.contract_address.clone()],
+            tree.clone(),
+        );
+        let root_invocation = tree.into_authorized_invocation();
+
+        let ledger_info = default_ledger_info();
+        let nonce = opts.nonce;
+        let signature_expiration_ledger =
+            (ledger_info.sequence_number as i64 + opts.expiration_offset as i64).max(0) as u32;
+        let network_id: Hash = ledger_info.network_id.try_into().unwrap();
+        let preimage = HashIdPreimage::SorobanAuthorizationWithAddress(
+            HashIdPreimageSorobanAuthorizationWithAddress {
+                network_id,
+                address: account_contract.contract_address.clone(),
+                invocation: root_invocation.clone(),
+                nonce,
+                signature_expiration_ledger,
+            },
+        );
+        let computed_payload: [u8; 32] =
+            Sha256::digest(&preimage.to_xdr(Limits::none()).unwrap()).into();
+        let delegate_payload = opts.delegate_payload_override.unwrap_or(computed_payload);
+        let delegate_address = opts
+            .delegate_address_override
+            .unwrap_or(delegate_account_contract.contract_address.clone());
+
+        let account_signature = if opts.use_delegate_contract_setup {
+            ScVal::Vec(Some(
+                vec![builtin_delegated_signature(&delegate_address)]
+                    .try_into()
+                    .unwrap(),
+            ))
+        } else {
+            ScVal::Void
+        };
+        let delegate_signature = if opts.use_delegate_contract_setup {
+            ScVal::Vec(Some(
+                vec![payload_signature(&delegate_payload)]
+                    .try_into()
+                    .unwrap(),
+            ))
+        } else {
+            ScVal::Void
+        };
+        let delegate_sig_entry = SorobanDelegateSignature {
+            address: delegate_address.clone(),
+            signature: delegate_signature,
+            nested_delegates: vec![].try_into().unwrap(),
+        };
+        let auth_entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::AddressWithDelegates(
+                SorobanAddressCredentialsWithDelegates {
+                    address_credentials: SorobanAddressCredentials {
+                        address: account_contract.contract_address.clone(),
+                        nonce,
+                        signature_expiration_ledger,
+                        signature: account_signature,
+                    },
+                    delegates: vec![delegate_sig_entry].try_into().unwrap(),
+                },
+            ),
+            root_invocation,
+        };
+
+        let source_account = get_account_id([99; 32]);
+        let ttl = Some(ledger_info.sequence_number + 1000);
+        let account_contract_entry = if opts.use_delegate_contract_setup {
+            contract_instance_entry_with_delegated_signer(
+                &account_contract.contract_address,
+                DELEGATED_AUTH_TEST_CONTRACT,
+                &delegate_address,
+            )
+        } else {
+            account_contract.contract_entry.clone()
+        };
+        let mut ledger_entries = vec![
+            (account_contract.wasm_entry.clone(), ttl),
+            (auth_contract.wasm_entry.clone(), ttl),
+            (account_contract_entry, ttl),
+            (auth_contract.contract_entry.clone(), ttl),
+        ];
+        if opts.use_delegate_contract_setup {
+            ledger_entries.push((delegate_account_contract.contract_entry.clone(), ttl));
+        }
+        if opts.pre_existing_nonce {
+            ledger_entries.push((
+                nonce_entry(&account_contract.contract_address, nonce),
+                Some(ledger_info.sequence_number + 1000),
+            ));
+        }
+        let mut ro_keys = vec![
+            account_contract.wasm_key.clone(),
+            auth_contract.wasm_key.clone(),
+            account_contract.contract_key.clone(),
+            auth_contract.contract_key.clone(),
+        ];
+        if opts.use_delegate_contract_setup {
+            ro_keys.push(delegate_account_contract.contract_key.clone());
+        }
+        let rw_keys = vec![nonce_key(&account_contract.contract_address, nonce)];
+        invoke_host_function_helper(
+            true,
+            &host_fn,
+            &resources(100_000_000, ro_keys, rw_keys),
+            &source_account,
+            vec![auth_entry],
+            &ledger_info,
+            ledger_entries,
+            &prng_seed(),
+        )
+    }
+
+    #[test]
+    fn test_delegated_auth_success() {
+        assert!(run_delegated_auth(RunOpts::default())
+            .unwrap()
+            .invoke_result
+            .is_ok());
+    }
+
+    #[test]
+    fn test_delegated_auth_failure_with_bad_delegate_payload() {
+        assert!(HostError::result_matches_err(
+            run_delegated_auth(RunOpts {
+                delegate_payload_override: Some([1; 32]),
+                ..RunOpts::default()
+            })
+            .unwrap()
+            .invoke_result,
+            (ScErrorType::Auth, ScErrorCode::InvalidAction)
+        ));
+    }
+
+    #[test]
+    fn test_delegated_auth_nonce_reuse_fails() {
+        assert!(HostError::result_matches_err(
+            run_delegated_auth(RunOpts {
+                pre_existing_nonce: true,
+                ..RunOpts::default()
+            })
+            .unwrap()
+            .invoke_result,
+            (ScErrorType::Auth, ScErrorCode::ExistingValue)
+        ));
+    }
+
+    #[test]
+    fn test_delegated_auth_expired_signature_fails() {
+        assert!(HostError::result_matches_err(
+            run_delegated_auth(RunOpts {
+                expiration_offset: -1,
+                ..RunOpts::default()
+            })
+            .unwrap()
+            .invoke_result,
+            (ScErrorType::Auth, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn test_muxed_delegate_address_is_rejected() {
+        let muxed = ScAddress::MuxedAccount(MuxedEd25519Account {
+            id: 7,
+            ed25519: Uint256([7; 32]),
+        });
+        assert!(HostError::result_matches_err(
+            run_delegated_auth(RunOpts {
+                delegate_address_override: Some(muxed),
+                nonce: 42,
+                use_delegate_contract_setup: false,
+                ..RunOpts::default()
+            }),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn test_claimable_balance_delegate_address_is_rejected() {
+        let cb = ScAddress::ClaimableBalance(ClaimableBalanceId::ClaimableBalanceIdTypeV0(Hash(
+            [8; 32],
+        )));
+        assert!(HostError::result_matches_err(
+            run_delegated_auth(RunOpts {
+                delegate_address_override: Some(cb),
+                nonce: 42,
+                use_delegate_contract_setup: false,
+                ..RunOpts::default()
+            }),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn test_liquidity_pool_delegate_address_is_rejected() {
+        let lp = ScAddress::LiquidityPool(PoolId(Hash([9; 32])));
+        assert!(HostError::result_matches_err(
+            run_delegated_auth(RunOpts {
+                delegate_address_override: Some(lp),
+                nonce: 42,
+                use_delegate_contract_setup: false,
+                ..RunOpts::default()
+            }),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
     }
 }

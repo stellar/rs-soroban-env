@@ -52,7 +52,8 @@ members = [
     "custom_account_context",
     "try_call_sac",
     "invoker_auth",
-    "check_auth_instance_storage"
+    "check_auth_instance_storage",
+    "builtin_auth_delegation"
 ]
 [profile.release]
 opt-level = "z"
@@ -68,11 +69,11 @@ lto = true
 rust-version = "1.84.0"
 
 [workspace.dependencies.soroban-sdk]
-version = "=25.0.0-rc.1"
+version = "=26.0.0-rc.1"
 # git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]
-version = "=25.0.1"
+version = "=26.1.2"
 # git = "https://github.com/stellar/rs-soroban-env"
 
 # Always build from the local instance of env as we need to rebuild test Wasms

@@ -84,12 +84,6 @@ k256 = {version = "0.13.1", default-features = false, features = ["alloc"]}
 p256 = {version = "0.13.2", default-features = false, features = ["alloc"]}
 lazy_static = "1.5.0"
 
-[dev-dependencies.stellar-xdr]
-version = "=26.0.0"
-git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "b71d1f84ada0868c468bc64273a8da717262c622"
-default-features = false
-
 [features]
 testutils = ["soroban-env-common/testutils", "recording_mode"]
 backtrace = ["dep:backtrace"]
@@ -107,8 +101,6 @@ bench = ["testutils"]
 # When bumping the major version of any crates in this repo all the code
 # guarded by this feature should be enabled unconditionally.
 unstable-next-api = []
-cap_0071 = ["soroban-env-common/cap_0071"]
-test_feature = ["soroban-env-common/test_feature"]
 
 [[bench]]
 required-features = ["bench"]

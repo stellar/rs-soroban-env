@@ -31,7 +31,10 @@ use soroban_test_wasms::{
 
 use crate::auth::RecordedAuthPayload;
 use crate::{Host, LedgerInfo};
-use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryIntoVal};
+use soroban_env_common::{
+    xdr::HashIdPreimageSorobanAuthorizationWithAddress, AddressObject, Env, Symbol, SymbolStr,
+    TryIntoVal,
+};
 
 use crate::builtin_contracts::base_types::Vec as HostVec;
 
@@ -145,7 +148,7 @@ impl AuthTest {
             create_account(
                 &host,
                 &signing_key_to_account_id(signing_key),
-                vec![(&signing_key, 1)],
+                &[(&signing_key, 1)],
                 100_000_000,
                 1,
                 [1, 0, 0, 0],
@@ -244,6 +247,8 @@ impl AuthTest {
         let mut contract_auth = vec![];
         self.last_nonces.clear();
         for address_id in 0..self.keys.len() {
+            let use_address_v2_credentials = address_id % 2 == 0;
+
             let sc_address = self.key_to_sc_address(&self.keys[address_id]);
             let mut curr_nonces = vec![];
             for sign_root in &sign_payloads[address_id] {
@@ -253,7 +258,22 @@ impl AuthTest {
                     .unwrap();
                 curr_nonces.push(nonce);
                 let root_invocation = self.convert_sign_node(sign_root);
-                let payload_preimage =
+                let payload_preimage = if use_address_v2_credentials {
+                    HashIdPreimage::SorobanAuthorizationWithAddress(
+                        HashIdPreimageSorobanAuthorizationWithAddress {
+                            address: sc_address.clone(),
+                            network_id: self
+                                .host
+                                .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                                .unwrap()
+                                .try_into()
+                                .unwrap(),
+                            invocation: root_invocation.clone(),
+                            nonce,
+                            signature_expiration_ledger: 1000,
+                        },
+                    )
+                } else {
                     HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
                         network_id: self
                             .host
@@ -264,24 +284,30 @@ impl AuthTest {
                         invocation: root_invocation.clone(),
                         nonce,
                         signature_expiration_ledger: 1000,
-                    });
+                    })
+                };
                 let payload = self.host.metered_hash_xdr(&payload_preimage).unwrap();
                 let signature_args = test_vec![
                     &self.host,
                     sign_payload_for_account(&self.host, &self.keys[address_id], &payload)
                 ];
+                let credentials = SorobanAddressCredentials {
+                    address: sc_address.clone(),
+                    nonce,
+                    signature: ScVal::Vec(Some(
+                        self.host
+                            .vecobject_to_scval_vec(signature_args.into())
+                            .unwrap()
+                            .into(),
+                    )),
+                    signature_expiration_ledger: 1000,
+                };
                 contract_auth.push(SorobanAuthorizationEntry {
-                    credentials: SorobanCredentials::Address(SorobanAddressCredentials {
-                        address: sc_address.clone(),
-                        nonce,
-                        signature: ScVal::Vec(Some(
-                            self.host
-                                .vecobject_to_scval_vec(signature_args.into())
-                                .unwrap()
-                                .into(),
-                        )),
-                        signature_expiration_ledger: 1000,
-                    }),
+                    credentials: if use_address_v2_credentials {
+                        SorobanCredentials::AddressV2(credentials)
+                    } else {
+                        SorobanCredentials::Address(credentials)
+                    },
                     root_invocation,
                 });
             }
@@ -988,8 +1014,8 @@ fn test_two_authorized_trees() {
                 ),
             ),
             resources: SubInvocationResources {
-                instructions: 3534571,
-                mem_bytes: 8481766,
+                instructions: 3567903,
+                mem_bytes: 8487330,
                 disk_read_entries: 1,
                 memory_read_entries: 8,
                 write_entries: 2,
@@ -1014,8 +1040,8 @@ fn test_two_authorized_trees() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1573332,
-                        mem_bytes: 3636258,
+                        instructions: 1589984,
+                        mem_bytes: 3638984,
                         disk_read_entries: 1,
                         memory_read_entries: 4,
                         write_entries: 1,
@@ -1040,8 +1066,8 @@ fn test_two_authorized_trees() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 362050,
-                                mem_bytes: 1208266,
+                                instructions: 362078,
+                                mem_bytes: 1208378,
                                 disk_read_entries: 0,
                                 memory_read_entries: 1,
                                 write_entries: 0,
@@ -1067,8 +1093,8 @@ fn test_two_authorized_trees() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 361465,
-                                mem_bytes: 1208291,
+                                instructions: 361493,
+                                mem_bytes: 1208403,
                                 disk_read_entries: 0,
                                 memory_read_entries: 1,
                                 write_entries: 0,
@@ -1096,8 +1122,8 @@ fn test_two_authorized_trees() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1574852,
-                        mem_bytes: 3636425,
+                        instructions: 1591504,
+                        mem_bytes: 3639151,
                         disk_read_entries: 0,
                         memory_read_entries: 2,
                         write_entries: 1,
@@ -1122,8 +1148,8 @@ fn test_two_authorized_trees() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 363603,
-                                mem_bytes: 1208409,
+                                instructions: 363631,
+                                mem_bytes: 1208521,
                                 disk_read_entries: 0,
                                 memory_read_entries: 1,
                                 write_entries: 0,
@@ -1149,8 +1175,8 @@ fn test_two_authorized_trees() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 361801,
-                                mem_bytes: 1208168,
+                                instructions: 361829,
+                                mem_bytes: 1208280,
                                 disk_read_entries: 0,
                                 memory_read_entries: 0,
                                 write_entries: 0,
@@ -2470,8 +2496,8 @@ fn test_require_auth_within_check_auth() {
                 ),
             ),
             resources: SubInvocationResources {
-                instructions: 1434110,
-                mem_bytes: 3621468,
+                instructions: 1439217,
+                mem_bytes: 3622540,
                 disk_read_entries: 1,
                 memory_read_entries: 10,
                 write_entries: 3,
@@ -2496,8 +2522,8 @@ fn test_require_auth_within_check_auth() {
                         ),
                     ),
                     resources: SubInvocationResources {
-                        instructions: 1050492,
-                        mem_bytes: 2405669,
+                        instructions: 1055557,
+                        mem_bytes: 2406573,
                         disk_read_entries: 1,
                         memory_read_entries: 7,
                         write_entries: 2,
@@ -2522,8 +2548,8 @@ fn test_require_auth_within_check_auth() {
                                 ),
                             ),
                             resources: SubInvocationResources {
-                                instructions: 733593,
-                                mem_bytes: 1202616,
+                                instructions: 738616,
+                                mem_bytes: 1203352,
                                 disk_read_entries: 1,
                                 memory_read_entries: 3,
                                 write_entries: 1,

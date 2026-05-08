@@ -18,7 +18,7 @@ use crate::{
         self, AccountId, ContractId, ContractIdPreimage, ScErrorCode, ScErrorType,
         ThresholdIndexes, Uint256,
     },
-    Env, EnvBase, ErrorHandler, HostError, Symbol, TryFromVal, TryIntoVal, Val,
+    BytesObject, Env, ErrorHandler, HostError, Symbol, TryFromVal, TryIntoVal, Val,
 };
 use core::cmp::Ordering;
 
@@ -140,22 +140,28 @@ fn invocation_tree_to_auth_contexts(
     Ok(())
 }
 
+pub(crate) fn convert_to_auth_context_val(
+    host: &Host,
+    invocation: &AuthorizedInvocation,
+) -> Result<Val, HostError> {
+    let mut auth_context_vec = HostVec::new(host)?;
+    invocation_tree_to_auth_contexts(host, invocation, &mut auth_context_vec)?;
+    Ok(auth_context_vec.into())
+}
+
 // metering: covered
 pub(crate) fn check_account_contract_auth(
     host: &Host,
     account_contract: &ContractId,
-    signature_payload: &[u8; 32],
+    signature_payload: BytesObject,
     signature: Val,
-    invocation: &AuthorizedInvocation,
+    context: Val,
 ) -> Result<(), HostError> {
-    let payload_obj = host.bytes_new_from_slice(signature_payload)?;
-    let mut auth_context_vec = HostVec::new(host)?;
-    invocation_tree_to_auth_contexts(host, invocation, &mut auth_context_vec)?;
     Ok(host
         .call_n_internal(
             account_contract,
             ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(host)?,
-            &[payload_obj.into(), signature, auth_context_vec.into()],
+            &[signature_payload.into(), signature, context],
             CallParams {
                 // Allow self reentry for this function in order to be able to do
                 // wallet admin ops using the auth framework itself.
@@ -171,12 +177,12 @@ pub(crate) fn check_account_contract_auth(
 pub(crate) fn check_account_authentication(
     host: &Host,
     account_id: AccountId,
-    payload: &[u8],
+    signature_payload: BytesObject,
     signature: Val,
 ) -> Result<(), HostError> {
     let signatures: HostVec = signature.try_into_val(host)?;
     // Check if there is too many signatures: there shouldn't be more
-    // signatures then the amount of account signers.
+    // signatures than the amount of account signers.
     let len = signatures.len()?;
     if len > MAX_ACCOUNT_SIGNATURES {
         return Err(err!(
@@ -193,7 +199,6 @@ pub(crate) fn check_account_authentication(
             &[],
         ));
     }
-    let payload_obj = host.bytes_new_from_slice(payload)?;
     let account = host.load_account(account_id)?;
     let mut prev_pk: Option<BytesN<32>> = None;
     let mut weight = 0u32;
@@ -214,7 +219,7 @@ pub(crate) fn check_account_authentication(
 
         host.verify_sig_ed25519(
             sig.public_key.clone().into(),
-            payload_obj,
+            signature_payload,
             sig.signature.into(),
         )?;
 
