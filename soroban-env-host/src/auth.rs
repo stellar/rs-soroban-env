@@ -493,7 +493,7 @@ pub(crate) struct DelegatedAccountAuthTrackerSnapshot {
 /// Delegation mechanism allows an account to forward its signature payload
 /// and authorization context to the authentication routine of another
 /// `Address` (i.e. `__check_auth` for a contract, or the builtin-in
-/// authentcation for G-addresses).
+/// authentication for G-addresses).
 /// The tracker always belongs to the respective [`AccountAuthorizationTracker`]
 /// and is initialized from the account's credentials in the enforcing auth
 /// mode. Delegation is not supported in the recording auth mode, i.e. the
@@ -573,6 +573,11 @@ impl std::hash::Hash for AccountAuthorizationCredentials {
                 3u32.hash(state);
                 if let Ok(delegated_auth_tracker) = delegated_auth_tracker_cell.try_borrow() {
                     delegated_auth_tracker.hash(state);
+                } else {
+                    debug_assert!(
+                        false,
+                        "failed to borrow delegated account auth tracker for hashing"
+                    );
                 }
             }
         }

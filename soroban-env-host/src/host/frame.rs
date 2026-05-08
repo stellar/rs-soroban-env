@@ -1257,7 +1257,7 @@ impl Host {
                     return Err(self.err(
                         ScErrorType::Context,
                         ScErrorCode::InternalError,
-                        "ensure_auth_check_frame is not supported for host fns",
+                        "ensure_check_auth_frame is not supported for host fns",
                         &[],
                     ));
                 }
@@ -1265,7 +1265,7 @@ impl Host {
                     return Err(self.err(
                         ScErrorType::Context,
                         ScErrorCode::InternalError,
-                        "ensure_auth_check_frame is not supported for stellar asset contract",
+                        "ensure_check_auth_frame is not supported for stellar asset contract",
                         &[],
                     ));
                 }
