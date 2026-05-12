@@ -2,7 +2,7 @@ use std::{cmp::Ordering, rc::Rc};
 
 use expect_test::expect;
 use soroban_env_common::{
-    xdr::{self, ContractCostType, ScError, ScErrorCode},
+    xdr::{self, AccountId, ContractCostType, PublicKey, ScAddress, ScError, ScErrorCode, Uint256},
     Compare, Env, EnvBase, TryFromVal, TryIntoVal, Val,
 };
 
@@ -201,6 +201,49 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
         r#"[Diagnostic Event] topics:[error, Error(WasmVm, InvalidAction)], data:["contract call failed", add_with, [2147483647, 1, Bytes()]]"#
+    ]];
+    let actual = format!("{}", last_event);
+    expected.assert_eq(&actual);
+
+    Ok(())
+}
+
+#[test]
+fn invoke_with_account_address_err() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    let account_address = host.add_host_object(ScAddress::Account(AccountId(
+        PublicKey::PublicKeyTypeEd25519(Uint256([1; 32])),
+    )))?;
+    let sym = Symbol::try_from_small_str("go")?;
+    let args = host.vec_new()?;
+
+    // try call -- address conversion will fail but we should get a recoverable error, not a trap
+    let res = host.try_call(account_address, sym, args)?;
+    let expected = Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InvalidAction);
+    assert!(res.shallow_eq(&expected.to_val()));
+
+    let events = host.get_events()?.0;
+    let last_event: &HostEvent = events.last().unwrap();
+    // run `UPDATE_EXPECT=true cargo test` to update this.
+    let expected = expect![[
+        r#"[Diagnostic Event] topics:[error, Error(Object, InvalidInput)], data:["contract try_call failed", go, []]"#
+    ]];
+    let actual = format!("{}", last_event);
+    expected.assert_eq(&actual);
+
+    // call -- address conversion will fail like a contract call error
+    let res = host.call(account_address, sym, args);
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+
+    let events = host.get_events()?.0;
+    let last_event: &HostEvent = events.last().unwrap();
+    // run `UPDATE_EXPECT=true cargo test` to update this.
+    let expected = expect![[
+        r#"[Diagnostic Event] topics:[error, Error(Object, InvalidInput)], data:["contract call failed", go, []]"#
     ]];
     let actual = format!("{}", last_event);
     expected.assert_eq(&actual);

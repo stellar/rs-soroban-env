@@ -1,0 +1,10 @@
+{
+  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_new()": "cpu:14930, mem:80, objs:-/1@ad26cd6b",
+  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:15433, mem:160, objs:-/2@c68e8e8a",
+  "   3 call try_call(Address(obj#1), Symbol(go), Vec(obj#3))": "",
+  "   4 ret try_call -> Ok(Error(Context, InvalidAction))": "cpu:16246, mem:176",
+  "   5 call call(Address(obj#1), Symbol(go), Vec(obj#3))": "",
+  "   6 ret call -> Err(Error(Object, InvalidInput))": "cpu:17059, mem:192",
+  "   7 end": "cpu:17059, mem:192, prngs:-/9b4a753, objs:-/2@c68e8e8a, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
