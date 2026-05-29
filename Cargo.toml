@@ -21,15 +21,15 @@ exclude = ["soroban-test-wasms/wasm-workspace"]
 # NB: When bumping the major version make sure to clean up the
 # code guarded by `unstable-*` features to make it enabled
 # unconditionally.
-version = "26.1.2"
+version = "27.0.0"
 rust-version = "1.84.0"
 
 [workspace.dependencies]
-soroban-env-common = { version = "=26.1.2", path = "soroban-env-common", default-features = false }
-soroban-env-guest = { version = "=26.1.2", path = "soroban-env-guest" }
-soroban-env-host = { version = "=26.1.2", path = "soroban-env-host" }
-soroban-env-macros = { version = "=26.1.2", path = "soroban-env-macros" }
-soroban-builtin-sdk-macros = { version = "=26.1.2", path = "soroban-builtin-sdk-macros" }
+soroban-env-common = { version = "=27.0.0", path = "soroban-env-common", default-features = false }
+soroban-env-guest = { version = "=27.0.0", path = "soroban-env-guest" }
+soroban-env-host = { version = "=27.0.0", path = "soroban-env-host" }
+soroban-env-macros = { version = "=27.0.0", path = "soroban-env-macros" }
+soroban-builtin-sdk-macros = { version = "=27.0.0", path = "soroban-builtin-sdk-macros" }
 # NB: this must match the wasmparser version wasmi is using
 wasmparser = "=0.116.1"
 
@@ -37,9 +37,9 @@ wasmparser = "=0.116.1"
 [workspace.dependencies.stellar-xdr]
 version = "=26.0.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "a749b69b3471aec0c20ec431b0297f3414d66421"
+rev = "deae51ba0eb4d13e287fb036c0ee9d8ed8ab9560"
 default-features = false
-features = ["cap_0071"]
+features = ["cap_0071", "cap_0083"]
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
