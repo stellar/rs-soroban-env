@@ -18,7 +18,7 @@ soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi", "shallow-val-hash"] }
 wasmi = { workspace = true }
 wasmparser = { workspace = true }
-stellar-strkey = "0.0.13"
+stellar-strkey = "0.0.17"
 static_assertions = "1.1.0"
 sha2 = "0.10.8"
 hex-literal = "0.4.1"

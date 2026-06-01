@@ -686,7 +686,9 @@ impl Host {
                 ))
             }
         };
-        Ok(strkey.to_string())
+        // NB: `Strkey::to_string` is an inherent method that returns a
+        // `heapless::String`; use the `Display` impl to get a `std::String`.
+        Ok(format!("{strkey}"))
     }
 
     pub(crate) fn muxed_sc_address_to_strkey(
@@ -708,7 +710,9 @@ impl Host {
                         ed25519: muxed_account.ed25519.0.metered_clone(self)?,
                     },
                 );
-                Ok(strkey.to_string())
+                // NB: `Strkey::to_string` is an inherent method that returns a
+                // `heapless::String`; use the `Display` impl to get a `std::String`.
+                Ok(format!("{strkey}"))
             }
             _ => Err(self.err(
                 ScErrorType::Object,

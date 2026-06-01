@@ -47,6 +47,10 @@ version = "=0.31.1-soroban.20.0.1"
 git = "https://github.com/stellar/wasmi"
 rev = "0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
 
+# Patched in to test the latest stellar-strkey git main before its release.
+[patch.crates-io]
+stellar-strkey = { git = "https://github.com/stellar/rs-stellar-strkey", rev = "d16561c672b950d7af05939817df19f3a1f63299" }
+
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # [patch.crates-io]
 # stellar-xdr = { path = "../rs-stellar-xdr" }
