@@ -514,7 +514,7 @@ fn invoke_host_function_using_simulation_with_signers(
         enable_diagnostics,
         host_fn,
         source_account,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         ledger_info,
         ledger_entries_with_ttl.clone(),
         prng_seed,
@@ -770,7 +770,7 @@ fn test_run_out_of_budget_before_calling_host_in_recording_mode() {
         true,
         &upload_wasm_host_fn(ADD_I32),
         &get_account_id([0; 32]),
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &default_ledger_info(),
         vec![],
         &prng_seed(),
@@ -860,7 +860,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         false,
         &upload_wasm_host_fn(ADD_I32),
         &get_account_id([123; 32]),
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -915,7 +915,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
         true,
         &upload_wasm_host_fn(&[0_u8; 1000]),
         &get_account_id([123; 32]),
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -953,7 +953,7 @@ fn test_unsupported_wasm_upload_failure_in_recording_mode() {
         true,
         &upload_wasm_host_fn(ADD_F32),
         &get_account_id([123; 32]),
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![],
         &prng_seed(),
@@ -1407,7 +1407,7 @@ fn test_create_contract_success_in_recording_mode() {
         true,
         &cd.host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![(
             cd.wasm_entry.clone(),
@@ -1496,7 +1496,7 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         true,
         &cd.host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![
             (
@@ -2040,7 +2040,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         true,
         &host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![
             (
@@ -2121,7 +2121,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         true,
         &extend_host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![
             (
@@ -2393,7 +2393,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
         true,
         &host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         le_with_ttl.clone(),
         &prng_seed(),
@@ -2535,7 +2535,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
         true,
         &host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         le_with_ttl.clone(),
         &prng_seed(),
@@ -2664,7 +2664,7 @@ fn test_auto_restore_with_new_entry_in_recording_mode() {
         true,
         &host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         le_with_ttl.clone(),
         &prng_seed(),
@@ -2795,7 +2795,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
         true,
         &host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![
             (
@@ -2922,7 +2922,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
         true,
         &host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![
             (
@@ -3065,7 +3065,7 @@ fn test_invoke_contract_with_storage_ops_success_using_simulation() {
         true,
         &extend_host_fn,
         &cd.deployer,
-        RecordingInvocationAuthMode::Recording(true),
+        RecordingInvocationAuthMode::recording(true, true),
         &ledger_info,
         vec![
             (

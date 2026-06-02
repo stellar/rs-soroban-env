@@ -567,19 +567,31 @@ fn storage_footprint_to_ledger_footprint(
 impl RecordedAuthPayload {
     fn into_auth_entry_with_emulated_signature(
         self,
+        use_address_v2: bool,
     ) -> Result<SorobanAuthorizationEntry, HostError> {
         const EMULATED_SIGNATURE_SIZE: usize = 512;
 
         match (self.address, self.nonce) {
             (Some(address), Some(nonce)) => Ok(SorobanAuthorizationEntry {
-                credentials: SorobanCredentials::AddressV2(SorobanAddressCredentials {
-                    address,
-                    nonce,
-                    signature_expiration_ledger: 0,
-                    signature: ScVal::Bytes(
-                        vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
-                    ),
-                }),
+                credentials: if use_address_v2 {
+                    SorobanCredentials::AddressV2(SorobanAddressCredentials {
+                        address,
+                        nonce,
+                        signature_expiration_ledger: 0,
+                        signature: ScVal::Bytes(
+                            vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
+                        ),
+                    })
+                } else {
+                    SorobanCredentials::Address(SorobanAddressCredentials {
+                        address,
+                        nonce,
+                        signature_expiration_ledger: 0,
+                        signature: ScVal::Bytes(
+                            vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
+                        ),
+                    })
+                },
                 root_invocation: self.invocation,
             }),
             (None, None) => Ok(SorobanAuthorizationEntry {
@@ -606,14 +618,41 @@ fn clear_signature(auth_entry: &mut SorobanAuthorizationEntry) {
 }
 
 #[cfg(any(test, feature = "recording_mode"))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct RecordingInvocationAuthParams {
+    pub disable_non_root_auth: bool,
+    pub use_address_v2: bool,
+}
+
+#[cfg(any(test, feature = "recording_mode"))]
+impl RecordingInvocationAuthParams {
+    pub const fn new(disable_non_root_auth: bool, use_address_v2: bool) -> Self {
+        Self {
+            disable_non_root_auth,
+            use_address_v2,
+        }
+    }
+}
+
+#[cfg(any(test, feature = "recording_mode"))]
 /// Defines the authorization mode for the `invoke_host_function_in_recording_mode`.
 pub enum RecordingInvocationAuthMode {
     /// Use enforcing auth and pass the signed authorization entries to be used.
     Enforcing(Vec<SorobanAuthorizationEntry>),
     /// Use recording auth and determine whether non-root authorization is
-    /// disabled (i.e. non-root auth is not allowed when `true` is passed to
-    /// the enum).
-    Recording(bool),
+    /// disabled, and whether recorded auth should use `AddressV2`
+    /// credentials.
+    Recording(RecordingInvocationAuthParams),
+}
+
+#[cfg(any(test, feature = "recording_mode"))]
+impl RecordingInvocationAuthMode {
+    pub const fn recording(disable_non_root_auth: bool, use_address_v2: bool) -> Self {
+        Self::Recording(RecordingInvocationAuthParams::new(
+            disable_non_root_auth,
+            use_address_v2,
+        ))
+    }
 }
 
 /// Invokes a host function within a fresh host instance in 'recording' mode.
@@ -663,7 +702,11 @@ pub fn invoke_host_function_in_recording_mode(
 ) -> Result<InvokeHostFunctionRecordingModeResult, HostError> {
     let storage = Storage::with_recording_footprint(ledger_snapshot.clone());
     let host = Host::with_storage_and_budget(storage, budget.clone());
-    let is_recording_auth = matches!(auth_mode, RecordingInvocationAuthMode::Recording(_));
+    let recording_auth = match &auth_mode {
+        RecordingInvocationAuthMode::Recording(recording_auth) => Some(*recording_auth),
+        RecordingInvocationAuthMode::Enforcing(_) => None,
+    };
+    let is_recording_auth = recording_auth.is_some();
     let ledger_seq = ledger_info.sequence_number;
     let min_live_until_ledger = ledger_info
         .min_live_until_ledger_checked(ContractDataDurability::Persistent)
@@ -683,8 +726,8 @@ pub fn invoke_host_function_in_recording_mode(
         RecordingInvocationAuthMode::Enforcing(auth_entries) => {
             host.set_authorization_entries(auth_entries.clone())?;
         }
-        RecordingInvocationAuthMode::Recording(disable_non_root_auth) => {
-            host.switch_to_recording_auth(*disable_non_root_auth)?;
+        RecordingInvocationAuthMode::Recording(recording_auth) => {
+            host.switch_to_recording_auth(recording_auth.disable_non_root_auth)?;
         }
     }
 
@@ -706,7 +749,20 @@ pub fn invoke_host_function_in_recording_mode(
         let recorded_auth = host.get_recorded_auth_payloads()?;
         recorded_auth
             .into_iter()
-            .map(|a| a.into_auth_entry_with_emulated_signature())
+            .map(|a| {
+                a.into_auth_entry_with_emulated_signature(
+                    recording_auth
+                        .ok_or_else(|| {
+                            host.err(
+                                ScErrorType::Context,
+                                ScErrorCode::InternalError,
+                                "expected to have recording auth info in recording mode",
+                                &[],
+                            )
+                        })?
+                        .use_address_v2,
+                )
+            })
             .collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>()?
     };
 
