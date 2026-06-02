@@ -571,7 +571,13 @@ impl Host {
         // allow it in production because it risks replaying an old contract
         // with the new VM and thereby (subtly!) replaying its execution costs
         // wrong.
-        #[cfg(not(test))]
+        //
+        // We also bypass this check when the "next" feature is enabled. "next"
+        // is the unsafe-for-production simulation build whose interface protocol
+        // is bumped one ahead of the host's base protocol; a "next" host can be used
+        // as the current host for both its base protocol and the next one, so it
+        // must be allowed to run the base protocol below its interface version.
+        #[cfg(not(any(test, feature = "next")))]
         if proto < meta::INTERFACE_VERSION.protocol {
             return Err(self.err(
                 ScErrorType::Context,
