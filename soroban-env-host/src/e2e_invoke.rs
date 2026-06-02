@@ -647,6 +647,11 @@ pub enum RecordingInvocationAuthMode {
 
 #[cfg(any(test, feature = "recording_mode"))]
 impl RecordingInvocationAuthMode {
+    /// Convenience constructor for recording auth mode.
+    ///
+    /// - `disable_non_root_auth`: when `true`, non-root authorization is not allowed during recording.
+    /// - `use_address_v2`: when `true`, recorded authorization uses `AddressV2` credentials;
+    ///   otherwise it uses `Address` credentials.
     pub const fn recording(disable_non_root_auth: bool, use_address_v2: bool) -> Self {
         Self::Recording(RecordingInvocationAuthParams::new(
             disable_non_root_auth,
