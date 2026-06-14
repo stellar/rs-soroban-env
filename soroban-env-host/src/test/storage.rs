@@ -4,12 +4,17 @@ use crate::budget::{AsBudget, Budget};
 use crate::host_object::MuxedScAddress;
 use crate::storage::{AccessType, Footprint, Storage};
 use crate::xdr::{
-    ContractDataDurability, ContractId, LedgerKey, LedgerKeyContractData, MuxedEd25519Account,
-    ScAddress, ScErrorCode, ScErrorType, ScVal, Uint256,
+    ContractDataDurability, ContractDataEntry, ContractExecutable, ContractId, ExtensionPoint,
+    Hash, LedgerKey, LedgerKeyContractData, MuxedEd25519Account, ScAddress, ScContractInstance,
+    ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScVal, Uint256,
 };
 use crate::{Host, HostError, MeteredOrdMap};
-use soroban_env_common::{AddressObject, Env, MuxedAddressObject, Symbol, TryFromVal, TryIntoVal};
-use soroban_test_wasms::{CONTRACT_STORAGE, CONTRACT_STORAGE_WITH_VALS, INVOKE_CONTRACT};
+use soroban_env_common::{
+    AddressObject, Env, MuxedAddressObject, StorageType, Symbol, TryFromVal, TryIntoVal, Val,
+};
+use soroban_test_wasms::{
+    CONTRACT_STORAGE, CONTRACT_STORAGE_WITH_VALS, EXTERNAL_STORAGE_TEST_CONTRACT, INVOKE_CONTRACT,
+};
 
 #[test]
 fn footprint_record_access() -> Result<(), HostError> {
@@ -340,6 +345,347 @@ fn test_instance_storage() {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
     test_storage(&host, contract_id, "instance");
+}
+
+#[test]
+fn try_get_contract_data_preserves_stored_void() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let contract_addr = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    let contract_id = host.contract_id_from_address(contract_addr).unwrap();
+    let key = Symbol::try_from_small_str("key").unwrap().to_val();
+
+    host.with_test_contract_frame(
+        contract_id,
+        Symbol::try_from_small_str("test").unwrap(),
+        || {
+            assert!(host
+                .try_get_contract_data_value(key, StorageType::Persistent)?
+                .is_none());
+            host.put_contract_data(key, Val::VOID.to_val(), StorageType::Persistent)?;
+            let value = host
+                .try_get_contract_data_value(key, StorageType::Persistent)?
+                .unwrap();
+            assert!(value.is_void());
+            Ok(Val::VOID.to_val())
+        },
+    )?;
+    Ok(())
+}
+
+#[test]
+fn put_contract_data_updates_existing_ledger_entry() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let contract_addr = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    let contract_id = host.contract_id_from_address(contract_addr).unwrap();
+    let key = Symbol::try_from_small_str("key").unwrap().to_val();
+
+    host.with_test_contract_frame(
+        contract_id,
+        Symbol::try_from_small_str("test").unwrap(),
+        || {
+            host.put_contract_data(
+                key,
+                1_u32.try_into_val(&*host).unwrap(),
+                StorageType::Persistent,
+            )?;
+            host.put_contract_data(
+                key,
+                2_u32.try_into_val(&*host).unwrap(),
+                StorageType::Persistent,
+            )?;
+
+            let value: u32 = host
+                .try_get_contract_data_value(key, StorageType::Persistent)?
+                .unwrap()
+                .try_into_val(&*host)
+                .unwrap();
+            assert_eq!(value, 2);
+            Ok(Val::VOID.to_val())
+        },
+    )?;
+    Ok(())
+}
+
+fn test_contract_id(id: u8) -> ContractId {
+    ContractId(Hash([id; 32]))
+}
+
+fn test_contract_address(host: &Host, id: &ContractId) -> Result<AddressObject, HostError> {
+    host.add_host_object(ScAddress::Contract(id.clone()))
+}
+
+fn seed_contract_data_entry(
+    host: &Host,
+    contract_id: &ContractId,
+    key: Val,
+    value: Val,
+    durability: ContractDataDurability,
+) -> Result<Rc<LedgerKey>, HostError> {
+    let ledger_key = host.storage_key_for_address(
+        ScAddress::Contract(contract_id.clone()),
+        host.from_host_val_for_storage(key)?,
+        durability,
+    )?;
+    let entry = Host::new_contract_data(
+        host,
+        ContractDataEntry {
+            contract: ScAddress::Contract(contract_id.clone()),
+            key: host.from_host_val(key)?,
+            val: host.from_host_val(value)?,
+            durability,
+            ext: ExtensionPoint::V0,
+        },
+    )?;
+    let live_until_ledger = Some(host.get_min_live_until_ledger(durability)?);
+    host.with_mut_storage(|storage| {
+        storage.map = storage.map.insert(
+            Rc::clone(&ledger_key),
+            Some((entry, live_until_ledger)),
+            host.as_budget(),
+        )?;
+        Ok(())
+    })?;
+    Ok(ledger_key)
+}
+
+fn seed_contract_instance_entry(
+    host: &Host,
+    contract_id: &ContractId,
+    key: Val,
+    value: Val,
+) -> Result<Rc<LedgerKey>, HostError> {
+    let ledger_key = host.contract_instance_ledger_key(contract_id)?;
+    let storage = vec![ScMapEntry {
+        key: host.from_host_val_for_storage(key)?,
+        val: host.from_host_val(value)?,
+    }];
+    let entry = Host::new_contract_data(
+        host,
+        ContractDataEntry {
+            contract: ScAddress::Contract(contract_id.clone()),
+            key: ScVal::LedgerKeyContractInstance,
+            val: ScVal::ContractInstance(ScContractInstance {
+                executable: ContractExecutable::Wasm(Hash(Default::default())),
+                storage: Some(ScMap(storage.try_into().unwrap())),
+            }),
+            durability: ContractDataDurability::Persistent,
+            ext: ExtensionPoint::V0,
+        },
+    )?;
+    let live_until_ledger =
+        Some(host.get_min_live_until_ledger(ContractDataDurability::Persistent)?);
+    host.with_mut_storage(|storage| {
+        storage.map = storage.map.insert(
+            Rc::clone(&ledger_key),
+            Some((entry, live_until_ledger)),
+            host.as_budget(),
+        )?;
+        Ok(())
+    })?;
+    Ok(ledger_key)
+}
+
+fn assert_read_only_footprint(host: &Host, key: &Rc<LedgerKey>) -> Result<(), HostError> {
+    host.with_mut_storage(|storage| {
+        let access = storage
+            .footprint
+            .0
+            .get::<LedgerKey>(key, host.as_budget())?;
+        assert_eq!(access, Some(&AccessType::ReadOnly));
+        Ok(())
+    })
+}
+
+fn check_external_durable_storage_read(
+    storage_type: StorageType,
+    durability: ContractDataDurability,
+) -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let target_id = test_contract_id(match storage_type {
+        StorageType::Persistent => 1,
+        StorageType::Temporary => 2,
+        StorageType::Instance => unreachable!(),
+    });
+    let target_addr = test_contract_address(&host, &target_id)?;
+    let key = Symbol::try_from_small_str("key").unwrap().to_val();
+    let value = 7_u32.try_into_val(&*host).unwrap();
+    let ledger_key = seed_contract_data_entry(&host, &target_id, key, value, durability)?;
+
+    assert_eq!(
+        bool::from(host.has_external_contract_data(target_addr, key, storage_type)?),
+        true
+    );
+    let value: u32 = host
+        .get_external_contract_data(target_addr, key, storage_type)?
+        .try_into_val(&*host)
+        .unwrap();
+    assert_eq!(value, 7);
+    assert_read_only_footprint(&host, &ledger_key)?;
+
+    let missing_key = Symbol::try_from_small_str("missing").unwrap().to_val();
+    assert_eq!(
+        bool::from(host.has_external_contract_data(target_addr, missing_key, storage_type)?),
+        false
+    );
+    assert!(HostError::result_matches_err(
+        host.get_external_contract_data(target_addr, missing_key, storage_type),
+        (ScErrorType::Storage, ScErrorCode::MissingValue)
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn external_persistent_storage_read_records_readonly_footprint() -> Result<(), HostError> {
+    check_external_durable_storage_read(StorageType::Persistent, ContractDataDurability::Persistent)
+}
+
+#[test]
+fn external_temporary_storage_read_records_readonly_footprint() -> Result<(), HostError> {
+    check_external_durable_storage_read(StorageType::Temporary, ContractDataDurability::Temporary)
+}
+
+#[test]
+fn external_instance_storage_read_records_instance_footprint() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let target_id = test_contract_id(3);
+    let target_addr = test_contract_address(&host, &target_id)?;
+    let key = Symbol::try_from_small_str("key").unwrap().to_val();
+    let value = 9_u32.try_into_val(&*host).unwrap();
+    let instance_key = seed_contract_instance_entry(&host, &target_id, key, value)?;
+
+    assert_eq!(
+        bool::from(host.has_external_contract_data(target_addr, key, StorageType::Instance)?),
+        true
+    );
+    let value: u32 = host
+        .get_external_contract_data(target_addr, key, StorageType::Instance)?
+        .try_into_val(&*host)
+        .unwrap();
+    assert_eq!(value, 9);
+    assert_read_only_footprint(&host, &instance_key)?;
+
+    let missing_key = Symbol::try_from_small_str("missing").unwrap().to_val();
+    assert_eq!(
+        bool::from(host.has_external_contract_data(
+            target_addr,
+            missing_key,
+            StorageType::Instance
+        )?),
+        false
+    );
+
+    Ok(())
+}
+
+#[test]
+fn external_contract_data_rejects_non_contract_address() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let account = host.add_host_object(ScAddress::Account(
+        crate::testutils::generate_account_id(&host),
+    ))?;
+    let key = Symbol::try_from_small_str("key").unwrap().to_val();
+    assert!(HostError::result_matches_err(
+        host.has_external_contract_data(account, key, StorageType::Persistent),
+        (ScErrorType::Object, ScErrorCode::InvalidInput)
+    ));
+    Ok(())
+}
+
+#[test]
+fn external_try_get_contract_data_preserves_stored_void() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let target_id = test_contract_id(4);
+    let target_addr = test_contract_address(&host, &target_id)?;
+    let key = Symbol::try_from_small_str("key").unwrap().to_val();
+    seed_contract_data_entry(
+        &host,
+        &target_id,
+        key,
+        Val::VOID.to_val(),
+        ContractDataDurability::Persistent,
+    )?;
+
+    let value = host
+        .try_get_external_contract_data_value(target_addr, key, StorageType::Persistent)?
+        .unwrap();
+    assert!(value.is_void());
+    assert_eq!(
+        bool::from(host.has_external_contract_data(target_addr, key, StorageType::Persistent)?),
+        true
+    );
+    Ok(())
+}
+
+#[test]
+fn external_contract_data_requires_readonly_footprint_in_enforcing_mode() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let target_id = test_contract_id(5);
+    let target_addr = test_contract_address(&host, &target_id)?;
+    let key = Symbol::try_from_small_str("key").unwrap().to_val();
+    let value = 11_u32.try_into_val(&*host).unwrap();
+    seed_contract_data_entry(
+        &host,
+        &target_id,
+        key,
+        value,
+        ContractDataDurability::Persistent,
+    )?;
+    host.switch_to_enforcing_storage()?;
+
+    assert!(HostError::result_matches_err(
+        host.get_external_contract_data(target_addr, key, StorageType::Persistent),
+        (ScErrorType::Storage, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[cfg(feature = "next")]
+#[test]
+fn external_contract_data_wasm_imports_read_target_storage() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let target_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    let reader_id = host.register_test_contract_wasm(EXTERNAL_STORAGE_TEST_CONTRACT);
+    let key = Symbol::try_from_small_str("key")?;
+
+    for (put_fn, has_fn, get_fn, value) in [
+        (
+            "put_persistent",
+            "has_persistent",
+            "get_persistent",
+            101_u64,
+        ),
+        ("put_temporary", "has_temporary", "get_temporary", 202_u64),
+        ("put_instance", "has_instance", "get_instance", 303_u64),
+    ] {
+        host.call(
+            target_id,
+            Symbol::try_from_val(&*host, &put_fn).unwrap(),
+            test_vec![&*host, key, value].into(),
+        )?;
+
+        let has: bool = host
+            .call(
+                reader_id,
+                Symbol::try_from_val(&*host, &has_fn).unwrap(),
+                test_vec![&*host, target_id, key].into(),
+            )?
+            .try_into_val(&*host)
+            .unwrap();
+        assert!(has);
+
+        let got: u64 = host
+            .call(
+                reader_id,
+                Symbol::try_from_val(&*host, &get_fn).unwrap(),
+                test_vec![&*host, target_id, key].into(),
+            )?
+            .try_into_val(&*host)
+            .unwrap();
+        assert_eq!(got, value);
+    }
+
+    Ok(())
 }
 
 #[test]

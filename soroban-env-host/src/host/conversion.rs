@@ -165,6 +165,21 @@ impl Host {
         self.storage_key_from_scval(key_scval, durability)
     }
 
+    /// Converts a [`Val`] to an [`ScVal`] and combines it with the provided
+    /// contract address to produce a [`Key`] for accessing another contract's
+    /// ledger storage.
+    // Notes on metering: covered by components.
+    pub(crate) fn storage_key_from_address_val(
+        &self,
+        contract: AddressObject,
+        k: Val,
+        durability: ContractDataDurability,
+    ) -> Result<Rc<LedgerKey>, HostError> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key_scval = self.from_host_val_for_storage(k)?;
+        self.storage_key_for_address(ScAddress::Contract(contract_id), key_scval, durability)
+    }
+
     /// Converts a binary search result into a u64. `res` is `Some(index)` if
     /// the value was found at `index`, or `Err(index)` if the value was not
     /// found and would've needed to be inserted at `index`. Returns a

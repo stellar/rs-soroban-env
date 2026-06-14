@@ -4,8 +4,9 @@ use crate::{
     storage::{Footprint, Storage},
     Host, HostError, LedgerInfo, MeteredOrdMap,
 };
-use soroban_env_common::{Env, Symbol};
-use soroban_test_wasms::{ADD_I32, COMPLEX};
+use soroban_env_common::{Env, StorageType, Symbol, TryFromVal, TryIntoVal, Val};
+use soroban_test_wasms::{ADD_I32, COMPLEX, CONTRACT_STORAGE};
+use std::time::Instant;
 
 use crate::testutils::{generate_account_id, generate_bytes_array};
 
@@ -136,5 +137,150 @@ fn run_complex() -> Result<(), HostError> {
     // Give tracy a little time to extract data.
     #[cfg(feature = "tracy")]
     std::thread::sleep(std::time::Duration::from_secs(2));
+    Ok(())
+}
+
+fn measure_storage_read(
+    host: &Host,
+    label: &str,
+    iterations: u64,
+    mut f: impl FnMut() -> Result<Val, HostError>,
+) -> Result<(), HostError> {
+    host.with_budget(|budget| {
+        budget.reset_unlimited()?;
+        Ok(())
+    })?;
+    let start = Instant::now();
+    for _ in 0..iterations {
+        f()?;
+    }
+    let elapsed = start.elapsed();
+    let budget = host.budget_cloned();
+    println!(
+        "{label}: iterations={iterations} cpu_insns={} mem_bytes={} wall_nsecs={}",
+        budget.get_cpu_insns_consumed()?,
+        budget.get_mem_bytes_consumed()?,
+        elapsed.as_nanos()
+    );
+    Ok(())
+}
+
+fn storage_symbol(host: &Host, name: &str) -> Symbol {
+    Symbol::try_from_val(host, &name).unwrap()
+}
+
+fn instance_size_key(host: &Host, i: usize) -> Symbol {
+    Symbol::try_from_val(host, &format!("ikey{i}").as_str()).unwrap()
+}
+
+// This is a lightweight benchmark harness for comparing the new host external
+// read path against a target contract view function that returns the same data.
+//
+// Run with:
+// RUST_TEST_THREADS=1 cargo test --release -p soroban-env-host --lib --features testutils,next \
+//   test::metering_benchmark::compare_external_storage_read_to_contract_view_call \
+//   -- --ignored --nocapture
+#[ignore]
+#[test]
+fn compare_external_storage_read_to_contract_view_call() -> Result<(), HostError> {
+    const ITERATIONS: u64 = 100;
+
+    let host = Host::test_host_with_recording_footprint();
+    host.set_ledger_info(LEDGER_INFO)?;
+    host.with_budget(|b| {
+        b.reset_unlimited()?;
+        Ok(())
+    })?;
+    let contract = host.register_test_contract_wasm(CONTRACT_STORAGE);
+
+    let persistent_key = Symbol::try_from_small_str("persist")?;
+    let temporary_key = Symbol::try_from_small_str("temp")?;
+    let instance_key = Symbol::try_from_small_str("instance")?;
+
+    host.call(
+        contract,
+        storage_symbol(&host, "put_persistent"),
+        test_vec![&host, persistent_key, 7_u64].into(),
+    )?;
+    host.call(
+        contract,
+        storage_symbol(&host, "put_temporary"),
+        test_vec![&host, temporary_key, 7_u64].into(),
+    )?;
+    host.call(
+        contract,
+        storage_symbol(&host, "put_instance"),
+        test_vec![&host, instance_key, 7_u64].into(),
+    )?;
+
+    // Warm VM/module caches and storage footprints before measuring the steady path.
+    host.call(
+        contract,
+        storage_symbol(&host, "get_persistent"),
+        test_vec![&host, persistent_key].into(),
+    )?;
+    host.get_external_contract_data(contract, persistent_key.to_val(), StorageType::Persistent)?;
+    host.call(
+        contract,
+        storage_symbol(&host, "get_temporary"),
+        test_vec![&host, temporary_key].into(),
+    )?;
+    host.get_external_contract_data(contract, temporary_key.to_val(), StorageType::Temporary)?;
+    host.call(
+        contract,
+        storage_symbol(&host, "get_instance"),
+        test_vec![&host, instance_key].into(),
+    )?;
+    host.get_external_contract_data(contract, instance_key.to_val(), StorageType::Instance)?;
+
+    measure_storage_read(&host, "contract_view_persistent", ITERATIONS, || {
+        host.call(
+            contract,
+            storage_symbol(&host, "get_persistent"),
+            test_vec![&host, persistent_key].into(),
+        )
+    })?;
+    measure_storage_read(&host, "external_read_persistent", ITERATIONS, || {
+        host.get_external_contract_data(contract, persistent_key.to_val(), StorageType::Persistent)
+    })?;
+    measure_storage_read(&host, "contract_view_temporary", ITERATIONS, || {
+        host.call(
+            contract,
+            storage_symbol(&host, "get_temporary"),
+            test_vec![&host, temporary_key].into(),
+        )
+    })?;
+    measure_storage_read(&host, "external_read_temporary", ITERATIONS, || {
+        host.get_external_contract_data(contract, temporary_key.to_val(), StorageType::Temporary)
+    })?;
+    measure_storage_read(&host, "contract_view_instance", ITERATIONS, || {
+        host.call(
+            contract,
+            storage_symbol(&host, "get_instance"),
+            test_vec![&host, instance_key].into(),
+        )
+    })?;
+    measure_storage_read(&host, "external_read_instance", ITERATIONS, || {
+        host.get_external_contract_data(contract, instance_key.to_val(), StorageType::Instance)
+    })?;
+
+    let mut current_instance_entries = 0;
+    for target_instance_entries in [1, 8, 32] {
+        for i in current_instance_entries..target_instance_entries {
+            host.call(
+                contract,
+                storage_symbol(&host, "put_instance"),
+                test_vec![&host, instance_size_key(&host, i), i as u64].into(),
+            )?;
+        }
+        current_instance_entries = target_instance_entries;
+        let read_key = instance_size_key(&host, 0);
+        host.get_external_contract_data(contract, read_key.to_val(), StorageType::Instance)?;
+        let label = format!("external_read_instance_{target_instance_entries}_entries");
+        measure_storage_read(&host, &label, ITERATIONS, || {
+            host.get_external_contract_data(contract, read_key.to_val(), StorageType::Instance)
+        })?;
+    }
+
     Ok(())
 }
