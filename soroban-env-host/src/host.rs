@@ -2303,8 +2303,7 @@ impl VmCallerEnv for Host {
         t: StorageType,
     ) -> Result<Bool, HostError> {
         Ok(Val::from_bool(
-            self.try_get_external_contract_data_value(contract, k, t)?
-                .is_some(),
+            self.external_contract_data_value(contract, k, t)?.is_some(),
         ))
     }
 
@@ -2316,7 +2315,7 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Val, HostError> {
-        self.try_get_external_contract_data_value(contract, k, t)?
+        self.external_contract_data_value(contract, k, t)?
             .ok_or_else(|| {
                 self.err(
                     ScErrorType::Storage,
@@ -2325,26 +2324,6 @@ impl VmCallerEnv for Host {
                     &[contract.to_val(), k],
                 )
             })
-    }
-
-    // Notes on metering: covered by components
-    fn try_get_external_contract_data(
-        &self,
-        vmcaller: &mut VmCaller<Host>,
-        contract: AddressObject,
-        k: Val,
-        t: StorageType,
-        has_pos: U32Val,
-    ) -> Result<Val, HostError> {
-        let MemFnArgs { vm, pos, .. } = self.get_mem_fn_args(has_pos, U32Val::from(1))?;
-        let value = self.try_get_external_contract_data_value(contract, k, t)?;
-        let has = Val::from_bool(value.is_some()).to_val();
-        self.metered_vm_write_vals_to_linear_memory(vmcaller, &vm, pos, &[has], |v| {
-            Ok(u64::to_le_bytes(
-                self.absolute_to_relative(*v)?.get_payload(),
-            ))
-        })?;
-        Ok(value.unwrap_or_else(|| Val::VOID.to_val()))
     }
 
     // Notes on metering: covered by components

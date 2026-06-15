@@ -38,7 +38,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn try_get_external_contract_data_value(
+    pub(crate) fn external_contract_data_value(
         &self,
         contract: AddressObject,
         k: Val,
@@ -54,11 +54,11 @@ impl Host {
                     .map(|entry| self.contract_data_entry_value(&entry.data))
                     .transpose()
             }
-            StorageType::Instance => self.try_get_external_instance_data_value(contract, k),
+            StorageType::Instance => self.external_instance_data_value(contract, k),
         }
     }
 
-    fn try_get_external_instance_data_value(
+    fn external_instance_data_value(
         &self,
         contract: AddressObject,
         k: Val,

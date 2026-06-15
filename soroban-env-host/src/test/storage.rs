@@ -593,7 +593,7 @@ fn external_contract_data_rejects_non_contract_address() -> Result<(), HostError
 }
 
 #[test]
-fn external_try_get_contract_data_preserves_stored_void() -> Result<(), HostError> {
+fn external_has_contract_data_preserves_stored_void_presence() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let target_id = test_contract_id(4);
     let target_addr = test_contract_address(&host, &target_id)?;
@@ -607,7 +607,7 @@ fn external_try_get_contract_data_preserves_stored_void() -> Result<(), HostErro
     )?;
 
     let value = host
-        .try_get_external_contract_data_value(target_addr, key, StorageType::Persistent)?
+        .external_contract_data_value(target_addr, key, StorageType::Persistent)?
         .unwrap();
     assert!(value.is_void());
     assert_eq!(
