@@ -245,6 +245,7 @@ deny = [
 skip = [
     { name = "hashbrown", version = "=0.14.1" },
     { name = "syn", version = "=1.0.109" },
+    { name = "crate-git-revision", version = "=0.0.6" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
