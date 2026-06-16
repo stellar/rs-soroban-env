@@ -514,14 +514,13 @@ impl Host {
     ) -> Result<(), HostError> {
         let durability: ContractDataDurability = t.try_into()?;
         let key = self.storage_key_from_val(k, durability)?;
-        // Currently the storage stores the whole ledger entries, while this
-        // operation might only modify the internal `ScVal` value. Thus we
-        // need to only overwrite the value in case if there is already an
-        // existing ledger entry value for the key in the storage.
-        if self.try_borrow_storage_mut()?.has(&key, self, Some(k))? {
-            let (current, live_until_ledger) = self
-                .try_borrow_storage_mut()?
-                .get_with_live_until_ledger(&key, self, Some(k))?;
+        // Storage stores whole ledger entries, while this only changes the
+        // internal ScVal when the entry already exists.
+        let existing = {
+            self.try_borrow_storage_mut()?
+                .try_get_full(&key, self, Some(k))?
+        };
+        if let Some((current, live_until_ledger)) = existing {
             let mut current = (*current).metered_clone(self)?;
             match current.data {
                 LedgerEntryData::ContractData(ref mut entry) => {

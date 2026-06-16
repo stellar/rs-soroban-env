@@ -1,8 +1,8 @@
 use crate::{
     meta::INTERFACE_VERSION,
     testutils::{generate_account_id, generate_bytes_array, wasm as wasm_util},
-    xdr::{ScErrorCode, ScErrorType},
-    AddressObject, Env, Host, HostError, LedgerInfo, Symbol, Val, WasmiMarshal,
+    xdr::{ContractId, Hash, ScAddress, ScErrorCode, ScErrorType},
+    AddressObject, Env, Host, HostError, LedgerInfo, StorageType, Symbol, Val, WasmiMarshal,
 };
 
 #[test]
@@ -204,6 +204,33 @@ fn test_native_mode_calling_protocol_gated_host_fn() -> Result<(), HostError> {
         res,
         (ScErrorType::Context, ScErrorCode::IndexBounds)
     ));
+
+    Ok(())
+}
+
+#[cfg(feature = "next")]
+#[test]
+fn test_external_contract_data_is_protocol_gated_in_native_mode() -> Result<(), HostError> {
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    host.enable_debug()?;
+    let contract = host.add_host_object(ScAddress::Contract(ContractId(Hash([1; 32]))))?;
+    let key = Symbol::try_from_small_str("key")?.to_val();
+    let mut li = LedgerInfo::default();
+
+    li.protocol_version = 27;
+    host.set_ledger_info(li.clone())?;
+    let res =
+        <Host as Env>::has_external_contract_data(&host, contract, key, StorageType::Persistent);
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Context, ScErrorCode::IndexBounds)
+    ));
+
+    li.protocol_version = 28;
+    host.set_ledger_info(li)?;
+    let res =
+        <Host as Env>::has_external_contract_data(&host, contract, key, StorageType::Persistent)?;
+    assert_eq!(bool::from(res), false);
 
     Ok(())
 }

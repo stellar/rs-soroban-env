@@ -23,6 +23,7 @@ members = [
     "auth",
     "fib",
     "contract_data",
+    "external_storage",
     "upload_contract",
     "create_contract",
     "invoke_contract",
@@ -73,7 +74,8 @@ version = "=26.0.0-rc.1"
 # git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]
-version = "=26.1.2"
+version = "=27.0.0"
+features = ["next"]
 # git = "https://github.com/stellar/rs-soroban-env"
 
 # Always build from the local instance of env as we need to rebuild test Wasms
