@@ -246,6 +246,10 @@ skip = [
     { name = "hashbrown", version = "=0.14.1" },
     { name = "syn", version = "=1.0.109" },
     { name = "crate-git-revision", version = "=0.0.6" },
+    # Transitional duplicate: we depend on stellar-strkey 0.0.17 directly while
+    # the published stellar-xdr 27.0.0 still pulls in 0.0.13. This goes away once
+    # the stellar-xdr v28 (protocol-28) release also ships on strkey 0.0.17.
+    { name = "stellar-strkey", version = "=0.0.13" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
