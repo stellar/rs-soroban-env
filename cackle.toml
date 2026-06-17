@@ -109,6 +109,9 @@ allow_apis = [
 
 [pkg.rand]
 allow_unsafe = true
+allow_apis = [
+    "rand",
+]
 
 [pkg.backtrace]
 allow_apis = [
@@ -144,6 +147,18 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.subtle]
+allow_unsafe = true
+
+[pkg.byteorder]
+allow_unsafe = true
+
+[pkg.hash32]
+allow_unsafe = true
+
+[pkg.stable_deref_trait]
+allow_unsafe = true
+
+[pkg.stellar-strkey]
 allow_unsafe = true
 
 [pkg.zeroize]
@@ -246,11 +261,7 @@ build.allow_apis = [
 ]
 
 [pkg.heapless]
-build.allow_apis = [
-    "env",
-    "fs",
-    "process",
-]
+allow_unsafe = true
 
 [pkg.tracking-allocator]
 allow_unsafe = true
