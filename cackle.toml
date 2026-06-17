@@ -262,6 +262,11 @@ build.allow_apis = [
 
 [pkg.heapless]
 allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
 
 [pkg.tracking-allocator]
 allow_unsafe = true
