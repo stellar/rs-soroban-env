@@ -70,29 +70,6 @@ pub trait EnvBase: Sized + Clone {
     /// log or enrich the error with context (both of which happen in `Host`).
     fn error_from_error_val(&self, e: crate::Error) -> Self::Error;
 
-    /// Reject an error from the environment, turning it into a panic but on
-    /// terms that the environment controls (eg. enriching or logging it). This
-    /// should only ever be called by client-side / SDK local-testing code,
-    /// never in the `Host`.
-    #[cfg(feature = "testutils")]
-    fn escalate_error_to_panic(&self, e: Self::Error) -> !;
-
-    #[cfg(all(feature = "std", feature = "testutils"))]
-    #[deprecated(note = "replaced by trace_env_call")]
-    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    #[cfg(all(feature = "std", feature = "testutils"))]
-    #[deprecated(note = "replaced by trace_env_ret")]
-    fn env_ret_hook(
-        &self,
-        _fname: &'static str,
-        _res: &Result<String, &Self::Error>,
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
     /// Return true if the environment wants to receive trace calls and and
     /// returns using [`Self::trace_env_call`] and [`Self::trace_env_ret`].
     #[cfg(feature = "std")]
@@ -231,6 +208,33 @@ pub trait EnvBase: Sized + Clone {
     /// Check the current ledger protocol version against a provided upper
     /// bound, error if protocol version is out-of-bound.
     fn check_protocol_version_upper_bound(&self, upper_bound: u32) -> Result<(), Self::Error>;
+}
+
+/// Trait for test-only extensions to [EnvBase]. This trait is only available
+/// when the `testutils` feature is enabled.
+#[cfg(feature = "testutils")]
+pub trait EnvBaseTestUtils: EnvBase {
+    /// Reject an error from the environment, turning it into a panic but on
+    /// terms that the environment controls (eg. enriching or logging it). This
+    /// should only ever be called by client-side / SDK local-testing code,
+    /// never in the `Host`.
+    fn escalate_error_to_panic(&self, e: Self::Error) -> !;
+
+    #[cfg(feature = "std")]
+    #[deprecated(note = "replaced by trace_env_call")]
+    fn env_call_hook(&self, _fname: &'static str, _args: &[String]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    #[cfg(feature = "std")]
+    #[deprecated(note = "replaced by trace_env_ret")]
+    fn env_ret_hook(
+        &self,
+        _fname: &'static str,
+        _res: &Result<String, &Self::Error>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 /// This trait is used by macro-generated dispatch and forwarding functions to
