@@ -686,7 +686,7 @@ impl Host {
                 ))
             }
         };
-        Ok(strkey.to_string())
+        Ok(strkey.to_string().as_str().to_string())
     }
 
     pub(crate) fn muxed_sc_address_to_strkey(
@@ -708,7 +708,7 @@ impl Host {
                         ed25519: muxed_account.ed25519.0.metered_clone(self)?,
                     },
                 );
-                Ok(strkey.to_string())
+                Ok(strkey.to_string().as_str().to_string())
             }
             _ => Err(self.err(
                 ScErrorType::Object,
