@@ -962,9 +962,7 @@ fn test_cap_84_transfer_with_muxed_contracts() {
     );
 
     // A plain (non-muxed) contract destination emits no `to_muxed_id`.
-    contract
-        .transfer(&user, dst_address.clone(), 1)
-        .unwrap();
+    contract.transfer(&user, dst_address.clone(), 1).unwrap();
     assert_eq!(
         test.host.get_contract_events().unwrap().0,
         vec![contract.test_event(
