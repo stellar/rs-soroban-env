@@ -422,6 +422,34 @@ fn muxed_address_storage_key_conversion() {
     assert!(res_non_storage.is_ok());
 }
 
+// CAP-0084: a muxed contract address routes through the same `MuxedAddress`
+// vehicle, so it inherits the storage-key prohibition.
+#[cfg(feature = "next")]
+#[test]
+fn muxed_contract_storage_key_conversion() {
+    use crate::xdr::MuxedContract;
+    let host = observe_host!(Host::test_host_with_recording_footprint());
+    let muxed_address = MuxedScAddress(ScAddress::MuxedContract(MuxedContract {
+        id: 42,
+        contract_id: ContractId([7; 32].into()),
+    }));
+    let muxed_address_val = host
+        .add_host_object(muxed_address.clone())
+        .unwrap()
+        .to_val();
+    // Conversion for use as a storage key should fail.
+    let res = host.from_host_val_for_storage(muxed_address_val);
+
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Storage, ScErrorCode::InvalidInput)
+    ));
+
+    // Conversion to regular ScVal should succeed.
+    let res_non_storage = host.from_host_val(muxed_address_val);
+    assert!(res_non_storage.is_ok());
+}
+
 #[test]
 fn test_muxed_account_is_not_allowed_as_storage_key() {
     let host = Host::test_host_with_recording_footprint();

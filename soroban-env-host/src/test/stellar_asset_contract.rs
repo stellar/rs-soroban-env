@@ -895,6 +895,139 @@ fn test_cap_67_transfer_with_muxed_accounts() {
     );
 }
 
+#[cfg(feature = "next")]
+#[test]
+fn test_cap_84_transfer_with_muxed_contracts() {
+    use crate::builtin_contracts::testutils::muxed_contract_address;
+
+    let test = StellarAssetContractTest::setup(function_name!());
+    // Enable invocation metering to get the events to reset automatically on
+    // every contract call.
+    test.host.enable_invocation_metering();
+    let contract = test.default_stellar_asset_contract();
+
+    let user = TestSigner::account(&test.user_key);
+    test.create_default_account(&user);
+    test.create_default_trustline(&user);
+
+    // The destination is a contract; contracts hold SAC balances without a
+    // trustline. The de-muxed contract address is what the event/balance use.
+    let dst_contract_id = generate_bytes_array(&test.host);
+    let dst_address = contract_id_to_address(&test.host, dst_contract_id);
+
+    contract
+        .mint(
+            &TestSigner::account(&test.issuer_key),
+            user.address(&test.host),
+            100_000_000,
+        )
+        .unwrap();
+
+    let transfer_symbol = Symbol::try_from_small_str("transfer").unwrap().to_val();
+    let token_name = contract.name().unwrap();
+
+    // Transfer from a (non-muxed) account to a muxed contract destination.
+    contract
+        .transfer_muxed(
+            &user,
+            muxed_contract_address(&test.host, dst_contract_id, 0xCAFE),
+            9_999_999,
+        )
+        .unwrap();
+
+    assert_eq!(
+        test.host.get_contract_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                transfer_symbol,
+                user.address(&test.host),
+                // `to` topic is the de-muxed contract address.
+                dst_address.clone(),
+                &token_name,
+            ],
+            test_map![
+                &test.host,
+                ("amount", 9_999_999_i128),
+                ("to_muxed_id", 0xCAFE_u64)
+            ]
+            .into()
+        )]
+    );
+    // Balance credits the underlying contract.
+    assert_eq!(contract.balance(dst_address.clone()).unwrap(), 9_999_999);
+    assert_eq!(
+        contract.balance(user.address(&test.host)).unwrap(),
+        90_000_001
+    );
+
+    // A plain (non-muxed) contract destination emits no `to_muxed_id`.
+    contract
+        .transfer(&user, dst_address.clone(), 1)
+        .unwrap();
+    assert_eq!(
+        test.host.get_contract_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                transfer_symbol,
+                user.address(&test.host),
+                dst_address.clone(),
+                &token_name,
+            ],
+            1_i128.try_into_val(&test.host).unwrap()
+        )]
+    );
+    assert_eq!(contract.balance(dst_address).unwrap(), 10_000_000);
+}
+
+#[cfg(feature = "next")]
+#[test]
+fn test_cap_84_mint_with_muxed_contract() {
+    use crate::builtin_contracts::testutils::muxed_contract_address;
+
+    let test = StellarAssetContractTest::setup(function_name!());
+    test.host.enable_invocation_metering();
+    let admin = TestSigner::account(&test.issuer_key);
+    let contract = test.default_stellar_asset_contract();
+
+    let dst_contract_id = generate_bytes_array(&test.host);
+    let dst_address = contract_id_to_address(&test.host, dst_contract_id);
+
+    let mint_symbol = Symbol::try_from_small_str("mint").unwrap().to_val();
+    let token_name = contract.name().unwrap();
+
+    // Mint to a muxed contract destination.
+    contract
+        .mint_muxed(
+            &admin,
+            muxed_contract_address(&test.host, dst_contract_id, 7_654_321),
+            100_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        test.host.get_contract_events().unwrap().0,
+        vec![contract.test_event(
+            test_vec![
+                &test.host,
+                mint_symbol,
+                // `to` topic is the de-muxed contract address.
+                dst_address.clone(),
+                &token_name,
+            ],
+            test_map![
+                &test.host,
+                ("amount", 100_000_000_i128),
+                ("to_muxed_id", 7_654_321_u64)
+            ]
+            .into()
+        )]
+    );
+    // Balance credits the underlying contract.
+    assert_eq!(contract.balance(dst_address).unwrap(), 100_000_000);
+}
+
 #[test]
 fn test_native_self_transfer() {
     let test = StellarAssetContractTest::setup(function_name!());

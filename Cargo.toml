@@ -36,8 +36,10 @@ wasmparser = "=0.116.1"
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]
 version = "=27.0.0"
-#git = "https://github.com/stellar/rs-stellar-xdr"
-#rev = "156759ab322dda6976d07435c6f5b70f98e9fd0c"
+# SPIKE: rs-stellar-xdr#548 (CAP-0084). Fork-hosted branch p28-cap-0084.
+# Productionize -> stellar/rs-stellar-xdr merged SHA (or crates.io version) once #548 lands.
+git = "https://github.com/sisuresh/rs-stellar-xdr"
+rev = "bd30d420ce6f63ccd9360e371830384cb84d1c04"
 default-features = false
 
 [workspace.dependencies.wasmi]

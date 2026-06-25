@@ -37,7 +37,10 @@ std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["dep:serde", "stellar-xdr/serde"]
 wasmi = ["dep:wasmi", "dep:wasmparser"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
-next = ["soroban-env-macros/next"]
+# `next` also enables the gated XDR of CAPs targeting the next protocol. Each
+# cap_XXXX entry becomes unconditional (moved to the workspace stellar-xdr
+# dep) at the protocol bump, and is removed once folded into the base XDR.
+next = ["soroban-env-macros/next", "stellar-xdr/cap_0083", "stellar-xdr/cap_0084"]
 tracy = ["dep:tracy-client"]
 shallow-val-hash = []
 
