@@ -272,7 +272,10 @@ allow-git = []
 
 [sources.allow-org]
 # 1 or more github.com organizations to allow git sources for
-github = ["stellar"]
+# TEMP CAP-0084 SPIKE: "sisuresh" allows the rs-stellar-xdr#548 fork-rev pin
+# (git+https://github.com/sisuresh/rs-stellar-xdr?rev=bd30d420). Revert when the
+# stellar-xdr dependency re-points to an accepted stellar/rs-stellar-xdr rev.
+github = ["stellar", "sisuresh"]
 # 1 or more gitlab.com organizations to allow git sources for
 # gitlab = [""]
 # 1 or more bitbucket.org organizations to allow git sources for
