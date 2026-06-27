@@ -38,6 +38,11 @@ serde = ["dep:serde", "stellar-xdr/serde"]
 wasmi = ["dep:wasmi", "dep:wasmparser"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
 next = ["soroban-env-macros/next"]
+# CAP-0084 (muxed contract addresses). Gated on its own feature rather than the
+# umbrella `next`: it pulls in `next` (so the proto-28 meta is active whenever
+# this CAP's code compiles) plus the gated XDR variant from stellar-xdr. Fold
+# into the base XDR / make unconditional at the protocol bump.
+cap_0084_muxed_contract = ["next", "stellar-xdr/cap_0084_muxed_contract"]
 tracy = ["dep:tracy-client"]
 shallow-val-hash = []
 

@@ -75,6 +75,18 @@ fn check_not_issuer(e: &Host, addr: &Address) -> Result<(), HostError> {
     }
 }
 
+// Destination type for SAC `mint`. Under the current protocol it is a plain
+// `Address` (byte-for-byte unchanged). Under `next` (Protocol 28 / CAP-0084) it
+// widens to `MuxedAddress` so a muxed contract can be a mint destination,
+// mirroring `transfer`. This is a cfg'd alias on a single `mint` method rather
+// than two cfg'd `mint` methods because the builtin `#[contractimpl]` dispatch
+// macro keys arms by positional index and discards per-method cfg attributes,
+// so two same-named cfg'd `mint` definitions would desync the dispatch table.
+#[cfg(not(feature = "cap_0084_muxed_contract"))]
+type MintDestination = Address;
+#[cfg(feature = "cap_0084_muxed_contract")]
+type MintDestination = MuxedAddress;
+
 #[contractimpl]
 // Metering: covered by components.
 impl StellarAssetContract {
@@ -334,9 +346,16 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub(crate) fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
+    pub(crate) fn mint(e: &Host, to: MintDestination, amount: i128) -> Result<(), HostError> {
         let _span = tracy_span!("SAC mint");
         check_nonnegative_amount(e, amount)?;
+        // Under `next`, `to` is a `MuxedAddress`: de-mux to the underlying
+        // address and capture the mux id for the event (mirrors `transfer`).
+        // Under curr, `to` is already a plain `Address` and no mux id is emitted.
+        #[cfg(feature = "cap_0084_muxed_contract")]
+        let (to, to_muxed_id) = (to.address()?, to.id()?);
+        #[cfg(not(feature = "cap_0084_muxed_contract"))]
+        let to_muxed_id: Option<u64> = None;
         check_not_issuer(e, &to)?;
 
         let admin = read_administrator(e)?;
@@ -348,7 +367,7 @@ impl StellarAssetContract {
         )?;
 
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::mint(e, to, None, amount)?;
+        event::mint(e, to, to_muxed_id, amount)?;
         Ok(())
     }
 

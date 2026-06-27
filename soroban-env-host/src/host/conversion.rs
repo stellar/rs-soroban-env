@@ -629,6 +629,10 @@ impl Host {
                     ScAddress::MuxedAccount(_) => Ok(self
                         .add_host_object(MuxedScAddress(addr.metered_clone(self)?))?
                         .into()),
+                    #[cfg(feature = "cap_0084_muxed_contract")]
+                    ScAddress::MuxedContract(_) => Ok(self
+                        .add_host_object(MuxedScAddress(addr.metered_clone(self)?))?
+                        .into()),
                     _ => Err(self.err(
                         ScErrorType::Object,
                         ScErrorCode::UnexpectedType,

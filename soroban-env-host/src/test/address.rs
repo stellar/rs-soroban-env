@@ -50,6 +50,32 @@ fn test_muxed_address_to_components_conversion() {
     assert_eq!(mux_id_val, ScVal::U64(123));
 }
 
+// CAP-0084: `get_address_from_muxed_address` / `get_id_from_muxed_address` on a
+// muxed contract return the underlying contract address and the mux id.
+#[cfg(feature = "cap_0084_muxed_contract")]
+#[test]
+fn test_muxed_contract_to_components_conversion() {
+    use crate::xdr::MuxedContract;
+    let host = observe_host!(Host::test_host());
+    let muxed_address_obj = host
+        .add_host_object(MuxedScAddress(ScAddress::MuxedContract(MuxedContract {
+            id: 456,
+            contract_id: ContractId(Hash([20; 32])),
+        })))
+        .unwrap();
+    let address = host
+        .get_address_from_muxed_address(muxed_address_obj)
+        .unwrap();
+    let mux_id = host.get_id_from_muxed_address(muxed_address_obj).unwrap();
+    let address_val = host.from_host_val(address.into()).unwrap();
+    let mux_id_val = host.from_host_val(mux_id.into()).unwrap();
+    assert_eq!(
+        address_val,
+        ScVal::Address(ScAddress::Contract(ContractId(Hash([20; 32]))))
+    );
+    assert_eq!(mux_id_val, ScVal::U64(456));
+}
+
 #[test]
 fn test_invalid_muxed_address_object_conversions() {
     let host = observe_host!(Host::test_host());

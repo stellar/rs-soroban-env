@@ -214,6 +214,16 @@ impl<'a> TestStellarAssetContract<'a> {
         self.call_with_single_signer(admin, "mint", test_vec![self.host, to, amount])
     }
 
+    #[cfg(feature = "cap_0084_muxed_contract")]
+    pub(crate) fn mint_muxed(
+        &self,
+        admin: &TestSigner,
+        to: MuxedAddress,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        self.call_with_single_signer(admin, "mint", test_vec![self.host, to, amount])
+    }
+
     pub(crate) fn clawback(
         &self,
         admin: &TestSigner,

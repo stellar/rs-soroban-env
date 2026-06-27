@@ -88,6 +88,7 @@ lazy_static = "1.5.0"
 testutils = ["soroban-env-common/testutils", "recording_mode"]
 backtrace = ["dep:backtrace"]
 next = ["soroban-env-common/next"]
+cap_0084_muxed_contract = ["next", "soroban-env-common/cap_0084_muxed_contract"]
 tracy = ["dep:tracy-client", "soroban-env-common/tracy"]
 recording_mode = []
 bench = ["testutils"]
