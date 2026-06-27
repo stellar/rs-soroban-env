@@ -257,6 +257,8 @@ impl HostObjectType for MuxedScAddress {
     fn inject(self, host: &Host) -> Result<HostObject, HostError> {
         match &self.0 {
             xdr::ScAddress::MuxedAccount(_) => Ok(HostObject::MuxedAddress(self)),
+            #[cfg(feature = "cap_0084_muxed_contract")]
+            xdr::ScAddress::MuxedContract(_) => Ok(HostObject::MuxedAddress(self)),
             _ => Err(host.err(
                 ScErrorType::Object,
                 ScErrorCode::InvalidInput,

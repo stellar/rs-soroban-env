@@ -20,3 +20,4 @@ all-features = true
 [features]
 testutils = ["soroban-env-common/testutils"]
 next = ["soroban-env-common/next"]
+cap_0084_muxed_contract = ["next", "soroban-env-common/cap_0084_muxed_contract"]
