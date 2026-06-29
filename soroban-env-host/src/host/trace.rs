@@ -298,7 +298,7 @@ impl Host {
                     match v {
                         Some((entry, ttl)) => {
                             0.metered_hash(&mut state, budget)?;
-                            entry.metered_hash_xdr(&mut state, budget)?;
+                            entry.metered_hash(&mut state, budget)?;
                             ttl.metered_hash(&mut state, budget)?;
                         }
                         None => {
