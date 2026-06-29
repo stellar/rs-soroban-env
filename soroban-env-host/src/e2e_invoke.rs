@@ -209,6 +209,7 @@ trait EntryTTLSource {
 /// Returns the difference between the `storage` and its initial snapshot as
 /// `LedgerEntryChanges`.
 /// Returns an entry for every item in `storage` footprint.
+#[allow(clippy::too_many_arguments)]
 fn get_ledger_changes<S: EntryTTLSource + ?Sized>(
     budget: &Budget,
     storage: &Storage,
