@@ -18,7 +18,7 @@ testutils = ["soroban-env-host/testutils"]
 unstable-next-api = ["soroban-env-host/unstable-next-api"]
 
 [dependencies]
-anyhow = { version = "1.0.75", features = [] }
+anyhow = "1.0.103"
 thiserror = "1.0.40"
 soroban-env-host = { workspace = true,  features = ["recording_mode"]}
 static_assertions = "1.1.0"

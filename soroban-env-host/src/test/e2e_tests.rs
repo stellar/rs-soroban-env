@@ -11,7 +11,7 @@ use crate::{
     e2e_invoke::{
         entry_size_for_rent, invoke_host_function, invoke_host_function_in_recording_mode,
         ledger_entry_to_ledger_key, LedgerEntryChange, LedgerEntryLiveUntilChange,
-        RecordingInvocationAuthMode,
+        RecordingInvocationAuthMode, TtlLedgerEntryMeta,
     },
     e2e_testutils::{
         auth_contract_invocation, create_contract_auth, default_ledger_info, get_account_id,
@@ -20,15 +20,15 @@ use crate::{
     },
     testutils::MockSnapshotSource,
     xdr::{
-        AccountId, ContractDataDurability, ContractDataEntry, ContractEvent, ContractExecutable,
-        ContractId, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
-        DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-        HashIdPreimageSorobanAuthorizationWithAddress, HostFunction, InvokeContractArgs,
-        LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
-        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
+        AccountId, ContractCostType, ContractDataDurability, ContractDataEntry, ContractEvent,
+        ContractExecutable, ContractId, ContractIdPreimage, ContractIdPreimageFromAddress,
+        CreateContractArgs, DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage,
+        HashIdPreimageSorobanAuthorization, HashIdPreimageSorobanAuthorizationWithAddress,
+        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryType,
+        LedgerFootprint, LedgerKey, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
         SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedInvocation,
-        SorobanCredentials, SorobanResources, TtlEntry, Uint256, WriteXdr,
+        SorobanCredentials, SorobanResources, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -45,7 +45,7 @@ use soroban_test_wasms::{
     NO_ARGUMENT_CONSTRUCTOR_TEST_CONTRACT_P22, SIMPLE_ACCOUNT_CONTRACT, SUM_I32,
     UPDATEABLE_CONTRACT,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 // It's tricky to get exactly the same instruction consumption
@@ -85,13 +85,6 @@ fn compute_key_hash(key: &LedgerKey) -> Vec<u8> {
     let key_xdr = key.to_xdr(Limits::none()).unwrap();
     let hash: [u8; 32] = Sha256::digest(&key_xdr).into();
     hash.to_vec()
-}
-
-fn ttl_entry(key: &LedgerKey, ttl: u32) -> TtlEntry {
-    TtlEntry {
-        key_hash: compute_key_hash(key).try_into().unwrap(),
-        live_until_ledger_seq: ttl,
-    }
 }
 
 fn symbol_sc_val(s: &str) -> ScVal {
@@ -341,34 +334,33 @@ fn invoke_host_function_helper_with_restored_entries(
         .iter()
         .map(|e| e.to_xdr(limits.clone()).unwrap())
         .collect();
-    let encoded_ledger_entries: Vec<Vec<u8>> = ledger_entries_with_ttl
+    let mut entry_by_key: HashMap<LedgerKey, (Vec<u8>, Option<TtlLedgerEntryMeta>)> =
+        HashMap::new();
+    for (le, ttl) in ledger_entries_with_ttl.iter() {
+        let key = ledger_entry_to_ledger_key(le, &Budget::default()).unwrap();
+        let encoded = le.to_xdr(limits.clone()).unwrap();
+        let ttl = ttl
+            .map(|live_until_ledger| {
+                Ok::<TtlLedgerEntryMeta, HostError>(TtlLedgerEntryMeta {
+                    live_until_ledger,
+                    entry_size_for_rent: entry_size_for_rent(
+                        &Budget::default(),
+                        &le,
+                        encoded.len() as u32,
+                    )?,
+                })
+            })
+            .transpose()?;
+        entry_by_key.insert(key, (encoded, ttl));
+    }
+    let encoded_ledger_entries: Vec<(Option<Vec<u8>>, Option<TtlLedgerEntryMeta>)> = resources
+        .footprint
+        .read_only
         .iter()
-        .map(|e| e.0.to_xdr(limits.clone()).unwrap())
-        .collect();
-    let encoded_ttl_entries: Vec<Vec<u8>> = ledger_entries_with_ttl
-        .iter()
-        .map(|e| {
-            let (le, ttl) = e;
-            let key = match &le.data {
-                LedgerEntryData::ContractData(cd) => {
-                    LedgerKey::ContractData(LedgerKeyContractData {
-                        contract: cd.contract.clone(),
-                        key: cd.key.clone(),
-                        durability: cd.durability,
-                    })
-                }
-                LedgerEntryData::ContractCode(code) => {
-                    LedgerKey::ContractCode(LedgerKeyContractCode {
-                        hash: code.hash.clone(),
-                    })
-                }
-                _ => {
-                    return vec![];
-                }
-            };
-            ttl_entry(&key, ttl.unwrap())
-                .to_xdr(limits.clone())
-                .unwrap()
+        .chain(resources.footprint.read_write.iter())
+        .map(|k| match entry_by_key.get(k) {
+            Some((bytes, ttl)) => (Some(bytes.clone()), *ttl),
+            None => (None, None),
         })
         .collect();
     let mut restored_contracts = HashSet::new();
@@ -396,7 +388,6 @@ fn invoke_host_function_helper_with_restored_entries(
         encoded_auth_entries.into_iter(),
         ledger_info.clone(),
         encoded_ledger_entries.into_iter(),
-        encoded_ttl_entries.into_iter(),
         prng_seed.to_vec(),
         &mut diagnostic_events,
         None,
@@ -891,7 +882,7 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
-    expect!["1767593"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1594164"].assert_eq(&res.resources.instructions.to_string());
     expect!["684"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -930,7 +921,7 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
-    expect!["1093647"].assert_eq(&res.resources.instructions.to_string());
+    expect!["920500"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -1053,6 +1044,66 @@ fn test_wasm_upload_with_incorrect_footprint_fails() {
 }
 
 #[test]
+fn test_contract_code_from_module_cache_is_not_decoded() {
+    let ledger_info = default_ledger_info();
+    let account = get_account_id([123; 32]);
+
+    let upload_result = invoke_host_function_helper(
+        false,
+        &upload_wasm_host_fn(AUTH_TEST_CONTRACT),
+        &resources(10_000_000, vec![], vec![get_wasm_key(AUTH_TEST_CONTRACT)]),
+        &account,
+        vec![],
+        &ledger_info,
+        vec![],
+        &prng_seed(),
+    )
+    .unwrap();
+    assert!(upload_result.invoke_result.is_ok());
+
+    let cd = CreateContractData::new([111; 32], AUTH_TEST_CONTRACT);
+
+    let invoke_result = invoke_host_function_using_simulation(
+        false,
+        &invoke_contract_host_fn(
+            &cd.contract_address,
+            "store",
+            vec![ScVal::Vec(Some(ScVec::default()))],
+        ),
+        &account,
+        &ledger_info,
+        vec![
+            (cd.contract_entry, Some(ledger_info.sequence_number + 1000)),
+            (cd.wasm_entry, Some(ledger_info.sequence_number + 1000)),
+        ],
+        &prng_seed(),
+    )
+    .unwrap();
+    assert!(invoke_result.invoke_result.is_ok());
+
+    // Sanity check the budgets - upload is much more expensive than invocation.
+    // Note, that this value is rough and can be adjusted if we e.g. optimize
+    // uploads.
+    assert!(
+        upload_result.budget.get_cpu_insns_consumed().unwrap()
+            > 10 * invoke_result.budget.get_cpu_insns_consumed().unwrap()
+    );
+    // Verify that deserialization cost is much lower in the invocation.
+    assert!(
+        upload_result
+            .budget
+            .get_tracker(ContractCostType::ValDeser)
+            .unwrap()
+            .cpu
+            > 10 * invoke_result
+                .budget
+                .get_tracker(ContractCostType::ValDeser)
+                .unwrap()
+                .cpu
+    );
+}
+
+#[test]
 fn test_wasm_upload_without_footprint_fails() {
     let res = invoke_host_function_helper(
         true,
@@ -1155,6 +1206,19 @@ fn test_wasm_upload_success_with_extra_footprint_entries() {
         res.ledger_changes,
         vec![
             LedgerEntryChangeHelper {
+                read_only: true,
+                key: get_wasm_key(CONTRACT_STORAGE),
+                old_entry_size_bytes_for_rent: 0,
+                new_value: None,
+                ttl_change: Some(LedgerEntryLiveUntilChange {
+                    key_hash: compute_key_hash(&get_wasm_key(CONTRACT_STORAGE)),
+                    entry_type: LedgerEntryType::ContractCode,
+                    durability: ContractDataDurability::Persistent,
+                    old_live_until_ledger: 0,
+                    new_live_until_ledger: 0,
+                }),
+            },
+            LedgerEntryChangeHelper {
                 read_only: false,
                 key: get_wasm_key(ADD_I32),
                 old_entry_size_bytes_for_rent: 0,
@@ -1185,19 +1249,6 @@ fn test_wasm_upload_success_with_extra_footprint_entries() {
                     durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: ledger_info.sequence_number + 1000,
                     new_live_until_ledger: ledger_info.sequence_number + 1000,
-                }),
-            },
-            LedgerEntryChangeHelper {
-                read_only: true,
-                key: get_wasm_key(CONTRACT_STORAGE),
-                old_entry_size_bytes_for_rent: 0,
-                new_value: None,
-                ttl_change: Some(LedgerEntryLiveUntilChange {
-                    key_hash: compute_key_hash(&get_wasm_key(CONTRACT_STORAGE)),
-                    entry_type: LedgerEntryType::ContractCode,
-                    durability: ContractDataDurability::Persistent,
-                    old_live_until_ledger: 0,
-                    new_live_until_ledger: 0,
                 }),
             },
         ]
@@ -1236,6 +1287,10 @@ fn test_create_contract_success() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100
+            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: cd.contract_key.clone(),
@@ -1251,10 +1306,6 @@ fn test_create_contract_success() {
                         - 1,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &cd.wasm_entry,
-                ledger_info.sequence_number + 100
-            ),
         ]
     );
     assert!(res.budget.get_cpu_insns_consumed().unwrap() > 0);
@@ -1334,23 +1385,22 @@ fn test_create_contract_with_no_argument_constructor_success() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100
+            ),
             LedgerEntryChangeHelper {
                 read_only: false,
-                key: temp_entry_key.clone(),
+                key: cd.contract_key.clone(),
                 old_entry_size_bytes_for_rent: 0,
-                new_value: Some(contract_data_entry(
-                    &cd.contract_address,
-                    &symbol_sc_val("key"),
-                    &u32_sc_val(3),
-                    ContractDataDurability::Temporary
-                )),
+                new_value: Some(expected_contract_entry),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
-                    key_hash: compute_key_hash(&temp_entry_key),
+                    key_hash: compute_key_hash(&cd.contract_key),
                     entry_type: LedgerEntryType::ContractData,
-                    durability: ContractDataDurability::Temporary,
+                    durability: ContractDataDurability::Persistent,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
-                        + ledger_info.min_temp_entry_ttl
+                        + ledger_info.min_persistent_entry_ttl
                         - 1,
                 }),
             },
@@ -1376,23 +1426,24 @@ fn test_create_contract_with_no_argument_constructor_success() {
             },
             LedgerEntryChangeHelper {
                 read_only: false,
-                key: cd.contract_key.clone(),
+                key: temp_entry_key.clone(),
                 old_entry_size_bytes_for_rent: 0,
-                new_value: Some(expected_contract_entry),
+                new_value: Some(contract_data_entry(
+                    &cd.contract_address,
+                    &symbol_sc_val("key"),
+                    &u32_sc_val(3),
+                    ContractDataDurability::Temporary
+                )),
                 ttl_change: Some(LedgerEntryLiveUntilChange {
-                    key_hash: compute_key_hash(&cd.contract_key),
+                    key_hash: compute_key_hash(&temp_entry_key),
                     entry_type: LedgerEntryType::ContractData,
-                    durability: ContractDataDurability::Persistent,
+                    durability: ContractDataDurability::Temporary,
                     old_live_until_ledger: 0,
                     new_live_until_ledger: ledger_info.sequence_number
-                        + ledger_info.min_persistent_entry_ttl
+                        + ledger_info.min_temp_entry_ttl
                         - 1,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &cd.wasm_entry,
-                ledger_info.sequence_number + 100
-            ),
         ]
     );
     assert!(res.budget.get_cpu_insns_consumed().unwrap() > 0);
@@ -1425,6 +1476,10 @@ fn test_create_contract_success_in_recording_mode() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100
+            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: cd.contract_key.clone(),
@@ -1440,14 +1495,10 @@ fn test_create_contract_success_in_recording_mode() {
                         - 1,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &cd.wasm_entry,
-                ledger_info.sequence_number + 100
-            ),
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    expect!["663637"].assert_eq(&res.resources.instructions.to_string());
+    expect!["290904"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1533,6 +1584,18 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            LedgerEntryChangeHelper::no_op_change(
+                &custom_account_instance_entry,
+                ledger_info.sequence_number + 1000,
+            ),
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100
+            ),
+            LedgerEntryChangeHelper::no_op_change(
+                &wasm_entry(custom_account_wasm),
+                ledger_info.sequence_number + 1000
+            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: cd.contract_key.clone(),
@@ -1548,10 +1611,6 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                         - 1,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &custom_account_instance_entry,
-                ledger_info.sequence_number + 1000,
-            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: nonce_entry_key.clone(),
@@ -1574,18 +1633,10 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
                         - 1,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &cd.wasm_entry,
-                ledger_info.sequence_number + 100
-            ),
-            LedgerEntryChangeHelper::no_op_change(
-                &wasm_entry(custom_account_wasm),
-                ledger_info.sequence_number + 1000
-            ),
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    expect!["1070795"].assert_eq(&res.resources.instructions.to_string());
+    expect!["476131"].assert_eq(&res.resources.instructions.to_string());
     expect!["176"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1634,6 +1685,10 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100
+            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: cd.contract_key.clone(),
@@ -1649,14 +1704,10 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
                         - 1,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &cd.wasm_entry,
-                ledger_info.sequence_number + 100
-            ),
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    expect!["665138"].assert_eq(&res.resources.instructions.to_string());
+    expect!["292405"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -1730,6 +1781,14 @@ fn test_create_contract_success_with_extra_footprint_entries() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100
+            ),
+            LedgerEntryChangeHelper::no_op_change(
+                &cd2.wasm_entry,
+                ledger_info.sequence_number + 200
+            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: cd.contract_key.clone(),
@@ -1758,14 +1817,6 @@ fn test_create_contract_success_with_extra_footprint_entries() {
                     new_live_until_ledger: 0,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &cd.wasm_entry,
-                ledger_info.sequence_number + 100
-            ),
-            LedgerEntryChangeHelper::no_op_change(
-                &cd2.wasm_entry,
-                ledger_info.sequence_number + 200
-            ),
         ]
     );
     assert!(res.budget.get_cpu_insns_consumed().unwrap() > 0);
@@ -1939,6 +1990,8 @@ fn test_invoke_contract_with_storage_ops_success() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            contract_entry_change.clone(),
+            wasm_entry_change.clone(),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: data_key.clone(),
@@ -1954,8 +2007,6 @@ fn test_invoke_contract_with_storage_ops_success() {
                         - 1,
                 }),
             },
-            contract_entry_change.clone(),
-            wasm_entry_change.clone()
         ]
     );
 
@@ -1998,6 +2049,8 @@ fn test_invoke_contract_with_storage_ops_success() {
     assert_eq!(
         extend_res.ledger_changes,
         vec![
+            contract_entry_change.clone(),
+            wasm_entry_change.clone(),
             LedgerEntryChangeHelper {
                 read_only: true,
                 key: data_key.clone(),
@@ -2012,8 +2065,6 @@ fn test_invoke_contract_with_storage_ops_success() {
                     new_live_until_ledger: ledger_info.sequence_number + 5000,
                 }),
             },
-            contract_entry_change.clone(),
-            wasm_entry_change.clone()
         ]
     );
     assert!(extend_res.budget.get_cpu_insns_consumed().unwrap() > 0);
@@ -2075,6 +2126,8 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            contract_entry_change.clone(),
+            wasm_entry_change.clone(),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: data_key.clone(),
@@ -2090,12 +2143,10 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
                         - 1,
                 }),
             },
-            contract_entry_change.clone(),
-            wasm_entry_change.clone()
         ]
     );
     assert!(res.restored_rw_entry_ids.is_empty());
-    expect!["898006"].assert_eq(&res.resources.instructions.to_string());
+    expect!["395420"].assert_eq(&res.resources.instructions.to_string());
     expect!["80"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -2162,7 +2213,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    expect!["1009860"].assert_eq(&extend_res.resources.instructions.to_string());
+    expect!["387038"].assert_eq(&extend_res.resources.instructions.to_string());
     assert_eq!(
         extend_res.resources,
         SorobanResources {
@@ -2314,6 +2365,12 @@ fn test_invoke_contract_with_storage_extension_and_autorestore() {
     // Wasm change is no-op, but it's not read-only.
     wasm_entry_change.read_only = false;
     wasm_entry_change.new_value = Some(cd.wasm_entry.clone());
+    wasm_entry_change.old_entry_size_bytes_for_rent = entry_size_for_rent(
+        &Budget::default(),
+        &cd.wasm_entry,
+        cd.wasm_entry.to_xdr(Limits::none()).unwrap().len() as u32,
+    )
+    .unwrap();
     let contract_entry_change = LedgerEntryChangeHelper {
         read_only: false,
         key: cd.contract_key.clone(),
@@ -2345,9 +2402,9 @@ fn test_invoke_contract_with_storage_extension_and_autorestore() {
     assert_eq!(
         res.ledger_changes,
         vec![
-            contract_data_change,
             contract_entry_change.clone(),
-            wasm_entry_change.clone()
+            wasm_entry_change.clone(),
+            contract_data_change,
         ]
     );
 }
@@ -2462,7 +2519,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
         ]
     );
 
-    expect!["1562621"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1047488"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2568,6 +2625,10 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.wasm_entry,
+                ledger_info.sequence_number + 100_000
+            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: data_key.clone(),
@@ -2598,14 +2659,10 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
                         - 1,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &cd.wasm_entry,
-                ledger_info.sequence_number + 100_000
-            ),
         ]
     );
 
-    expect!["1028344"].assert_eq(&res.resources.instructions.to_string());
+    expect!["409425"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2745,7 +2802,7 @@ fn test_auto_restore_with_new_entry_in_recording_mode() {
         ]
     );
     let wasm_entry_size = cd.wasm_entry.to_xdr(Limits::none()).unwrap().len() as u32;
-    expect!["1444181"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1045796"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2882,7 +2939,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
         ]
     );
 
-    expect!["1561476"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1036899"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2968,6 +3025,10 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
     assert_eq!(
         res.ledger_changes,
         vec![
+            LedgerEntryChangeHelper::no_op_change(
+                &cd.contract_entry,
+                ledger_info.sequence_number + 100
+            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: data_key.clone(),
@@ -2983,10 +3044,6 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
                         - 1,
                 }),
             },
-            LedgerEntryChangeHelper::no_op_change(
-                &cd.contract_entry,
-                ledger_info.sequence_number + 100
-            ),
             LedgerEntryChangeHelper {
                 read_only: false,
                 key: cd.wasm_key.clone(),
@@ -3005,7 +3062,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
         ]
     );
 
-    expect!["1563649"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1039544"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {

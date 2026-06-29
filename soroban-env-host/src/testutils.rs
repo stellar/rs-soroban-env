@@ -117,15 +117,15 @@ pub fn generate_bytes_array(host: &Host) -> [u8; 32] {
     bytes
 }
 
-pub struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
+pub struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, EntryWithLiveUntil>);
 
 impl MockSnapshotSource {
     pub fn new() -> Self {
-        Self(BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new())
+        Self(BTreeMap::<Rc<LedgerKey>, EntryWithLiveUntil>::new())
     }
 
     pub fn from_entries(entries: Vec<(LedgerEntry, Option<u32>)>) -> Self {
-        let mut map = BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new();
+        let mut map = BTreeMap::<Rc<LedgerKey>, EntryWithLiveUntil>::new();
         let dummy_budget = Budget::default();
         for (e, maybe_ttl) in entries {
             let key = Rc::new(ledger_entry_to_ledger_key(&e, &dummy_budget).unwrap());

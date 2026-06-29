@@ -10,7 +10,8 @@
 use std::rc::Rc;
 
 use crate::budget::AsBudget;
-use crate::host::metered_clone::{MeteredClone, MeteredIterator};
+use crate::host::ledger_entry::HostLedgerEntry;
+use crate::host::metered_clone::{MeteredAlloc, MeteredClone, MeteredIterator};
 use crate::{
     budget::Budget,
     host::metered_map::MeteredOrdMap,
@@ -22,9 +23,10 @@ use crate::{
     Env, Error, Host, HostError, Val,
 };
 
-pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
+pub(crate) type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type EntryWithLiveUntil = (Rc<LedgerEntry>, Option<u32>);
-pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<EntryWithLiveUntil>, Budget>;
+pub(crate) type HostEntryWithLiveUntil = (Rc<HostLedgerEntry>, Option<u32>);
+pub(crate) type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<HostEntryWithLiveUntil>, Budget>;
 
 /// The in-memory instance storage of the current running contract. Initially
 /// contains entries from the `ScMap` of the corresponding `ScContractInstance`
@@ -99,7 +101,7 @@ pub trait SnapshotSource {
 /// against a suitably fresh [SnapshotSource].
 // Notes on metering: covered by the underneath `MeteredOrdMap`.
 #[derive(Clone, Default, Hash)]
-pub struct Footprint(pub FootprintMap);
+pub(crate) struct Footprint(pub(crate) FootprintMap);
 
 impl Footprint {
     #[cfg(any(test, feature = "recording_mode"))]
@@ -177,14 +179,14 @@ pub(crate) enum FootprintMode {
 /// [FootprintMode::Enforcing] mode and enforces partitioned access.
 #[derive(Clone, Default)]
 pub struct Storage {
-    pub footprint: Footprint,
+    pub(crate) footprint: Footprint,
     pub(crate) mode: FootprintMode,
-    pub map: StorageMap,
+    pub(crate) map: StorageMap,
 }
 
 /// Helper struct holding common state for TTL extension operations.
 struct TtlExtensionInfo {
-    entry: Rc<LedgerEntry>,
+    entry: Rc<HostLedgerEntry>,
     old_live_until: u32,
     current_ttl: u32,
     max_live_until: u32,
@@ -204,7 +206,7 @@ impl Storage {
     /// never used by stellar-core when interacting with the Soroban host, nor
     /// does the Soroban host ever generate any. Therefore the storage system
     /// will reject them with [ScErrorCode::InternalError] if they ever occur.
-    pub fn check_supported_ledger_entry_type(le: &LedgerEntry) -> Result<(), HostError> {
+    pub(crate) fn check_supported_ledger_entry_type(le: &LedgerEntry) -> Result<(), HostError> {
         use crate::xdr::LedgerEntryData::*;
         match le.data {
             Account(_) | Trustline(_) | ContractData(_) | ContractCode(_) => Ok(()),
@@ -218,7 +220,7 @@ impl Storage {
     /// never used by stellar-core when interacting with the Soroban host, nor
     /// does the Soroban host ever generate any. Therefore the storage system
     /// will reject them with [ScErrorCode::InternalError] if they ever occur.
-    pub fn check_supported_ledger_key_type(lk: &LedgerKey) -> Result<(), HostError> {
+    pub(crate) fn check_supported_ledger_key_type(lk: &LedgerKey) -> Result<(), HostError> {
         use LedgerKey::*;
         match lk {
             Account(_) | Trustline(_) | ContractData(_) | ContractCode(_) => Ok(()),
@@ -230,7 +232,7 @@ impl Storage {
     /// Constructs a new [Storage] in [FootprintMode::Enforcing] using a
     /// given [Footprint] and a storage map populated with all the keys
     /// listed in the [Footprint].
-    pub fn with_enforcing_footprint_and_map(footprint: Footprint, map: StorageMap) -> Self {
+    pub(crate) fn with_enforcing_footprint_and_map(footprint: Footprint, map: StorageMap) -> Self {
         Self {
             mode: FootprintMode::Enforcing,
             footprint,
@@ -249,12 +251,15 @@ impl Storage {
         }
     }
 
-    // Helper function the next 3 `get`-variants funnel into.
-    fn try_get_full_helper(
+    // Helper for getting the internal storage entry wrapper in read-only mode.
+    // This allows for accessing the entry without decoding it, which is useful
+    // for the functions that don't need to read the actual underlying
+    // `LedgerEntry`.
+    fn try_get_host_ledger_entry(
         &mut self,
         key: &Rc<LedgerKey>,
         host: &Host,
-    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+    ) -> Result<Option<HostEntryWithLiveUntil>, HostError> {
         let _span = tracy_span!("storage get");
         Self::check_supported_ledger_key_type(key)?;
         self.prepare_read_only_access(key, host)?;
@@ -262,7 +267,19 @@ impl Storage {
             // Key has to be in the storage map at this point due to
             // `prepare_read_only_access`.
             None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
-            Some(pair_option) => Ok(pair_option.clone()),
+            Some(maybe_entry) => Ok(maybe_entry.clone()),
+        }
+    }
+
+    // Helper function the next 3 `get`-variants funnel into.
+    fn try_get_full_helper(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        host: &Host,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        match self.try_get_host_ledger_entry(key, host)? {
+            None => Ok(None),
+            Some((entry, live_until)) => Ok(Some((entry.decoded(host.budget_ref())?, live_until))),
         }
     }
 
@@ -353,6 +370,13 @@ impl Storage {
                 self.footprint.enforce_access(key, ty, host.budget_ref())?;
             }
         };
+        let val = match val {
+            Some((entry, live_until)) => Some((
+                Rc::metered_new(HostLedgerEntry::from_decoded(entry), host.budget_ref())?,
+                live_until,
+            )),
+            None => None,
+        };
         self.map = self.map.insert(Rc::clone(key), val, host.budget_ref())?;
         Ok(())
     }
@@ -425,7 +449,10 @@ impl Storage {
         key_val: Option<Val>,
     ) -> Result<bool, HostError> {
         let _span = tracy_span!("storage has");
-        Ok(self.try_get_full(key, host, key_val)?.is_some())
+        let res = self
+            .try_get_host_ledger_entry(key, host)
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))?;
+        Ok(res.is_some())
     }
 
     /// Common setup for TTL extension operations. Returns the entry info
@@ -444,7 +471,16 @@ impl Storage {
 
         // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
-        let (entry, old_live_until) = self.get_with_live_until_ledger(key, host, key_val)?;
+        let (entry, old_live_until) = self
+            .try_get_host_ledger_entry(key, host)
+            .map_err(|e| host.decorate_storage_error(e, key.as_ref(), key_val))?
+            .ok_or_else(|| {
+                host.decorate_storage_error(
+                    (ScErrorType::Storage, ScErrorCode::MissingValue).into(),
+                    key.as_ref(),
+                    key_val,
+                )
+            })?;
         let old_live_until = old_live_until.ok_or_else(|| {
             host.err(
                 ScErrorType::Storage,
@@ -685,8 +721,10 @@ impl Storage {
         host: &Host,
     ) -> Result<Option<EntryWithLiveUntil>, HostError> {
         match self.map.get::<Rc<LedgerKey>>(key, host.budget_ref())? {
-            Some(pair_option) => Ok(pair_option.clone()),
-            None => Ok(None),
+            Some(Some((entry, live_until))) => {
+                Ok(Some((entry.decoded(host.budget_ref())?, *live_until)))
+            }
+            Some(None) | None => Ok(None),
         }
     }
 
@@ -706,7 +744,33 @@ impl Storage {
                     .map
                     .contains_key::<Rc<LedgerKey>>(key, host.budget_ref())?
                 {
-                    let value = src.get(&key)?;
+                    // Re-encode (unmetered) the entry and store it encoded to
+                    // emulate the behavior of the enforcing mode, which
+                    // receives an encoded entry as the input.
+                    use crate::xdr::WriteXdr;
+                    let value = match src.get(&key)? {
+                        Some((entry, live_until)) => {
+                            let encoded =
+                                entry.to_xdr(crate::DEFAULT_XDR_RW_LIMITS).map_err(|_| {
+                                    HostError::from((
+                                        ScErrorType::Storage,
+                                        ScErrorCode::InternalError,
+                                    ))
+                                })?;
+                            // The holder allocation here is intentionally not
+                            // metered to avoid double-charging allocation
+                            // in e2e mode.
+                            // This *very slightly* reduces metering accuracy in
+                            // unit tests, but it's generally rather inaccurate
+                            // anyways as it doesn't do any of the e2e
+                            // invocation work.
+                            Some((
+                                Rc::new(HostLedgerEntry::from_encoded(encoded.into())),
+                                live_until,
+                            ))
+                        }
+                        None => None,
+                    };
                     self.map = self.map.insert(key.clone(), value, host.budget_ref())?;
                 }
                 self.footprint.record_access(key, ty, host.budget_ref())?;

@@ -10,7 +10,7 @@ use crate::{
         EventError, HostEvent, InternalContractEvent, InternalDiagnosticArg,
         InternalDiagnosticEvent, InternalEvent,
     },
-    host::{frame::Context, Events},
+    host::{frame::Context, ledger_entry::HostLedgerEntry, Events},
     host_object::{HostObject, MuxedScAddress},
     storage::AccessType,
     xdr::{
@@ -340,6 +340,12 @@ impl<C: DeclaredSizeForMetering, E: DeclaredSizeForMetering> DeclaredSizeForMete
     const DECLARED_SIZE: u64 = C::DECLARED_SIZE + E::DECLARED_SIZE;
 }
 
+impl DeclaredSizeForMetering for HostLedgerEntry {
+    // `Option<Rc<[u8]>>` (16, fat pointer + niche) + `RefCell<Option<Rc<LedgerEntry>>>`
+    // (16: 8-byte borrow flag + 8-byte thin-pointer option).
+    const DECLARED_SIZE: u64 = 32;
+}
+
 mod test {
     #[allow(unused)]
     use super::*;
@@ -506,6 +512,7 @@ mod test {
         );
         expect!["64"].assert_eq(size_of::<InternalDiagnosticArg>().to_string().as_str());
         expect!["88"].assert_eq(size_of::<InternalDiagnosticEvent>().to_string().as_str());
+        expect!["32"].assert_eq(size_of::<HostLedgerEntry>().to_string().as_str());
 
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
@@ -700,6 +707,8 @@ mod test {
         assert_mem_size_le_declared_size!(InvokerContractAuthorizationTracker);
         assert_mem_size_le_declared_size!(InternalDiagnosticArg);
         assert_mem_size_le_declared_size!(InternalDiagnosticEvent);
+
+        assert_mem_size_le_declared_size!(HostLedgerEntry);
 
         // xdr types
         assert_mem_size_le_declared_size!(TimePoint);

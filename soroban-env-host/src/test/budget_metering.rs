@@ -441,7 +441,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
 
     let expected = expect![[r#"
         ===============================================================================================================================================================================
-        Cpu limit: 100000000; used: 68564977
+        Cpu limit: 100000000; used: 68506552
         Mem limit: 41943040; used: 725156
         ===============================================================================================================================================================================
         CostType                           iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
@@ -452,7 +452,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         DispatchHostFunction               176            None           54560          0              310                 0                   0                   0                   
         VisitObject                        97             None           5917           0              61                  0                   0                   0                   
         ValSer                             1              Some(49)       241            389            230                 29                  242                 384                 
-        ValDeser                           1              Some(103)      62271          309            59052               4001                0                   384                 
+        ValDeser                           1              Some(103)      3846           309            331                 4369                0                   384                 
         ComputeSha256Hash                  1              Some(193)      14310          0              3738                7012                0                   0                   
         ComputeEd25519PubKey               226            None           9097178        0              40253               0                   0                   0                   
         VerifyEd25519Sig                   1              Some(227)      384738         0              377524              4068                0                   0                   
@@ -534,7 +534,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 70
-        Shadow cpu limit: 100000000; used: 68564977
+        Shadow cpu limit: 100000000; used: 68506552
         Shadow mem limit: 41943040; used: 725156
         ===============================================================================================================================================================================
 
