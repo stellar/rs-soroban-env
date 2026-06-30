@@ -750,6 +750,21 @@ impl Host {
                     || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
                 )
             }
+            ContractExecutable::ExternalRef(external_ref) => {
+                let wasm_hash = self.resolve_external_ref_wasm_hash(external_ref)?;
+                let vm = self.instantiate_vm(id, &wasm_hash)?;
+                let relative_objects = Vec::new();
+                self.with_frame(
+                    Frame::ContractVM {
+                        vm: Rc::clone(&vm),
+                        fn_name: *func,
+                        args: args_vec,
+                        instance,
+                        relative_objects,
+                    },
+                    || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
+                )
+            }
             ContractExecutable::StellarAsset => self.with_frame(
                 Frame::StellarAssetContract(id.metered_clone(self)?, *func, args_vec, instance),
                 || {
@@ -885,6 +900,11 @@ impl Host {
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 let vm = self.instantiate_vm(contract_id, wasm_hash)?;
+                Ok(vm.module.proto_version)
+            }
+            ContractExecutable::ExternalRef(external_ref) => {
+                let wasm_hash = self.resolve_external_ref_wasm_hash(external_ref)?;
+                let vm = self.instantiate_vm(contract_id, &wasm_hash)?;
                 Ok(vm.module.proto_version)
             }
             ContractExecutable::StellarAsset => self.get_ledger_protocol_version(),

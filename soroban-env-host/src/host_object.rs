@@ -9,8 +9,8 @@ use crate::{
     },
     num::{I256, U256},
     xdr::{self, ContractCostType, ScErrorCode, ScErrorType, SCSYMBOL_LIMIT},
-    AddressObject, BytesObject, Compare, DurationObject, DurationSmall, Host, HostError,
-    I128Object, I128Small, I256Object, I256Small, I64Object, I64Small, MapObject,
+    AddressObject, BytesObject, Compare, DurationObject, DurationSmall, ExecutableTagObject, Host,
+    HostError, I128Object, I128Small, I256Object, I256Small, I64Object, I64Small, MapObject,
     MuxedAddressObject, Object, StringObject, SymbolObject, SymbolSmall, SymbolStr,
     TimepointObject, TimepointSmall, TryFromVal, U128Object, U128Small, U256Object, U256Small,
     U64Object, U64Small, Val, VecObject,
@@ -36,6 +36,7 @@ pub(crate) enum HostObject {
     Symbol(xdr::ScSymbol),
     Address(xdr::ScAddress),
     MuxedAddress(MuxedScAddress),
+    ExecutableTag(ExecutableTag),
 }
 
 impl std::fmt::Debug for HostObject {
@@ -56,6 +57,7 @@ impl std::fmt::Debug for HostObject {
             Self::Symbol(arg0) => f.debug_tuple("Symbol").field(arg0).finish(),
             Self::Address(arg0) => f.debug_tuple("Address").field(arg0).finish(),
             Self::MuxedAddress(arg0) => f.debug_tuple("MuxedAddress").field(arg0).finish(),
+            Self::ExecutableTag(arg0) => f.debug_tuple("ExecutableTag").field(arg0).finish(),
         }
     }
 }
@@ -140,7 +142,8 @@ impl HostObject {
             | HostObject::Bytes(_)
             | HostObject::String(_)
             | HostObject::Address(_)
-            | HostObject::MuxedAddress(_) => None,
+            | HostObject::MuxedAddress(_)
+            | HostObject::ExecutableTag(_) => None,
         };
         Ok(res)
     }
@@ -212,6 +215,15 @@ declare_host_object_type!(I256, I256Object, I256);
 declare_mem_host_object_type!(xdr::ScBytes, BytesObject, Bytes);
 declare_mem_host_object_type!(xdr::ScString, StringObject, String);
 declare_host_object_type!(xdr::ScSymbol, SymbolObject, Symbol);
+
+// `ExecutableTag` wraps an `xdr::ScString` holding the string key of an
+// executable reference. It is a distinct newtype (rather than reusing
+// `xdr::ScString`, which is already mapped to `HostObject::String`) so that it
+// gets its own `HostObject` case and `ExecutableTagObject` wrapper.
+#[derive(Clone, Hash, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) struct ExecutableTag(pub(crate) xdr::ScString);
+
+declare_host_object_type!(ExecutableTag, ExecutableTagObject, ExecutableTag);
 
 impl HostObjectType for xdr::ScAddress {
     type Wrapper = AddressObject;

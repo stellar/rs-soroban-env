@@ -5,17 +5,20 @@ use crate::{
     budget::AsBudget,
     err,
     host::metered_clone::{MeteredAlloc, MeteredClone},
+    host_object::ExecutableTag,
     storage::{InstanceStorageMap, Storage},
     vm::VersionedContractCodeCostInputs,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
-        ContractDataEntry, ContractExecutable, ContractId, ContractIdPreimage, ExtensionPoint,
-        Hash, HashIdPreimage, HashIdPreimageContractId, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
-        LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
-        ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
+        ContractDataEntry, ContractExecutable, ContractExecutableExternalRef, ContractId,
+        ContractIdPreimage, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
+        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
+        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScVal, Signer, SignerKey,
+        ThresholdIndexes, TrustLineAsset, Uint256,
     },
-    AddressObject, Env, ErrorHandler, Host, HostError, StorageType, U32Val, Val,
+    AddressObject, BytesObject, Env, ErrorHandler, ExecutableTagObject, Host, HostError,
+    StorageType, Tag, U32Val, Val,
 };
 
 impl Host {
@@ -159,9 +162,96 @@ impl Host {
         }
     }
 
-    pub(crate) fn wasm_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
+    pub(crate) fn verify_wasm_exists(&self, wasm_hash: &Hash) -> Result<(), HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
-        self.try_borrow_storage_mut()?.has(&key, self, None)
+        let exists = self.try_borrow_storage_mut()?.has(&key, self, None)?;
+        if !exists {
+            return Err(err!(
+                self,
+                (ScErrorType::Storage, ScErrorCode::MissingValue),
+                "Wasm does not exist",
+                wasm_hash
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn executable_ref_from_inputs(
+        &self,
+        executable_owner: AddressObject,
+        tag: ExecutableTagObject,
+    ) -> Result<ContractExecutableExternalRef, HostError> {
+        let executable_owner = self.visit_obj(executable_owner, |addr: &ScAddress| {
+            addr.metered_clone(self)
+        })?;
+        let tag = self.visit_obj(tag, |t: &ExecutableTag| t.0.metered_clone(self))?;
+        Ok(ContractExecutableExternalRef {
+            executable_owner,
+            tag,
+        })
+    }
+
+    pub(crate) fn executable_ref_ledger_key(
+        &self,
+        executable_ref: &ContractExecutableExternalRef,
+    ) -> Result<Rc<LedgerKey>, HostError> {
+        Rc::metered_new(
+            LedgerKey::ContractData(LedgerKeyContractData {
+                contract: executable_ref.executable_owner.metered_clone(self)?,
+                key: ScVal::ExecutableTag(executable_ref.tag.metered_clone(self)?),
+                durability: ContractDataDurability::Persistent,
+            }),
+            self,
+        )
+    }
+
+    pub(crate) fn verify_executable_ref_entry_exists(
+        &self,
+        external_ref: &ContractExecutableExternalRef,
+        tag: Option<ExecutableTagObject>,
+    ) -> Result<(), HostError> {
+        let key = self.executable_ref_ledger_key(&external_ref)?;
+        let exists = self
+            .try_borrow_storage_mut()?
+            .has(&key, self, tag.map(|t| t.to_val()))?;
+        if !exists {
+            return Err(err!(
+                self,
+                (ScErrorType::Storage, ScErrorCode::MissingValue),
+                "executable reference entry does not exist",
+                &external_ref.executable_owner,
+                &external_ref.tag
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn resolve_external_ref_wasm_hash(
+        &self,
+        external_ref: &ContractExecutableExternalRef,
+    ) -> Result<Hash, HostError> {
+        let key = self.executable_ref_ledger_key(&external_ref)?;
+        let entry = self.try_borrow_storage_mut()?.get(&key, self, None)?;
+        match &entry.data {
+            LedgerEntryData::ContractData(e) => match &e.val {
+                ScVal::Bytes(bytes) => self.fixed_length_bytes_from_slice::<Hash, 32>(
+                    "executable_ref_wasm_hash",
+                    bytes.as_slice(),
+                ),
+                _ => Err(self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
+                    "executable reference entry does not contain a Wasm hash",
+                    &[],
+                )),
+            },
+            _ => Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "expected ContractData ledger entry for executable reference",
+                &[],
+            )),
+        }
     }
 
     // Stores the contract instance specified with its parts (executable and
@@ -259,6 +349,18 @@ impl Host {
                 self.try_borrow_storage_mut()?
                     .extend_ttl(self, key, threshold, extend_to, None)?;
             }
+            ContractExecutable::ExternalRef(external_ref) => {
+                // Extend both the executable reference entry (in the owner
+                // contract's storage) and the referenced Wasm code entry, so
+                // that the contract stays both resolvable and executable.
+                let ref_key = self.executable_ref_ledger_key(&external_ref)?;
+                self.try_borrow_storage_mut()?
+                    .extend_ttl(self, ref_key, threshold, extend_to, None)?;
+                let wasm_hash = self.resolve_external_ref_wasm_hash(&external_ref)?;
+                let code_key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.try_borrow_storage_mut()?
+                    .extend_ttl(self, code_key, threshold, extend_to, None)?;
+            }
             ContractExecutable::StellarAsset => {}
         }
         Ok(())
@@ -296,6 +398,29 @@ impl Host {
                 self.try_borrow_storage_mut()?.extend_ttl_v2(
                     self,
                     key,
+                    extend_to,
+                    min_extension,
+                    max_extension,
+                    None,
+                )?;
+            }
+            ContractExecutable::ExternalRef(external_ref) => {
+                // The 'code' scope extends both the executable reference entry
+                // and the referenced Wasm code entry for external-ref contracts.
+                let ref_key = self.executable_ref_ledger_key(&external_ref)?;
+                self.try_borrow_storage_mut()?.extend_ttl_v2(
+                    self,
+                    ref_key,
+                    extend_to,
+                    min_extension,
+                    max_extension,
+                    None,
+                )?;
+                let wasm_hash = self.resolve_external_ref_wasm_hash(&external_ref)?;
+                let code_key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.try_borrow_storage_mut()?.extend_ttl_v2(
+                    self,
+                    code_key,
                     extend_to,
                     min_extension,
                     max_extension,
@@ -506,7 +631,56 @@ impl Host {
         })
     }
 
-    pub(super) fn put_contract_data_into_ledger(
+    pub(crate) fn validate_put_contract_data(
+        &self,
+        k: Val,
+        v: Val,
+        t: StorageType,
+    ) -> Result<(), HostError> {
+        // Executable reference entries must be persistent entries that store
+        // a hash of an existing Wasm.
+        if k.get_tag() == Tag::ExecutableTagObject {
+            if !matches!(t, StorageType::Persistent) {
+                return Err(self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InvalidInput,
+                    "executable reference entries may only use persistent storage",
+                    &[],
+                ));
+            }
+            let value_obj: BytesObject = v.try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InvalidInput,
+                    "executable reference value must be a 32-byte Wasm hash",
+                    &[v],
+                )
+            })?;
+            let wasm_hash = self.hash_from_bytesobj_input("executable_ref_wasm_hash", value_obj)?;
+            self.verify_wasm_exists(&wasm_hash)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_del_contract_data(
+        &self,
+        k: Val,
+        _t: StorageType,
+    ) -> Result<(), HostError> {
+        // Executable reference entries may never be deleted, so that the
+        // instances based on them remain usable.
+        if k.get_tag() == Tag::ExecutableTagObject {
+            return Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidAction,
+                "executable reference entries cannot be deleted",
+                &[],
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn put_contract_data_into_ledger(
         &self,
         k: Val,
         v: Val,

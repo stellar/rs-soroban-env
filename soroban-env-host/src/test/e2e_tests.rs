@@ -15,20 +15,22 @@ use crate::{
     },
     e2e_testutils::{
         auth_contract_invocation, create_contract_auth, default_ledger_info, get_account_id,
-        get_contract_id_preimage, get_wasm_hash, get_wasm_key, ledger_entry, wasm_entry,
-        AuthContractInvocationNode, CreateContractData,
+        get_contract_id_hash, get_contract_id_preimage, get_wasm_hash, get_wasm_key, ledger_entry,
+        wasm_entry, AuthContractInvocationNode, CreateContractData,
     },
     testutils::MockSnapshotSource,
     xdr::{
         AccountId, ContractCostType, ContractDataDurability, ContractDataEntry, ContractEvent,
-        ContractExecutable, ContractId, ContractIdPreimage, ContractIdPreimageFromAddress,
-        CreateContractArgs, DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage,
-        HashIdPreimageSorobanAuthorization, HashIdPreimageSorobanAuthorizationWithAddress,
-        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryType,
-        LedgerFootprint, LedgerKey, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
-        SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedInvocation,
-        SorobanCredentials, SorobanResources, Uint256, WriteXdr,
+        ContractExecutable, ContractExecutableExternalRef, ContractId, ContractIdPreimage,
+        ContractIdPreimageFromAddress, CreateContractArgs, CreateContractArgsV2, DiagnosticEvent,
+        ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
+        HashIdPreimageSorobanAuthorizationWithAddress, HostFunction, InvokeContractArgs,
+        LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
+        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScVal, ScVec,
+        SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+        SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
+        WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
@@ -3842,5 +3844,330 @@ mod delegated_auth_tests {
             }),
             (ScErrorType::Object, ScErrorCode::InvalidInput)
         ));
+    }
+}
+
+mod cap_85_executable_reference {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    const OWNER_CONTRACT_ID: [u8; 32] = [9; 32];
+    const REF_TAG: &[u8] = b"exec ref";
+
+    struct ExternalRefContractData {
+        deployer: AccountId,
+        contract_key: LedgerKey,
+        contract_entry: LedgerEntry,
+        contract_address: ScAddress,
+        ref_key: LedgerKey,
+        ref_entry: LedgerEntry,
+        wasm_key: LedgerKey,
+        wasm_entry: LedgerEntry,
+        auth_entry: SorobanAuthorizationEntry,
+        host_fn: HostFunction,
+    }
+
+    impl ExternalRefContractData {
+        fn new(salt: [u8; 32], wasm: &[u8]) -> Self {
+            let deployer = get_account_id([123; 32]);
+            let contract_id_preimage = get_contract_id_preimage(&deployer, &salt);
+            let owner = ScAddress::Contract(ContractId(Hash(OWNER_CONTRACT_ID)));
+            let tag = ScString(REF_TAG.try_into().unwrap());
+            let executable = ContractExecutable::ExternalRef(ContractExecutableExternalRef {
+                executable_owner: owner.clone(),
+                tag: tag.clone(),
+            });
+            let create_args = CreateContractArgsV2 {
+                contract_id_preimage: contract_id_preimage.clone(),
+                executable: executable.clone(),
+                constructor_args: Default::default(),
+            };
+            let contract_address = ScAddress::Contract(ContractId(Hash(get_contract_id_hash(
+                &contract_id_preimage,
+            ))));
+            let contract_key = LedgerKey::ContractData(LedgerKeyContractData {
+                contract: contract_address.clone(),
+                key: ScVal::LedgerKeyContractInstance,
+                durability: ContractDataDurability::Persistent,
+            });
+            let contract_entry = ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
+                ext: ExtensionPoint::V0,
+                contract: contract_address.clone(),
+                key: ScVal::LedgerKeyContractInstance,
+                durability: ContractDataDurability::Persistent,
+                val: ScVal::ContractInstance(ScContractInstance {
+                    executable,
+                    storage: None,
+                }),
+            }));
+            let ref_key = LedgerKey::ContractData(LedgerKeyContractData {
+                contract: owner.clone(),
+                key: ScVal::ExecutableTag(tag.clone()),
+                durability: ContractDataDurability::Persistent,
+            });
+            let ref_entry = ledger_entry(LedgerEntryData::ContractData(ContractDataEntry {
+                ext: ExtensionPoint::V0,
+                contract: owner,
+                key: ScVal::ExecutableTag(tag),
+                durability: ContractDataDurability::Persistent,
+                val: bytes_sc_val(&get_wasm_hash(wasm)),
+            }));
+            let auth_entry = SorobanAuthorizationEntry {
+                credentials: SorobanCredentials::SourceAccount,
+                root_invocation: SorobanAuthorizedInvocation {
+                    function: SorobanAuthorizedFunction::CreateContractV2HostFn(
+                        create_args.clone(),
+                    ),
+                    sub_invocations: Default::default(),
+                },
+            };
+
+            Self {
+                deployer,
+                contract_key,
+                contract_entry,
+                contract_address,
+                ref_key,
+                ref_entry,
+                wasm_key: get_wasm_key(wasm),
+                wasm_entry: wasm_entry(wasm),
+                auth_entry,
+                host_fn: HostFunction::CreateContractV2(create_args),
+            }
+        }
+    }
+
+    #[test]
+    fn test_create_external_ref_contract_success() {
+        let cd = ExternalRefContractData::new([111; 32], ADD_I32);
+        let ledger_info = default_ledger_info();
+        let ref_live_until = ledger_info.sequence_number + 1000;
+        let wasm_live_until = ledger_info.sequence_number + 100;
+
+        let res = invoke_host_function_helper(
+            true,
+            &cd.host_fn,
+            &resources(
+                10_000_000,
+                vec![cd.ref_key.clone(), cd.wasm_key.clone()],
+                vec![cd.contract_key.clone()],
+            ),
+            &cd.deployer,
+            vec![cd.auth_entry],
+            &ledger_info,
+            vec![
+                (cd.ref_entry.clone(), Some(ref_live_until)),
+                (cd.wasm_entry.clone(), Some(wasm_live_until)),
+            ],
+            &prng_seed(),
+        )
+        .unwrap();
+        assert_eq!(
+            res.invoke_result.unwrap(),
+            ScVal::Address(cd.contract_address)
+        );
+        assert!(res.contract_events.is_empty());
+        assert_eq!(
+            res.ledger_changes,
+            vec![
+                LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper {
+                    read_only: false,
+                    key: cd.contract_key.clone(),
+                    old_entry_size_bytes_for_rent: 0,
+                    new_value: Some(cd.contract_entry),
+                    ttl_change: Some(LedgerEntryLiveUntilChange {
+                        key_hash: compute_key_hash(&cd.contract_key),
+                        entry_type: LedgerEntryType::ContractData,
+                        durability: ContractDataDurability::Persistent,
+                        old_live_until_ledger: 0,
+                        new_live_until_ledger: ledger_info.sequence_number
+                            + ledger_info.min_persistent_entry_ttl
+                            - 1,
+                    }),
+                },
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_create_external_ref_contract_using_simulation() {
+        let cd = ExternalRefContractData::new([111; 32], ADD_I32);
+        let ledger_info = default_ledger_info();
+        let ref_live_until = ledger_info.sequence_number + 1000;
+        let wasm_live_until = ledger_info.sequence_number + 100;
+
+        // Run the same create path through simulation so recording-mode
+        // footprint, auth, events, and result are checked against enforcing.
+        let res = invoke_host_function_using_simulation(
+            true,
+            &cd.host_fn,
+            &cd.deployer,
+            &ledger_info,
+            vec![
+                (cd.ref_entry.clone(), Some(ref_live_until)),
+                (cd.wasm_entry.clone(), Some(wasm_live_until)),
+            ],
+            &prng_seed(),
+        )
+        .unwrap();
+        assert_eq!(
+            res.invoke_result.unwrap(),
+            ScVal::Address(cd.contract_address)
+        );
+        assert_eq!(
+            res.ledger_changes,
+            vec![
+                LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper {
+                    read_only: false,
+                    key: cd.contract_key.clone(),
+                    old_entry_size_bytes_for_rent: 0,
+                    new_value: Some(cd.contract_entry),
+                    ttl_change: Some(LedgerEntryLiveUntilChange {
+                        key_hash: compute_key_hash(&cd.contract_key),
+                        entry_type: LedgerEntryType::ContractData,
+                        durability: ContractDataDurability::Persistent,
+                        old_live_until_ledger: 0,
+                        new_live_until_ledger: ledger_info.sequence_number
+                            + ledger_info.min_persistent_entry_ttl
+                            - 1,
+                    }),
+                },
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_create_external_ref_contract_with_v1_host_fn_using_simulation() {
+        let cd = ExternalRefContractData::new([112; 32], ADD_I32);
+        let ledger_info = default_ledger_info();
+        let ref_live_until = ledger_info.sequence_number + 1000;
+        let wasm_live_until = ledger_info.sequence_number + 100;
+        let HostFunction::CreateContractV2(create_args) = &cd.host_fn else {
+            panic!("unexpected host function");
+        };
+        let host_fn = HostFunction::CreateContract(CreateContractArgs {
+            contract_id_preimage: create_args.contract_id_preimage.clone(),
+            executable: create_args.executable.clone(),
+        });
+        let res = invoke_host_function_using_simulation(
+            true,
+            &host_fn,
+            &cd.deployer,
+            &ledger_info,
+            vec![
+                (cd.ref_entry.clone(), Some(ref_live_until)),
+                (cd.wasm_entry.clone(), Some(wasm_live_until)),
+            ],
+            &prng_seed(),
+        )
+        .unwrap();
+        assert_eq!(
+            res.invoke_result.unwrap(),
+            ScVal::Address(cd.contract_address)
+        );
+        assert_eq!(
+            res.ledger_changes,
+            vec![
+                LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper {
+                    read_only: false,
+                    key: cd.contract_key.clone(),
+                    old_entry_size_bytes_for_rent: 0,
+                    new_value: Some(cd.contract_entry),
+                    ttl_change: Some(LedgerEntryLiveUntilChange {
+                        key_hash: compute_key_hash(&cd.contract_key),
+                        entry_type: LedgerEntryType::ContractData,
+                        durability: ContractDataDurability::Persistent,
+                        old_live_until_ledger: 0,
+                        new_live_until_ledger: ledger_info.sequence_number
+                            + ledger_info.min_persistent_entry_ttl
+                            - 1,
+                    }),
+                },
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_invoke_external_ref_contract_success() {
+        let cd = ExternalRefContractData::new([111; 32], ADD_I32);
+        let ledger_info = default_ledger_info();
+        let contract_live_until = ledger_info.sequence_number + 1000;
+        let ref_live_until = ledger_info.sequence_number + 2000;
+        let wasm_live_until = ledger_info.sequence_number + 100;
+        let host_fn = invoke_contract_host_fn(
+            &cd.contract_address,
+            "add",
+            vec![ScVal::I32(3), ScVal::I32(4)],
+        );
+
+        // Invoke a pre-existing external-ref contract with an enforcing
+        // footprint that includes the contract, ref entry, and resolved Wasm.
+        let res = invoke_host_function_helper(
+            true,
+            &host_fn,
+            &resources(
+                10_000_000,
+                vec![
+                    cd.contract_key.clone(),
+                    cd.ref_key.clone(),
+                    cd.wasm_key.clone(),
+                ],
+                vec![],
+            ),
+            &cd.deployer,
+            vec![],
+            &ledger_info,
+            vec![
+                (cd.contract_entry.clone(), Some(contract_live_until)),
+                (cd.ref_entry.clone(), Some(ref_live_until)),
+                (cd.wasm_entry.clone(), Some(wasm_live_until)),
+            ],
+            &prng_seed(),
+        )
+        .unwrap();
+        assert_eq!(res.invoke_result.unwrap(), ScVal::I32(7));
+
+        assert_eq!(
+            res.ledger_changes,
+            vec![
+                LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.contract_entry, contract_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_invoke_external_ref_contract_using_simulation() {
+        let cd = ExternalRefContractData::new([111; 32], ADD_I32);
+        let ledger_info = default_ledger_info();
+        let host_fn = invoke_contract_host_fn(
+            &cd.contract_address,
+            "add",
+            vec![ScVal::I32(3), ScVal::I32(4)],
+        );
+
+        // Run the external-ref invocation through simulation to verify the
+        // recorded footprint and result match enforcing execution.
+        let res = invoke_host_function_using_simulation(
+            true,
+            &host_fn,
+            &cd.deployer,
+            &ledger_info,
+            vec![
+                (cd.contract_entry, Some(ledger_info.sequence_number + 1000)),
+                (cd.ref_entry, Some(ledger_info.sequence_number + 2000)),
+                (cd.wasm_entry, Some(ledger_info.sequence_number + 100)),
+            ],
+            &prng_seed(),
+        )
+        .unwrap();
+        assert_eq!(res.invoke_result.unwrap(), ScVal::I32(7));
     }
 }

@@ -1809,13 +1809,11 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "27.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05ff843326969bdf1ef673dcdba94c08f4a3c8f1e58d6e6ef39b1bd4f749179a"
 dependencies = [
  "arbitrary",
  "base64 0.22.1",
  "cfg_eval",
- "crate-git-revision 0.0.6",
+ "crate-git-revision 0.0.9",
  "escape-bytes",
  "ethnum",
  "hex",
