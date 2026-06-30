@@ -40,6 +40,7 @@ fn host_obj_discriminant(ho: &HostObject) -> usize {
         HostObject::Map(_) => 12,
         HostObject::Address(_) => 13,
         HostObject::MuxedAddress(_) => 14,
+        HostObject::ExecutableTag(_) => 15,
     }
 }
 
@@ -67,6 +68,9 @@ impl Compare<HostObject> for Host {
                 (Symbol(a), Symbol(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
                 (Address(a), Address(b)) => self.as_budget().compare(a, b),
                 (MuxedAddress(a), MuxedAddress(b)) => self.as_budget().compare(a, b),
+                (ExecutableTag(a), ExecutableTag(b)) => {
+                    self.as_budget().compare(&a.0.as_slice(), &b.0.as_slice())
+                }
 
                 // List out at least one side of all the remaining cases here so
                 // we don't accidentally forget to update this when/if a new
@@ -85,7 +89,8 @@ impl Compare<HostObject> for Host {
                 | (String(_), _)
                 | (Symbol(_), _)
                 | (Address(_), _)
-                | (MuxedAddress(_), _) => {
+                | (MuxedAddress(_), _)
+                | (ExecutableTag(_), _) => {
                     let a = host_obj_discriminant(a);
                     let b = host_obj_discriminant(b);
                     Ok(a.cmp(&b))
@@ -316,6 +321,10 @@ impl Compare<ScVal> for Budget {
                 <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
             }
 
+            (ExecutableTag(a), ExecutableTag(b)) => {
+                <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
+            }
+
             (ContractInstance(a), ContractInstance(b)) => self.compare(&a, &b),
 
             // These two cases are content-free, besides their discriminant.
@@ -346,6 +355,7 @@ impl Compare<ScVal> for Budget {
             | (Bytes(_), _)
             | (String(_), _)
             | (Symbol(_), _)
+            | (ExecutableTag(_), _)
             | (ContractInstance(_), _)
             | (Bool(_), _)
             | (Void, _)
@@ -789,6 +799,11 @@ mod tests {
                     id: 0,
                     ed25519: xdr::Uint256([0; 32]),
                 })),
+            )
+            .unwrap(),
+            Tag::ExecutableTagObject => Val::try_from_val(
+                host,
+                &ScVal::ExecutableTag(xdr::ScString(b"tag".to_vec().try_into().unwrap())),
             )
             .unwrap(),
             Tag::ObjectCodeUpperBound => panic!(),
