@@ -82,9 +82,9 @@ fn check_not_issuer(e: &Host, addr: &Address) -> Result<(), HostError> {
 // than two cfg'd `mint` methods because the builtin `#[contractimpl]` dispatch
 // macro keys arms by positional index and discards per-method cfg attributes,
 // so two same-named cfg'd `mint` definitions would desync the dispatch table.
-#[cfg(not(feature = "cap_0084_muxed_contract"))]
+#[cfg(not(feature = "next"))]
 type MintDestination = Address;
-#[cfg(feature = "cap_0084_muxed_contract")]
+#[cfg(feature = "next")]
 type MintDestination = MuxedAddress;
 
 #[contractimpl]
@@ -352,9 +352,9 @@ impl StellarAssetContract {
         // Under `next`, `to` is a `MuxedAddress`: de-mux to the underlying
         // address and capture the mux id for the event (mirrors `transfer`).
         // Under curr, `to` is already a plain `Address` and no mux id is emitted.
-        #[cfg(feature = "cap_0084_muxed_contract")]
+        #[cfg(feature = "next")]
         let (to, to_muxed_id) = (to.address()?, to.id()?);
-        #[cfg(not(feature = "cap_0084_muxed_contract"))]
+        #[cfg(not(feature = "next"))]
         let to_muxed_id: Option<u64> = None;
         check_not_issuer(e, &to)?;
 

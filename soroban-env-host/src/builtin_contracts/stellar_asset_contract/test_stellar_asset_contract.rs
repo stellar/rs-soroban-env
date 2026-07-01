@@ -214,7 +214,7 @@ impl<'a> TestStellarAssetContract<'a> {
         self.call_with_single_signer(admin, "mint", test_vec![self.host, to, amount])
     }
 
-    #[cfg(feature = "cap_0084_muxed_contract")]
+    #[cfg(feature = "next")]
     pub(crate) fn mint_muxed(
         &self,
         admin: &TestSigner,

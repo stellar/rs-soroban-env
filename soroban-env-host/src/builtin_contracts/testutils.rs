@@ -59,7 +59,7 @@ pub(crate) fn contract_id_to_address(host: &Host, contract_id: [u8; 32]) -> Addr
 // CAP-0084: build a muxed contract address (`ScAddress::MuxedContract`) wrapping
 // the given contract id and multiplexing id, mirroring `TestSigner::muxed_address`
 // for accounts.
-#[cfg(feature = "cap_0084_muxed_contract")]
+#[cfg(feature = "next")]
 pub(crate) fn muxed_contract_address(
     host: &Host,
     contract_id: [u8; 32],

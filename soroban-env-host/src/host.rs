@@ -3747,7 +3747,7 @@ impl VmCallerEnv for Host {
                 )));
                 Ok(address)
             }
-            #[cfg(feature = "cap_0084_muxed_contract")]
+            #[cfg(feature = "next")]
             ScAddress::MuxedContract(muxed_contract) => Ok(ScAddress::Contract(
                 muxed_contract.contract_id.metered_clone(self)?,
             )),
@@ -3768,7 +3768,7 @@ impl VmCallerEnv for Host {
     ) -> Result<U64Val, Self::Error> {
         let mux_id = self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
             ScAddress::MuxedAccount(muxed_account) => Ok(muxed_account.id),
-            #[cfg(feature = "cap_0084_muxed_contract")]
+            #[cfg(feature = "next")]
             ScAddress::MuxedContract(muxed_contract) => Ok(muxed_contract.id),
             _ => Err(self.err(
                 ScErrorType::Object,
