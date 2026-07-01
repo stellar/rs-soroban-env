@@ -455,7 +455,7 @@ impl TryFromVal<Host, ScAddress> for MuxedAddress {
                 let obj = env.add_host_object(MuxedScAddress(addr.clone()))?;
                 MuxedAddress::try_from_val(env, &obj)
             }
-            #[cfg(feature = "cap_0084_muxed_contract")]
+            #[cfg(feature = "next")]
             ScAddress::MuxedContract(_) => {
                 let obj = env.add_host_object(MuxedScAddress(addr.clone()))?;
                 MuxedAddress::try_from_val(env, &obj)

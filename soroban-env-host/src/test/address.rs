@@ -52,7 +52,7 @@ fn test_muxed_address_to_components_conversion() {
 
 // CAP-0084: `get_address_from_muxed_address` / `get_id_from_muxed_address` on a
 // muxed contract return the underlying contract address and the mux id.
-#[cfg(feature = "cap_0084_muxed_contract")]
+#[cfg(feature = "next")]
 #[test]
 fn test_muxed_contract_to_components_conversion() {
     use crate::xdr::MuxedContract;

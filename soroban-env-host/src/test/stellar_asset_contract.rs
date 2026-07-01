@@ -895,7 +895,7 @@ fn test_cap_67_transfer_with_muxed_accounts() {
     );
 }
 
-#[cfg(feature = "cap_0084_muxed_contract")]
+#[cfg(feature = "next")]
 #[test]
 fn test_cap_84_transfer_with_muxed_contracts() {
     use crate::builtin_contracts::testutils::muxed_contract_address;
@@ -979,7 +979,7 @@ fn test_cap_84_transfer_with_muxed_contracts() {
     assert_eq!(contract.balance(dst_address).unwrap(), 10_000_000);
 }
 
-#[cfg(feature = "cap_0084_muxed_contract")]
+#[cfg(feature = "next")]
 #[test]
 fn test_cap_84_mint_with_muxed_contract() {
     use crate::builtin_contracts::testutils::muxed_contract_address;
