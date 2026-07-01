@@ -37,7 +37,10 @@ std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["dep:serde", "stellar-xdr/serde"]
 wasmi = ["dep:wasmi", "dep:wasmparser"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
-next = ["soroban-env-macros/next"]
+# CAP-0084 (muxed contract addresses) is gated on the umbrella `next` per the
+# rs-soroban-env contract: `next` pulls in the gated XDR variant from
+# stellar-xdr. Fold into the base XDR / make unconditional at the protocol bump.
+next = ["soroban-env-macros/next", "stellar-xdr/cap_0084_muxed_contract"]
 tracy = ["dep:tracy-client"]
 shallow-val-hash = []
 

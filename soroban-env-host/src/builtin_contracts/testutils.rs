@@ -56,6 +56,27 @@ pub(crate) fn contract_id_to_address(host: &Host, contract_id: [u8; 32]) -> Addr
     .unwrap()
 }
 
+// CAP-0084: build a muxed contract address (`ScAddress::MuxedContract`) wrapping
+// the given contract id and multiplexing id, mirroring `TestSigner::muxed_address`
+// for accounts.
+#[cfg(feature = "next")]
+pub(crate) fn muxed_contract_address(
+    host: &Host,
+    contract_id: [u8; 32],
+    mux_id: u64,
+) -> MuxedAddress {
+    use soroban_env_common::xdr::MuxedContract;
+    let sc_address = ScAddress::MuxedContract(MuxedContract {
+        id: mux_id,
+        contract_id: ContractId(Hash(contract_id)),
+    });
+    MuxedAddress::try_from_val(
+        host,
+        &host.add_host_object(MuxedScAddress(sc_address)).unwrap(),
+    )
+    .unwrap()
+}
+
 #[derive(Clone)]
 pub(crate) enum TestSigner {
     AccountInvoker(AccountId),
