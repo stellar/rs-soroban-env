@@ -40,3 +40,4 @@ mod str;
 mod symbol;
 mod tuple;
 mod vec;
+mod vm_mem_refund;

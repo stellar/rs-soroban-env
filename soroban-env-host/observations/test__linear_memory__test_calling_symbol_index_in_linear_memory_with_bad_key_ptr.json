@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8099217",
   "  19 pop VM:f3d2f69d:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8099720, mem:1641785, objs:-/9@b4d92289, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8100162, mem:1641865, objs:-/10@bb8122e5",
-  "  22 push VM:f3d2f69d:loadmem1(Symbol(kkkkkkkk), U32(256), U32(1))": "cpu:8739681, mem:1920712, objs:-/11@fe70ee92, vm:65536@b1cd98b9/4@70bfd778, stk:1@3ae50962, auth:1@27279bf3/-",
-  "  23 call symbol_index_in_linear_memory(Symbol(kkkkkkkk), U32(256), U32(1))": "cpu:8742162, mem:1920790, vm:-/-",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8099720, objs:-/9@b4d92289, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8100162, objs:-/10@bb8122e5",
+  "  22 push VM:f3d2f69d:loadmem1(Symbol(kkkkkkkk), U32(256), U32(1))": "cpu:8739681, mem:1650911, objs:-/11@fe70ee92, vm:65536@b1cd98b9/4@70bfd778, stk:1@3ae50962, auth:1@27279bf3/-",
+  "  23 call symbol_index_in_linear_memory(Symbol(kkkkkkkk), U32(256), U32(1))": "cpu:8742162, mem:1650989, vm:-/-",
   "  24 ret symbol_index_in_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8750787",
   "  25 pop VM:f3d2f69d:loadmem1 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@1ef083fd/4@70bfd778",
   "  26 ret call -> Err(Error(WasmVm, IndexBounds))": " vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8750787, mem:1920790, prngs:-/9b4a753, objs:-/11@fe70ee92, vm:-/-, evt:-, store:-/2@1217a1ed, foot:2@858769f6, stk:-, auth:-/-"
+  "  27 end": "cpu:8750787, mem:1650989, prngs:-/9b4a753, objs:-/11@fe70ee92, vm:-/-, evt:-, store:-/2@1217a1ed, foot:2@858769f6, stk:-, auth:-/-"
 }

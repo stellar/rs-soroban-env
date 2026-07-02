@@ -737,18 +737,32 @@ impl Host {
         let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
-                let vm = self.instantiate_vm(id, wasm_hash)?;
-                let relative_objects = Vec::new();
-                self.with_frame(
-                    Frame::ContractVM {
-                        vm: Rc::clone(&vm),
-                        fn_name: *func,
-                        args: args_vec,
-                        instance,
-                        relative_objects,
-                    },
-                    || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
-                )
+                // Clone the hash (a plain 32-byte copy, no budget charge) so
+                // the borrow of `instance.executable` ends before `instance` is
+                // moved into the frame below.
+                let wasm_hash = wasm_hash.clone();
+                // Reclaim this VM's instantiation and linear memory when its
+                // frame exits. We open a memory-refund scope that accumulates
+                // exactly the memory charged for this VM (instantiation,
+                // parsing in the throwaway path, and linear-memory growth), and
+                // refund it afterwards. The refund happens on both the success
+                // and error paths, since the VM's `Store` and linear memory are
+                // dropped either way; this also lets a `try_call` caller that
+                // recovers from a sub-call failure reclaim the sub-call's
+                // memory.
+                self.as_budget().push_vm_mem_refund_scope()?;
+                let res = self.call_wasm_contract_fn(
+                    id,
+                    func,
+                    args,
+                    args_vec,
+                    instance,
+                    &wasm_hash,
+                    treat_missing_function_as_noop,
+                );
+                let refund = self.as_budget().pop_vm_mem_refund_scope()?;
+                self.as_budget().refund_mem_bytes(refund)?;
+                res
             }
             ContractExecutable::StellarAsset => self.with_frame(
                 Frame::StellarAssetContract(id.metered_clone(self)?, *func, args_vec, instance),
@@ -758,6 +772,34 @@ impl Host {
                 },
             ),
         }
+    }
+
+    // Instantiates the contract's VM and invokes `func` within a `ContractVM`
+    // frame. Factored out of `call_contract_fn` so that the memory-refund
+    // scope handling around it (see the `next`-gated arm above) stays a thin
+    // wrapper.
+    fn call_wasm_contract_fn(
+        &self,
+        id: &ContractId,
+        func: &Symbol,
+        args: &[Val],
+        args_vec: Vec<Val>,
+        instance: ScContractInstance,
+        wasm_hash: &Hash,
+        treat_missing_function_as_noop: bool,
+    ) -> Result<Val, HostError> {
+        let vm = self.instantiate_vm(id, wasm_hash)?;
+        let relative_objects = Vec::new();
+        self.with_frame(
+            Frame::ContractVM {
+                vm: Rc::clone(&vm),
+                fn_name: *func,
+                args: args_vec,
+                instance,
+                relative_objects,
+            },
+            || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
+        )
     }
 
     fn instantiate_vm(&self, id: &ContractId, wasm_hash: &Hash) -> Result<Rc<Vm>, HostError> {

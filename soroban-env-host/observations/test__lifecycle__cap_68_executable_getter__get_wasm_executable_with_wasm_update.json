@@ -59,10 +59,10 @@
   "  57 pop VM:7013ae53:update -> Ok(I32(123))": "cpu:6140800, mem:6694572, vm:1048576@740599e7/6@c559546a, store:1@f369ddeb/3@d5018297",
   "  58 ret call -> Ok(I32(123))": " objs:-/23@75259a7, vm:-/-, store:-/3@d5018297, stk:-, auth:-/-",
   "  59 call get_address_executable(Address(obj#17))": "",
-  "  60 call bytes_new_from_slice(32)": "cpu:6143462, mem:6694871",
-  "  61 ret bytes_new_from_slice -> Ok(Bytes(obj#47))": "cpu:6144433, mem:6694999, objs:-/24@29d17e9c",
+  "  60 call bytes_new_from_slice(32)": "cpu:6143462",
+  "  61 ret bytes_new_from_slice -> Ok(Bytes(obj#47))": "cpu:6144433, objs:-/24@29d17e9c",
   "  62 call vec_new_from_slice(2)": "",
-  "  63 ret vec_new_from_slice -> Ok(Vec(obj#49))": "cpu:6145461, mem:6695111, objs:-/25@2c8acd1c",
+  "  63 ret vec_new_from_slice -> Ok(Vec(obj#49))": "cpu:6145461, objs:-/25@2c8acd1c",
   "  64 ret get_address_executable -> Ok(Vec(obj#49))": "cpu:6145522",
   "  65 call vec_get(Vec(obj#49), U32(0))": "",
   "  66 ret vec_get -> Ok(Symbol(Wasm))": "cpu:6145687",
@@ -74,5 +74,5 @@
   "  72 ret bytes_len -> Ok(U32(32))": "cpu:6146167",
   "  73 call bytes_copy_to_slice(Bytes(obj#47), U32(0), 32)": "cpu:6146274",
   "  74 ret bytes_copy_to_slice -> Ok(())": "cpu:6146381",
-  "  75 end": "cpu:6146381, mem:6695111, prngs:-/9b4a753, objs:-/25@2c8acd1c, vm:-/-, evt:1@3146a5e8, store:-/3@d5018297, foot:3@61912b5d, stk:-, auth:-/-"
+  "  75 end": "cpu:6146381, mem:6694572, prngs:-/9b4a753, objs:-/25@2c8acd1c, vm:-/-, evt:1@3146a5e8, store:-/3@d5018297, foot:3@61912b5d, stk:-, auth:-/-"
 }

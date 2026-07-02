@@ -203,6 +203,16 @@ pub(crate) struct BudgetImpl {
     is_in_shadow_mode: bool,
     fuel_costs: wasmi::FuelCosts,
     depth_limit: u32,
+    /// A stack of memory-refund accumulators, one per in-progress VM
+    /// invocation. Charges made via [`Budget::charge_refundable_vm_mem`] (VM
+    /// instantiation, parsing in the throwaway path, and wasm linear-memory
+    /// growth) add the exact amount they charged to `mem_bytes` to the top of
+    /// this stack. When a VM's frame exits, its accumulator is popped and
+    /// refunded to `mem_bytes`, reclaiming the budget for memory that has been
+    /// deallocated. Only the specifically-marked charge sites accumulate here,
+    /// so memory that outlives the frame (host objects, storage entries) is
+    /// never refunded.
+    mem_refund_scopes: Vec<u64>,
 }
 
 impl BudgetImpl {
@@ -220,6 +230,7 @@ impl BudgetImpl {
             is_in_shadow_mode: false,
             fuel_costs: load_calibrated_fuel_costs(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
+            mem_refund_scopes: Vec::new(),
         })
     }
 
@@ -314,6 +325,7 @@ impl Default for BudgetImpl {
             is_in_shadow_mode: false,
             fuel_costs: load_calibrated_fuel_costs(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
+            mem_refund_scopes: Vec::new(),
         };
 
         for ct in ContractCostType::variants() {
@@ -1324,6 +1336,60 @@ impl Budget {
         self.0.try_borrow_mut_or_err()?.charge(ty, 1, input)
     }
 
+    /// Like [`Budget::charge`], but additionally records the exact amount
+    /// charged to `mem_bytes` against the innermost active VM memory-refund
+    /// scope (if any). Used at the charge sites for memory that a VM owns and
+    /// releases when its frame exits: VM instantiation, wasm parsing (only when
+    /// it happens inside a live scope, i.e. the throwaway path — cache-built
+    /// modules are parsed outside any scope and so are not refunded), and wasm
+    /// linear-memory growth. The accumulated amount is refunded when the scope
+    /// is popped at frame exit.
+    ///
+    /// The amount accumulated is the real `total_count` delta, so a charge made
+    /// in shadow mode (which does not touch `total_count`) contributes zero,
+    /// and if there is no active scope this behaves exactly like
+    /// [`Budget::charge`].
+    pub(crate) fn charge_refundable_vm_mem(
+        &self,
+        ty: ContractCostType,
+        input: Option<u64>,
+    ) -> Result<(), HostError> {
+        let mut b = self.0.try_borrow_mut_or_err()?;
+        let before = b.mem_bytes.get_total_count();
+        b.charge(ty, 1, input)?;
+        let charged = b.mem_bytes.get_total_count().saturating_sub(before);
+        if let Some(top) = b.mem_refund_scopes.last_mut() {
+            *top = top.saturating_add(charged);
+        }
+        Ok(())
+    }
+
+    /// Pushes a new (zeroed) VM memory-refund scope. Must be balanced by a
+    /// later [`Budget::pop_vm_mem_refund_scope`].
+    pub(crate) fn push_vm_mem_refund_scope(&self) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.mem_refund_scopes.push(0);
+        Ok(())
+    }
+
+    /// Pops the innermost VM memory-refund scope and returns the total memory
+    /// (in `mem_bytes` units) accumulated in it. Errors if there is no scope to
+    /// pop (which would indicate an unbalanced push/pop bug).
+    pub(crate) fn pop_vm_mem_refund_scope(&self) -> Result<u64, HostError> {
+        self.0
+            .try_borrow_mut_or_err()?
+            .mem_refund_scopes
+            .pop()
+            .ok_or_else(|| (ScErrorType::Budget, ScErrorCode::InternalError).into())
+    }
+
+    /// Refunds previously-charged memory back to the running `mem_bytes` count
+    /// (see [`BudgetDimension::refund`]). The high-water mark used for
+    /// reporting is not affected.
+    pub(crate) fn refund_mem_bytes(&self, amount: u64) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.mem_bytes.refund(amount);
+        Ok(())
+    }
+
     pub(crate) fn get_memory_cost(
         &self,
         ty: ContractCostType,
@@ -1413,8 +1479,14 @@ impl Budget {
         Ok(self.0.try_borrow_or_err()?.cpu_insns.get_total_count())
     }
 
+    /// Returns the peak (high-water mark) memory consumption. This is the
+    /// maximum instantaneous `total_count` ever reached, which is the quantity
+    /// the memory limit effectively bounds and the meaningful value to report.
+    /// When no memory has been refunded (e.g. on protocol versions without VM
+    /// memory refunding) this equals the running `total_count`, so the reported
+    /// value is unchanged.
     pub fn get_mem_bytes_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_total_count())
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_max_total_count())
     }
 
     pub fn get_cpu_insns_remaining(&self) -> Result<u64, HostError> {

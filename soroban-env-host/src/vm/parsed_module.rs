@@ -30,46 +30,46 @@ impl VersionedContractCodeCostInputs {
         let budget = budget.as_budget();
         match self {
             Self::V0 { wasm_bytes } => {
-                budget.charge(ContractCostType::VmInstantiation, Some(*wasm_bytes as u64))?;
+                budget.charge_refundable_vm_mem(ContractCostType::VmInstantiation, Some(*wasm_bytes as u64))?;
             }
             Self::V1(inputs) => {
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmInstructions,
                     Some(inputs.n_instructions as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmFunctions,
                     Some(inputs.n_functions as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmGlobals,
                     Some(inputs.n_globals as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmTableEntries,
                     Some(inputs.n_table_entries as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmTypes,
                     Some(inputs.n_types as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmDataSegments,
                     Some(inputs.n_data_segments as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmElemSegments,
                     Some(inputs.n_elem_segments as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmImports,
                     Some(inputs.n_imports as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmExports,
                     Some(inputs.n_exports as u64),
                 )?;
-                budget.charge(
+                budget.charge_refundable_vm_mem(
                     ContractCostType::ParseWasmDataSegmentBytes,
                     Some(inputs.n_data_segment_bytes as u64),
                 )?;
@@ -89,43 +89,43 @@ impl VersionedContractCodeCostInputs {
                 // VmInstantiation cost type was repurposed to only cover the
                 // cost of parsing, so we have to charge the "second half" cost
                 // of instantiation separately here.
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::VmCachedInstantiation,
                     Some(*wasm_bytes as u64),
                 )?;
             }
             Self::V1(inputs) => {
-                _host.charge_budget(ContractCostType::InstantiateWasmInstructions, None)?;
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(ContractCostType::InstantiateWasmInstructions, None)?;
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::InstantiateWasmFunctions,
                     Some(inputs.n_functions as u64),
                 )?;
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::InstantiateWasmGlobals,
                     Some(inputs.n_globals as u64),
                 )?;
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::InstantiateWasmTableEntries,
                     Some(inputs.n_table_entries as u64),
                 )?;
-                _host.charge_budget(ContractCostType::InstantiateWasmTypes, None)?;
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(ContractCostType::InstantiateWasmTypes, None)?;
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::InstantiateWasmDataSegments,
                     Some(inputs.n_data_segments as u64),
                 )?;
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::InstantiateWasmElemSegments,
                     Some(inputs.n_elem_segments as u64),
                 )?;
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::InstantiateWasmImports,
                     Some(inputs.n_imports as u64),
                 )?;
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::InstantiateWasmExports,
                     Some(inputs.n_exports as u64),
                 )?;
-                _host.charge_budget(
+                _host.as_budget().charge_refundable_vm_mem(
                     ContractCostType::InstantiateWasmDataSegmentBytes,
                     Some(inputs.n_data_segment_bytes as u64),
                 )?;

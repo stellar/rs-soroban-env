@@ -21,8 +21,8 @@
   "  19 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:4440307, mem:4210766, objs:1@e42086ac/11@a33ab8f2, stk:1@82638e5a",
   "  20 ret try_call -> Ok(Error(Context, InvalidAction))": " objs:-/11@a33ab8f2, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#13), Symbol(add_with), Vec(obj#19))": "",
-  "  22 push VM:3f2c7e4c:add_with(I32(2147483647), I32(1), Bytes(obj#17))": "cpu:5121187, mem:5477664, objs:-/12@a24be952, vm:1114112@e6a5c288/10@a420633f, stk:1@2aaba6be, auth:1@36e6e42c/-",
-  "  23 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:5124223, mem:5477766, objs:1@e42086ac/12@a24be952, stk:1@82638e5a",
+  "  22 push VM:3f2c7e4c:add_with(I32(2147483647), I32(1), Bytes(obj#17))": "cpu:5121187, mem:4215176, objs:-/12@a24be952, vm:1114112@e6a5c288/10@a420633f, stk:1@2aaba6be, auth:1@36e6e42c/-",
+  "  23 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:5124223, mem:4215278, objs:1@e42086ac/12@a24be952, stk:1@82638e5a",
   "  24 ret call -> Err(Error(WasmVm, InvalidAction))": " objs:-/12@a24be952, vm:-/-, stk:-, auth:-/-",
-  "  25 end": "cpu:5124223, mem:5477766, prngs:-/9b4a753, objs:-/12@a24be952, vm:-/-, evt:-, store:-/2@9edb245b, foot:2@b3f027d3, stk:-, auth:-/-"
+  "  25 end": "cpu:5124223, mem:4215278, prngs:-/9b4a753, objs:-/12@a24be952, vm:-/-, evt:-, store:-/2@9edb245b, foot:2@b3f027d3, stk:-, auth:-/-"
 }

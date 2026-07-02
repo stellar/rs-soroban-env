@@ -528,7 +528,7 @@ fn excessive_logging() -> Result<(), HostError> {
         r#"
     =================================================================
     Cpu limit: 2000000; used: 214303
-    Mem limit: 500000; used: 166812
+    Mem limit: 500000; used: 1854
     =================================================================
     CostType                           cpu_insns      mem_bytes      
     WasmInsnExec                       300            0              

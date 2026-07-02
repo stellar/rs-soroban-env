@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1521304",
   "  19 pop VM:aa640488:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1521807, mem:745352, objs:-/9@428cdb6f, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1523133, mem:745592, objs:-/12@7f914cf3",
-  "  22 push VM:aa640488:test(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1735730, mem:912460, objs:-/13@1ae19ac, vm:65536@b1cd98b9/2@2f94d90d, stk:1@325dbd34, auth:1@73b1caf7/-",
-  "  23 call poseidon2_permutation(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1739536, mem:912690, objs:3@34201d93/13@1ae19ac, vm:-/-, stk:1@f1c30b04",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1521807, objs:-/9@428cdb6f, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1523133, objs:-/12@7f914cf3",
+  "  22 push VM:aa640488:test(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1735730, mem:747300, objs:-/13@1ae19ac, vm:65536@b1cd98b9/2@2f94d90d, stk:1@325dbd34, auth:1@73b1caf7/-",
+  "  23 call poseidon2_permutation(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1739536, mem:747530, objs:3@34201d93/13@1ae19ac, vm:-/-, stk:1@f1c30b04",
   "  24 pop VM:aa640488:test -> Err(Error(Value, InvalidInput))": "cpu:1740288, vm:65536@b1cd98b9/2@2f94d90d",
   "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/13@1ae19ac, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1740288, mem:912690, prngs:-/9b4a753, objs:-/13@1ae19ac, vm:-/-, evt:-, store:-/2@34fc87fe, foot:2@e10328c6, stk:-, auth:-/-"
+  "  26 end": "cpu:1740288, mem:747530, prngs:-/9b4a753, objs:-/13@1ae19ac, vm:-/-, evt:-, store:-/2@34fc87fe, foot:2@e10328c6, stk:-, auth:-/-"
 }

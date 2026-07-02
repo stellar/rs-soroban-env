@@ -22,8 +22,19 @@ pub(crate) struct BudgetDimension {
     pub(crate) limit: u64,
 
     /// Tracks the sum of _output_ values from the cost model, for purposes
-    /// of comparing to limit.
+    /// of comparing to limit. Unlike a pure running total, this may _decrease_
+    /// when memory is refunded (see [`BudgetDimension::refund`]), so it tracks
+    /// the currently-held resource rather than the cumulative amount ever
+    /// charged.
     pub(crate) total_count: u64,
+
+    /// High-water mark of `total_count`: the maximum value it ever reached.
+    /// Never decreased by a refund. In the absence of refunds this always
+    /// equals `total_count`, so reporting it is backwards-compatible; with
+    /// refunds it is the peak (concurrent) resource usage, which is the
+    /// meaningful quantity to report and the value the limit effectively
+    /// bounds.
+    pub(crate) max_total_count: u64,
 
     /// The shadow limit tracks work done internally that is not exposed to the
     /// external user -- it does not affect fees or decide the invocation outcome
@@ -42,6 +53,7 @@ impl Default for BudgetDimension {
             cost_models: [MeteredCostComponent::default(); ContractCostType::variants().len()],
             limit: 0,
             total_count: 0,
+            max_total_count: 0,
             shadow_limit: 0,
             shadow_total_count: 0,
         }
@@ -125,8 +137,24 @@ impl BudgetDimension {
         self.total_count
     }
 
+    /// Returns the high-water mark of `total_count`. Equals `total_count` when
+    /// no refunds have occurred.
+    pub(crate) fn get_max_total_count(&self) -> u64 {
+        self.max_total_count
+    }
+
     pub(crate) fn get_remaining(&self) -> u64 {
         self.limit.saturating_sub(self.total_count)
+    }
+
+    /// Returns previously-charged resources back to the running `total_count`
+    /// (used to reclaim memory that has been deallocated, e.g. a VM's linear
+    /// memory and instance when its frame exits). The high-water mark
+    /// (`max_total_count`) is intentionally NOT decreased. `saturating_sub`
+    /// guarantees `total_count` can never go negative even if `amount` were
+    /// somehow larger than the current count.
+    pub(crate) fn refund(&mut self, amount: u64) {
+        self.total_count = self.total_count.saturating_sub(amount);
     }
 
     pub(crate) fn reset(&mut self, limit: u64) {
@@ -137,6 +165,7 @@ impl BudgetDimension {
 
     pub(crate) fn reset_count(&mut self) {
         self.total_count = 0;
+        self.max_total_count = 0;
         self.shadow_total_count = 0;
     }
 
@@ -182,6 +211,7 @@ impl BudgetDimension {
             self.shadow_total_count = self.shadow_total_count.saturating_add(amount);
         } else {
             self.total_count = self.total_count.saturating_add(amount);
+            self.max_total_count = self.max_total_count.max(self.total_count);
         }
 
         Ok(amount)

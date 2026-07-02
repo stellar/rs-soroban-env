@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1507764",
   "  19 pop VM:34e5d3f1:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1508267, mem:743459, objs:-/9@2d92aaa7, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1509593, mem:743699, objs:-/12@43f67ec8",
-  "  22 push VM:34e5d3f1:test(Address(obj#19), Bytes(obj#123), Bytes(obj#21))": "cpu:1721173, mem:910220, objs:-/13@7bd8c3b2, vm:65536@b1cd98b9/2@2f94d90d, stk:1@4ed95dab, auth:1@73b1caf7/-",
-  "  23 call create_contract(Address(obj#19), Bytes(obj#123), Bytes(obj#21))": "cpu:1724959, mem:910370, objs:3@555dc61d/13@7bd8c3b2, vm:-/-, stk:1@e4e00af0",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1508267, objs:-/9@2d92aaa7, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1509593, objs:-/12@43f67ec8",
+  "  22 push VM:34e5d3f1:test(Address(obj#19), Bytes(obj#123), Bytes(obj#21))": "cpu:1721173, mem:745312, objs:-/13@7bd8c3b2, vm:65536@b1cd98b9/2@2f94d90d, stk:1@4ed95dab, auth:1@73b1caf7/-",
+  "  23 call create_contract(Address(obj#19), Bytes(obj#123), Bytes(obj#21))": "cpu:1724959, mem:745462, objs:3@555dc61d/13@7bd8c3b2, vm:-/-, stk:1@e4e00af0",
   "  24 pop VM:34e5d3f1:test -> Err(Error(Value, InvalidInput))": "cpu:1725687, vm:65536@b1cd98b9/2@2f94d90d",
   "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/13@7bd8c3b2, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1725687, mem:910370, prngs:-/9b4a753, objs:-/13@7bd8c3b2, vm:-/-, evt:-, store:-/2@796c88db, foot:2@134a737a, stk:-, auth:-/-"
+  "  26 end": "cpu:1725687, mem:745462, prngs:-/9b4a753, objs:-/13@7bd8c3b2, vm:-/-, evt:-, store:-/2@796c88db, foot:2@134a737a, stk:-, auth:-/-"
 }

@@ -610,6 +610,18 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
+    /// Like [`wasm_module_with_mem_grow`], but traps (via `unreachable`) after
+    /// growing linear memory. Used to verify that a VM's memory is refunded
+    /// even when its frame exits via an error.
+    pub(crate) fn wasm_module_with_mem_grow_then_trap(n_pages: usize) -> Vec<u8> {
+        let mut fe = ModEmitter::default_with_test_protocol().func(Arity(0), 0);
+        fe.push(Operand::Const32(n_pages as i32));
+        fe.memory_grow();
+        fe.drop();
+        fe.trap();
+        fe.finish_and_export("test").finish()
+    }
+
     pub(crate) fn wasm_module_with_linear_memory_logging() -> Vec<u8> {
         let mut me = ModEmitter::default_with_test_protocol();
         // log_from_linear_memory

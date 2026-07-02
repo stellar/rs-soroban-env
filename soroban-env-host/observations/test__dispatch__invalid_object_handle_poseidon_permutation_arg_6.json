@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1521304",
   "  19 pop VM:20727a1f:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1521807, mem:745352, objs:-/9@6c570ee9, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1523133, mem:745592, objs:-/12@8c7f83b0",
-  "  22 push VM:20727a1f:test(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1735730, mem:912460, objs:-/13@87c134b5, vm:65536@b1cd98b9/2@2f94d90d, stk:1@68133113, auth:1@73b1caf7/-",
-  "  23 call poseidon_permutation(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1739536, mem:912690, objs:3@34201d93/13@87c134b5, vm:-/-, stk:1@17b6e148",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1521807, objs:-/9@6c570ee9, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1523133, objs:-/12@8c7f83b0",
+  "  22 push VM:20727a1f:test(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1735730, mem:747300, objs:-/13@87c134b5, vm:65536@b1cd98b9/2@2f94d90d, stk:1@68133113, auth:1@73b1caf7/-",
+  "  23 call poseidon_permutation(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1739536, mem:747530, objs:3@34201d93/13@87c134b5, vm:-/-, stk:1@17b6e148",
   "  24 pop VM:20727a1f:test -> Err(Error(Value, InvalidInput))": "cpu:1740288, vm:65536@b1cd98b9/2@2f94d90d",
   "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/13@87c134b5, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1740288, mem:912690, prngs:-/9b4a753, objs:-/13@87c134b5, vm:-/-, evt:-, store:-/2@e04a34fe, foot:2@8f000a18, stk:-, auth:-/-"
+  "  26 end": "cpu:1740288, mem:747530, prngs:-/9b4a753, objs:-/13@87c134b5, vm:-/-, evt:-, store:-/2@e04a34fe, foot:2@8f000a18, stk:-, auth:-/-"
 }

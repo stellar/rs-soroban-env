@@ -1831,7 +1831,7 @@ mod cap_58_constructor {
                         invocation: CreateContractEntryPoint,
                         resources: SubInvocationResources {
                             instructions: 899450,
-                            mem_bytes: 3470425,
+                            mem_bytes: 3466339,
                             disk_read_entries: 0,
                             memory_read_entries: 6,
                             write_entries: 3,
@@ -1857,7 +1857,7 @@ mod cap_58_constructor {
                                 ),
                                 resources: SubInvocationResources {
                                     instructions: 629444,
-                                    mem_bytes: 2339001,
+                                    mem_bytes: 2334995,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
                                     write_entries: 2,
@@ -1989,7 +1989,7 @@ mod cap_58_constructor {
                         ),
                         resources: SubInvocationResources {
                             instructions: 2404866,
-                            mem_bytes: 5948360,
+                            mem_bytes: 4768122,
                             disk_read_entries: 0,
                             memory_read_entries: 8,
                             write_entries: 3,
@@ -2015,7 +2015,7 @@ mod cap_58_constructor {
                                 ),
                                 resources: SubInvocationResources {
                                     instructions: 914414,
-                                    mem_bytes: 2387167,
+                                    mem_bytes: 2382281,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
                                     write_entries: 2,
@@ -2070,7 +2070,7 @@ mod cap_58_constructor {
                                 ),
                                 resources: SubInvocationResources {
                                     instructions: 546406,
-                                    mem_bytes: 1175120,
+                                    mem_bytes: 0,
                                     disk_read_entries: 0,
                                     memory_read_entries: 0,
                                     write_entries: 0,

@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8092636",
   "  19 pop VM:66877ee9:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8093139, mem:1640832, objs:-/9@e6d58a70, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8093581, mem:1640912, objs:-/10@30900c3e",
-  "  22 push VM:66877ee9:loadmem2(U32(65280), U32(32))": "cpu:8732499, mem:1919584, objs:-/11@dc0cabac, vm:65536@b1cd98b9/4@70bfd778, stk:1@fa006852, auth:1@d114d61d/-",
-  "  23 call vec_new_from_linear_memory(U32(65280), U32(32))": "cpu:8734976, mem:1919646, vm:-/-",
-  "  24 ret vec_new_from_linear_memory -> Ok(Vec(obj#23))": "cpu:8745121, mem:1919998, objs:-/12@221aa934",
-  "  25 pop VM:66877ee9:loadmem2 -> Ok(Vec(obj#23))": "cpu:8745617, mem:1920022, objs:1@f1b74ac7/12@221aa934, vm:65536@6d331be9/4@70bfd778, stk:1@3a388da9",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8093139, objs:-/9@e6d58a70, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8093581, objs:-/10@30900c3e",
+  "  22 push VM:66877ee9:loadmem2(U32(65280), U32(32))": "cpu:8732499, mem:1649935, objs:-/11@dc0cabac, vm:65536@b1cd98b9/4@70bfd778, stk:1@fa006852, auth:1@d114d61d/-",
+  "  23 call vec_new_from_linear_memory(U32(65280), U32(32))": "cpu:8734976, mem:1649997, vm:-/-",
+  "  24 ret vec_new_from_linear_memory -> Ok(Vec(obj#23))": "cpu:8745121, mem:1650349, objs:-/12@221aa934",
+  "  25 pop VM:66877ee9:loadmem2 -> Ok(Vec(obj#23))": "cpu:8745617, mem:1650373, objs:1@f1b74ac7/12@221aa934, vm:65536@6d331be9/4@70bfd778, stk:1@3a388da9",
   "  26 ret call -> Ok(Vec(obj#23))": "cpu:8745678, objs:-/12@221aa934, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8745678, mem:1920022, prngs:-/9b4a753, objs:-/12@221aa934, vm:-/-, evt:-, store:-/2@d47f89e0, foot:2@e4436610, stk:-, auth:-/-"
+  "  27 end": "cpu:8745678, mem:1650373, prngs:-/9b4a753, objs:-/12@221aa934, vm:-/-, evt:-, store:-/2@d47f89e0, foot:2@e4436610, stk:-, auth:-/-"
 }

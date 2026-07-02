@@ -54,8 +54,12 @@ impl ResourceLimiter for Host {
                     .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
             }
 
+            // Charge for the growth, and record it against the active VM
+            // memory-refund scope (if any) so that this VM's linear memory is
+            // reclaimed when its frame exits. `charge_refundable_vm_mem`
+            // behaves exactly like `charge` when no refund scope is active.
             self.as_budget()
-                .charge(ContractCostType::MemAlloc, Some(delta))
+                .charge_refundable_vm_mem(ContractCostType::MemAlloc, Some(delta))
                 .map(|_| true)
                 .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
         } else {

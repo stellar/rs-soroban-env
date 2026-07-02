@@ -19,7 +19,7 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1480916",
   "  19 pop VM:90910914:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1481419, mem:737833, objs:-/9@2e1c4280, vm:-/-, stk:-, auth:-/-",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1481419, objs:-/9@2e1c4280, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "cpu:963, mem:96, objs:-/10@c54e237a",
   "  22 push VM:90910914:test()": "cpu:199953, mem:164748, objs:-/11@933d1765, vm:65536@b1cd98b9/2@2f94d90d, stk:1@aaad1067, auth:1@b1b428e/-",
   "  23 pop VM:90910914:test -> Err(Error(WasmVm, ArithDomain))": "cpu:202442, mem:164778",

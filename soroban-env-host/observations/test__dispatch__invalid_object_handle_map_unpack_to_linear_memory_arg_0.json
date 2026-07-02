@@ -19,11 +19,11 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1510480",
   "  19 pop VM:da4b931a:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1510983, mem:743838, objs:-/9@6a6f0777, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "cpu:1511425, mem:743918, objs:-/10@4a05f6bf",
-  "  22 push VM:da4b931a:test(Map(obj#123), U32(123), U32(123), U32(123))": "cpu:1723210, mem:910508, objs:-/11@59e8bf0d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@5c485459, auth:1@b1b428e/-",
-  "  23 call map_unpack_to_linear_memory(Map(obj#123), U32(123), U32(123), U32(123))": "cpu:1726130, mem:910626, objs:1@a940116a/11@59e8bf0d, vm:-/-, stk:1@1573bf6d",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1510983, objs:-/9@6a6f0777, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "cpu:1511425, objs:-/10@4a05f6bf",
+  "  22 push VM:da4b931a:test(Map(obj#123), U32(123), U32(123), U32(123))": "cpu:1723210, mem:745550, objs:-/11@59e8bf0d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@5c485459, auth:1@b1b428e/-",
+  "  23 call map_unpack_to_linear_memory(Map(obj#123), U32(123), U32(123), U32(123))": "cpu:1726130, mem:745668, objs:1@a940116a/11@59e8bf0d, vm:-/-, stk:1@1573bf6d",
   "  24 pop VM:da4b931a:test -> Err(Error(Value, InvalidInput))": "cpu:1726801, vm:65536@b1cd98b9/2@2f94d90d",
   "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/11@59e8bf0d, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1726801, mem:910626, prngs:-/9b4a753, objs:-/11@59e8bf0d, vm:-/-, evt:-, store:-/2@504f7bbc, foot:2@6bbb2cbb, stk:-, auth:-/-"
+  "  26 end": "cpu:1726801, mem:745668, prngs:-/9b4a753, objs:-/11@59e8bf0d, vm:-/-, evt:-, store:-/2@504f7bbc, foot:2@6bbb2cbb, stk:-, auth:-/-"
 }

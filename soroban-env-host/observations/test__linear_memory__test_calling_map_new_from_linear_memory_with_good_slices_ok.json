@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8099217",
   "  19 pop VM:fa0022b7:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8099720, mem:1641785, objs:-/9@4082512b, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8100162, mem:1641865, objs:-/10@68a8cd8b",
-  "  22 push VM:fa0022b7:loadmem1(U32(0), U32(65024), U32(32))": "cpu:8739681, mem:1920712, objs:-/11@a5c9f130, vm:65536@b1cd98b9/4@70bfd778, stk:1@7559c0cd, auth:1@27279bf3/-",
-  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8742162, mem:1920790, vm:-/-",
-  "  24 ret map_new_from_linear_memory -> Ok(Map(obj#23))": "cpu:8753461, mem:1922198, objs:-/12@d875ee83",
-  "  25 pop VM:fa0022b7:loadmem1 -> Ok(Map(obj#23))": "cpu:8753957, mem:1922222, objs:1@7b601b67/12@d875ee83, vm:65536@1ef083fd/4@70bfd778, stk:1@202eab04",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8099720, objs:-/9@4082512b, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8100162, objs:-/10@68a8cd8b",
+  "  22 push VM:fa0022b7:loadmem1(U32(0), U32(65024), U32(32))": "cpu:8739681, mem:1650911, objs:-/11@a5c9f130, vm:65536@b1cd98b9/4@70bfd778, stk:1@7559c0cd, auth:1@27279bf3/-",
+  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8742162, mem:1650989, vm:-/-",
+  "  24 ret map_new_from_linear_memory -> Ok(Map(obj#23))": "cpu:8753461, mem:1652397, objs:-/12@d875ee83",
+  "  25 pop VM:fa0022b7:loadmem1 -> Ok(Map(obj#23))": "cpu:8753957, mem:1652421, objs:1@7b601b67/12@d875ee83, vm:65536@1ef083fd/4@70bfd778, stk:1@202eab04",
   "  26 ret call -> Ok(Map(obj#23))": "cpu:8754018, objs:-/12@d875ee83, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8754018, mem:1922222, prngs:-/9b4a753, objs:-/12@d875ee83, vm:-/-, evt:-, store:-/2@d9a8b09b, foot:2@1986de3, stk:-, auth:-/-"
+  "  27 end": "cpu:8754018, mem:1652421, prngs:-/9b4a753, objs:-/12@d875ee83, vm:-/-, evt:-, store:-/2@d9a8b09b, foot:2@1986de3, stk:-, auth:-/-"
 }

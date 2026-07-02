@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8099217",
   "  19 pop VM:fa0022b7:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8099720, mem:1641785, objs:-/9@4082512b, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8100162, mem:1641865, objs:-/10@68a8cd8b",
-  "  22 push VM:fa0022b7:loadmem2(U32(0), U32(65024), U32(32))": "cpu:8739681, mem:1920712, objs:-/11@a5c9f130, vm:65536@b1cd98b9/4@70bfd778, stk:1@3f66dede, auth:1@d114d61d/-",
-  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8742162, mem:1920790, vm:-/-",
-  "  24 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:8752528, mem:1921334",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8099720, objs:-/9@4082512b, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8100162, objs:-/10@68a8cd8b",
+  "  22 push VM:fa0022b7:loadmem2(U32(0), U32(65024), U32(32))": "cpu:8739681, mem:1650911, objs:-/11@a5c9f130, vm:65536@b1cd98b9/4@70bfd778, stk:1@3f66dede, auth:1@d114d61d/-",
+  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8742162, mem:1650989, vm:-/-",
+  "  24 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:8752528, mem:1651533",
   "  25 pop VM:fa0022b7:loadmem2 -> Err(Error(Value, InvalidInput))": " vm:65536@6d331be9/4@70bfd778",
   "  26 ret call -> Err(Error(Value, InvalidInput))": " vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8752528, mem:1921334, prngs:-/9b4a753, objs:-/11@a5c9f130, vm:-/-, evt:-, store:-/2@d9a8b09b, foot:2@1986de3, stk:-, auth:-/-"
+  "  27 end": "cpu:8752528, mem:1651533, prngs:-/9b4a753, objs:-/11@a5c9f130, vm:-/-, evt:-, store:-/2@d9a8b09b, foot:2@1986de3, stk:-, auth:-/-"
 }

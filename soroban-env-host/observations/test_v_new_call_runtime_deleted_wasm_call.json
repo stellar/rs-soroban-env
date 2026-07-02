@@ -6,7 +6,7 @@
   "   4 push VM:c1af73c3:test()": "cpu:214888, mem:169637, objs:-/3@2988da9d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@72641ed5, auth:1@1d00dc6b/-",
   "   5 pop VM:c1af73c3:test -> Ok(Symbol(pass))": "cpu:217385, mem:169667",
   "   6 ret call -> Ok(Symbol(pass))": " vm:-/-, stk:-, auth:-/-",
-  "   7 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "cpu:259381, mem:169976, store:-/1@e5d250, foot:1@2784223c",
-  "   8 ret call -> Err(Error(Storage, ExceededLimit))": "cpu:267441, mem:170464, objs:-/4@14b86d0c",
-  "   9 end": "cpu:267441, mem:170464, prngs:-/-, objs:-/4@14b86d0c, vm:-/-, evt:-, store:-/1@e5d250, foot:1@2784223c, stk:-, auth:-/-"
+  "   7 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "cpu:259381, store:-/1@e5d250, foot:1@2784223c",
+  "   8 ret call -> Err(Error(Storage, ExceededLimit))": "cpu:267441, objs:-/4@14b86d0c",
+  "   9 end": "cpu:267441, mem:169667, prngs:-/-, objs:-/4@14b86d0c, vm:-/-, evt:-, store:-/1@e5d250, foot:1@2784223c, stk:-, auth:-/-"
 }

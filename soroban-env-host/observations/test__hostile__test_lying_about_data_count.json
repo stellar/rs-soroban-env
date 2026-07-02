@@ -19,10 +19,10 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:3490750",
   "  19 pop VM:59df6340:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:3491253, mem:1016074, objs:-/9@70089d10, vm:-/-, stk:-, auth:-/-",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:3491253, objs:-/9@70089d10, vm:-/-, stk:-, auth:-/-",
   "  21 call bytes_new_from_slice(2708)": "cpu:3491300",
-  "  22 ret bytes_new_from_slice -> Ok(Bytes(obj#19))": "cpu:3492939, mem:1018878, objs:-/10@376a9985",
+  "  22 ret bytes_new_from_slice -> Ok(Bytes(obj#19))": "cpu:3492939, objs:-/10@376a9985",
   "  23 call upload_wasm(Bytes(obj#19))": "",
-  "  24 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:5059143, mem:1258850",
-  "  25 end": "cpu:5059143, mem:1258850, prngs:-/9b4a753, objs:-/10@376a9985, vm:-/-, evt:-, store:-/2@4cbd8db, foot:2@57ceb227, stk:-, auth:-/-"
+  "  24 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:5059143, mem:1077150",
+  "  25 end": "cpu:5059143, mem:1077150, prngs:-/9b4a753, objs:-/10@376a9985, vm:-/-, evt:-, store:-/2@4cbd8db, foot:2@57ceb227, stk:-, auth:-/-"
 }
