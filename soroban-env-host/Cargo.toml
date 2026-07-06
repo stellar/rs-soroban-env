@@ -24,7 +24,9 @@ sha2 = "0.10.8"
 hex-literal = "0.4.1"
 hmac = "0.12.1"
 # NB: We'll need to pin this again after switching the Core to the new env version.
-ed25519-dalek = {version = ">=2.0.0", features = ["rand_core"] }
+# ed25519-dalek 3.0.0 (2026-07-06) bumped its rand_core past the rand 0.8.5 /
+# rand_chacha 0.3.1 pinned below, breaking `ChaCha20Rng: CryptoRng`. Cap <3.0.0.
+ed25519-dalek = {version = ">=2.0.0, <3.0.0", features = ["rand_core"] }
 # NB: this must match the same rand version used by ed25519-dalek above
 rand = "0.8.5"
 # NB: this must match the same rand_chacha version used by ed25519-dalek above
