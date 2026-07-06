@@ -2000,5 +2000,5 @@
   "1998 ret vec_push_back -> Ok(Vec(obj#3997))": "cpu:2166795, mem:199896, objs:-/1999@9ac8c53a",
   "1999 call vec_push_back(Vec(obj#3999), Vec(obj#3997))": "cpu:2167758, mem:199992, objs:-/2000@94ddbab",
   "2000 ret vec_push_back -> Ok(Vec(obj#4001))": "cpu:2168963, mem:200096, objs:-/2001@1c7caf96",
-  "2001 end": "cpu:2229260, mem:208176, prngs:-/-, objs:-/2001@1c7caf96, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "2001 end": "cpu:2230068, mem:211408, prngs:-/-, objs:-/2001@1c7caf96, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

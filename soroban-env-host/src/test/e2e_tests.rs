@@ -3967,6 +3967,7 @@ mod cap_85_executable_reference {
             res.ledger_changes,
             vec![
                 LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
                 LedgerEntryChangeHelper {
                     read_only: false,
                     key: cd.contract_key.clone(),
@@ -3982,7 +3983,6 @@ mod cap_85_executable_reference {
                             - 1,
                     }),
                 },
-                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
             ]
         );
     }
@@ -4016,6 +4016,7 @@ mod cap_85_executable_reference {
             res.ledger_changes,
             vec![
                 LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
                 LedgerEntryChangeHelper {
                     read_only: false,
                     key: cd.contract_key.clone(),
@@ -4031,7 +4032,6 @@ mod cap_85_executable_reference {
                             - 1,
                     }),
                 },
-                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
             ]
         );
     }
@@ -4069,6 +4069,7 @@ mod cap_85_executable_reference {
             res.ledger_changes,
             vec![
                 LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
                 LedgerEntryChangeHelper {
                     read_only: false,
                     key: cd.contract_key.clone(),
@@ -4084,7 +4085,6 @@ mod cap_85_executable_reference {
                             - 1,
                     }),
                 },
-                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
             ]
         );
     }
@@ -4132,8 +4132,8 @@ mod cap_85_executable_reference {
         assert_eq!(
             res.ledger_changes,
             vec![
-                LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
                 LedgerEntryChangeHelper::no_op_change(&cd.contract_entry, contract_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
                 LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
             ]
         );
