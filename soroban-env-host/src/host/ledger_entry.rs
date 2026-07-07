@@ -14,11 +14,11 @@ use crate::{
 /// A ledger entry held by the host's storage map, decoded lazily on first
 /// access (when necessary).
 ///
-/// The logical content of a `HostLedgerEntry` is immutable: it is either the
+/// The logical content of a `LazyLedgerEntry` is immutable: it is either the
 /// raw buffer it was loaded from, the decoded entry, or both (after a lazy
 /// decode).
 /// Decoding happens at most once and is memoized in place. Thanks to that, if
-/// the same `HostLedgerEntry` is shared between the containers via `Rc` (which
+/// the same `LazyLedgerEntry` is shared between the containers via `Rc` (which
 /// is what the storage does), decoding will happen at most once across all of
 /// them.
 ///
@@ -26,19 +26,19 @@ use crate::{
 /// when the entry is not accessed during the contract execution (which is what
 /// typically happens to the contract code entries, which are normally fetched
 /// from the module cache).
-pub(crate) struct HostLedgerEntry {
+pub(crate) struct LazyLedgerEntry {
     /// The raw XDR encoding the entry was loaded from. `Some` for entries loaded
     /// from the ledger, `None` for entries created in-host (e.g. via `put`). It
     /// is retained even after a lazy decode so that trace-hash queries stay
     /// decode-free (the trace hash also records the current decode state; see
-    /// [`HostLedgerEntry::metered_hash`]).
+    /// [`LazyLedgerEntry::metered_hash`]).
     encoded: Option<Rc<[u8]>>,
     /// The decoded entry form. Filled at construction for in-host entries,
     /// or on first access for entries loaded from the ledger.
     decoded: RefCell<Option<Rc<LedgerEntry>>>,
 }
 
-impl HostLedgerEntry {
+impl LazyLedgerEntry {
     /// Constructs a wrapper around an already-decoded entry (e.g. one created
     /// in-host by a host function).
     pub(crate) fn from_decoded(entry: Rc<LedgerEntry>) -> Self {
@@ -49,7 +49,7 @@ impl HostLedgerEntry {
     }
 
     /// Constructs a wrapper around a raw, owned XDR buffer. The entry is not
-    /// decoded until [`HostLedgerEntry::decoded`] is first called. The caller is
+    /// decoded until [`LazyLedgerEntry::decoded`] is first called. The caller is
     /// responsible for having charged for owning `encoded`.
     pub(crate) fn from_encoded(encoded: Rc<[u8]>) -> Self {
         Self {

@@ -10,7 +10,7 @@
 use std::rc::Rc;
 
 use crate::budget::AsBudget;
-use crate::host::ledger_entry::HostLedgerEntry;
+use crate::host::ledger_entry::LazyLedgerEntry;
 use crate::host::metered_clone::{MeteredAlloc, MeteredClone, MeteredIterator};
 use crate::{
     budget::Budget,
@@ -25,7 +25,7 @@ use crate::{
 
 pub(crate) type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type EntryWithLiveUntil = (Rc<LedgerEntry>, Option<u32>);
-pub(crate) type HostEntryWithLiveUntil = (Rc<HostLedgerEntry>, Option<u32>);
+pub(crate) type HostEntryWithLiveUntil = (Rc<LazyLedgerEntry>, Option<u32>);
 pub(crate) type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<HostEntryWithLiveUntil>, Budget>;
 
 /// The in-memory instance storage of the current running contract. Initially
@@ -186,7 +186,7 @@ pub struct Storage {
 
 /// Helper struct holding common state for TTL extension operations.
 struct TtlExtensionInfo {
-    entry: Rc<HostLedgerEntry>,
+    entry: Rc<LazyLedgerEntry>,
     old_live_until: u32,
     current_ttl: u32,
     max_live_until: u32,
@@ -372,7 +372,7 @@ impl Storage {
         };
         let val = match val {
             Some((entry, live_until)) => Some((
-                Rc::metered_new(HostLedgerEntry::from_decoded(entry), host.budget_ref())?,
+                Rc::metered_new(LazyLedgerEntry::from_decoded(entry), host.budget_ref())?,
                 live_until,
             )),
             None => None,
@@ -765,7 +765,7 @@ impl Storage {
                             // anyways as it doesn't do any of the e2e
                             // invocation work.
                             Some((
-                                Rc::new(HostLedgerEntry::from_encoded(encoded.into())),
+                                Rc::new(LazyLedgerEntry::from_encoded(encoded.into())),
                                 live_until,
                             ))
                         }

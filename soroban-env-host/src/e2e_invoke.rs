@@ -35,7 +35,7 @@ use crate::{
     },
     DiagnosticLevel, Error, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
-use crate::{host::ledger_entry::HostLedgerEntry, vm::wasm_module_memory_cost};
+use crate::{host::ledger_entry::LazyLedgerEntry, vm::wasm_module_memory_cost};
 use crate::{ledger_info::get_key_durability, ModuleCache};
 
 type RestoredKeySet = MeteredOrdMap<Rc<LedgerKey>, (), Budget>;
@@ -1127,7 +1127,7 @@ where
                 budget.charge(ContractCostType::MemAlloc, Some(entry_bytes.len() as u64))?;
                 budget.charge(ContractCostType::MemCpy, Some(entry_bytes.len() as u64))?;
                 let entry_bytes_rc: Rc<[u8]> = Rc::from(entry_bytes);
-                let entry = Rc::metered_new(HostLedgerEntry::from_encoded(entry_bytes_rc), budget)?;
+                let entry = Rc::metered_new(LazyLedgerEntry::from_encoded(entry_bytes_rc), budget)?;
 
                 let durability = get_key_durability(key);
 

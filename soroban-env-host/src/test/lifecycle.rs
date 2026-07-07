@@ -818,12 +818,12 @@ mod cap_54_55_56 {
             )
         }
         fn storage_map(&self, budget: &Budget) -> StorageMap {
-            use crate::host::ledger_entry::HostLedgerEntry;
+            use crate::host::ledger_entry::LazyLedgerEntry;
             StorageMap::new()
                 .insert(
                     self.contract_key.clone(),
                     Some((
-                        Rc::new(HostLedgerEntry::from_decoded(self.contract_entry.clone())),
+                        Rc::new(LazyLedgerEntry::from_decoded(self.contract_entry.clone())),
                         Some(99999),
                     )),
                     budget,
@@ -832,7 +832,7 @@ mod cap_54_55_56 {
                 .insert(
                     self.wasm_key.clone(),
                     Some((
-                        Rc::new(HostLedgerEntry::from_decoded(self.wasm_entry.clone())),
+                        Rc::new(LazyLedgerEntry::from_decoded(self.wasm_entry.clone())),
                         Some(99999),
                     )),
                     budget,

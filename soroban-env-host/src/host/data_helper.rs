@@ -567,7 +567,7 @@ impl Host {
 #[cfg(any(test, feature = "testutils"))]
 use crate::storage::{AccessType, EntryWithLiveUntil};
 #[cfg(any(test, feature = "testutils"))]
-use crate::{crypto, host::ledger_entry::HostLedgerEntry};
+use crate::{crypto, host::ledger_entry::LazyLedgerEntry};
 
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
@@ -627,7 +627,7 @@ impl Host {
                 .record_access(&key, access_type, self.as_budget())?;
             let val = match val {
                 Some((entry, live_until)) => Some((
-                    Rc::metered_new(HostLedgerEntry::from_decoded(entry), self.as_budget())?,
+                    Rc::metered_new(LazyLedgerEntry::from_decoded(entry), self.as_budget())?,
                     live_until,
                 )),
                 None => None,
