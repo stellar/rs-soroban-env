@@ -6,10 +6,6 @@ use std::{cmp::max, rc::Rc};
 
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::storage::SnapshotSource;
-#[cfg(any(test, feature = "testutils"))]
-use crate::xdr::{
-    LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine,
-};
 #[cfg(any(test, feature = "recording_mode"))]
 use crate::{
     auth::RecordedAuthPayload,
@@ -1033,33 +1029,6 @@ fn extract_diagnostic_events(events: &Events, diagnostic_events: &mut Vec<Diagno
             in_successful_contract_call: !event.failed_call,
             event: event.event.clone(),
         });
-    }
-}
-
-#[cfg(any(test, feature = "testutils"))]
-pub(crate) fn ledger_entry_to_ledger_key(
-    le: &LedgerEntry,
-    budget: &Budget,
-) -> Result<LedgerKey, HostError> {
-    match &le.data {
-        LedgerEntryData::Account(a) => Ok(LedgerKey::Account(LedgerKeyAccount {
-            account_id: a.account_id.metered_clone(budget)?,
-        })),
-        LedgerEntryData::Trustline(tl) => Ok(LedgerKey::Trustline(LedgerKeyTrustLine {
-            account_id: tl.account_id.metered_clone(budget)?,
-            asset: tl.asset.metered_clone(budget)?,
-        })),
-        LedgerEntryData::ContractData(cd) => Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: cd.contract.metered_clone(budget)?,
-            key: cd.key.metered_clone(budget)?,
-            durability: cd.durability,
-        })),
-        LedgerEntryData::ContractCode(code) => Ok(LedgerKey::ContractCode(LedgerKeyContractCode {
-            hash: code.hash.metered_clone(budget)?,
-        })),
-        _ => {
-            return Err(storage_internal_error());
-        }
     }
 }
 

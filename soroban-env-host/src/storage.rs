@@ -9,8 +9,10 @@
 
 use std::rc::Rc;
 
+use soroban_env_common::Compare;
+
 use crate::budget::AsBudget;
-use crate::host::ledger_entry::LazyLedgerEntry;
+use crate::host::ledger_entry::{ledger_entry_to_ledger_key, LazyLedgerEntry};
 use crate::host::metered_clone::{MeteredAlloc, MeteredClone, MeteredIterator};
 use crate::{
     budget::Budget,
@@ -279,7 +281,26 @@ impl Storage {
     ) -> Result<Option<EntryWithLiveUntil>, HostError> {
         match self.try_get_host_ledger_entry(key, host)? {
             None => Ok(None),
-            Some((entry, live_until)) => Ok(Some((entry.decoded(host.budget_ref())?, live_until))),
+            Some((entry, live_until)) => {
+                let was_decoded = entry.is_decoded();
+                let decoded = entry.decoded(host.budget_ref())?;
+                if !was_decoded {
+                    let decoded_key = ledger_entry_to_ledger_key(&decoded, host)?;
+                    if !host
+                        .as_budget()
+                        .compare(key.as_ref(), &decoded_key)?
+                        .is_eq()
+                    {
+                        return Err(host.err(
+                            ScErrorType::Storage,
+                            ScErrorCode::InternalError,
+                            "storage ledger key mismatch after decoding",
+                            &[],
+                        ));
+                    }
+                }
+                Ok(Some((decoded, live_until)))
+            }
         }
     }
 

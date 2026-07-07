@@ -4,14 +4,14 @@ use crate::e2e_testutils::{
     account_entry, bytes_sc_val, contract_code_entry_with_refined_contract_cost_inputs,
     upload_wasm_host_fn,
 };
-use crate::testutils::simple_account_sign_fn;
+use crate::testutils::{ledger_entry_to_ledger_key_unmetered, simple_account_sign_fn};
 use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::testutils::TestSigner,
     e2e_invoke::{
         entry_size_for_rent, invoke_host_function, invoke_host_function_in_recording_mode,
-        ledger_entry_to_ledger_key, LedgerEntryChange, LedgerEntryLiveUntilChange,
-        RecordingInvocationAuthMode, TtlLedgerEntryMeta,
+        LedgerEntryChange, LedgerEntryLiveUntilChange, RecordingInvocationAuthMode,
+        TtlLedgerEntryMeta,
     },
     e2e_testutils::{
         auth_contract_invocation, create_contract_auth, default_ledger_info, get_account_id,
@@ -227,7 +227,7 @@ impl From<LedgerEntryChange> for LedgerEntryChangeHelper {
 
 impl LedgerEntryChangeHelper {
     fn no_op_change(entry: &LedgerEntry, live_until_ledger: u32) -> Self {
-        let ledger_key = ledger_entry_to_ledger_key(entry, &Budget::default()).unwrap();
+        let ledger_key = ledger_entry_to_ledger_key_unmetered(entry);
         let durability = match &ledger_key {
             LedgerKey::ContractData(cd) => Some(cd.durability),
             LedgerKey::ContractCode(_) => Some(ContractDataDurability::Persistent),
@@ -337,7 +337,7 @@ fn invoke_host_function_helper_with_restored_entries(
     let mut entry_by_key: HashMap<LedgerKey, (Vec<u8>, Option<TtlLedgerEntryMeta>)> =
         HashMap::new();
     for (le, ttl) in ledger_entries_with_ttl.iter() {
-        let key = ledger_entry_to_ledger_key(le, &Budget::default()).unwrap();
+        let key = ledger_entry_to_ledger_key_unmetered(le);
         let encoded = le.to_xdr(limits.clone()).unwrap();
         let ttl = ttl
             .map(|live_until_ledger| {
@@ -609,7 +609,7 @@ fn invoke_host_function_using_simulation_with_signers(
         // Update TTL of the entry corresponding to the key
         if let Some((_, ttl)) = ledger_entries_with_ttl
             .iter_mut()
-            .find(|(le, _)| ledger_entry_to_ledger_key(le, &Budget::default()).unwrap() == key)
+            .find(|(le, _)| ledger_entry_to_ledger_key_unmetered(le) == key)
         {
             *ttl = Some(restored_live_until_ledger);
         } else {
@@ -1636,15 +1636,14 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
-    expect!["476131"].assert_eq(&res.resources.instructions.to_string());
+    expect!["476417"].assert_eq(&res.resources.instructions.to_string());
     expect!["176"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
             footprint: LedgerFootprint {
                 read_only: vec![
-                    ledger_entry_to_ledger_key(&custom_account_instance_entry, &Budget::default())
-                        .unwrap(),
+                    ledger_entry_to_ledger_key_unmetered(&custom_account_instance_entry),
                     cd.wasm_key,
                     get_wasm_key(custom_account_wasm),
                 ]
@@ -2146,7 +2145,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         ]
     );
     assert!(res.restored_rw_entry_ids.is_empty());
-    expect!["395420"].assert_eq(&res.resources.instructions.to_string());
+    expect!["395612"].assert_eq(&res.resources.instructions.to_string());
     expect!["80"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
         res.resources,
@@ -2213,7 +2212,7 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
-    expect!["387038"].assert_eq(&extend_res.resources.instructions.to_string());
+    expect!["387230"].assert_eq(&extend_res.resources.instructions.to_string());
     assert_eq!(
         extend_res.resources,
         SorobanResources {
@@ -2519,7 +2518,7 @@ fn test_auto_restore_with_extension_in_recording_mode() {
         ]
     );
 
-    expect!["1047488"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1047774"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2662,7 +2661,7 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
         ]
     );
 
-    expect!["409425"].assert_eq(&res.resources.instructions.to_string());
+    expect!["410329"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2802,7 +2801,7 @@ fn test_auto_restore_with_new_entry_in_recording_mode() {
         ]
     );
     let wasm_entry_size = cd.wasm_entry.to_xdr(Limits::none()).unwrap().len() as u32;
-    expect!["1045796"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1046082"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -2939,7 +2938,7 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
         ]
     );
 
-    expect!["1036899"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1037185"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {
@@ -3062,7 +3061,7 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
         ]
     );
 
-    expect!["1039544"].assert_eq(&res.resources.instructions.to_string());
+    expect!["1039830"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
         SorobanResources {

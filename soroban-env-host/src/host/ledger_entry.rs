@@ -3,12 +3,15 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     budget::Budget,
     host::{
-        metered_clone::MeteredAlloc,
+        metered_clone::{MeteredAlloc, MeteredClone},
         metered_hash::{CountingHasher, MeteredHash, MeteredHashXdr},
         metered_xdr::metered_from_xdr_with_budget,
     },
-    xdr::{LedgerEntry, ScErrorCode, ScErrorType},
-    Error, HostError,
+    xdr::{
+        LedgerEntry, LedgerEntryData, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
+        LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
+    },
+    Error, Host, HostError,
 };
 
 /// A ledger entry held by the host's storage map, decoded lazily on first
@@ -62,6 +65,10 @@ impl LazyLedgerEntry {
         Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into()
     }
 
+    pub(crate) fn is_decoded(&self) -> bool {
+        self.decoded.borrow().is_some()
+    }
+
     /// Returns the decoded entry, decoding (and charging `ValDeser`) on the
     /// first call and memoizing the result.
     pub(crate) fn decoded(&self, budget: &Budget) -> Result<Rc<LedgerEntry>, HostError> {
@@ -97,5 +104,36 @@ impl LazyLedgerEntry {
         self.encoded.is_some().metered_hash(hasher, budget)?;
         decoded.is_some().metered_hash(hasher, budget)?;
         Ok(())
+    }
+}
+
+pub(crate) fn ledger_entry_to_ledger_key(
+    le: &LedgerEntry,
+    host: &Host,
+) -> Result<LedgerKey, HostError> {
+    match &le.data {
+        LedgerEntryData::Account(a) => Ok(LedgerKey::Account(LedgerKeyAccount {
+            account_id: a.account_id.metered_clone(host)?,
+        })),
+        LedgerEntryData::Trustline(tl) => Ok(LedgerKey::Trustline(LedgerKeyTrustLine {
+            account_id: tl.account_id.metered_clone(host)?,
+            asset: tl.asset.metered_clone(host)?,
+        })),
+        LedgerEntryData::ContractData(cd) => Ok(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: cd.contract.metered_clone(host)?,
+            key: cd.key.metered_clone(host)?,
+            durability: cd.durability,
+        })),
+        LedgerEntryData::ContractCode(code) => Ok(LedgerKey::ContractCode(LedgerKeyContractCode {
+            hash: code.hash.metered_clone(host)?,
+        })),
+        _ => {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "encountered unknown ledger entry type while converting to ledger key",
+                &[],
+            ));
+        }
     }
 }

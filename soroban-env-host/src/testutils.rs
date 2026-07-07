@@ -1,4 +1,4 @@
-use crate::e2e_invoke::ledger_entry_to_ledger_key;
+use crate::host::ledger_entry::ledger_entry_to_ledger_key;
 use crate::storage::EntryWithLiveUntil;
 use crate::ErrorHandler;
 use crate::{
@@ -117,6 +117,11 @@ pub fn generate_bytes_array(host: &Host) -> [u8; 32] {
     bytes
 }
 
+pub(crate) fn ledger_entry_to_ledger_key_unmetered(le: &LedgerEntry) -> LedgerKey {
+    let host = Host::default();
+    ledger_entry_to_ledger_key(le, &host).unwrap()
+}
+
 pub struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, EntryWithLiveUntil>);
 
 impl MockSnapshotSource {
@@ -126,9 +131,8 @@ impl MockSnapshotSource {
 
     pub fn from_entries(entries: Vec<(LedgerEntry, Option<u32>)>) -> Self {
         let mut map = BTreeMap::<Rc<LedgerKey>, EntryWithLiveUntil>::new();
-        let dummy_budget = Budget::default();
         for (e, maybe_ttl) in entries {
-            let key = Rc::new(ledger_entry_to_ledger_key(&e, &dummy_budget).unwrap());
+            let key = Rc::new(ledger_entry_to_ledger_key_unmetered(&e));
             map.insert(key, (Rc::new(e), maybe_ttl));
         }
         Self(map)
