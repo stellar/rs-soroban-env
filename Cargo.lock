@@ -61,9 +61,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.75"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "approx"
@@ -1600,7 +1600,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "soroban-bench-utils"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "perf-event",
  "soroban-env-common",
@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-builtin-sdk-macros"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1620,7 +1620,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-common"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "arbitrary",
  "crate-git-revision 0.0.9",
@@ -1639,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-guest"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "soroban-env-common",
  "static_assertions",
@@ -1647,7 +1647,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-host"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "arbitrary",
  "ark-bls12-381",
@@ -1707,7 +1707,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-macros"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1720,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-fuzz-targets"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "arbitrary",
  "soroban-env-host",
@@ -1731,7 +1731,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-simulation"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "anyhow",
  "expect-test",
@@ -1746,7 +1746,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-synth-wasm"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "arbitrary",
  "expect-test",
@@ -1760,7 +1760,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-test-wasms"
-version = "27.0.0"
+version = "28.0.0"
 
 [[package]]
 name = "soroban-wasmi"
@@ -1865,7 +1865,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "test_no_std"
-version = "27.0.0"
+version = "28.0.0"
 dependencies = [
  "soroban-env-common",
 ]

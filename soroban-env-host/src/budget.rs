@@ -371,8 +371,8 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(29);
                 }
                 ContractCostType::ValDeser => {
-                    cpu.const_term = 59052;
-                    cpu.lin_term = ScaledU64(4001);
+                    cpu.const_term = 331;
+                    cpu.lin_term = ScaledU64(4369);
                 }
                 ContractCostType::ComputeSha256Hash => {
                     cpu.const_term = 3738;

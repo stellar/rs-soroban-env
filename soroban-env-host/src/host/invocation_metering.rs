@@ -1091,8 +1091,8 @@ mod test {
         // contract), so 2 writes/bumps are expected.
         expect![[r#"
             InvocationResources {
-                instructions: 4199686,
-                mem_bytes: 2863204,
+                instructions: 4200562,
+                mem_bytes: 2863300,
                 disk_read_entries: 0,
                 memory_read_entries: 2,
                 write_entries: 2,
@@ -1109,8 +1109,8 @@ mod test {
             DetailedInvocationResources {
                 invocation: CreateContractEntryPoint,
                 resources: SubInvocationResources {
-                    instructions: 4199686,
-                    mem_bytes: 2863204,
+                    instructions: 4200562,
+                    mem_bytes: 2863300,
                     disk_read_entries: 0,
                     memory_read_entries: 2,
                     write_entries: 2,
@@ -1206,8 +1206,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 320246,
-                mem_bytes: 1135322,
+                instructions: 320684,
+                mem_bytes: 1135370,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 1,
@@ -1258,8 +1258,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 322157,
-                mem_bytes: 1135678,
+                instructions: 322595,
+                mem_bytes: 1135726,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 1,
