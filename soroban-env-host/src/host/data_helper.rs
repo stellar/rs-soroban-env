@@ -626,10 +626,9 @@ impl Host {
                 .footprint
                 .record_access(&key, access_type, self.as_budget())?;
             let val = match val {
-                Some((entry, live_until)) => Some((
-                    Rc::metered_new(LazyLedgerEntry::from_decoded(entry), self.as_budget())?,
-                    live_until,
-                )),
+                Some((entry, live_until)) => {
+                    Some((Rc::new(LazyLedgerEntry::from_decoded(entry)), live_until))
+                }
                 None => None,
             };
             storage.map = storage.map.insert(key, val, self.as_budget())?;
