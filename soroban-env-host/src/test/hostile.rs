@@ -637,7 +637,8 @@ fn excessive_logging() -> Result<(), HostError> {
             Bn254G1Msm                         0              0              
             =================================================================
 
-        "#]].assert_eq(&actual);
+        "#]]
+        .assert_eq(&actual);
         // At this point we've ensured that actual budget matches expectations,
         // so we can proceed to using the expected budget below to reduce
         // duplication of expectations (note, that it's not possible to update
