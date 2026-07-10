@@ -356,7 +356,7 @@ impl Vm {
                         let err = code.into();
                         let mut msg = Cow::Borrowed("VM call trapped");
                         host.with_debug_mode(|| {
-                            msg = Cow::Owned(format!("VM call trapped: {:?}", &code));
+                            msg = Cow::Owned(format!("VM call trapped: {:?}", code));
                             Ok(())
                         });
                         return Err(host.error(err, &msg, &[func_sym.to_val()]));
@@ -378,7 +378,7 @@ impl Vm {
                 e => {
                     let mut msg = Cow::Borrowed("VM call failed");
                     host.with_debug_mode(|| {
-                        msg = Cow::Owned(format!("VM call failed: {:?}", &e));
+                        msg = Cow::Owned(format!("VM call failed: {:?}", e));
                         Ok(())
                     });
                     return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
