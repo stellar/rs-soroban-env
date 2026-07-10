@@ -890,6 +890,9 @@ fn test_wasm_upload_success_in_recording_mode() {
         }]
     );
     assert!(res.auth.is_empty());
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["1594196"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["1594164"].assert_eq(&res.resources.instructions.to_string());
     expect!["684"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
@@ -929,6 +932,9 @@ fn test_wasm_upload_failure_in_recording_mode() {
     ));
     assert!(res.ledger_changes.is_empty());
     assert!(res.auth.is_empty());
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["920508"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["920500"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
@@ -1506,6 +1512,9 @@ fn test_create_contract_success_in_recording_mode() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["291017"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["290904"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
@@ -1644,6 +1653,9 @@ fn test_create_contract_success_in_recording_mode_with_custom_account() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["476614"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["476417"].assert_eq(&res.resources.instructions.to_string());
     expect!["176"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
@@ -1714,6 +1726,9 @@ fn test_create_contract_success_in_recording_mode_with_enforced_auth() {
         ]
     );
     assert_eq!(res.auth, vec![cd.auth_entry]);
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["292523"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["292405"].assert_eq(&res.resources.instructions.to_string());
     expect!["104"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
@@ -2153,6 +2168,9 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
         ]
     );
     assert!(res.restored_rw_entry_ids.is_empty());
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["395708"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["395612"].assert_eq(&res.resources.instructions.to_string());
     expect!["80"].assert_eq(&res.resources.write_bytes.to_string());
     assert_eq!(
@@ -2220,6 +2238,9 @@ fn test_invoke_contract_with_storage_ops_success_in_recording_mode() {
             wasm_entry_change.clone()
         ]
     );
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["387322"].assert_eq(&extend_res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["387230"].assert_eq(&extend_res.resources.instructions.to_string());
     assert_eq!(
         extend_res.resources,
@@ -2526,6 +2547,9 @@ fn test_auto_restore_with_extension_in_recording_mode() {
         ]
     );
 
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["1047878"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["1047774"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
@@ -2669,6 +2693,9 @@ fn test_auto_restore_with_overwrite_in_recording_mode() {
         ]
     );
 
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["410437"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["410329"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
@@ -2809,6 +2836,9 @@ fn test_auto_restore_with_new_entry_in_recording_mode() {
         ]
     );
     let wasm_entry_size = cd.wasm_entry.to_xdr(Limits::none()).unwrap().len() as u32;
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["1046186"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["1046082"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
@@ -2946,6 +2976,9 @@ fn test_auto_restore_with_expired_temp_entry_in_recording_mode() {
         ]
     );
 
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["1037285"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["1037185"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
@@ -3069,6 +3102,9 @@ fn test_auto_restore_with_recreated_temp_entry_in_recording_mode() {
         ]
     );
 
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect!["1039934"].assert_eq(&res.resources.instructions.to_string());
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect!["1039830"].assert_eq(&res.resources.instructions.to_string());
     assert_eq!(
         res.resources,
@@ -3978,6 +4014,7 @@ mod cap_85_executable_reference {
             res.ledger_changes,
             vec![
                 LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
                 LedgerEntryChangeHelper {
                     read_only: false,
                     key: cd.contract_key.clone(),
@@ -3993,7 +4030,6 @@ mod cap_85_executable_reference {
                             - 1,
                     }),
                 },
-                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
             ]
         );
     }
@@ -4027,6 +4063,7 @@ mod cap_85_executable_reference {
             res.ledger_changes,
             vec![
                 LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
                 LedgerEntryChangeHelper {
                     read_only: false,
                     key: cd.contract_key.clone(),
@@ -4042,7 +4079,6 @@ mod cap_85_executable_reference {
                             - 1,
                     }),
                 },
-                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
             ]
         );
     }
@@ -4080,6 +4116,7 @@ mod cap_85_executable_reference {
             res.ledger_changes,
             vec![
                 LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
                 LedgerEntryChangeHelper {
                     read_only: false,
                     key: cd.contract_key.clone(),
@@ -4095,7 +4132,6 @@ mod cap_85_executable_reference {
                             - 1,
                     }),
                 },
-                LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
             ]
         );
     }
@@ -4143,8 +4179,8 @@ mod cap_85_executable_reference {
         assert_eq!(
             res.ledger_changes,
             vec![
-                LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
                 LedgerEntryChangeHelper::no_op_change(&cd.contract_entry, contract_live_until),
+                LedgerEntryChangeHelper::no_op_change(&cd.ref_entry, ref_live_until),
                 LedgerEntryChangeHelper::no_op_change(&cd.wasm_entry, wasm_live_until),
             ]
         );

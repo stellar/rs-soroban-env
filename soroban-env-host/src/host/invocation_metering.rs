@@ -1089,6 +1089,24 @@ mod test {
         let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
         // We meter the whole registration procedure here (upload + create
         // contract), so 2 writes/bumps are expected.
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 4200623,
+                mem_bytes: 2863588,
+                disk_read_entries: 0,
+                memory_read_entries: 2,
+                write_entries: 2,
+                disk_read_bytes: 0,
+                write_bytes: 3132,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 80531388,
+                persistent_entry_rent_bumps: 2,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 4200562,
@@ -1105,6 +1123,34 @@ mod test {
                 temporary_entry_rent_bumps: 0,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            DetailedInvocationResources {
+                invocation: CreateContractEntryPoint,
+                resources: SubInvocationResources {
+                    instructions: 4200623,
+                    mem_bytes: 2863588,
+                    disk_read_entries: 0,
+                    memory_read_entries: 2,
+                    write_entries: 2,
+                    disk_read_bytes: 0,
+                    write_bytes: 3132,
+                    contract_events_size_bytes: 0,
+                    persistent_rent_ledger_bytes: 80531388,
+                    persistent_entry_rent_bumps: 2,
+                    temporary_rent_ledger_bytes: 0,
+                    temporary_entry_rent_bumps: 0,
+                },
+                sub_call_resources: [],
+            }"#]]
+        .assert_eq(
+            format!(
+                "{:#?}",
+                host.get_detailed_last_invocation_resources().unwrap()
+            )
+            .as_str(),
+        );
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             DetailedInvocationResources {
                 invocation: CreateContractEntryPoint,
@@ -1143,6 +1189,24 @@ mod test {
                 test_vec![&host, key].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 316669,
+                mem_bytes: 1135019,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
+                write_entries: 0,
+                disk_read_bytes: 0,
+                write_bytes: 0,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 316637,
@@ -1159,6 +1223,43 @@ mod test {
                 temporary_entry_rent_bumps: 0,
             }"#]]
         .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            DetailedInvocationResources {
+                invocation: InvokeContract(
+                    Contract(
+                        ContractId(
+                            Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441),
+                        ),
+                    ),
+                    ScSymbol(
+                        StringM(has_persistent),
+                    ),
+                ),
+                resources: SubInvocationResources {
+                    instructions: 316669,
+                    mem_bytes: 1135019,
+                    disk_read_entries: 0,
+                    memory_read_entries: 3,
+                    write_entries: 0,
+                    disk_read_bytes: 0,
+                    write_bytes: 0,
+                    contract_events_size_bytes: 0,
+                    persistent_rent_ledger_bytes: 0,
+                    persistent_entry_rent_bumps: 0,
+                    temporary_rent_ledger_bytes: 0,
+                    temporary_entry_rent_bumps: 0,
+                },
+                sub_call_resources: [],
+            }"#]]
+        .assert_eq(
+            format!(
+                "{:#?}",
+                host.get_detailed_last_invocation_resources().unwrap()
+            )
+            .as_str(),
+        );
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             DetailedInvocationResources {
                 invocation: InvokeContract(
@@ -1204,6 +1305,24 @@ mod test {
                 test_vec![&host, key, 1234_u64].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 320720,
+                mem_bytes: 1135562,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
+                write_entries: 1,
+                disk_read_bytes: 0,
+                write_bytes: 84,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 83916,
+                persistent_entry_rent_bumps: 1,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 320684,
@@ -1230,6 +1349,24 @@ mod test {
                 test_vec![&host, key].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 315968,
+                mem_bytes: 1134867,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
+                write_entries: 0,
+                disk_read_bytes: 0,
+                write_bytes: 0,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 315936,
@@ -1256,6 +1393,24 @@ mod test {
                 test_vec![&host, key, 1234_u64].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 322631,
+                mem_bytes: 1135918,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
+                write_entries: 1,
+                disk_read_bytes: 0,
+                write_bytes: 84,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 1260,
+                temporary_entry_rent_bumps: 1,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 322595,
@@ -1282,6 +1437,24 @@ mod test {
                 test_vec![&host, key].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 316508,
+                mem_bytes: 1134935,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
+                write_entries: 0,
+                disk_read_bytes: 0,
+                write_bytes: 0,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 316476,
@@ -1308,6 +1481,24 @@ mod test {
                 test_vec![&host, key, &5000_u32, &5000_u32].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 317733,
+                mem_bytes: 1135287,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
+                write_entries: 0,
+                disk_read_bytes: 0,
+                write_bytes: 0,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 336084,
+                persistent_entry_rent_bumps: 1,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 317701,
@@ -1334,6 +1525,24 @@ mod test {
                 test_vec![&host, key, &3000_u32, &3000_u32].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 318135,
+                mem_bytes: 1135287,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
+                write_entries: 0,
+                disk_read_bytes: 0,
+                write_bytes: 0,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 250740,
+                temporary_entry_rent_bumps: 1,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 318103,
@@ -1360,6 +1569,24 @@ mod test {
             test_vec![&host, non_existent_key, &5000_u32, &5000_u32].into(),
         );
         assert!(res.is_err());
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 317572,
+                mem_bytes: 1135355,
+                disk_read_entries: 0,
+                memory_read_entries: 3,
+                write_entries: 0,
+                disk_read_bytes: 0,
+                write_bytes: 0,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 317540,
@@ -1393,6 +1620,24 @@ mod test {
                 test_vec![&host, key].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 320743,
+                mem_bytes: 1135822,
+                disk_read_entries: 2,
+                memory_read_entries: 1,
+                write_entries: 2,
+                disk_read_bytes: 3132,
+                write_bytes: 3132,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 80531388,
+                persistent_entry_rent_bumps: 2,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 320711,
@@ -1425,6 +1670,24 @@ mod test {
                 test_vec![&host, key].into(),
             )
             .unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            InvocationResources {
+                instructions: 323280,
+                mem_bytes: 1136269,
+                disk_read_entries: 3,
+                memory_read_entries: 0,
+                write_entries: 3,
+                disk_read_bytes: 3216,
+                write_bytes: 3216,
+                contract_events_size_bytes: 0,
+                persistent_rent_ledger_bytes: 80615304,
+                persistent_entry_rent_bumps: 3,
+                temporary_rent_ledger_bytes: 0,
+                temporary_entry_rent_bumps: 0,
+            }"#]]
+        .assert_eq(format!("{:#?}", host.get_last_invocation_resources().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             InvocationResources {
                 instructions: 323248,
@@ -1850,6 +2113,41 @@ mod test {
         }));
         assert!(res.is_err());
         let diag_events = host.get_diagnostic_events().unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            HostEvent {
+                event: ContractEvent {
+                    ext: V0,
+                    contract_id: None,
+                    type_: Diagnostic,
+                    body: V0(
+                        ContractEventV0 {
+                            topics: VecM(
+                                [
+                                    Symbol(
+                                        ScSymbol(
+                                            StringM(error),
+                                        ),
+                                    ),
+                                    Error(
+                                        Budget(
+                                            ExceededLimit,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                            data: String(
+                                ScString(
+                                    StringM(invocation resource limits are exceeded: instructions: 1861753 > 10, memory bytes: 1163561 > 20, contract events size bytes: 800 > 50, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(1a2ee5a89dd2162a20e716b3e2de70a2d662480a9565350378661871bcf8e398) })' size: 1840 > 45),
+                                ),
+                            ),
+                        },
+                    ),
+                },
+                failed_call: false,
+            }"#]]
+        .assert_eq(format!("{:#?}", diag_events.0.last().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             HostEvent {
                 event: ContractEvent {
@@ -1903,6 +2201,41 @@ mod test {
         }));
         assert!(res.is_err());
         let diag_events = host.get_diagnostic_events().unwrap();
+        #[cfg(feature = "cap_0085_executable_ref")]
+        expect![[r#"
+            HostEvent {
+                event: ContractEvent {
+                    ext: V0,
+                    contract_id: None,
+                    type_: Diagnostic,
+                    body: V0(
+                        ContractEventV0 {
+                            topics: VecM(
+                                [
+                                    Symbol(
+                                        ScSymbol(
+                                            StringM(error),
+                                        ),
+                                    ),
+                                    Error(
+                                        Budget(
+                                            ExceededLimit,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                            data: String(
+                                ScString(
+                                    StringM(invocation resource limits are exceeded: instructions: 320996 > 10, memory bytes: 1135974 > 20, total footprint ledger entries: 5 > 4, disk read ledger entries: 2 > 1, disk read bytes: 3132 > 30, write ledger entries: 2 > 0, write bytes: 3132 > 40, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: Symbol(ScSymbol(StringM(key_1))), durability: Persistent })' size: 60 > 25, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(fc644715caaead746e6145f4331ff75c427c965c20d2995a9942b01247515962) })' size: 3028 > 45),
+                                ),
+                            ),
+                        },
+                    ),
+                },
+                failed_call: false,
+            }"#]]
+        .assert_eq(format!("{:#?}", diag_events.0.last().unwrap()).as_str());
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         expect![[r#"
             HostEvent {
                 event: ContractEvent {

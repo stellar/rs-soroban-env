@@ -3617,6 +3617,71 @@ fn test_custom_account_auth() {
     contract
         .mint(&new_admin, user_address.clone(), 100)
         .unwrap();
+    #[cfg(feature = "cap_0085_executable_ref")]
+    expect![[r#"
+        DetailedInvocationResources {
+            invocation: InvokeContract(
+                Contract(
+                    ContractId(
+                        Hash(2e378f80e81a004a1aa7f910dbf45983b9cbb234805c3dbe76a3a4254625f5a9),
+                    ),
+                ),
+                ScSymbol(
+                    StringM(mint),
+                ),
+            ),
+            resources: SubInvocationResources {
+                instructions: 832960,
+                mem_bytes: 1220190,
+                disk_read_entries: 1,
+                memory_read_entries: 5,
+                write_entries: 2,
+                disk_read_bytes: 116,
+                write_bytes: 188,
+                contract_events_size_bytes: 200,
+                persistent_rent_ledger_bytes: 0,
+                persistent_entry_rent_bumps: 0,
+                temporary_rent_ledger_bytes: 720000,
+                temporary_entry_rent_bumps: 1,
+            },
+            sub_call_resources: [
+                DetailedInvocationResources {
+                    invocation: InvokeContract(
+                        Contract(
+                            ContractId(
+                                Hash(e5be92092cfde76cf93c2f513a1df0962d5c49d95c6977eb8a414a52855f1ce6),
+                            ),
+                        ),
+                        ScSymbol(
+                            StringM(__check_auth),
+                        ),
+                    ),
+                    resources: SubInvocationResources {
+                        instructions: 713383,
+                        mem_bytes: 1197908,
+                        disk_read_entries: 0,
+                        memory_read_entries: 3,
+                        write_entries: 0,
+                        disk_read_bytes: 0,
+                        write_bytes: 0,
+                        contract_events_size_bytes: 0,
+                        persistent_rent_ledger_bytes: 0,
+                        persistent_entry_rent_bumps: 0,
+                        temporary_rent_ledger_bytes: 0,
+                        temporary_entry_rent_bumps: 0,
+                    },
+                    sub_call_resources: [],
+                },
+            ],
+        }"#]]
+    .assert_eq(
+        format!(
+            "{:#?}",
+            test.host.get_detailed_last_invocation_resources().unwrap()
+        )
+        .as_str(),
+    );
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     expect![[r#"
         DetailedInvocationResources {
             invocation: InvokeContract(

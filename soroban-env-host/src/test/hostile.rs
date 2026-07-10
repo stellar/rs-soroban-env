@@ -524,6 +524,105 @@ fn excessive_logging() -> Result<(), HostError> {
     assert_eq!(constructor_events_len, 2);
     host.switch_to_enforcing_storage()?;
 
+    #[cfg(feature = "cap_0085_executable_ref")]
+    let expected_budget = expect![
+        r#"
+    =================================================================
+    Cpu limit: 2000000; used: 214331
+    Mem limit: 500000; used: 166940
+    =================================================================
+    CostType                           cpu_insns      mem_bytes      
+    WasmInsnExec                       300            0              
+    MemAlloc                           16648          67520          
+    MemCpy                             2342           0              
+    MemCmp                             472            0              
+    DispatchHostFunction               310            0              
+    VisitObject                        244            0              
+    ValSer                             0              0              
+    ValDeser                           0              0              
+    ComputeSha256Hash                  3738           0              
+    ComputeEd25519PubKey               0              0              
+    VerifyEd25519Sig                   0              0              
+    VmInstantiation                    0              0              
+    VmCachedInstantiation              0              0              
+    InvokeVmFunction                   1948           14             
+    ComputeKeccak256Hash               0              0              
+    DecodeEcdsaCurve256Sig             0              0              
+    RecoverEcdsaSecp256k1Key           0              0              
+    Int256AddSub                       0              0              
+    Int256Mul                          0              0              
+    Int256Div                          0              0              
+    Int256Pow                          0              0              
+    Int256Shift                        0              0              
+    ChaCha20DrawBytes                  0              0              
+    ParseWasmInstructions              74665          17967          
+    ParseWasmFunctions                 4224           370            
+    ParseWasmGlobals                   1377           104            
+    ParseWasmTableEntries              29989          6285           
+    ParseWasmTypes                     8292           505            
+    ParseWasmDataSegments              0              0              
+    ParseWasmElemSegments              0              0              
+    ParseWasmImports                   5483           806            
+    ParseWasmExports                   6709           568            
+    ParseWasmDataSegmentBytes          0              0              
+    InstantiateWasmInstructions        43030          70704          
+    InstantiateWasmFunctions           59             114            
+    InstantiateWasmGlobals             83             53             
+    InstantiateWasmTableEntries        3300           1025           
+    InstantiateWasmTypes               0              0              
+    InstantiateWasmDataSegments        0              0              
+    InstantiateWasmElemSegments        0              0              
+    InstantiateWasmImports             6476           762            
+    InstantiateWasmExports             4642           143            
+    InstantiateWasmDataSegmentBytes    0              0              
+    Sec1DecodePointUncompressed        0              0              
+    VerifyEcdsaSecp256r1Sig            0              0              
+    Bls12381EncodeFp                   0              0              
+    Bls12381DecodeFp                   0              0              
+    Bls12381G1CheckPointOnCurve        0              0              
+    Bls12381G1CheckPointInSubgroup     0              0              
+    Bls12381G2CheckPointOnCurve        0              0              
+    Bls12381G2CheckPointInSubgroup     0              0              
+    Bls12381G1ProjectiveToAffine       0              0              
+    Bls12381G2ProjectiveToAffine       0              0              
+    Bls12381G1Add                      0              0              
+    Bls12381G1Mul                      0              0              
+    Bls12381G1Msm                      0              0              
+    Bls12381MapFpToG1                  0              0              
+    Bls12381HashToG1                   0              0              
+    Bls12381G2Add                      0              0              
+    Bls12381G2Mul                      0              0              
+    Bls12381G2Msm                      0              0              
+    Bls12381MapFp2ToG2                 0              0              
+    Bls12381HashToG2                   0              0              
+    Bls12381Pairing                    0              0              
+    Bls12381FrFromU256                 0              0              
+    Bls12381FrToU256                   0              0              
+    Bls12381FrAddSub                   0              0              
+    Bls12381FrMul                      0              0              
+    Bls12381FrPow                      0              0              
+    Bls12381FrInv                      0              0              
+    Bn254EncodeFp                      0              0              
+    Bn254DecodeFp                      0              0              
+    Bn254G1CheckPointOnCurve           0              0              
+    Bn254G2CheckPointOnCurve           0              0              
+    Bn254G2CheckPointInSubgroup        0              0              
+    Bn254G1ProjectiveToAffine          0              0              
+    Bn254G1Add                         0              0              
+    Bn254G1Mul                         0              0              
+    Bn254Pairing                       0              0              
+    Bn254FrFromU256                    0              0              
+    Bn254FrToU256                      0              0              
+    Bn254FrAddSub                      0              0              
+    Bn254FrMul                         0              0              
+    Bn254FrPow                         0              0              
+    Bn254FrInv                         0              0              
+    Bn254G1Msm                         0              0              
+    =================================================================
+    
+    "#
+    ];
+    #[cfg(not(feature = "cap_0085_executable_ref"))]
     let expected_budget = expect![
         r#"
     =================================================================
@@ -668,7 +767,14 @@ fn excessive_logging() -> Result<(), HostError> {
     {
         host.clear_module_cache()?;
         host.budget_ref().reset_limits(2_000_000, 500_000)?;
+        // CAP-85 enlarges `ScVal`, which increases the shadow memory consumed
+        // while externalizing the diagnostic log of a full memory page (~1.05MB
+        // vs ~0.95MB), so the shadow limit that lets diagnostics fit is bumped
+        // accordingly. The production budget below is unaffected.
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
         host.set_shadow_budget_limits(2_000_000, 1_000_000)?;
+        #[cfg(feature = "cap_0085_executable_ref")]
+        host.set_shadow_budget_limits(2_000_000, 2_000_000)?;
         let res = host.call(
             contract_id_obj,
             Symbol::try_from_small_str("test")?,

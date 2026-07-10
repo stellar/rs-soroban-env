@@ -1831,6 +1831,90 @@ mod cap_58_constructor {
                     params,
                 )
                 .unwrap();
+                #[cfg(feature = "cap_0085_executable_ref")]
+                expect![[r#"
+                    DetailedInvocationResources {
+                        invocation: CreateContractEntryPoint,
+                        resources: SubInvocationResources {
+                            instructions: 901432,
+                            mem_bytes: 3471641,
+                            disk_read_entries: 0,
+                            memory_read_entries: 6,
+                            write_entries: 3,
+                            disk_read_bytes: 0,
+                            write_bytes: 280,
+                            contract_events_size_bytes: 0,
+                            persistent_rent_ledger_bytes: 835380,
+                            persistent_entry_rent_bumps: 2,
+                            temporary_rent_ledger_bytes: 1140,
+                            temporary_entry_rent_bumps: 1,
+                        },
+                        sub_call_resources: [
+                            DetailedInvocationResources {
+                                invocation: InvokeContract(
+                                    Contract(
+                                        ContractId(
+                                            Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e),
+                                        ),
+                                    ),
+                                    ScSymbol(
+                                        StringM(__constructor),
+                                    ),
+                                ),
+                                resources: SubInvocationResources {
+                                    instructions: 630858,
+                                    mem_bytes: 2339657,
+                                    disk_read_entries: 0,
+                                    memory_read_entries: 4,
+                                    write_entries: 2,
+                                    disk_read_bytes: 0,
+                                    write_bytes: 176,
+                                    contract_events_size_bytes: 0,
+                                    persistent_rent_ledger_bytes: 409500,
+                                    persistent_entry_rent_bumps: 1,
+                                    temporary_rent_ledger_bytes: 1140,
+                                    temporary_entry_rent_bumps: 1,
+                                },
+                                sub_call_resources: [
+                                    DetailedInvocationResources {
+                                        invocation: InvokeContract(
+                                            Contract(
+                                                ContractId(
+                                                    Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441),
+                                                ),
+                                            ),
+                                            ScSymbol(
+                                                StringM(do_auth),
+                                            ),
+                                        ),
+                                        resources: SubInvocationResources {
+                                            instructions: 348721,
+                                            mem_bytes: 1207659,
+                                            disk_read_entries: 0,
+                                            memory_read_entries: 2,
+                                            write_entries: 0,
+                                            disk_read_bytes: 0,
+                                            write_bytes: 0,
+                                            contract_events_size_bytes: 0,
+                                            persistent_rent_ledger_bytes: 0,
+                                            persistent_entry_rent_bumps: 0,
+                                            temporary_rent_ledger_bytes: 0,
+                                            temporary_entry_rent_bumps: 0,
+                                        },
+                                        sub_call_resources: [],
+                                    },
+                                ],
+                            },
+                        ],
+                    }"#]]
+                .assert_eq(
+                    format!(
+                        "{:#?}",
+                        host.get_detailed_last_invocation_resources().unwrap()
+                    )
+                    .as_str(),
+                );
+                #[cfg(not(feature = "cap_0085_executable_ref"))]
                 expect![[r#"
                     DetailedInvocationResources {
                         invocation: CreateContractEntryPoint,
@@ -1980,6 +2064,126 @@ mod cap_58_constructor {
                     ],
                 )
                 .unwrap();
+                #[cfg(feature = "cap_0085_executable_ref")]
+                expect![[r#"
+                    DetailedInvocationResources {
+                        invocation: InvokeContract(
+                            Contract(
+                                ContractId(
+                                    Hash(2920dd889580ddcd278d3cbd1ada25ec0ab9d9f499386395dca4913ab68be212),
+                                ),
+                            ),
+                            ScSymbol(
+                                StringM(deploy_with_external_auth),
+                            ),
+                        ),
+                        resources: SubInvocationResources {
+                            instructions: 2407012,
+                            mem_bytes: 5950376,
+                            disk_read_entries: 0,
+                            memory_read_entries: 8,
+                            write_entries: 3,
+                            disk_read_bytes: 0,
+                            write_bytes: 280,
+                            contract_events_size_bytes: 0,
+                            persistent_rent_ledger_bytes: 835380,
+                            persistent_entry_rent_bumps: 2,
+                            temporary_rent_ledger_bytes: 1140,
+                            temporary_entry_rent_bumps: 1,
+                        },
+                        sub_call_resources: [
+                            DetailedInvocationResources {
+                                invocation: InvokeContract(
+                                    Contract(
+                                        ContractId(
+                                            Hash(918b3e455574ab13e00191424a3ee4ce71580d7ba1358cc86ab5d9daad1f541d),
+                                        ),
+                                    ),
+                                    ScSymbol(
+                                        StringM(__constructor),
+                                    ),
+                                ),
+                                resources: SubInvocationResources {
+                                    instructions: 915832,
+                                    mem_bytes: 2387855,
+                                    disk_read_entries: 0,
+                                    memory_read_entries: 4,
+                                    write_entries: 2,
+                                    disk_read_bytes: 0,
+                                    write_bytes: 176,
+                                    contract_events_size_bytes: 0,
+                                    persistent_rent_ledger_bytes: 409500,
+                                    persistent_entry_rent_bumps: 1,
+                                    temporary_rent_ledger_bytes: 1140,
+                                    temporary_entry_rent_bumps: 1,
+                                },
+                                sub_call_resources: [
+                                    DetailedInvocationResources {
+                                        invocation: InvokeContract(
+                                            Contract(
+                                                ContractId(
+                                                    Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441),
+                                                ),
+                                            ),
+                                            ScSymbol(
+                                                StringM(do_auth),
+                                            ),
+                                        ),
+                                        resources: SubInvocationResources {
+                                            instructions: 350311,
+                                            mem_bytes: 1207919,
+                                            disk_read_entries: 0,
+                                            memory_read_entries: 2,
+                                            write_entries: 0,
+                                            disk_read_bytes: 0,
+                                            write_bytes: 0,
+                                            contract_events_size_bytes: 0,
+                                            persistent_rent_ledger_bytes: 0,
+                                            persistent_entry_rent_bumps: 0,
+                                            temporary_rent_ledger_bytes: 0,
+                                            temporary_entry_rent_bumps: 0,
+                                        },
+                                        sub_call_resources: [],
+                                    },
+                                ],
+                            },
+                            DetailedInvocationResources {
+                                invocation: InvokeContract(
+                                    Contract(
+                                        ContractId(
+                                            Hash(918b3e455574ab13e00191424a3ee4ce71580d7ba1358cc86ab5d9daad1f541d),
+                                        ),
+                                    ),
+                                    ScSymbol(
+                                        StringM(get_data),
+                                    ),
+                                ),
+                                resources: SubInvocationResources {
+                                    instructions: 546486,
+                                    mem_bytes: 1175536,
+                                    disk_read_entries: 0,
+                                    memory_read_entries: 0,
+                                    write_entries: 0,
+                                    disk_read_bytes: 0,
+                                    write_bytes: 0,
+                                    contract_events_size_bytes: 0,
+                                    persistent_rent_ledger_bytes: 0,
+                                    persistent_entry_rent_bumps: 0,
+                                    temporary_rent_ledger_bytes: 0,
+                                    temporary_entry_rent_bumps: 0,
+                                },
+                                sub_call_resources: [],
+                            },
+                        ],
+                    }"#]]
+                .assert_eq(
+                    format!(
+                        "{:#?}",
+                        host.get_detailed_last_invocation_resources().unwrap()
+                    )
+                    .as_str(),
+                );
+                #[cfg(not(feature = "cap_0085_executable_ref"))]
                 expect![[r#"
                     DetailedInvocationResources {
                         invocation: InvokeContract(
