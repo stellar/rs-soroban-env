@@ -359,82 +359,81 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64::from_unscaled_u64(1).safe_div(8);
                 }
                 ContractCostType::DispatchHostFunction => {
-                    cpu.const_term = 310;
+                    cpu.const_term = 295;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::VisitObject => {
-                    cpu.const_term = 61;
+                    cpu.const_term = 60;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ValSer => {
-                    cpu.const_term = 230;
-                    cpu.lin_term = ScaledU64(29);
+                    cpu.const_term = 221;
+                    cpu.lin_term = ScaledU64(26);
                 }
                 ContractCostType::ValDeser => {
                     cpu.const_term = 331;
                     cpu.lin_term = ScaledU64(4369);
                 }
                 ContractCostType::ComputeSha256Hash => {
-                    cpu.const_term = 3738;
-                    cpu.lin_term = ScaledU64(7012);
+                    cpu.const_term = 3636;
+                    cpu.lin_term = ScaledU64(7013);
                 }
                 ContractCostType::ComputeEd25519PubKey => {
-                    cpu.const_term = 40253;
+                    cpu.const_term = 40256;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::VerifyEd25519Sig => {
-                    cpu.const_term = 377524;
-                    cpu.lin_term = ScaledU64(4068);
+                    cpu.const_term = 377551;
+                    cpu.lin_term = ScaledU64(4059);
                 }
                 ContractCostType::VmInstantiation => {
-                    cpu.const_term = 451626;
-                    cpu.lin_term = ScaledU64(45405);
+                    cpu.const_term = 417482;
+                    cpu.lin_term = ScaledU64(45712);
                 }
                 ContractCostType::VmCachedInstantiation => {
                     cpu.const_term = 41142;
                     cpu.lin_term = ScaledU64(634);
                 }
                 ContractCostType::InvokeVmFunction => {
-                    cpu.const_term = 1948;
+                    cpu.const_term = 1945;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeKeccak256Hash => {
-                    cpu.const_term = 3766;
-                    cpu.lin_term = ScaledU64(5969);
+                    cpu.const_term = 6481;
+                    cpu.lin_term = ScaledU64(5943);
                 }
                 ContractCostType::DecodeEcdsaCurve256Sig => {
-                    cpu.const_term = 710;
+                    cpu.const_term = 711;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::RecoverEcdsaSecp256k1Key => {
-                    cpu.const_term = 2315295;
+                    cpu.const_term = 2314804;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256AddSub => {
-                    cpu.const_term = 4404;
+                    cpu.const_term = 4176;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256Mul => {
-                    cpu.const_term = 4947;
+                    cpu.const_term = 4716;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256Div => {
-                    cpu.const_term = 4911;
+                    cpu.const_term = 4680;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256Pow => {
-                    cpu.const_term = 4286;
+                    cpu.const_term = 4256;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::Int256Shift => {
-                    cpu.const_term = 913;
+                    cpu.const_term = 884;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ChaCha20DrawBytes => {
-                    cpu.const_term = 1058;
-                    cpu.lin_term = ScaledU64(501);
+                    cpu.const_term = 1059;
+                    cpu.lin_term = ScaledU64(502);
                 }
-
                 ContractCostType::ParseWasmInstructions => {
                     cpu.const_term = 73077;
                     cpu.lin_term = ScaledU64(25410);
@@ -743,8 +742,8 @@ impl Default for BudgetImpl {
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::VmInstantiation => {
-                    mem.const_term = 130065;
-                    mem.lin_term = ScaledU64(5064);
+                    mem.const_term = 132773;
+                    mem.lin_term = ScaledU64(4903);
                 }
                 ContractCostType::VmCachedInstantiation => {
                     mem.const_term = 69472;
@@ -790,7 +789,6 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-
                 ContractCostType::ParseWasmInstructions => {
                     mem.const_term = 17564;
                     mem.lin_term = ScaledU64(6457);
