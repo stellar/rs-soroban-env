@@ -5,21 +5,22 @@ use crate::{
     budget::AsBudget,
     err,
     host::metered_clone::{MeteredAlloc, MeteredClone},
-    host_object::ExecutableTag,
     storage::{InstanceStorageMap, Storage},
     vm::VersionedContractCodeCostInputs,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
-        ContractDataEntry, ContractExecutable, ContractExecutableExternalRef, ContractId,
+        ContractDataEntry, ContractExecutable, ContractId,
         ContractIdPreimage, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
         LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
         LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScVal, Signer, SignerKey,
         ThresholdIndexes, TrustLineAsset, Uint256,
     },
-    AddressObject, BytesObject, Env, ErrorHandler, ExecutableTagObject, Host, HostError,
-    StorageType, Tag, U32Val, Val,
+    AddressObject, BytesObject, Env, ErrorHandler, Host, HostError, StorageType, Tag, U32Val, Val,
 };
+// CAP-0085 external-ref helpers reference these gated XDR/host types.
+#[cfg(feature = "cap_0085_executable_ref")]
+use crate::{host_object::ExecutableTag, xdr::ContractExecutableExternalRef, ExecutableTagObject};
 
 impl Host {
     pub(crate) fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -176,6 +177,7 @@ impl Host {
         Ok(())
     }
 
+    #[cfg(feature = "cap_0085_executable_ref")]
     pub(crate) fn executable_ref_from_inputs(
         &self,
         executable_owner: AddressObject,
@@ -191,6 +193,7 @@ impl Host {
         })
     }
 
+    #[cfg(feature = "cap_0085_executable_ref")]
     pub(crate) fn executable_ref_ledger_key(
         &self,
         executable_ref: &ContractExecutableExternalRef,
@@ -205,6 +208,7 @@ impl Host {
         )
     }
 
+    #[cfg(feature = "cap_0085_executable_ref")]
     pub(crate) fn verify_executable_ref_entry_exists(
         &self,
         external_ref: &ContractExecutableExternalRef,
@@ -226,6 +230,7 @@ impl Host {
         Ok(())
     }
 
+    #[cfg(feature = "cap_0085_executable_ref")]
     pub(crate) fn resolve_external_ref_wasm_hash(
         &self,
         external_ref: &ContractExecutableExternalRef,
@@ -349,6 +354,7 @@ impl Host {
                 self.try_borrow_storage_mut()?
                     .extend_ttl(self, key, threshold, extend_to, None)?;
             }
+            #[cfg(feature = "cap_0085_executable_ref")]
             ContractExecutable::ExternalRef(external_ref) => {
                 // Extend both the executable reference entry (in the owner
                 // contract's storage) and the referenced Wasm code entry, so
@@ -404,6 +410,7 @@ impl Host {
                     None,
                 )?;
             }
+            #[cfg(feature = "cap_0085_executable_ref")]
             ContractExecutable::ExternalRef(external_ref) => {
                 // The 'code' scope extends both the executable reference entry
                 // and the referenced Wasm code entry for external-ref contracts.

@@ -1,7 +1,8 @@
 use super::base_types::{Address, BytesN, String};
-use crate::{
-    host::metered_clone::MeteredClone, xdr, Host, HostError, StringObject, TryFromVal, TryIntoVal,
-};
+use crate::{xdr, Host, HostError, TryIntoVal};
+// Only referenced by the gated CAP-0085 `ContractExecutableRef` xdr conversions.
+#[cfg(feature = "cap_0085_executable_ref")]
+use crate::{host::metered_clone::MeteredClone, StringObject, TryFromVal};
 use soroban_builtin_sdk_macros::contracttype;
 
 #[derive(Clone)]
@@ -12,6 +13,7 @@ pub(crate) struct ContractExecutableRef {
 }
 
 impl ContractExecutableRef {
+    #[cfg(feature = "cap_0085_executable_ref")]
     fn from_xdr(
         host: &Host,
         external_ref: &xdr::ContractExecutableExternalRef,
@@ -22,6 +24,7 @@ impl ContractExecutableRef {
         Ok(ContractExecutableRef { owner, tag })
     }
 
+    #[cfg(feature = "cap_0085_executable_ref")]
     pub(crate) fn to_xdr(
         &self,
         host: &Host,
@@ -51,6 +54,7 @@ impl ContractExecutable {
                 BytesN::<32>::from_slice(host, &wasm_hash.0)?,
             )),
             xdr::ContractExecutable::StellarAsset => Ok(ContractExecutable::StellarAsset),
+            #[cfg(feature = "cap_0085_executable_ref")]
             xdr::ContractExecutable::ExternalRef(external_ref) => {
                 Ok(ContractExecutable::ExternalRef(
                     ContractExecutableRef::from_xdr(host, external_ref)?,
@@ -64,9 +68,21 @@ impl ContractExecutable {
             ContractExecutable::Wasm(b) => Ok(xdr::ContractExecutable::Wasm(
                 host.hash_from_bytesobj_input("wasm_ref", b.as_object())?,
             )),
+            #[cfg(feature = "cap_0085_executable_ref")]
             ContractExecutable::ExternalRef(external_ref) => Ok(
                 xdr::ContractExecutable::ExternalRef(external_ref.to_xdr(host)?),
             ),
+            // The builtin `ExternalRef` variant is unconditional (the
+            // `#[contracttype]` derive is cfg-blind), so a feature-off arm is
+            // required. Unreachable: an external-ref instance can't be built
+            // without the gated XDR variants.
+            #[cfg(not(feature = "cap_0085_executable_ref"))]
+            ContractExecutable::ExternalRef(_) => Err(host.err(
+                xdr::ScErrorType::Value,
+                xdr::ScErrorCode::InternalError,
+                "CAP-0085 external contract references are not supported in this build",
+                &[],
+            )),
             ContractExecutable::StellarAsset => Ok(xdr::ContractExecutable::StellarAsset),
         }
     }
@@ -89,6 +105,7 @@ impl AddressExecutable {
                 BytesN::<32>::from_slice(host, &wasm_hash.0)?,
             )),
             xdr::ContractExecutable::StellarAsset => Ok(AddressExecutable::StellarAsset),
+            #[cfg(feature = "cap_0085_executable_ref")]
             xdr::ContractExecutable::ExternalRef(external_ref) => {
                 let wasm_hash = host.resolve_external_ref_wasm_hash(external_ref)?;
                 Ok(AddressExecutable::Wasm(BytesN::<32>::from_slice(

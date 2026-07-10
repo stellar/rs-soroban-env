@@ -134,6 +134,7 @@ mod separate_instance_code_extension {
 // TTL extension tests for the contracts with executable reference (CAP-0085).
 // The 'code' extension scope for such contracts covers both the executable
 // reference entry in the owner contract and the referenced Wasm code entry.
+#[cfg(feature = "next")]
 mod cap_85_external_ref_extension {
     use super::*;
     use crate::{

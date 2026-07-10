@@ -142,8 +142,9 @@ impl<'a> ScValObjRef<'a> {
             | ScVal::String(_)
             | ScVal::Vec(_)
             | ScVal::Map(_)
-            | ScVal::Address(_)
-            | ScVal::ExecutableTag(_) => Some(ScValObjRef(value)),
+            | ScVal::Address(_) => Some(ScValObjRef(value)),
+            #[cfg(feature = "cap_0085_executable_ref")]
+            ScVal::ExecutableTag(_) => Some(ScValObjRef(value)),
 
             // Other values are small or large depending on
             // their actual scalar value.

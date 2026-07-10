@@ -81,8 +81,11 @@ impl AuthorizationContext {
             }
             AuthorizedFunction::CreateContractHostFn(args) => {
                 let executable = match &args.executable {
-                    xdr::ContractExecutable::Wasm(_)
-                    | xdr::ContractExecutable::ExternalRef(_) => {
+                    xdr::ContractExecutable::Wasm(_) => {
+                        ContractExecutable::from_xdr(host, &args.executable)?
+                    }
+                    #[cfg(feature = "cap_0085_executable_ref")]
+                    xdr::ContractExecutable::ExternalRef(_) => {
                         ContractExecutable::from_xdr(host, &args.executable)?
                     }
                     xdr::ContractExecutable::StellarAsset => return Err(host.err(

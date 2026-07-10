@@ -245,7 +245,10 @@ impl Tag {
             Tag::MapObject => Some(ScValType::Map),
             Tag::AddressObject => Some(ScValType::Address),
             Tag::MuxedAddressObject => Some(ScValType::Address),
+            #[cfg(feature = "cap_0085_executable_ref")]
             Tag::ExecutableTagObject => Some(ScValType::ExecutableTag),
+            #[cfg(not(feature = "cap_0085_executable_ref"))]
+            Tag::ExecutableTagObject => None,
             Tag::ObjectCodeUpperBound => None,
             Tag::Bad => None,
         }
@@ -619,8 +622,9 @@ impl Val {
             | ScValType::Symbol
             | ScValType::Vec
             | ScValType::Map
-            | ScValType::Address
-            | ScValType::ExecutableTag => true,
+            | ScValType::Address => true,
+            #[cfg(feature = "cap_0085_executable_ref")]
+            ScValType::ExecutableTag => true,
             ScValType::ContractInstance
             | ScValType::LedgerKeyContractInstance
             | ScValType::LedgerKeyNonce => false,

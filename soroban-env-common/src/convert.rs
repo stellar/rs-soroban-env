@@ -594,10 +594,11 @@ where
             | ScVal::Vec(_)
             | ScVal::Map(_)
             | ScVal::Address(_)
-            | ScVal::ExecutableTag(_)
             | ScVal::LedgerKeyNonce(_)
             | ScVal::LedgerKeyContractInstance
             | ScVal::ContractInstance(_) => return Err(ConversionError.into()),
+            #[cfg(feature = "cap_0085_executable_ref")]
+            ScVal::ExecutableTag(_) => return Err(ConversionError.into()),
         })
     }
 }

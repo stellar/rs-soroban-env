@@ -189,8 +189,10 @@
   " 187 call vec_new_from_slice(4)": "",
   " 188 ret vec_new_from_slice -> Ok(Vec(obj#101))": "cpu:641661, mem:33483, objs:-/51@3dc541b9",
   " 189 call contract_event(Vec(obj#101), I128(10000000))": "",
-  " 190 ret contract_event -> Ok(Void)": "cpu:643272, mem:33676, objs:-/52@1ab916a8, evt:1@3fe6a656",
-  " 191 pop SAC:9d2afd13:transfer -> Ok(Void)": "",
-  " 192 ret call -> Ok(Void)": " store:-/4@218b00f6, stk:-, auth:-/-",
-  " 193 end": "cpu:648002, mem:34084, prngs:-/9b4a753, objs:-/52@1ab916a8, vm:-/-, evt:1@3fe6a656, store:-/4@218b00f6, foot:4@13a97eec, stk:-, auth:-/-"
+  " 190 call bytes_new_from_slice(32)": "cpu:641768",
+  " 191 ret bytes_new_from_slice -> Ok(Bytes(obj#103))": "cpu:642739, mem:33611, objs:-/52@1ab916a8",
+  " 192 ret contract_event -> Ok(Void)": "cpu:643272, mem:33676, evt:1@3fe6a656",
+  " 193 pop SAC:9d2afd13:transfer -> Ok(Void)": "",
+  " 194 ret call -> Ok(Void)": " store:-/4@218b00f6, stk:-, auth:-/-",
+  " 195 end": "cpu:648002, mem:34084, prngs:-/9b4a753, objs:-/52@1ab916a8, vm:-/-, evt:1@3fe6a656, store:-/4@218b00f6, foot:4@13a97eec, stk:-, auth:-/-"
 }

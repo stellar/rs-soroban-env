@@ -15,26 +15,32 @@ use crate::{
     },
     e2e_testutils::{
         auth_contract_invocation, create_contract_auth, default_ledger_info, get_account_id,
-        get_contract_id_hash, get_contract_id_preimage, get_wasm_hash, get_wasm_key, ledger_entry,
-        wasm_entry, AuthContractInvocationNode, CreateContractData,
+        get_contract_id_preimage, get_wasm_hash, get_wasm_key, ledger_entry, wasm_entry,
+        AuthContractInvocationNode, CreateContractData,
     },
     testutils::MockSnapshotSource,
     xdr::{
         AccountId, ContractCostType, ContractDataDurability, ContractDataEntry, ContractEvent,
-        ContractExecutable, ContractExecutableExternalRef, ContractId, ContractIdPreimage,
-        ContractIdPreimageFromAddress, CreateContractArgs, CreateContractArgsV2, DiagnosticEvent,
-        ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-        HashIdPreimageSorobanAuthorizationWithAddress, HostFunction, InvokeContractArgs,
-        LedgerEntry, LedgerEntryData, LedgerEntryType, LedgerFootprint, LedgerKey,
-        LedgerKeyContractCode, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScString, ScVal, ScVec,
-        SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, TtlEntry, Uint256,
-        WriteXdr,
+        ContractExecutable, ContractId, ContractIdPreimage, ContractIdPreimageFromAddress,
+        CreateContractArgs, DiagnosticEvent, ExtensionPoint, Hash, HashIdPreimage,
+        HashIdPreimageSorobanAuthorization, HashIdPreimageSorobanAuthorizationWithAddress,
+        HostFunction, InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryType,
+        LedgerFootprint, LedgerKey, LedgerKeyContractData, Limits, ReadXdr, ScAddress,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScNonceKey, ScVal, ScVec,
+        SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedInvocation,
+        SorobanCredentials, SorobanResources, Uint256, WriteXdr,
     },
     Host, HostError, LedgerInfo,
 };
 use crate::{ErrorHandler, ModuleCache};
+// CAP-0085 XDR types used only by the `next`-gated `cap_85_executable_reference`
+// test module (via `use super::*`).
+#[cfg(feature = "next")]
+use crate::e2e_testutils::get_contract_id_hash;
+#[cfg(feature = "next")]
+use crate::xdr::{
+    ContractExecutableExternalRef, CreateContractArgsV2, ScString, SorobanAuthorizedFunction,
+};
 use ed25519_dalek::SigningKey;
 use expect_test::expect;
 use pretty_assertions::assert_eq;
@@ -3847,6 +3853,7 @@ mod delegated_auth_tests {
     }
 }
 
+#[cfg(feature = "next")]
 mod cap_85_executable_reference {
     use super::*;
     use pretty_assertions::assert_eq;

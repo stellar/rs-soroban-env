@@ -14,7 +14,11 @@
   "  12 push TEST:   0:add(I32(1), I32(2))": "cpu:63036, mem:4784, objs:-/8@e402f2fb, stk:1@415daa75, auth:1@b173f450/-",
   "  13 call symbol_new_from_slice(13)": "",
   "  14 ret symbol_new_from_slice -> Ok(Symbol(obj#17))": "cpu:64046, mem:4893, objs:-/9@8ec14cc4",
-  "  15 pop TEST:   0:add -> Ok(Void)": "cpu:68113, mem:5391, objs:-/12@f614b4ca, evt:2@35ce66f3",
-  "  16 ret call -> Ok(Void)": " stk:-, auth:-/-",
-  "  17 end": "cpu:70685, mem:6047, prngs:-/9b4a753, objs:-/12@f614b4ca, vm:-/-, evt:2@7bd2a45d, store:-/2@ac7e6fda, foot:2@d6be0e71, stk:-, auth:-/-"
+  "  15 call bytes_new_from_slice(32)": "cpu:65059, mem:5005, objs:-/10@85210e9a",
+  "  16 ret bytes_new_from_slice -> Ok(Bytes(obj#21))": "cpu:66030, mem:5133, objs:-/11@9236016c",
+  "  17 call bytes_new_from_slice(32)": "cpu:66609, mem:5198, evt:1@f71e24aa",
+  "  18 ret bytes_new_from_slice -> Ok(Bytes(obj#23))": "cpu:67580, mem:5326, objs:-/12@f614b4ca",
+  "  19 pop TEST:   0:add -> Ok(Void)": "cpu:68113, mem:5391, evt:2@35ce66f3",
+  "  20 ret call -> Ok(Void)": " stk:-, auth:-/-",
+  "  21 end": "cpu:70685, mem:6047, prngs:-/9b4a753, objs:-/12@f614b4ca, vm:-/-, evt:2@7bd2a45d, store:-/2@ac7e6fda, foot:2@d6be0e71, stk:-, auth:-/-"
 }

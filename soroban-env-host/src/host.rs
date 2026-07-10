@@ -6,7 +6,7 @@ use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::common_types::AddressExecutable,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
-    host_object::{ExecutableTag, HostMap, HostObject, HostVec, MuxedScAddress},
+    host_object::{HostMap, HostObject, HostVec, MuxedScAddress},
     impl_bignum_host_fns, impl_bls12_381_fr_arith_host_fns, impl_bn254_fr_arith_host_fns,
     impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
@@ -21,6 +21,10 @@ use crate::{
     Error, ExecutableTagObject, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol,
     SymbolObject, SymbolSmall, TryFromVal, TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
 };
+// CAP-0085 `ExecutableTag` host-object newtype: only referenced by the gated
+// `create_executable_tag` body (unconditional surface lives in `host_object.rs`).
+#[cfg(feature = "cap_0085_executable_ref")]
+use crate::host_object::ExecutableTag;
 
 mod comparison;
 mod conversion;
@@ -2479,14 +2483,30 @@ impl VmCallerEnv for Host {
         salt: BytesObject,
         constructor_args: VecObject,
     ) -> Result<AddressObject, HostError> {
-        #[cfg(any(test, feature = "testutils"))]
-        let _invocation_meter_scope = self.maybe_meter_invocation(
-            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
-        );
-        let executable = ContractExecutable::ExternalRef(
-            self.executable_ref_from_inputs(executable_owner, tag)?,
-        );
-        self.create_contract_from_obj_inputs(deployer, executable, salt, Some(constructor_args))
+        #[cfg(feature = "cap_0085_executable_ref")]
+        {
+            #[cfg(any(test, feature = "testutils"))]
+            let _invocation_meter_scope = self.maybe_meter_invocation(
+                crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+            );
+            let executable = ContractExecutable::ExternalRef(
+                self.executable_ref_from_inputs(executable_owner, tag)?,
+            );
+            self.create_contract_from_obj_inputs(deployer, executable, salt, Some(constructor_args))
+        }
+        // CAP-0085 external-ref contracts require the gated XDR variants; this
+        // host fn is `min_supported_protocol: 28` so it is unreachable below the
+        // protocol at which the leaf is enabled via `next`. Defensive stub.
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
+        {
+            let _ = (deployer, executable_owner, tag, salt, constructor_args);
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "CAP-0085 external contract references are not supported in this build",
+                &[],
+            ))
+        }
     }
 
     // Notes on metering: covered by the components.
@@ -2566,10 +2586,24 @@ impl VmCallerEnv for Host {
         executable_owner: AddressObject,
         tag: ExecutableTagObject,
     ) -> Result<Void, HostError> {
-        let external_ref = self.executable_ref_from_inputs(executable_owner, tag)?;
-        self.verify_executable_ref_entry_exists(&external_ref, Some(tag))?;
-        self.update_current_contract_executable(ContractExecutable::ExternalRef(external_ref))?;
-        Ok(Val::VOID)
+        #[cfg(feature = "cap_0085_executable_ref")]
+        {
+            let external_ref = self.executable_ref_from_inputs(executable_owner, tag)?;
+            self.verify_executable_ref_entry_exists(&external_ref, Some(tag))?;
+            self.update_current_contract_executable(ContractExecutable::ExternalRef(external_ref))?;
+            Ok(Val::VOID)
+        }
+        // See `create_external_ref_contract`: defensive stub, unreachable below P28.
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
+        {
+            let _ = (executable_owner, tag);
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "CAP-0085 external contract references are not supported in this build",
+                &[],
+            ))
+        }
     }
 
     // endregion: "ledger" module functions
@@ -3104,8 +3138,22 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         tag_string: StringObject,
     ) -> Result<ExecutableTagObject, HostError> {
-        let scstr = self.visit_obj(tag_string, |s: &ScString| s.metered_clone(self))?;
-        self.add_host_object(ExecutableTag(scstr))
+        #[cfg(feature = "cap_0085_executable_ref")]
+        {
+            let scstr = self.visit_obj(tag_string, |s: &ScString| s.metered_clone(self))?;
+            self.add_host_object(ExecutableTag(scstr))
+        }
+        // See `create_external_ref_contract`: defensive stub, unreachable below P28.
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
+        {
+            let _ = tag_string;
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "CAP-0085 external contract references are not supported in this build",
+                &[],
+            ))
+        }
     }
 
     // endregion: "buf" module functions
@@ -3992,6 +4040,7 @@ impl Host {
                     )
                 })
             }
+            #[cfg(feature = "cap_0085_executable_ref")]
             ContractExecutable::ExternalRef(external_ref) => {
                 let wasm_hash = self.resolve_external_ref_wasm_hash(&external_ref)?;
                 let key = self.contract_code_ledger_key(&wasm_hash)?;

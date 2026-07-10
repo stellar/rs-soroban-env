@@ -25,8 +25,10 @@
   "  23 call vec_push_back(Vec(obj#25), U32(1))": "",
   "  24 ret vec_push_back -> Ok(Vec(obj#27))": "cpu:68637, mem:5389, objs:-/14@a7dec21",
   "  25 call contract_event(Vec(obj#27), Map(obj#21))": "",
-  "  26 ret contract_event -> Ok(Void)": "cpu:70309, mem:5582, objs:-/15@1b806b41, evt:1@420537d",
-  "  27 pop TEST:   0:add -> Ok(Void)": "",
-  "  28 ret call -> Ok(Void)": " stk:-, auth:-/-",
-  "  29 end": "cpu:72254, mem:6054, prngs:-/9b4a753, objs:-/15@1b806b41, vm:-/-, evt:1@420537d, store:-/2@ac7e6fda, foot:2@d6be0e71, stk:-, auth:-/-"
+  "  26 call bytes_new_from_slice(32)": "cpu:68805",
+  "  27 ret bytes_new_from_slice -> Ok(Bytes(obj#29))": "cpu:69776, mem:5517, objs:-/15@1b806b41",
+  "  28 ret contract_event -> Ok(Void)": "cpu:70309, mem:5582, evt:1@420537d",
+  "  29 pop TEST:   0:add -> Ok(Void)": "",
+  "  30 ret call -> Ok(Void)": " stk:-, auth:-/-",
+  "  31 end": "cpu:72254, mem:6054, prngs:-/9b4a753, objs:-/15@1b806b41, vm:-/-, evt:1@420537d, store:-/2@ac7e6fda, foot:2@d6be0e71, stk:-, auth:-/-"
 }

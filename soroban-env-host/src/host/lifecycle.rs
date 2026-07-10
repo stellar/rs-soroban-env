@@ -81,6 +81,7 @@ impl Host {
             ContractExecutable::Wasm(wasm_hash) => {
                 self.verify_wasm_exists(wasm_hash)?;
             }
+            #[cfg(feature = "cap_0085_executable_ref")]
             ContractExecutable::ExternalRef(external_ref) => {
                 // Only the existence of the reference entry is validated: the
                 // entry's value is guaranteed to be a valid Wasm hash by the
@@ -219,19 +220,26 @@ impl Host {
         // - Asset preimage must pair with StellarAsset executable
         match (&args.contract_id_preimage, &args.executable) {
             (ContractIdPreimage::Address(_), ContractExecutable::Wasm(_))
-            | (ContractIdPreimage::Address(_), ContractExecutable::ExternalRef(_))
             | (ContractIdPreimage::Asset(_), ContractExecutable::StellarAsset) => Ok(()),
+            #[cfg(feature = "cap_0085_executable_ref")]
+            (ContractIdPreimage::Address(_), ContractExecutable::ExternalRef(_)) => Ok(()),
             (ContractIdPreimage::Address(_), ContractExecutable::StellarAsset) => Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
                 "address preimage is not allowed for StellarAsset executable",
                 &[],
             )),
-            (ContractIdPreimage::Asset(_), ContractExecutable::Wasm(_))
-            | (ContractIdPreimage::Asset(_), ContractExecutable::ExternalRef(_)) => Err(self.err(
+            (ContractIdPreimage::Asset(_), ContractExecutable::Wasm(_)) => Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
-                "asset preimage is not allowed for Wasm or external reference executable",
+                "asset preimage is not allowed for Wasm executable",
+                &[],
+            )),
+            #[cfg(feature = "cap_0085_executable_ref")]
+            (ContractIdPreimage::Asset(_), ContractExecutable::ExternalRef(_)) => Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "asset preimage is not allowed for external reference executable",
                 &[],
             )),
         }?;
@@ -246,10 +254,14 @@ impl Host {
         self.maybe_initialize_stellar_asset_contract(&contract_id, &args.contract_id_preimage)?;
         // Wasm-backed contracts (whether via a direct Wasm hash or an external
         // reference that resolves to one) run their `__constructor`.
-        if matches!(
+        #[cfg(feature = "cap_0085_executable_ref")]
+        let is_wasm_backed = matches!(
             args.executable,
             ContractExecutable::Wasm(_) | ContractExecutable::ExternalRef(_)
-        ) {
+        );
+        #[cfg(not(feature = "cap_0085_executable_ref"))]
+        let is_wasm_backed = matches!(args.executable, ContractExecutable::Wasm(_));
+        if is_wasm_backed {
             self.call_constructor(&contract_id, constructor_args)?;
         }
         self.add_host_object(ScAddress::Contract(contract_id))

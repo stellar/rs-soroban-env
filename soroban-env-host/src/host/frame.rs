@@ -750,6 +750,7 @@ impl Host {
                     || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
                 )
             }
+            #[cfg(feature = "cap_0085_executable_ref")]
             ContractExecutable::ExternalRef(external_ref) => {
                 let wasm_hash = self.resolve_external_ref_wasm_hash(external_ref)?;
                 let vm = self.instantiate_vm(id, &wasm_hash)?;
@@ -902,6 +903,7 @@ impl Host {
                 let vm = self.instantiate_vm(contract_id, wasm_hash)?;
                 Ok(vm.module.proto_version)
             }
+            #[cfg(feature = "cap_0085_executable_ref")]
             ContractExecutable::ExternalRef(external_ref) => {
                 let wasm_hash = self.resolve_external_ref_wasm_hash(external_ref)?;
                 let vm = self.instantiate_vm(contract_id, &wasm_hash)?;

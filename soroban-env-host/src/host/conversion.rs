@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use crate::host_object::{ExecutableTag, MemHostObjectType, MuxedScAddress};
+use crate::host_object::{MemHostObjectType, MuxedScAddress};
+// Only used by the gated CAP-0085 ExecutableTag <-> ScVal conversion arms.
+#[cfg(feature = "cap_0085_executable_ref")]
+use crate::host_object::ExecutableTag;
 use crate::{
     budget::{AsBudget, DepthLimiter},
     crypto::metered_scalar::MeteredScalar,
@@ -531,8 +534,21 @@ impl Host {
                         }
                         ScVal::Address(addr.0.metered_clone(self)?)
                     }
+                    #[cfg(feature = "cap_0085_executable_ref")]
                     HostObject::ExecutableTag(et) => {
                         ScVal::ExecutableTag(et.0.metered_clone(self)?)
+                    }
+                    // `HostObject::ExecutableTag` is unconditional; without the
+                    // gated `ScVal::ExecutableTag` there is nothing to convert
+                    // into (such an object can't be created in this build).
+                    #[cfg(not(feature = "cap_0085_executable_ref"))]
+                    HostObject::ExecutableTag(_) => {
+                        return Err(self.err(
+                            ScErrorType::Object,
+                            ScErrorCode::InternalError,
+                            "CAP-0085 executable tags are not supported in this build",
+                            &[objref.to_val()],
+                        ));
                     }
                 };
                 Ok(ScValObject::unchecked_from_val(val))
@@ -639,6 +655,7 @@ impl Host {
                 // ,
             }
 
+            #[cfg(feature = "cap_0085_executable_ref")]
             ScVal::ExecutableTag(s) => Ok(self
                 .add_host_object(ExecutableTag(s.metered_clone(self)?))?
                 .into()),

@@ -14,6 +14,7 @@ mod depth_limit;
 mod dispatch;
 mod e2e_tests;
 mod event;
+#[cfg(feature = "next")]
 mod executable_tag;
 mod finish;
 mod frame;

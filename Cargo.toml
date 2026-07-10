@@ -36,10 +36,11 @@ wasmparser = "=0.116.1"
 # NB: When updating, also update the version in rs-soroban-env dev-dependencies
 [workspace.dependencies.stellar-xdr]
 version = "=27.0.0"
-#git = "https://github.com/stellar/rs-stellar-xdr"
-#rev = "156759ab322dda6976d07435c6f5b70f98e9fd0c"
+# SPIKE: rs-stellar-xdr#553 (CAP-0085). Fork-hosted branch p28-cap-0085.
+# Productionize -> stellar/rs-stellar-xdr merged SHA (or crates.io) once #553 lands.
+git = "https://github.com/sisuresh/rs-stellar-xdr"
+rev = "e1170cd9abb9d1d10cf4a3b7ed4091a109f56b71"
 default-features = false
-features = ["cap_0085"]
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
@@ -48,8 +49,8 @@ git = "https://github.com/stellar/wasmi"
 rev = "0ed3f3dee30dc41ebe21972399e0a73a41944aa0"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
-[patch.crates-io]
-stellar-xdr = { path = "../rs-stellar-xdr" }
+# [patch.crates-io]
+# stellar-xdr = { path = "../rs-stellar-xdr" }
 # [patch."https://github.com/stellar/wasmi"]
 # soroban-wasmi = { path = "../wasmi/crates/wasmi/" }
 # soroban-wasmi_core = { path = "../wasmi/crates/core/" }

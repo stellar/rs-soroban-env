@@ -2880,6 +2880,7 @@ mod cap_68_executable_getter {
     }
 }
 
+#[cfg(feature = "next")]
 mod cap_85_executable_reference {
     use super::*;
     use crate::{

@@ -326,6 +326,12 @@ impl MeteredClone for ContractId {}
 impl MeteredClone for Uint256 {}
 impl MeteredClone for ContractCodeCostInputs {}
 impl MeteredClone for ContractCodeEntryV1 {}
+// Feature-off, `ContractExecutable` is {Wasm, StellarAsset} — both shallow, so
+// this matches `main`. The gated `ExternalRef` variant owns a heap `ScString`
+// tag, making the type non-shallow.
+#[cfg(not(feature = "cap_0085_executable_ref"))]
+impl MeteredClone for ContractExecutable {}
+#[cfg(feature = "cap_0085_executable_ref")]
 impl MeteredClone for ContractExecutable {
     const IS_SHALLOW: bool = false;
 
@@ -468,6 +474,7 @@ impl MeteredClone for ScVal {
                 ScVal::Bytes(b) => BytesM::charge_for_substructure(b, budget),
                 ScVal::String(s) => StringM::charge_for_substructure(s, budget),
                 ScVal::Symbol(s) => StringM::charge_for_substructure(s, budget),
+                #[cfg(feature = "cap_0085_executable_ref")]
                 ScVal::ExecutableTag(s) => StringM::charge_for_substructure(s, budget),
                 ScVal::ContractInstance(i) => {
                     ScContractInstance::charge_for_substructure(i, budget)
@@ -579,6 +586,9 @@ impl MeteredClone for ScContractInstance {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        // Feature-off, `executable` is shallow (charging it is a no-op that
+        // main omitted); the gated `ExternalRef` executable owns a heap tag.
+        #[cfg(feature = "cap_0085_executable_ref")]
         self.executable.charge_for_substructure(budget.clone())?;
         self.storage.charge_for_substructure(budget)
     }

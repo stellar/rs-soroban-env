@@ -19,4 +19,5 @@ all-features = true
 
 [features]
 testutils = ["soroban-env-common/testutils"]
-next = ["soroban-env-common/next"]
+next = ["soroban-env-common/next", "cap_0085_executable_ref"]
+cap_0085_executable_ref = ["soroban-env-common/cap_0085_executable_ref"]

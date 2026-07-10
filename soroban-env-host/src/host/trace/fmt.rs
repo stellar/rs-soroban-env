@@ -48,6 +48,7 @@ impl From<&ContractExecutable> for ShortHashOrStaticStr {
         match exec {
             ContractExecutable::Wasm(hash) => hash.into(),
             ContractExecutable::StellarAsset => "SAC".into(),
+            #[cfg(feature = "cap_0085_executable_ref")]
             ContractExecutable::ExternalRef(_) => "REF".into(),
         }
     }

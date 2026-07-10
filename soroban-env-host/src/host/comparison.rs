@@ -321,6 +321,7 @@ impl Compare<ScVal> for Budget {
                 <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
             }
 
+            #[cfg(feature = "cap_0085_executable_ref")]
             (ExecutableTag(a), ExecutableTag(b)) => {
                 <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
             }
@@ -347,6 +348,11 @@ impl Compare<ScVal> for Budget {
             (Address(a), Address(b)) => self.compare(&a, &b),
             (LedgerKeyNonce(a), LedgerKeyNonce(b)) => self.compare(&a, &b),
 
+            // The gated `ExecutableTag` variant needs its own discriminant arm
+            // (it can't be a `|` alternative under a `#[cfg]`).
+            #[cfg(feature = "cap_0085_executable_ref")]
+            (ExecutableTag(_), _) => Ok(a.discriminant().cmp(&b.discriminant())),
+
             // List out at least one side of all the remaining cases here so
             // we don't accidentally forget to update this when/if a new
             // ScVal type is added.
@@ -355,7 +361,6 @@ impl Compare<ScVal> for Budget {
             | (Bytes(_), _)
             | (String(_), _)
             | (Symbol(_), _)
-            | (ExecutableTag(_), _)
             | (ContractInstance(_), _)
             | (Bool(_), _)
             | (Void, _)
@@ -687,6 +692,9 @@ mod tests {
             .filter(|t| {
                 // bad tags can't be converted to ScVal
                 !matches!(t, Tag::Bad)
+                    // ExecutableTag <-> ScVal conversion is gated behind CAP-0085.
+                    && (cfg!(feature = "cap_0085_executable_ref")
+                        || !matches!(t, Tag::ExecutableTagObject))
             })
             .collect()
     }
@@ -801,11 +809,15 @@ mod tests {
                 })),
             )
             .unwrap(),
+            #[cfg(feature = "cap_0085_executable_ref")]
             Tag::ExecutableTagObject => Val::try_from_val(
                 host,
                 &ScVal::ExecutableTag(xdr::ScString(b"tag".to_vec().try_into().unwrap())),
             )
             .unwrap(),
+            // Filtered out of `all_tags()` in this build (ScVal conversion gated).
+            #[cfg(not(feature = "cap_0085_executable_ref"))]
+            Tag::ExecutableTagObject => panic!("ExecutableTag requires CAP-0085"),
             Tag::ObjectCodeUpperBound => panic!(),
             Tag::Bad => panic!(),
             // NB: do not add a fallthrough case here if new Tag variants are added.

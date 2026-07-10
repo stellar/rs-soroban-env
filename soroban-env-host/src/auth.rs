@@ -2794,6 +2794,7 @@ impl AccountAuthorizationTracker {
                             .try_borrow_storage_mut()?
                             .try_get(&wasm_key, host, None)?;
                     }
+                    #[cfg(feature = "cap_0085_executable_ref")]
                     ContractExecutable::ExternalRef(external_ref) => {
                         let ref_key = host.executable_ref_ledger_key(&external_ref)?;
                         if let Some(ref_entry) = host
