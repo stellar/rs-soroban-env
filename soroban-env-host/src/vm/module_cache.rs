@@ -102,7 +102,6 @@ impl ModuleCache {
         for (k, v) in storage.map.iter(host.as_budget())? {
             if let LedgerKey::ContractCode(_) = &**k {
                 if let Some((e, _)) = v {
-                    let e = e.decoded(host.budget_ref())?;
                     if let LedgerEntryData::ContractCode(ContractCodeEntry { code, hash, ext }) =
                         &e.data
                     {

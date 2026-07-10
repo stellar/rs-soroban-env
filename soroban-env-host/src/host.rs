@@ -34,7 +34,6 @@ pub(crate) mod error;
 pub(crate) mod frame;
 #[cfg(any(test, feature = "testutils"))]
 pub mod invocation_metering;
-pub(crate) mod ledger_entry;
 pub(crate) mod ledger_info_helper;
 pub(crate) mod lifecycle;
 mod mem_helper;

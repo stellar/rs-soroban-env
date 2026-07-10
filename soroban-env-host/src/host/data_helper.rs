@@ -745,9 +745,9 @@ impl Host {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-use crate::storage::{AccessType, EntryWithLiveUntil};
+use crate::crypto;
 #[cfg(any(test, feature = "testutils"))]
-use crate::{crypto, host::ledger_entry::LazyLedgerEntry};
+use crate::storage::{AccessType, EntryWithLiveUntil, Footprint};
 
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
@@ -755,7 +755,7 @@ impl Host {
     pub fn add_ledger_entry(
         &self,
         key: &Rc<LedgerKey>,
-        val: &Rc<LedgerEntry>,
+        val: &Rc<soroban_env_common::xdr::LedgerEntry>,
         live_until_ledger: Option<u32>,
     ) -> Result<(), HostError> {
         self.with_mut_storage(|storage| storage.put(key, val, live_until_ledger, self, None))
@@ -776,21 +776,7 @@ impl Host {
     pub fn get_stored_entries(
         &self,
     ) -> Result<Vec<(Rc<LedgerKey>, Option<EntryWithLiveUntil>)>, HostError> {
-        let budget = self.budget_ref();
-        self.with_mut_storage(|storage| {
-            storage
-                .map
-                .map
-                .iter()
-                .map(|(k, v)| {
-                    let decoded = match v {
-                        Some((e, live_until)) => Some((e.decoded(budget)?, *live_until)),
-                        None => None,
-                    };
-                    Ok((k.clone(), decoded))
-                })
-                .collect()
-        })
+        self.with_mut_storage(|storage| Ok(storage.map.map.clone()))
     }
 
     // Performs the necessary setup to access the provided ledger key/entry in
@@ -798,19 +784,13 @@ impl Host {
     pub fn setup_storage_entry(
         &self,
         key: Rc<LedgerKey>,
-        val: Option<(Rc<LedgerEntry>, Option<u32>)>,
+        val: Option<(Rc<soroban_env_common::xdr::LedgerEntry>, Option<u32>)>,
         access_type: AccessType,
     ) -> Result<(), HostError> {
         self.with_mut_storage(|storage| {
             storage
                 .footprint
                 .record_access(&key, access_type, self.as_budget())?;
-            let val = match val {
-                Some((entry, live_until)) => {
-                    Some((Rc::new(LazyLedgerEntry::from_decoded(entry)), live_until))
-                }
-                None => None,
-            };
             storage.map = storage.map.insert(key, val, self.as_budget())?;
             Ok(())
         })
@@ -819,11 +799,7 @@ impl Host {
     // Performs the necessary setup to access all the entries in provided
     // footprint in enforcing mode.
     // "testutils" are not covered by budget metering.
-    #[cfg(test)]
-    pub(crate) fn setup_storage_footprint(
-        &self,
-        footprint: crate::storage::Footprint,
-    ) -> Result<(), HostError> {
+    pub fn setup_storage_footprint(&self, footprint: Footprint) -> Result<(), HostError> {
         for (key, access_type) in footprint.0.map {
             self.setup_storage_entry(key, None, access_type)?;
         }

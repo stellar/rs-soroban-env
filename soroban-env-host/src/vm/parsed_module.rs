@@ -3,8 +3,8 @@ use crate::{
     host::metered_clone::MeteredContainer,
     meta,
     xdr::{
-        ContractCodeEntryExt, ContractCostType, Limited, ReadXdr, ScEnvMetaEntry,
-        ScEnvMetaEntryInterfaceVersion, ScErrorCode, ScErrorType,
+        ContractCodeEntry, ContractCodeEntryExt, ContractCostType, Limited, ReadXdr,
+        ScEnvMetaEntry, ScEnvMetaEntryInterfaceVersion, ScErrorCode, ScErrorType,
     },
     ErrorHandler, Host, HostError, Val, DEFAULT_XDR_RW_LIMITS,
 };
@@ -154,13 +154,13 @@ pub struct ParsedModule {
 
 pub fn wasm_module_memory_cost(
     budget: &Budget,
-    ext: &ContractCodeEntryExt,
-    code_len: u32,
+    contract_code_entry: &ContractCodeEntry,
 ) -> Result<u64, HostError> {
-    match ext {
-        ContractCodeEntryExt::V0 => {
-            budget.get_memory_cost(ContractCostType::VmInstantiation, Some(code_len as u64))
-        }
+    match &contract_code_entry.ext {
+        ContractCodeEntryExt::V0 => budget.get_memory_cost(
+            ContractCostType::VmInstantiation,
+            Some(contract_code_entry.code.len() as u64),
+        ),
         ContractCodeEntryExt::V1(contract_code_entry_v1) => {
             let cost_inputs = &contract_code_entry_v1.cost_inputs;
             let mut res = 0_u64;
