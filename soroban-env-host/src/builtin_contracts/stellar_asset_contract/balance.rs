@@ -47,7 +47,7 @@ pub(crate) fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
             if let Some(raw_balance) =
-                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data_value(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 e.extend_contract_data_ttl(
                     key.try_into_val(e)?,
@@ -120,7 +120,7 @@ pub(crate) fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(
         ScAddress::Contract(id) => {
             let key = DataKey::Balance(addr.metered_clone(e)?);
             let mut balance = if let Some(raw_balance) =
-                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data_value(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 raw_balance.try_into_val(e)?
             } else {
@@ -174,7 +174,7 @@ pub(crate) fn spend_balance_no_authorization_check(
             // this can be used to clawback when deauthorized.
             let key = DataKey::Balance(addr.metered_clone(e)?);
             if let Some(raw_balance) =
-                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data_value(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if balance.amount < amount {
@@ -236,7 +236,7 @@ pub(crate) fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> 
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
             if let Some(raw_balance) =
-                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data_value(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 Ok(balance.authorized)
@@ -272,7 +272,7 @@ pub(crate) fn write_authorization(
         ScAddress::Contract(id) => {
             let key = DataKey::Balance(addr.metered_clone(e)?);
             if let Some(raw_balance) =
-                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data_value(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 balance.authorized = authorize;
@@ -340,7 +340,7 @@ pub(crate) fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostErro
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
             if let Some(raw_balance) =
-                e.try_get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
+                e.try_get_contract_data_value(key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if !balance.clawback {

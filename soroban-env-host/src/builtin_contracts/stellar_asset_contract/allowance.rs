@@ -15,7 +15,7 @@ use super::storage_types::AllowanceValue;
 pub(crate) fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
     if let Some(allowance) =
-        e.try_get_contract_data(key.try_into_val(e)?, StorageType::Temporary)?
+        e.try_get_contract_data_value(key.try_into_val(e)?, StorageType::Temporary)?
     {
         let val: AllowanceValue = allowance.try_into_val(e)?;
         if val.live_until_ledger < e.get_ledger_sequence()?.into() {
@@ -66,7 +66,7 @@ pub(crate) fn write_allowance(
     // If an allowance didn't exist, then the previous live_until ledger will be None.
     let allowance_with_live_until_option: Option<(AllowanceValue, Option<u32>)> =
         if let Some(allowance) =
-            e.try_get_contract_data(key.try_into_val(e)?, StorageType::Temporary)?
+            e.try_get_contract_data_value(key.try_into_val(e)?, StorageType::Temporary)?
         {
             let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
             updated_allowance.amount = amount;
