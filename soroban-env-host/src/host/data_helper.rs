@@ -9,12 +9,11 @@ use crate::{
     vm::VersionedContractCodeCostInputs,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
-        ContractDataEntry, ContractExecutable, ContractId,
-        ContractIdPreimage, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
-        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScVal, Signer, SignerKey,
-        ThresholdIndexes, TrustLineAsset, Uint256,
+        ContractDataEntry, ContractExecutable, ContractId, ContractIdPreimage, ExtensionPoint,
+        Hash, HashIdPreimage, HashIdPreimageContractId, LedgerEntry, LedgerEntryData,
+        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+        LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
+        ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
     },
     AddressObject, BytesObject, Env, ErrorHandler, Host, HostError, StorageType, Tag, U32Val, Val,
 };

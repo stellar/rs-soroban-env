@@ -117,34 +117,97 @@ impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
 impl_declared_size_type!(HostObject, 64);
 impl_declared_size_type!(HostError, 16);
-impl_declared_size_type!(Context, if cfg!(feature = "cap_0085_executable_ref") { 544 } else { 512 });
+impl_declared_size_type!(
+    Context,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        544
+    } else {
+        512
+    }
+);
 impl_declared_size_type!(Address, 16);
 
 impl_declared_size_type!(AccessType, 1);
 impl_declared_size_type!(InternalContractEvent, 40);
-impl_declared_size_type!(HostEvent, if cfg!(feature = "cap_0085_executable_ref") { 168 } else { 136 });
+impl_declared_size_type!(
+    HostEvent,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        168
+    } else {
+        136
+    }
+);
 impl_declared_size_type!(Events, 24);
 impl_declared_size_type!(InternalEvent, 40);
 impl_declared_size_type!(EventError, 1);
 
 impl_declared_size_type!(ContractInvocation, 16);
-impl_declared_size_type!(AuthorizedInvocation, if cfg!(feature = "cap_0085_executable_ref") { 208 } else { 176 });
+impl_declared_size_type!(
+    AuthorizedInvocation,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        208
+    } else {
+        176
+    }
+);
 impl_declared_size_type!(AuthorizedInvocationSnapshot, 32);
-impl_declared_size_type!(AccountAuthorizationTracker, if cfg!(feature = "cap_0085_executable_ref") { 320 } else { 288 });
+impl_declared_size_type!(
+    AccountAuthorizationTracker,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        320
+    } else {
+        288
+    }
+);
 impl_declared_size_type!(AccountAuthorizationTrackerSnapshot, 96);
 impl_declared_size_type!(DelegatedAccountAuthSignerTreeNode, 48);
 impl_declared_size_type!(DelegatedAccountAuthSignerTreeNodeSnapshot, 32);
 impl_declared_size_type!(DelegatedAccountAuthTrackerSnapshot, 56);
-impl_declared_size_type!(InvokerContractAuthorizationTracker, if cfg!(feature = "cap_0085_executable_ref") { 264 } else { 232 });
-impl_declared_size_type!(InternalDiagnosticArg, if cfg!(feature = "cap_0085_executable_ref") { 96 } else { 64 });
+impl_declared_size_type!(
+    InvokerContractAuthorizationTracker,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        264
+    } else {
+        232
+    }
+);
+impl_declared_size_type!(
+    InternalDiagnosticArg,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        96
+    } else {
+        64
+    }
+);
 impl_declared_size_type!(InternalDiagnosticEvent, 88);
 
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
 impl_declared_size_type!(Duration, 8);
-impl_declared_size_type!(ScVal, if cfg!(feature = "cap_0085_executable_ref") { 96 } else { 64 });
-impl_declared_size_type!(ScValObject, if cfg!(feature = "cap_0085_executable_ref") { 96 } else { 64 });
-impl_declared_size_type!(ScMapEntry, if cfg!(feature = "cap_0085_executable_ref") { 192 } else { 128 });
+impl_declared_size_type!(
+    ScVal,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        96
+    } else {
+        64
+    }
+);
+impl_declared_size_type!(
+    ScValObject,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        96
+    } else {
+        64
+    }
+);
+impl_declared_size_type!(
+    ScMapEntry,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        192
+    } else {
+        128
+    }
+);
 impl_declared_size_type!(ScVec, 24);
 impl_declared_size_type!(ScMap, 24);
 impl_declared_size_type!(Hash, 32);
@@ -154,7 +217,14 @@ impl_declared_size_type!(Int128Parts, 16);
 impl_declared_size_type!(UInt128Parts, 16);
 impl_declared_size_type!(Int256Parts, 32);
 impl_declared_size_type!(UInt256Parts, 32);
-impl_declared_size_type!(ContractExecutable, if cfg!(feature = "cap_0085_executable_ref") { 72 } else { 33 });
+impl_declared_size_type!(
+    ContractExecutable,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        72
+    } else {
+        33
+    }
+);
 impl_declared_size_type!(AccountId, 32);
 impl_declared_size_type!(SponsorshipDescriptor, 33);
 impl_declared_size_type!(ScAddress, 48);
@@ -176,16 +246,51 @@ impl_declared_size_type!(ContractCodeEntryV1, 40);
 // TtlEntry must be declared as it's used in e2e to build
 // The TtlEntryMap, but is not otherwise cloned anywhere.
 impl_declared_size_type!(TtlEntry, 36);
-impl_declared_size_type!(LedgerKey, if cfg!(feature = "cap_0085_executable_ref") { 152 } else { 120 });
-impl_declared_size_type!(LedgerEntry, if cfg!(feature = "cap_0085_executable_ref") { 288 } else { 256 });
-impl_declared_size_type!(ContractEvent, if cfg!(feature = "cap_0085_executable_ref") { 160 } else { 128 });
+impl_declared_size_type!(
+    LedgerKey,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        152
+    } else {
+        120
+    }
+);
+impl_declared_size_type!(
+    LedgerEntry,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        288
+    } else {
+        256
+    }
+);
+impl_declared_size_type!(
+    ContractEvent,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        160
+    } else {
+        128
+    }
+);
 impl_declared_size_type!(ScBytes, 24);
 impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ExecutableTag, 24);
 impl_declared_size_type!(ScSymbol, 24);
 impl_declared_size_type!(ScError, 8);
-impl_declared_size_type!(CreateContractArgs, if cfg!(feature = "cap_0085_executable_ref") { 152 } else { 120 });
-impl_declared_size_type!(CreateContractArgsV2, if cfg!(feature = "cap_0085_executable_ref") { 176 } else { 144 });
+impl_declared_size_type!(
+    CreateContractArgs,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        152
+    } else {
+        120
+    }
+);
+impl_declared_size_type!(
+    CreateContractArgsV2,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        176
+    } else {
+        144
+    }
+);
 impl_declared_size_type!(InvokeContractArgs, 96);
 impl_declared_size_type!(ContractIdPreimage, 80);
 impl_declared_size_type!(ContractDataDurability, 4);
@@ -263,10 +368,38 @@ impl_declared_size_type!(ContractDataDurability, 4);
 // upgraded to their new variants, hopefully also transient!)
 impl_declared_size_type!(ExtensionPoint, 0);
 
-impl_declared_size_type!(ScContractInstance, if cfg!(feature = "cap_0085_executable_ref") { 96 } else { 64 });
-impl_declared_size_type!(SorobanAuthorizationEntry, if cfg!(feature = "cap_0085_executable_ref") { 384 } else { 320 });
-impl_declared_size_type!(SorobanAuthorizedInvocation, if cfg!(feature = "cap_0085_executable_ref") { 200 } else { 168 });
-impl_declared_size_type!(SorobanAuthorizedFunction, if cfg!(feature = "cap_0085_executable_ref") { 176 } else { 144 });
+impl_declared_size_type!(
+    ScContractInstance,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        96
+    } else {
+        64
+    }
+);
+impl_declared_size_type!(
+    SorobanAuthorizationEntry,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        384
+    } else {
+        320
+    }
+);
+impl_declared_size_type!(
+    SorobanAuthorizedInvocation,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        200
+    } else {
+        168
+    }
+);
+impl_declared_size_type!(
+    SorobanAuthorizedFunction,
+    if cfg!(feature = "cap_0085_executable_ref") {
+        176
+    } else {
+        144
+    }
+);
 
 // foreign types
 impl_declared_size_type!(BlsScalar, 32);
