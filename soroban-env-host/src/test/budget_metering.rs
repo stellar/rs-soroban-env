@@ -119,7 +119,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     })?;
     assert_eq!(
         (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
-        (4005, 24030, 65536, 73734)
+        (4005, 24030, 65536, 73862)
     );
 
     // giving it the exact required amount will succeed
@@ -304,7 +304,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     /* MemAlloc          |            8x3      +    24x3              +             128x6                                                    = 864 */
     /* MemCpy            |  24    +   8x3      +    24x3              +             128x6                                                    = 888 */
     //*********************************************************************************************************************************************/
-    expect!["864"].assert_eq(
+    expect!["1248"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::MemAlloc)?
             .inputs
@@ -314,7 +314,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     );
     // 600 = 576 + 24 is correct because we need to copy all the memory allocated, as well as the
     // memory layout of the top level type (Vec).
-    expect!["888"].assert_eq(
+    expect!["1272"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::MemCpy)?
             .inputs

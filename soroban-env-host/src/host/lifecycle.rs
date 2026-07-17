@@ -1,5 +1,5 @@
 use crate::{
-    crypto, err,
+    crypto,
     host::{
         metered_clone::{MeteredAlloc, MeteredClone},
         metered_write_xdr, ContractReentryMode,
@@ -8,9 +8,9 @@ use crate::{
     xdr::{
         Asset, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractId,
         ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, ExtensionPoint,
-        Hash, LedgerKey, LedgerKeyContractCode, ScAddress, ScErrorCode, ScErrorType,
+        Hash, LedgerKey, LedgerKeyContractCode, ScAddress, ScErrorCode, ScErrorType, VecM,
     },
-    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val,
+    AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, TryIntoVal, Val, VecObject,
 };
 use std::rc::Rc;
 
@@ -18,6 +18,42 @@ const CONSTRUCTOR_FUNCTION_NAME: &str = "__constructor";
 const CONSTRUCTOR_SUPPORT_PROTOCOL: u32 = 22;
 
 impl Host {
+    pub(crate) fn create_contract_from_obj_inputs(
+        &self,
+        deployer: AddressObject,
+        executable: ContractExecutable,
+        salt: BytesObject,
+        constructor_args: Option<VecObject>,
+    ) -> Result<AddressObject, HostError> {
+        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+            address: self.visit_obj(deployer, |addr: &ScAddress| addr.metered_clone(self))?,
+            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
+        });
+        let (constructor_args, constructor_args_vec) = if let Some(v) = constructor_args {
+            (self.vecobject_to_scval_vec(v)?, self.call_args_from_obj(v)?)
+        } else {
+            (VecM::default(), vec![])
+        };
+        let args = CreateContractArgsV2 {
+            contract_id_preimage,
+            executable,
+            constructor_args,
+        };
+        self.create_contract_internal(Some(deployer), args, constructor_args_vec)
+    }
+
+    pub(crate) fn update_current_contract_executable(
+        &self,
+        new_executable: ContractExecutable,
+    ) -> Result<(), HostError> {
+        let curr_contract_id = self.get_current_contract_id_internal()?;
+        let key = self.contract_instance_ledger_key(&curr_contract_id)?;
+        let old_instance = self.retrieve_contract_instance_from_storage(&key)?;
+        self.emit_update_contract_event(&old_instance.executable, &new_executable)?;
+        self.store_contract_instance(Some(new_executable), None, curr_contract_id, &key)?;
+        Ok(())
+    }
+
     // Notes on metering: this is covered by the called components.
     fn create_contract_with_id(
         &self,
@@ -38,18 +74,20 @@ impl Host {
                     .into()],
             ));
         }
-        // Make sure the contract code exists. Without this check it would be
+        // Make sure the executable exists. Without this check it would be
         // possible to accidentally create a contract that never may be invoked
-        // (just by providing a bad hash).
-        if let ContractExecutable::Wasm(wasm_hash) = &contract_executable {
-            if !self.wasm_exists(wasm_hash)? {
-                return Err(err!(
-                    self,
-                    (ScErrorType::Storage, ScErrorCode::MissingValue),
-                    "Wasm does not exist",
-                    *wasm_hash
-                ));
+        // (just by providing a bad hash / reference).
+        match &contract_executable {
+            ContractExecutable::Wasm(wasm_hash) => {
+                self.verify_wasm_exists(wasm_hash)?;
             }
+            ContractExecutable::ExternalRef(external_ref) => {
+                // Only the existence of the reference entry is validated: the
+                // entry's value is guaranteed to be a valid Wasm hash by the
+                // protocol.
+                self.verify_executable_ref_entry_exists(external_ref, None)?;
+            }
+            ContractExecutable::StellarAsset => {}
         }
         self.store_contract_instance(Some(contract_executable), None, contract_id, &storage_key)?;
         Ok(())
@@ -177,10 +215,11 @@ impl Host {
         }
 
         // Validate that the ID preimage type matches the executable type:
-        // - Address preimage must pair with Wasm executable
+        // - Address preimage must pair with Wasm or ExternalRef executable
         // - Asset preimage must pair with StellarAsset executable
         match (&args.contract_id_preimage, &args.executable) {
             (ContractIdPreimage::Address(_), ContractExecutable::Wasm(_))
+            | (ContractIdPreimage::Address(_), ContractExecutable::ExternalRef(_))
             | (ContractIdPreimage::Asset(_), ContractExecutable::StellarAsset) => Ok(()),
             (ContractIdPreimage::Address(_), ContractExecutable::StellarAsset) => Err(self.err(
                 ScErrorType::Value,
@@ -188,10 +227,11 @@ impl Host {
                 "address preimage is not allowed for StellarAsset executable",
                 &[],
             )),
-            (ContractIdPreimage::Asset(_), ContractExecutable::Wasm(_)) => Err(self.err(
+            (ContractIdPreimage::Asset(_), ContractExecutable::Wasm(_))
+            | (ContractIdPreimage::Asset(_), ContractExecutable::ExternalRef(_)) => Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
-                "asset preimage is not allowed for Wasm executable",
+                "asset preimage is not allowed for Wasm or external reference executable",
                 &[],
             )),
         }?;
@@ -204,7 +244,12 @@ impl Host {
             args.executable.metered_clone(self)?,
         )?;
         self.maybe_initialize_stellar_asset_contract(&contract_id, &args.contract_id_preimage)?;
-        if matches!(args.executable, ContractExecutable::Wasm(_)) {
+        // Wasm-backed contracts (whether via a direct Wasm hash or an external
+        // reference that resolves to one) run their `__constructor`.
+        if matches!(
+            args.executable,
+            ContractExecutable::Wasm(_) | ContractExecutable::ExternalRef(_)
+        ) {
             self.call_constructor(&contract_id, constructor_args)?;
         }
         self.add_host_object(ScAddress::Contract(contract_id))

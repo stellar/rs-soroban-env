@@ -6,5 +6,5 @@
   "   4 ret vec_new_from_slice -> Ok(Vec(obj#3))": "cpu:67110790, mem:268435655, objs:-/2@a751d8e8",
   "   5 call contract_event(Vec(obj#3), Bytes(obj#1))": "cpu:0, mem:0",
   "   6 ret contract_event -> Ok(Void)": "cpu:653, mem:65, evt:1@c4ec4a97",
-  "   7 end": "cpu:33556226, mem:268435632, prngs:-/9b4a753, objs:-/2@a751d8e8, vm:-/-, evt:1@c4ec4a97, store:-/-, foot:-, stk:-, auth:-/-"
+  "   7 end": "cpu:33556234, mem:268435664, prngs:-/9b4a753, objs:-/2@a751d8e8, vm:-/-, evt:1@c4ec4a97, store:-/-, foot:-, stk:-, auth:-/-"
 }

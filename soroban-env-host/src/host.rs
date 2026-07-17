@@ -6,7 +6,7 @@ use crate::{
     budget::{AsBudget, Budget},
     builtin_contracts::common_types::AddressExecutable,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
-    host_object::{HostMap, HostObject, HostVec, MuxedScAddress},
+    host_object::{ExecutableTag, HostMap, HostObject, HostVec, MuxedScAddress},
     impl_bignum_host_fns, impl_bls12_381_fr_arith_host_fns, impl_bn254_fr_arith_host_fns,
     impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
@@ -14,13 +14,12 @@ use crate::{
     vm::ModuleCache,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
-        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, Duration,
-        LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
-        ScSymbol, ScVal, TimePoint, VecM,
+        ContractIdPreimage, CreateContractArgsV2, Duration, LedgerEntryData, PublicKey, ScAddress,
+        ScBytes, ScErrorCode, ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
     },
     AddressObject, Bool, BytesObject, Compare, ContractTtlExtension, ConversionError, EnvBase,
-    Error, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject,
-    SymbolSmall, TryFromVal, TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
+    Error, ExecutableTagObject, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol,
+    SymbolObject, SymbolSmall, TryFromVal, TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
 };
 
 mod comparison;
@@ -768,32 +767,6 @@ impl Host {
             })
     }
 
-    fn create_contract_impl(
-        &self,
-        deployer: AddressObject,
-        wasm_hash: BytesObject,
-        salt: BytesObject,
-        constructor_args: Option<VecObject>,
-    ) -> Result<AddressObject, HostError> {
-        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
-            address: self.visit_obj(deployer, |addr: &ScAddress| addr.metered_clone(self))?,
-            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
-        });
-        let executable =
-            ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
-        let (constructor_args, constructor_args_vec) = if let Some(v) = constructor_args {
-            (self.vecobject_to_scval_vec(v)?, self.call_args_from_obj(v)?)
-        } else {
-            (VecM::default(), vec![])
-        };
-        let args = CreateContractArgsV2 {
-            contract_id_preimage,
-            executable,
-            constructor_args,
-        };
-        self.create_contract_internal(Some(deployer), args, constructor_args_vec)
-    }
-
     /// Returns true if the Host contains the same instance of HostImpl and therefore changes to
     /// one will be observable via the other. If true, both are essentially the same Host.
     pub fn is_same(&self, other: &Self) -> bool {
@@ -847,7 +820,8 @@ impl EnvBase for Host {
             | (HostObject::String(_), Tag::StringObject)
             | (HostObject::Symbol(_), Tag::SymbolObject)
             | (HostObject::Address(_), Tag::AddressObject)
-            | (HostObject::MuxedAddress(_), Tag::MuxedAddressObject) => Ok(()),
+            | (HostObject::MuxedAddress(_), Tag::MuxedAddressObject)
+            | (HostObject::ExecutableTag(_), Tag::ExecutableTagObject) => Ok(()),
             _ => Err(self.err(
                 xdr::ScErrorType::Value,
                 xdr::ScErrorCode::InvalidInput,
@@ -2206,6 +2180,7 @@ impl VmCallerEnv for Host {
         v: Val,
         t: StorageType,
     ) -> Result<Void, HostError> {
+        self.validate_put_contract_data(k, v, t)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 self.put_contract_data_into_ledger(k, v, t)?
@@ -2283,6 +2258,7 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Void, HostError> {
+        self.validate_del_contract_data(k, t)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_val(k, t.try_into()?)?;
@@ -2472,7 +2448,9 @@ impl VmCallerEnv for Host {
         let _invocation_meter_scope = self.maybe_meter_invocation(
             crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
         );
-        self.create_contract_impl(deployer, wasm_hash, salt, None)
+        let executable =
+            ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
+        self.create_contract_from_obj_inputs(deployer, executable, salt, None)
     }
 
     fn create_contract_with_constructor(
@@ -2487,7 +2465,28 @@ impl VmCallerEnv for Host {
         let _invocation_meter_scope = self.maybe_meter_invocation(
             crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
         );
-        self.create_contract_impl(deployer, wasm_hash, salt, Some(constructor_args))
+        let executable =
+            ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
+        self.create_contract_from_obj_inputs(deployer, executable, salt, Some(constructor_args))
+    }
+
+    fn create_external_ref_contract(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        deployer: AddressObject,
+        executable_owner: AddressObject,
+        tag: ExecutableTagObject,
+        salt: BytesObject,
+        constructor_args: VecObject,
+    ) -> Result<AddressObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::CreateContractEntryPoint,
+        );
+        let executable = ContractExecutable::ExternalRef(
+            self.executable_ref_from_inputs(executable_owner, tag)?,
+        );
+        self.create_contract_from_obj_inputs(deployer, executable, salt, Some(constructor_args))
     }
 
     // Notes on metering: covered by the components.
@@ -2556,20 +2555,20 @@ impl VmCallerEnv for Host {
         hash: BytesObject,
     ) -> Result<Void, HostError> {
         let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", hash)?;
-        if !self.wasm_exists(&wasm_hash)? {
-            return Err(self.err(
-                ScErrorType::Storage,
-                ScErrorCode::MissingValue,
-                "Wasm does not exist",
-                &[hash.to_val()],
-            ));
-        }
-        let curr_contract_id = self.get_current_contract_id_internal()?;
-        let key = self.contract_instance_ledger_key(&curr_contract_id)?;
-        let old_instance = self.retrieve_contract_instance_from_storage(&key)?;
-        let new_executable = ContractExecutable::Wasm(wasm_hash);
-        self.emit_update_contract_event(&old_instance.executable, &new_executable)?;
-        self.store_contract_instance(Some(new_executable), None, curr_contract_id, &key)?;
+        self.verify_wasm_exists(&wasm_hash)?;
+        self.update_current_contract_executable(ContractExecutable::Wasm(wasm_hash))?;
+        Ok(Val::VOID)
+    }
+
+    fn update_current_contract_executable_ref(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        executable_owner: AddressObject,
+        tag: ExecutableTagObject,
+    ) -> Result<Void, HostError> {
+        let external_ref = self.executable_ref_from_inputs(executable_owner, tag)?;
+        self.verify_executable_ref_entry_exists(&external_ref, Some(tag))?;
+        self.update_current_contract_executable(ContractExecutable::ExternalRef(external_ref))?;
         Ok(Val::VOID)
     }
 
@@ -3098,6 +3097,15 @@ impl VmCallerEnv for Host {
     ) -> Result<StringObject, HostError> {
         let bytes = self.visit_obj(bytes, |b: &ScBytes| self.metered_slice_to_vec(b.as_slice()))?;
         self.add_host_object(ScString(bytes.try_into()?))
+    }
+
+    fn create_executable_tag(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        tag_string: StringObject,
+    ) -> Result<ExecutableTagObject, HostError> {
+        let scstr = self.visit_obj(tag_string, |s: &ScString| s.metered_clone(self))?;
+        self.add_host_object(ExecutableTag(scstr))
     }
 
     // endregion: "buf" module functions
@@ -3971,6 +3979,21 @@ impl Host {
             .executable
         {
             ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                let (_, live_until) = self
+                    .try_borrow_storage_mut()?
+                    .get_with_live_until_ledger(&key, self, None)?;
+                live_until.ok_or_else(|| {
+                    self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::InternalError,
+                        "unexpected contract code without TTL for a contract",
+                        &[contract.into()],
+                    )
+                })
+            }
+            ContractExecutable::ExternalRef(external_ref) => {
+                let wasm_hash = self.resolve_external_ref_wasm_hash(&external_ref)?;
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
                 let (_, live_until) = self
                     .try_borrow_storage_mut()?

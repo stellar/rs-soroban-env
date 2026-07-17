@@ -1,8 +1,8 @@
 {
   "   0 begin": "cpu:14285, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call bytes_new_from_slice(80)": "cpu:14332",
-  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15315, mem:176, objs:-/1@f98c7e44",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15315, mem:176, objs:-/1@431f1c58",
   "   3 call upload_wasm(Bytes(obj#1))": "",
   "   4 ret upload_wasm -> Err(Error(Context, InternalError))": "cpu:470622, mem:136157",
-  "   5 end": "cpu:470622, mem:136157, prngs:-/9b4a753, objs:-/1@f98c7e44, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "   5 end": "cpu:470622, mem:136157, prngs:-/9b4a753, objs:-/1@431f1c58, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }
