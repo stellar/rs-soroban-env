@@ -214,13 +214,13 @@ pub fn generate_hostfn_call_with_wrong_types(file_lit: LitStr) -> Result<TokenSt
     }
 
     let mut children_of_type: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for (ty, _) in edges.iter() {
+    for ty in edges.keys() {
         let children = children_of_type.entry(ty.clone()).or_default();
         dfs(&edges, ty, children);
     }
 
     let mut parents_of_type: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for (ty, _) in reverse_edges.iter() {
+    for ty in reverse_edges.keys() {
         let parents = parents_of_type.entry(ty.clone()).or_default();
         dfs(&reverse_edges, ty, parents);
     }
