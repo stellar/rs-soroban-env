@@ -151,8 +151,12 @@ pub enum Tag {
 
     MuxedAddressObject = 78,
 
+    /// Tag for a [Val] that refers to a host-side executable tag: a key
+    /// identifying an executable reference (see [`ExecutableTagObject`](crate::ExecutableTagObject)).
+    ExecutableTagObject = 79,
+
     /// Code delimiting the upper boundary of "object" types.
-    ObjectCodeUpperBound = 79,
+    ObjectCodeUpperBound = 80,
 
     /// Code reserved to indicate mis-tagged [`Val`]s.
     Bad = 0x7f,
@@ -241,6 +245,7 @@ impl Tag {
             Tag::MapObject => Some(ScValType::Map),
             Tag::AddressObject => Some(ScValType::Address),
             Tag::MuxedAddressObject => Some(ScValType::Address),
+            Tag::ExecutableTagObject => Some(ScValType::ExecutableTag),
             Tag::ObjectCodeUpperBound => None,
             Tag::Bad => None,
         }
@@ -341,6 +346,7 @@ declare_tag_based_object_wrapper!(VecObject);
 declare_tag_based_object_wrapper!(MapObject);
 declare_tag_based_object_wrapper!(AddressObject);
 declare_tag_based_object_wrapper!(MuxedAddressObject);
+declare_tag_based_object_wrapper!(ExecutableTagObject);
 
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
@@ -613,7 +619,8 @@ impl Val {
             | ScValType::Symbol
             | ScValType::Vec
             | ScValType::Map
-            | ScValType::Address => true,
+            | ScValType::Address
+            | ScValType::ExecutableTag => true,
             ScValType::ContractInstance
             | ScValType::LedgerKeyContractInstance
             | ScValType::LedgerKeyNonce => false,
@@ -690,7 +697,8 @@ impl Val {
             | Tag::VecObject
             | Tag::MapObject
             | Tag::AddressObject
-            | Tag::MuxedAddressObject => self.has_minor(0),
+            | Tag::MuxedAddressObject
+            | Tag::ExecutableTagObject => self.has_minor(0),
         }
     }
 
@@ -872,6 +880,7 @@ impl Debug for Val {
             Tag::MapObject => fmt_obj("Map", self, f),
             Tag::AddressObject => fmt_obj("Address", self, f),
             Tag::MuxedAddressObject => fmt_obj("MuxedAddress", self, f),
+            Tag::ExecutableTagObject => fmt_obj("ExecutableTag", self, f),
 
             Tag::Bad
             | Tag::SmallCodeUpperBound

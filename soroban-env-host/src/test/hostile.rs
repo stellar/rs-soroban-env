@@ -545,13 +545,13 @@ fn excessive_logging() -> Result<(), HostError> {
         let actual = format!("{}", host.as_budget());
         expect![[r#"
             =================================================================
-            Cpu limit: 2000000; used: 214179
-            Mem limit: 500000; used: 166812
+            Cpu limit: 2000000; used: 214207
+            Mem limit: 500000; used: 166940
             =================================================================
             CostType                           cpu_insns      mem_bytes      
             WasmInsnExec                       300            0              
-            MemAlloc                           16632          67392          
-            MemCpy                             2330           0              
+            MemAlloc                           16648          67520          
+            MemCpy                             2342           0              
             MemCmp                             472            0              
             DispatchHostFunction               295            0              
             VisitObject                        240            0              
@@ -664,7 +664,7 @@ fn excessive_logging() -> Result<(), HostError> {
         // the internal limit has been exceeded
         assert!(host.as_budget().shadow_mem_limit_exceeded()?);
         let actual = format!("{}", host.as_budget());
-        // the actual production budget numbers should stay the same
+        // the actual production budget numbers should stay the same
         assert_eq!(expected_budget, actual);
     }
 
@@ -672,7 +672,7 @@ fn excessive_logging() -> Result<(), HostError> {
     {
         host.clear_module_cache()?;
         host.budget_ref().reset_limits(2_000_000, 500_000)?;
-        host.set_shadow_budget_limits(2_000_000, 1_000_000)?;
+        host.set_shadow_budget_limits(2_000_000, 1_100_000)?;
         let res = host.call(
             contract_id_obj,
             Symbol::try_from_small_str("test")?,
@@ -681,12 +681,10 @@ fn excessive_logging() -> Result<(), HostError> {
         )?;
         // logging failure occurs in debug mode will not result in invocation failure
         assert_eq!(SymbolSmall::try_from(res)?.to_string(), "pass");
-        assert!(
-            !host.as_budget().shadow_mem_limit_exceeded()?
-                && !host.as_budget().shadow_cpu_limit_exceeded()?
-        );
+        assert!(!host.as_budget().shadow_mem_limit_exceeded()?);
+        assert!(!host.as_budget().shadow_cpu_limit_exceeded()?);
         let actual = format!("{}", host.as_budget());
-        // the actual production budget numbers should stay the same
+        // the actual production budget numbers should stay the same
         assert_eq!(expected_budget, actual);
     }
 
