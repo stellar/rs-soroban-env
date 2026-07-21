@@ -99,14 +99,7 @@ ignore = [
     # Ignores 'Rand is unsound with a custom logger using rand::rng()' advisory.
     # `rand` 0.8.5 is only vulnerable when its `log` + `thread_rng` path is
     # enabled with a custom logger, which we don't use
-    "RUSTSEC-2026-0097",
-    # TEMP CAP-0084 SPIKE: ignores 'Unsoundness in `anyhow::Error::downcast_mut()`'
-    # (RUSTSEC-2026-0190, affects anyhow < 1.0.103). This PR keeps anyhow pinned at
-    # 1.0.75 to avoid an out-of-scope dependency bump; the fix (anyhow -> 1.0.103)
-    # is carried by the dedicated advisory PR stellar/rs-soroban-env#1701. Remove
-    # this once #1701 (or a release carrying the bump) lands anyhow >= 1.0.103 into
-    # main and this PR rebases.
-    "RUSTSEC-2026-0190"
+    "RUSTSEC-2026-0097"
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
