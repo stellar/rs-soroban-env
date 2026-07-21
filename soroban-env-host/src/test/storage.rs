@@ -424,7 +424,6 @@ fn muxed_address_storage_key_conversion() {
 
 // CAP-0084: a muxed contract address routes through the same `MuxedAddress`
 // vehicle, so it inherits the storage-key prohibition.
-#[cfg(feature = "cap_0084_muxed_contract")]
 #[test]
 fn muxed_contract_storage_key_conversion() {
     use crate::xdr::MuxedContract;
@@ -524,7 +523,6 @@ fn test_muxed_account_is_not_allowed_as_storage_key() {
 
 // CAP-0084: the muxed contract twin of
 // `test_muxed_account_is_not_allowed_as_storage_key`.
-#[cfg(feature = "cap_0084_muxed_contract")]
 #[test]
 fn test_muxed_contract_is_not_allowed_as_storage_key() {
     use crate::xdr::MuxedContract;
