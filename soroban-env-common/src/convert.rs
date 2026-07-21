@@ -500,6 +500,7 @@ where
             | Tag::MapObject
             | Tag::AddressObject
             | Tag::MuxedAddressObject
+            | Tag::ExecutableTagObject
             | Tag::SmallCodeUpperBound
             | Tag::ObjectCodeLowerBound
             | Tag::ObjectCodeUpperBound
@@ -593,6 +594,7 @@ where
             | ScVal::Vec(_)
             | ScVal::Map(_)
             | ScVal::Address(_)
+            | ScVal::ExecutableTag(_)
             | ScVal::LedgerKeyNonce(_)
             | ScVal::LedgerKeyContractInstance
             | ScVal::ContractInstance(_) => return Err(ConversionError.into()),

@@ -2,17 +2,17 @@ use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
 
 use crate::{
     budget::AsBudget,
-    host_object::{HostMap, HostVec, MuxedScAddress},
+    host_object::{ExecutableTag, HostMap, HostVec, MuxedScAddress},
     xdr::{
         ContractId, Duration, Hash, MuxedEd25519Account, ScAddress, ScBytes, ScErrorCode,
         ScErrorType, ScString, ScSymbol, TimePoint, Uint256,
     },
     AddressObject, Bool, BytesObject, ContractTtlExtension, DurationObject, DurationSmall,
-    DurationVal, Env, Error, Host, HostError, I128Object, I128Small, I128Val, I256Object,
-    I256Small, I256Val, I32Val, I64Object, I64Small, MapObject, MuxedAddressObject, StorageType,
-    StringObject, Symbol, SymbolObject, SymbolSmall, TimepointObject, TimepointSmall, TimepointVal,
-    U128Object, U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small,
-    U64Val, Val, VecObject, Void, I256, U256,
+    DurationVal, Env, Error, ExecutableTagObject, Host, HostError, I128Object, I128Small, I128Val,
+    I256Object, I256Small, I256Val, I32Val, I64Object, I64Small, MapObject, MuxedAddressObject,
+    StorageType, StringObject, Symbol, SymbolObject, SymbolSmall, TimepointObject, TimepointSmall,
+    TimepointVal, U128Object, U128Small, U128Val, U256Object, U256Small, U256Val, U32Val,
+    U64Object, U64Small, U64Val, Val, VecObject, Void, I256, U256,
 };
 
 use soroban_env_macros::generate_synth_dispatch_host_fn_tests;
@@ -187,6 +187,12 @@ impl TestVal for MuxedAddressObject {
     }
 }
 
+impl TestVal for ExecutableTagObject {
+    fn test_val() -> Val {
+        unsafe { ExecutableTagObject::from_handle(123).to_val() }
+    }
+}
+
 impl TestVal for Symbol {
     fn test_val() -> Val {
         SymbolSmall::test_val()
@@ -340,6 +346,13 @@ impl TestObject for MuxedAddressObject {
             ed25519: Uint256([0; 32]),
         });
         host.add_host_object(MuxedScAddress(addr)).unwrap()
+    }
+}
+
+impl TestObject for ExecutableTagObject {
+    fn test_object(host: &Host) -> Self {
+        host.add_host_object(ExecutableTag(ScString::default()))
+            .unwrap()
     }
 }
 

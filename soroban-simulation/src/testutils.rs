@@ -19,7 +19,7 @@ pub struct MockSnapshotSource {
 
 impl MockSnapshotSource {
     pub fn from_entries(entries: Vec<(LedgerEntry, Option<u32>)>) -> Result<Self> {
-        let mut map = BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new();
+        let mut map = BTreeMap::<Rc<LedgerKey>, EntryWithLiveUntil>::new();
         for (e, maybe_ttl) in entries {
             let key = Rc::new(ledger_entry_to_ledger_key(&e)?);
             map.insert(key, (Rc::new(e), maybe_ttl));

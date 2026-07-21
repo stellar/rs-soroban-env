@@ -81,6 +81,7 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
         ),
         ScVal::Bytes(v) => write!(f, "Bytes({})", v.0),
         ScVal::String(v) => write!(f, "\"{}\"", v.0),
+        ScVal::ExecutableTag(v) => write!(f, "ExecutableTag(\"{}\")", v.0),
         ScVal::Symbol(v) => write!(f, "{}", v.0),
         ScVal::Vec(None) => write!(f, "[]"),
         ScVal::Vec(Some(vec)) => {
@@ -121,6 +122,14 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
             executable: ContractExecutable::StellarAsset,
             ..
         }) => write!(f, "ContractInstance(StellarAsset)"),
+        ScVal::ContractInstance(ScContractInstance {
+            executable: ContractExecutable::ExternalRef(external_ref),
+            ..
+        }) => {
+            write!(f, "ContractInstance(ExternalRef(")?;
+            display_address(&external_ref.executable_owner, f)?;
+            write!(f, ", {}))", external_ref.tag.0)
+        }
     }
 }
 

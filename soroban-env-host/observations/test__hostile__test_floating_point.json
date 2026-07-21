@@ -1,8 +1,8 @@
 {
-  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
-  "   1 call bytes_new_from_slice(124)": "cpu:14535",
-  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15528, mem:220, objs:-/1@60fb925",
+  "   0 begin": "cpu:14285, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(124)": "cpu:14332",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15325, mem:220, objs:-/1@96e06945",
   "   3 call upload_wasm(Bytes(obj#1))": "",
-  "   4 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:522918, mem:135378",
-  "   5 end": "cpu:522918, mem:135378, prngs:-/9b4a753, objs:-/1@60fb925, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "   4 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:488765, mem:137930",
+  "   5 end": "cpu:488765, mem:137930, prngs:-/9b4a753, objs:-/1@96e06945, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

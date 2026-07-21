@@ -119,7 +119,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     })?;
     assert_eq!(
         (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
-        (4005, 24030, 65536, 73734)
+        (4005, 24030, 65536, 73862)
     );
 
     // giving it the exact required amount will succeed
@@ -304,7 +304,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     /* MemAlloc          |            8x3      +    24x3              +             128x6                                                    = 864 */
     /* MemCpy            |  24    +   8x3      +    24x3              +             128x6                                                    = 888 */
     //*********************************************************************************************************************************************/
-    expect!["864"].assert_eq(
+    expect!["1248"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::MemAlloc)?
             .inputs
@@ -314,7 +314,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     );
     // 600 = 576 + 24 is correct because we need to copy all the memory allocated, as well as the
     // memory layout of the top level type (Vec).
-    expect!["888"].assert_eq(
+    expect!["1272"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::MemCpy)?
             .inputs
@@ -441,33 +441,33 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
 
     let expected = expect![[r#"
         ===============================================================================================================================================================================
-        Cpu limit: 100000000; used: 68564977
-        Mem limit: 41943040; used: 725156
+        Cpu limit: 100000000; used: 68471938
+        Mem limit: 41943040; used: 727679
         ===============================================================================================================================================================================
         CostType                           iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec                       246            None           984            0              4                   0                   0                   0                   
         MemAlloc                           1              Some(152)      453            168            434                 16                  16                  128                 
         MemCpy                             1              Some(65)       50             0              42                  16                  0                   0                   
         MemCmp                             1              Some(74)       53             0              44                  16                  0                   0                   
-        DispatchHostFunction               176            None           54560          0              310                 0                   0                   0                   
-        VisitObject                        97             None           5917           0              61                  0                   0                   0                   
-        ValSer                             1              Some(49)       241            389            230                 29                  242                 384                 
-        ValDeser                           1              Some(103)      62271          309            59052               4001                0                   384                 
-        ComputeSha256Hash                  1              Some(193)      14310          0              3738                7012                0                   0                   
-        ComputeEd25519PubKey               226            None           9097178        0              40253               0                   0                   0                   
-        VerifyEd25519Sig                   1              Some(227)      384738         0              377524              4068                0                   0                   
-        VmInstantiation                    1              Some(147)      503770         135880         451626              45405               130065              5064                
+        DispatchHostFunction               176            None           51920          0              295                 0                   0                   0                   
+        VisitObject                        97             None           5820           0              60                  0                   0                   0                   
+        ValSer                             1              Some(49)       230            389            221                 26                  242                 384                 
+        ValDeser                           1              Some(103)      3846           309            331                 4369                0                   384                 
+        ComputeSha256Hash                  1              Some(193)      14210          0              3636                7013                0                   0                   
+        ComputeEd25519PubKey               226            None           9097856        0              40256               0                   0                   0                   
+        VerifyEd25519Sig                   1              Some(227)      384749         0              377551              4059                0                   0                   
+        VmInstantiation                    1              Some(147)      469979         138403         417482              45712               132773              4903                
         VmCachedInstantiation              1              Some(147)      41870          70869          41142               634                 69472               1217                
-        InvokeVmFunction                   47             None           91556          658            1948                0                   14                  0                   
-        ComputeKeccak256Hash               1              Some(1)        3812           0              3766                5969                0                   0                   
-        DecodeEcdsaCurve256Sig             1              None           710            0              710                 0                   0                   0                   
-        RecoverEcdsaSecp256k1Key           1              None           2315295        181            2315295             0                   181                 0                   
-        Int256AddSub                       1              None           4404           99             4404                0                   99                  0                   
-        Int256Mul                          1              None           4947           99             4947                0                   99                  0                   
-        Int256Div                          1              None           4911           99             4911                0                   99                  0                   
-        Int256Pow                          1              None           4286           99             4286                0                   99                  0                   
-        Int256Shift                        1              None           913            99             913                 0                   99                  0                   
-        ChaCha20DrawBytes                  1              Some(1)        1061           0              1058                501                 0                   0                   
+        InvokeVmFunction                   47             None           91415          658            1945                0                   14                  0                   
+        ComputeKeccak256Hash               1              Some(1)        6527           0              6481                5943                0                   0                   
+        DecodeEcdsaCurve256Sig             1              None           711            0              711                 0                   0                   0                   
+        RecoverEcdsaSecp256k1Key           1              None           2314804        181            2314804             0                   181                 0                   
+        Int256AddSub                       1              None           4176           99             4176                0                   99                  0                   
+        Int256Mul                          1              None           4716           99             4716                0                   99                  0                   
+        Int256Div                          1              None           4680           99             4680                0                   99                  0                   
+        Int256Pow                          1              None           4256           99             4256                0                   99                  0                   
+        Int256Shift                        1              None           884            99             884                 0                   99                  0                   
+        ChaCha20DrawBytes                  1              Some(1)        1062           0              1059                502                 0                   0                   
         ParseWasmInstructions              1              Some(1)        73275          17614          73077               25410               17564               6457                
         ParseWasmFunctions                 1              Some(1)        4224           370            0                   540752              0                   47464               
         ParseWasmGlobals                   1              Some(1)        1377           104            0                   176363              0                   13420               
@@ -534,8 +534,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 70
-        Shadow cpu limit: 100000000; used: 68564977
-        Shadow mem limit: 41943040; used: 725156
+        Shadow cpu limit: 100000000; used: 68471938
+        Shadow mem limit: 41943040; used: 727679
         ===============================================================================================================================================================================
 
     "#]];
