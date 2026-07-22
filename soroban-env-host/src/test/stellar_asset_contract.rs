@@ -979,12 +979,18 @@ fn test_cap_84_transfer_with_muxed_contracts() {
 }
 
 #[test]
-fn test_cap_84_mint_with_muxed_contract() {
+fn test_cap_84_issuer_transfer_to_muxed_contract_emits_mint() {
     use crate::builtin_contracts::testutils::muxed_contract_address;
 
+    // CAP-84 scopes muxed contract support to `transfer` only; the SAC `mint`
+    // function does not accept a muxed contract destination. The `mint` *event*
+    // is unchanged, however: an issuer-source `transfer` to a muxed contract
+    // destination still emits a `mint` event carrying `to_muxed_id`, following
+    // CAP-67's issuer semantics.
     let test = StellarAssetContractTest::setup(function_name!());
     test.host.enable_invocation_metering();
-    let admin = TestSigner::account(&test.issuer_key);
+    // The issuer is the default SAC administrator.
+    let issuer = TestSigner::account(&test.issuer_key);
     let contract = test.default_stellar_asset_contract();
 
     let dst_contract_id = generate_bytes_array(&test.host);
@@ -993,10 +999,11 @@ fn test_cap_84_mint_with_muxed_contract() {
     let mint_symbol = Symbol::try_from_small_str("mint").unwrap().to_val();
     let token_name = contract.name().unwrap();
 
-    // Mint to a muxed contract destination.
+    // Transfer from the issuer to a muxed contract destination. Because the
+    // source is the issuer, this emits a `mint` event rather than a `transfer`.
     contract
-        .mint_muxed(
-            &admin,
+        .transfer_muxed(
+            &issuer,
             muxed_contract_address(&test.host, dst_contract_id, 7_654_321),
             100_000_000,
         )

@@ -334,12 +334,9 @@ impl StellarAssetContract {
     }
 
     // Metering: covered by components
-    pub(crate) fn mint(e: &Host, to: MuxedAddress, amount: i128) -> Result<(), HostError> {
+    pub(crate) fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
         let _span = tracy_span!("SAC mint");
         check_nonnegative_amount(e, amount)?;
-        // De-mux `to` to the underlying address and capture the mux id for
-        // the event (mirrors `transfer`).
-        let (to, to_muxed_id) = (to.address()?, to.id()?);
         check_not_issuer(e, &to)?;
 
         let admin = read_administrator(e)?;
@@ -351,7 +348,7 @@ impl StellarAssetContract {
         )?;
 
         receive_balance(e, to.metered_clone(e)?, amount)?;
-        event::mint(e, to, to_muxed_id, amount)?;
+        event::mint(e, to, None, amount)?;
         Ok(())
     }
 
