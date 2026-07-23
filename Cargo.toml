@@ -37,7 +37,10 @@ wasmparser = "=0.116.1"
 [workspace.dependencies.stellar-xdr]
 version = "=27.0.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "a90de0c0d6eba8be668e9074cfb7b285ac0ecd34"
+# WIP: points at the coordinated branch carrying the contract-spec XDR
+# additions (SCSpecTypeUDTV2 and the reworked `lib` field). Repin to a merged
+# rev once the XDR change lands.
+branch = "contract-spec-hash-xdr-pf11xo"
 default-features = false
 features = ["cap_0085_executable_ref"]
 
