@@ -19,7 +19,8 @@ use crate::{
     },
     AddressObject, Bool, BytesObject, Compare, ContractTtlExtension, ConversionError, EnvBase,
     Error, ExecutableTagObject, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol,
-    SymbolObject, SymbolSmall, TryFromVal, TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv, Void,
+    SymbolObject, SymbolSmall, TryFromVal, TryIntoVal, Val, VecObject, VmCaller, VmCallerEnv,
+    VmStoreData, Void,
 };
 
 mod comparison;
@@ -1137,14 +1138,14 @@ impl EnvBase for Host {
 }
 
 impl VmCallerEnv for Host {
-    type VmUserState = Host;
+    type VmUserState = VmStoreData;
 
     // region: "context" module functions
 
     // Notes on metering: covered by the components
     fn log_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         msg_pos: U32Val,
         msg_len: U32Val,
         vals_pos: U32Val,
@@ -1182,7 +1183,12 @@ impl VmCallerEnv for Host {
     }
 
     // Metered: covered by `visit`.
-    fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
+    fn obj_cmp(
+        &self,
+        _vmcaller: &mut VmCaller<VmStoreData>,
+        a: Val,
+        b: Val,
+    ) -> Result<i64, HostError> {
         let res = match {
             match (Object::try_from(a), Object::try_from(b)) {
                 // We were given two objects: compare them.
@@ -1244,7 +1250,7 @@ impl VmCallerEnv for Host {
 
     fn contract_event(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         topics: VecObject,
         data: Val,
     ) -> Result<Void, HostError> {
@@ -1252,15 +1258,24 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
-    fn get_ledger_version(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
+    fn get_ledger_version(
+        &self,
+        _vmcaller: &mut VmCaller<VmStoreData>,
+    ) -> Result<U32Val, Self::Error> {
         Ok(self.get_ledger_protocol_version()?.into())
     }
 
-    fn get_ledger_sequence(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
+    fn get_ledger_sequence(
+        &self,
+        _vmcaller: &mut VmCaller<VmStoreData>,
+    ) -> Result<U32Val, Self::Error> {
         self.with_ledger_info(|li| Ok(li.sequence_number.into()))
     }
 
-    fn get_ledger_timestamp(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U64Val, Self::Error> {
+    fn get_ledger_timestamp(
+        &self,
+        _vmcaller: &mut VmCaller<VmStoreData>,
+    ) -> Result<U64Val, Self::Error> {
         self.with_ledger_info(|li| Ok(U64Val::try_from_val(self, &li.timestamp)?))
     }
 
@@ -1287,7 +1302,7 @@ impl VmCallerEnv for Host {
 
     fn get_ledger_network_id(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
     ) -> Result<BytesObject, Self::Error> {
         self.with_ledger_info(|li| {
             // FIXME: cache this and a few other such IDs: https://github.com/stellar/rs-soroban-env/issues/681
@@ -1298,7 +1313,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by the components.
     fn get_current_contract_address(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
     ) -> Result<AddressObject, HostError> {
         // FIXME: cache this and a few other such IDs: https://github.com/stellar/rs-soroban-env/issues/681
         self.add_host_object(ScAddress::Contract(
@@ -1308,7 +1323,7 @@ impl VmCallerEnv for Host {
 
     fn get_max_live_until_ledger(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
     ) -> Result<U32Val, Self::Error> {
         Ok(self.max_live_until_ledger()?.into())
     }
@@ -1651,13 +1666,13 @@ impl VmCallerEnv for Host {
     // endregion: "int" module functions
     // region: "map" module functions
 
-    fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
+    fn map_new(&self, _vmcaller: &mut VmCaller<VmStoreData>) -> Result<MapObject, HostError> {
         self.add_host_object(HostMap::new())
     }
 
     fn map_put(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         m: MapObject,
         k: Val,
         v: Val,
@@ -1668,7 +1683,7 @@ impl VmCallerEnv for Host {
 
     fn map_get(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
@@ -1686,7 +1701,7 @@ impl VmCallerEnv for Host {
 
     fn map_del(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         m: MapObject,
         k: Val,
     ) -> Result<MapObject, HostError> {
@@ -1701,14 +1716,18 @@ impl VmCallerEnv for Host {
         }
     }
 
-    fn map_len(&self, _vmcaller: &mut VmCaller<Host>, m: MapObject) -> Result<U32Val, HostError> {
+    fn map_len(
+        &self,
+        _vmcaller: &mut VmCaller<VmStoreData>,
+        m: MapObject,
+    ) -> Result<U32Val, HostError> {
         let len = self.visit_obj(m, |hm: &HostMap| Ok(hm.len()))?;
         self.usize_to_u32val(len)
     }
 
     fn map_has(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         m: MapObject,
         k: Val,
     ) -> Result<Bool, HostError> {
@@ -1717,7 +1736,7 @@ impl VmCallerEnv for Host {
 
     fn map_key_by_pos(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         m: MapObject,
         i: U32Val,
     ) -> Result<Val, HostError> {
@@ -1729,7 +1748,7 @@ impl VmCallerEnv for Host {
 
     fn map_val_by_pos(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         m: MapObject,
         i: U32Val,
     ) -> Result<Val, HostError> {
@@ -1741,7 +1760,7 @@ impl VmCallerEnv for Host {
 
     fn map_keys(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         m: MapObject,
     ) -> Result<VecObject, HostError> {
         let vec = self.visit_obj(m, |hm: &HostMap| {
@@ -1752,7 +1771,7 @@ impl VmCallerEnv for Host {
 
     fn map_values(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         m: MapObject,
     ) -> Result<VecObject, HostError> {
         let vec = self.visit_obj(m, |hm: &HostMap| {
@@ -1763,7 +1782,7 @@ impl VmCallerEnv for Host {
 
     fn map_new_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         keys_pos: U32Val,
         vals_pos: U32Val,
         len: U32Val,
@@ -1773,7 +1792,7 @@ impl VmCallerEnv for Host {
 
     fn map_unpack_to_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         map: MapObject,
         keys_pos: U32Val,
         vals_pos: U32Val,
@@ -1784,7 +1803,7 @@ impl VmCallerEnv for Host {
 
     fn sparse_map_new_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         keys_pos: U32Val,
         vals_pos: U32Val,
         len: U32Val,
@@ -1794,7 +1813,7 @@ impl VmCallerEnv for Host {
 
     fn sparse_map_unpack_to_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         map: MapObject,
         keys_pos: U32Val,
         vals_pos: U32Val,
@@ -1806,13 +1825,13 @@ impl VmCallerEnv for Host {
     // endregion: "map" module functions
     // region: "vec" module functions
 
-    fn vec_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<VecObject, HostError> {
+    fn vec_new(&self, _vmcaller: &mut VmCaller<VmStoreData>) -> Result<VecObject, HostError> {
         self.add_host_object(HostVec::new())
     }
 
     fn vec_put(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         i: U32Val,
         x: Val,
@@ -1827,7 +1846,7 @@ impl VmCallerEnv for Host {
 
     fn vec_get(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         i: U32Val,
     ) -> Result<Val, HostError> {
@@ -1840,7 +1859,7 @@ impl VmCallerEnv for Host {
 
     fn vec_del(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         i: U32Val,
     ) -> Result<VecObject, HostError> {
@@ -1852,14 +1871,18 @@ impl VmCallerEnv for Host {
         self.add_host_object(vnew)
     }
 
-    fn vec_len(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<U32Val, HostError> {
+    fn vec_len(
+        &self,
+        _vmcaller: &mut VmCaller<VmStoreData>,
+        v: VecObject,
+    ) -> Result<U32Val, HostError> {
         let len = self.visit_obj(v, |hv: &HostVec| Ok(hv.len()))?;
         self.usize_to_u32val(len)
     }
 
     fn vec_push_front(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         x: Val,
     ) -> Result<VecObject, HostError> {
@@ -1869,7 +1892,7 @@ impl VmCallerEnv for Host {
 
     fn vec_pop_front(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
     ) -> Result<VecObject, HostError> {
         let vnew = self.visit_obj(v, |hv: &HostVec| hv.pop_front(self.as_budget()))?;
@@ -1878,7 +1901,7 @@ impl VmCallerEnv for Host {
 
     fn vec_push_back(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         x: Val,
     ) -> Result<VecObject, HostError> {
@@ -1888,20 +1911,28 @@ impl VmCallerEnv for Host {
 
     fn vec_pop_back(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
     ) -> Result<VecObject, HostError> {
         let vnew = self.visit_obj(v, |hv: &HostVec| hv.pop_back(self.as_budget()))?;
         self.add_host_object(vnew)
     }
 
-    fn vec_front(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<Val, HostError> {
+    fn vec_front(
+        &self,
+        _vmcaller: &mut VmCaller<VmStoreData>,
+        v: VecObject,
+    ) -> Result<Val, HostError> {
         self.visit_obj(v, |hv: &HostVec| {
             hv.front(self.as_budget()).map(|hval| *hval)
         })
     }
 
-    fn vec_back(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<Val, HostError> {
+    fn vec_back(
+        &self,
+        _vmcaller: &mut VmCaller<VmStoreData>,
+        v: VecObject,
+    ) -> Result<Val, HostError> {
         self.visit_obj(v, |hv: &HostVec| {
             hv.back(self.as_budget()).map(|hval| *hval)
         })
@@ -1909,7 +1940,7 @@ impl VmCallerEnv for Host {
 
     fn vec_insert(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         i: U32Val,
         x: Val,
@@ -1924,7 +1955,7 @@ impl VmCallerEnv for Host {
 
     fn vec_append(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v1: VecObject,
         v2: VecObject,
     ) -> Result<VecObject, HostError> {
@@ -1942,7 +1973,7 @@ impl VmCallerEnv for Host {
 
     fn vec_slice(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         start: U32Val,
         end: U32Val,
@@ -1958,7 +1989,7 @@ impl VmCallerEnv for Host {
 
     fn vec_first_index_of(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         x: Val,
     ) -> Result<Val, Self::Error> {
@@ -1974,7 +2005,7 @@ impl VmCallerEnv for Host {
 
     fn vec_last_index_of(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         x: Val,
     ) -> Result<Val, Self::Error> {
@@ -1990,7 +2021,7 @@ impl VmCallerEnv for Host {
 
     fn vec_binary_search(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: VecObject,
         x: Val,
     ) -> Result<u64, Self::Error> {
@@ -2002,7 +2033,7 @@ impl VmCallerEnv for Host {
 
     fn vec_new_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<VecObject, HostError> {
@@ -2030,7 +2061,7 @@ impl VmCallerEnv for Host {
 
     fn vec_unpack_to_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vec: VecObject,
         vals_pos: U32Val,
         len: U32Val,
@@ -2068,7 +2099,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components
     fn put_contract_data(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         k: Val,
         v: Val,
         t: StorageType,
@@ -2090,7 +2121,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components
     fn has_contract_data(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         k: Val,
         t: StorageType,
     ) -> Result<Bool, HostError> {
@@ -2110,7 +2141,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components
     fn get_contract_data(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         k: Val,
         t: StorageType,
     ) -> Result<Val, HostError> {
@@ -2147,7 +2178,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components
     fn del_contract_data(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         k: Val,
         t: StorageType,
     ) -> Result<Void, HostError> {
@@ -2173,7 +2204,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components
     fn extend_contract_data_ttl(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         k: Val,
         t: StorageType,
         threshold: U32Val,
@@ -2200,7 +2231,7 @@ impl VmCallerEnv for Host {
 
     fn extend_current_contract_instance_and_code_ttl(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         threshold: U32Val,
         extend_to: U32Val,
     ) -> Result<Void, HostError> {
@@ -2270,7 +2301,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components
     fn extend_contract_data_ttl_v2(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         k: Val,
         t: StorageType,
         extend_to: U32Val,
@@ -2332,7 +2363,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by the components.
     fn create_contract(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         deployer: AddressObject,
         wasm_hash: BytesObject,
         salt: BytesObject,
@@ -2348,7 +2379,7 @@ impl VmCallerEnv for Host {
 
     fn create_contract_with_constructor(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         deployer: AddressObject,
         wasm_hash: BytesObject,
         salt: BytesObject,
@@ -2365,7 +2396,7 @@ impl VmCallerEnv for Host {
 
     fn create_external_ref_contract(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         deployer: AddressObject,
         executable_owner: AddressObject,
         tag: ExecutableTagObject,
@@ -2385,7 +2416,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by the components.
     fn create_asset_contract(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         serialized_asset: BytesObject,
     ) -> Result<AddressObject, HostError> {
         #[cfg(any(test, feature = "testutils"))]
@@ -2408,7 +2439,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by the components.
     fn get_contract_id(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         deployer: AddressObject,
         salt: BytesObject,
     ) -> Result<AddressObject, HostError> {
@@ -2419,7 +2450,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by the components.
     fn get_asset_contract_id(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         serialized_asset: BytesObject,
     ) -> Result<AddressObject, HostError> {
         let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
@@ -2429,7 +2460,7 @@ impl VmCallerEnv for Host {
 
     fn upload_wasm(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         wasm: BytesObject,
     ) -> Result<BytesObject, HostError> {
         #[cfg(any(test, feature = "testutils"))]
@@ -2444,7 +2475,7 @@ impl VmCallerEnv for Host {
 
     fn update_current_contract_wasm(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         hash: BytesObject,
     ) -> Result<Void, HostError> {
         let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", hash)?;
@@ -2455,7 +2486,7 @@ impl VmCallerEnv for Host {
 
     fn update_current_contract_executable_ref(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         executable_owner: AddressObject,
         tag: ExecutableTagObject,
     ) -> Result<Void, HostError> {
@@ -2471,7 +2502,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
     fn call(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         contract_address: AddressObject,
         func: Symbol,
         args: VecObject,
@@ -2507,7 +2538,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by the components.
     fn try_call(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         contract_address: AddressObject,
         func: Symbol,
         args: VecObject,
@@ -2577,7 +2608,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components
     fn serialize_to_bytes(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         v: Val,
     ) -> Result<BytesObject, HostError> {
         let scv = self.from_host_val(v)?;
@@ -2589,7 +2620,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components
     fn deserialize_from_bytes(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
     ) -> Result<Val, HostError> {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
@@ -2614,7 +2645,7 @@ impl VmCallerEnv for Host {
 
     fn string_copy_to_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         s: StringObject,
         s_pos: U32Val,
         lm_pos: U32Val,
@@ -2626,7 +2657,7 @@ impl VmCallerEnv for Host {
 
     fn symbol_copy_to_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         s: SymbolObject,
         s_pos: U32Val,
         lm_pos: U32Val,
@@ -2638,7 +2669,7 @@ impl VmCallerEnv for Host {
 
     fn bytes_copy_to_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
         b_pos: U32Val,
         lm_pos: U32Val,
@@ -2650,7 +2681,7 @@ impl VmCallerEnv for Host {
 
     fn bytes_copy_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
         b_pos: U32Val,
         lm_pos: U32Val,
@@ -2661,7 +2692,7 @@ impl VmCallerEnv for Host {
 
     fn bytes_new_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<BytesObject, HostError> {
@@ -2670,7 +2701,7 @@ impl VmCallerEnv for Host {
 
     fn string_new_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<StringObject, HostError> {
@@ -2679,7 +2710,7 @@ impl VmCallerEnv for Host {
 
     fn symbol_new_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<SymbolObject, HostError> {
@@ -2689,7 +2720,7 @@ impl VmCallerEnv for Host {
     // Metering: covered by `metered_vm_scan_slices_in_linear_memory` and `symbol_matches`.
     fn symbol_index_in_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         sym: Symbol,
         lm_pos: U32Val,
         len: U32Val,
@@ -2722,14 +2753,14 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by `add_host_object`
-    fn bytes_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<BytesObject, HostError> {
+    fn bytes_new(&self, _vmcaller: &mut VmCaller<VmStoreData>) -> Result<BytesObject, HostError> {
         self.add_host_object(self.scbytes_from_vec(Vec::<u8>::new())?)
     }
 
     // Notes on metering: `get_mut` is free
     fn bytes_put(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
         iv: U32Val,
         u: U32Val,
@@ -2757,7 +2788,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: `get` is free
     fn bytes_get(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
         iv: U32Val,
     ) -> Result<U32Val, HostError> {
@@ -2778,7 +2809,7 @@ impl VmCallerEnv for Host {
 
     fn bytes_del(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
         i: U32Val,
     ) -> Result<BytesObject, HostError> {
@@ -2802,7 +2833,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: `len` is free
     fn bytes_len(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
     ) -> Result<U32Val, HostError> {
         let len = self.visit_obj(b, |hv: &ScBytes| Ok(hv.len()))?;
@@ -2812,7 +2843,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: `len` is free
     fn string_len(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: StringObject,
     ) -> Result<U32Val, HostError> {
         let len = self.visit_obj(b, |hv: &ScString| Ok(hv.len()))?;
@@ -2822,7 +2853,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: `len` is free
     fn symbol_len(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: SymbolObject,
     ) -> Result<U32Val, HostError> {
         let len = self.visit_obj(b, |hv: &ScSymbol| Ok(hv.len()))?;
@@ -2832,7 +2863,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: `push` is free
     fn bytes_push(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
         u: U32Val,
     ) -> Result<BytesObject, HostError> {
@@ -2852,7 +2883,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: `pop` is free
     fn bytes_pop(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let vnew = self.visit_obj(b, |hv: &ScBytes| {
@@ -2875,7 +2906,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: `first` is free
     fn bytes_front(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
     ) -> Result<U32Val, HostError> {
         self.visit_obj(b, |hv: &ScBytes| {
@@ -2895,7 +2926,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: `last` is free
     fn bytes_back(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
     ) -> Result<U32Val, HostError> {
         self.visit_obj(b, |hv: &ScBytes| {
@@ -2914,7 +2945,7 @@ impl VmCallerEnv for Host {
 
     fn bytes_insert(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
         i: U32Val,
         u: U32Val,
@@ -2936,7 +2967,7 @@ impl VmCallerEnv for Host {
 
     fn bytes_append(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b1: BytesObject,
         b2: BytesObject,
     ) -> Result<BytesObject, HostError> {
@@ -2956,7 +2987,7 @@ impl VmCallerEnv for Host {
 
     fn bytes_slice(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         b: BytesObject,
         start: U32Val,
         end: U32Val,
@@ -2976,7 +3007,7 @@ impl VmCallerEnv for Host {
 
     fn string_to_bytes(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         str: StringObject,
     ) -> Result<BytesObject, HostError> {
         let scb = self.visit_obj(str, |s: &ScString| self.scbytes_from_slice(s.as_slice()))?;
@@ -2985,7 +3016,7 @@ impl VmCallerEnv for Host {
 
     fn bytes_to_string(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         bytes: BytesObject,
     ) -> Result<StringObject, HostError> {
         let bytes = self.visit_obj(bytes, |b: &ScBytes| self.metered_slice_to_vec(b.as_slice()))?;
@@ -2994,7 +3025,7 @@ impl VmCallerEnv for Host {
 
     fn create_executable_tag(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         tag_string: StringObject,
     ) -> Result<ExecutableTagObject, HostError> {
         let scstr = self.visit_obj(tag_string, |s: &ScString| s.metered_clone(self))?;
@@ -3007,7 +3038,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components.
     fn compute_hash_sha256(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         x: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let hash = self.sha256_hash_from_bytesobj_input(x)?;
@@ -3017,7 +3048,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components.
     fn compute_hash_keccak256(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         x: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let hash = self.keccak256_hash_from_bytesobj_input(x)?;
@@ -3027,7 +3058,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by components.
     fn verify_sig_ed25519(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         k: BytesObject,
         x: BytesObject,
         s: BytesObject,
@@ -3042,7 +3073,7 @@ impl VmCallerEnv for Host {
 
     fn recover_key_ecdsa_secp256k1(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         msg_digest: BytesObject,
         signature: BytesObject,
         recovery_id: U32Val,
@@ -3056,7 +3087,7 @@ impl VmCallerEnv for Host {
 
     fn verify_sig_ecdsa_secp256r1(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         public_key: BytesObject,
         msg_digest: BytesObject,
         signature: BytesObject,
@@ -3070,7 +3101,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_check_g1_is_in_subgroup(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         pt: BytesObject,
     ) -> Result<Bool, HostError> {
         let pt = self.g1_affine_deserialize_from_bytesobj(pt, PointValidationMode::CheckOnCurve)?;
@@ -3080,7 +3111,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g1_add(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
@@ -3092,7 +3123,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g1_mul(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         p0: BytesObject,
         scalar: U256Val,
     ) -> Result<BytesObject, HostError> {
@@ -3107,7 +3138,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g1_msm(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
@@ -3119,7 +3150,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_map_fp_to_g1(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         fp: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let fp = self.fp_deserialize_from_bytesobj(fp)?;
@@ -3129,7 +3160,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_hash_to_g1(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         mo: BytesObject,
         dst: BytesObject,
     ) -> Result<BytesObject, HostError> {
@@ -3147,7 +3178,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_check_g2_is_in_subgroup(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         pt: BytesObject,
     ) -> Result<Bool, HostError> {
         let pt = self.g2_affine_deserialize_from_bytesobj(pt, PointValidationMode::CheckOnCurve)?;
@@ -3157,7 +3188,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g2_add(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
@@ -3169,7 +3200,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g2_mul(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         p0: BytesObject,
         scalar_le_bytes: U256Val,
     ) -> Result<BytesObject, HostError> {
@@ -3184,7 +3215,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g2_msm(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
@@ -3196,7 +3227,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_map_fp2_to_g2(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         fp2: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let fp2 = self.fp2_deserialize_from_bytesobj(fp2)?;
@@ -3206,7 +3237,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_hash_to_g2(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         msg: BytesObject,
         dst: BytesObject,
     ) -> Result<BytesObject, HostError> {
@@ -3224,7 +3255,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_multi_pairing_check(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vp1: VecObject,
         vp2: VecObject,
     ) -> Result<Bool, HostError> {
@@ -3272,7 +3303,7 @@ impl VmCallerEnv for Host {
 
     fn bn254_g1_add(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         p0: BytesObject,
         p1: BytesObject,
     ) -> Result<BytesObject, HostError> {
@@ -3284,7 +3315,7 @@ impl VmCallerEnv for Host {
 
     fn bn254_g1_mul(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         p0: BytesObject,
         scalar: U256Val,
     ) -> Result<BytesObject, HostError> {
@@ -3296,7 +3327,7 @@ impl VmCallerEnv for Host {
 
     fn bn254_multi_pairing_check(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vp1: VecObject,
         vp2: VecObject,
     ) -> Result<Bool, HostError> {
@@ -3344,7 +3375,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g1_is_on_curve(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         point: BytesObject,
     ) -> Result<Bool, HostError> {
         let pt = self.g1_affine_deserialize_from_bytesobj(point, PointValidationMode::NoCheck)?;
@@ -3354,7 +3385,7 @@ impl VmCallerEnv for Host {
 
     fn bls12_381_g2_is_on_curve(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         point: BytesObject,
     ) -> Result<Bool, HostError> {
         let pt = self.g2_affine_deserialize_from_bytesobj(point, PointValidationMode::NoCheck)?;
@@ -3364,7 +3395,7 @@ impl VmCallerEnv for Host {
 
     fn bn254_g1_is_on_curve(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         point: BytesObject,
     ) -> Result<Bool, HostError> {
         let pt = self.bn254_g1_affine_deserialize(point, PointValidationMode::NoCheck)?;
@@ -3374,7 +3405,7 @@ impl VmCallerEnv for Host {
 
     fn bn254_g1_msm(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         vp: VecObject,
         vs: VecObject,
     ) -> Result<BytesObject, HostError> {
@@ -3387,7 +3418,7 @@ impl VmCallerEnv for Host {
 
     fn poseidon_permutation(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         input: VecObject,
         field: Symbol,
         t: U32Val,
@@ -3437,7 +3468,7 @@ impl VmCallerEnv for Host {
 
     fn poseidon2_permutation(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<VmStoreData>,
         input: VecObject,
         field: Symbol,
         t: U32Val,

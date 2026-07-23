@@ -225,15 +225,16 @@ fn register_and_invoke_custom_vm_no_linker_check(
     wasm_code: &[u8],
 ) -> Result<wasmi::Value, wasmi::Error> {
     use crate::vm::protocol_gated_dummy;
+    use crate::VmStoreData;
     use wasmi::{Engine, Func, Linker, Module, Store, Value};
     let mut config = wasmi::Config::default();
     config.consume_fuel(true);
     let engine = Engine::new(&config);
     let module = Module::new(&engine, wasm_code).unwrap();
-    let mut store = Store::new(&engine, host.clone());
+    let mut store = Store::new(&engine, VmStoreData::new(host.clone()));
     store.add_fuel(10000000).unwrap();
-    store.limiter(|host| host);
-    let mut linker = <Linker<Host>>::new(&engine);
+    store.limiter(|data| data);
+    let mut linker = <Linker<VmStoreData>>::new(&engine);
 
     let wrap = |store| Func::wrap(store, protocol_gated_dummy);
     let func = (wrap)(&mut store);

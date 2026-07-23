@@ -1,5 +1,5 @@
 use super::dispatch;
-use crate::Host;
+use crate::VmStoreData;
 use soroban_env_common::call_macro_with_all_host_functions;
 use wasmi::{errors::LinkerError, Linker};
 
@@ -18,7 +18,7 @@ pub(crate) struct HostFuncInfo {
     /// Function that takes a wasmi::Linker and adds a dispatch function
     /// for this host function, with the specific type of the dispatch function,
     /// into a Func in the Linker.
-    pub(crate) wrap: fn(&mut Linker<Host>) -> Result<&mut Linker<Host>, LinkerError>,
+    pub(crate) wrap: fn(&mut Linker<VmStoreData>) -> Result<&mut Linker<VmStoreData>, LinkerError>,
 
     /// Minimal supported protocol version of this host function
     pub(crate) min_proto: Option<u32>,

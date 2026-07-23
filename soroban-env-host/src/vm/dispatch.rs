@@ -1,7 +1,7 @@
 use super::FuelRefillable;
 use crate::{
     xdr::{ContractCostType, ScErrorCode, ScErrorType},
-    CheckedEnvArg, EnvBase, Host, HostError, VmCaller, VmCallerEnv,
+    CheckedEnvArg, EnvBase, Host, HostError, VmCaller, VmCallerEnv, VmStoreData,
 };
 use crate::{
     AddressObject, Bool, BytesObject, ContractTtlExtension, DurationObject, Error, ErrorHandler,
@@ -204,12 +204,12 @@ macro_rules! generate_dispatch_functions {
                 // expansion, flattening all functions from all 'mod' blocks
                 // into a set of functions.
                 $(#[$fn_attr])*
-                pub(crate) fn $fn_id(mut caller: wasmi::Caller<Host>, $($arg:i64),*) ->
+                pub(crate) fn $fn_id(mut caller: wasmi::Caller<VmStoreData>, $($arg:i64),*) ->
                     Result<(i64,), Trap>
                 {
                     let _span = tracy_span!(core::stringify!($fn_id));
 
-                    let host = caller.data().clone();
+                    let host = caller.data().host.clone();
 
                     // This is an additional protocol version guardrail that
                     // should not be necessary. Any wasm contract containing a

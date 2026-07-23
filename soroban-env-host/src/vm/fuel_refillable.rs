@@ -1,7 +1,7 @@
 use crate::{
     budget::AsBudget,
     xdr::{ContractCostType, ScErrorCode, ScErrorType},
-    Host, HostError,
+    Host, HostError, VmStoreData,
 };
 
 use wasmi::{errors::FuelError, Caller, Store};
@@ -67,5 +67,5 @@ macro_rules! impl_refillable_for_store {
         }
     };
 }
-impl_refillable_for_store!(Store<Host>);
-impl_refillable_for_store!(Caller<'a, Host>);
+impl_refillable_for_store!(Store<VmStoreData>);
+impl_refillable_for_store!(Caller<'a, VmStoreData>);

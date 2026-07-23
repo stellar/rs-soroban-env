@@ -4,6 +4,7 @@ use crate::{
     host_object::MemHostObjectType,
     xdr::{ContractCostType, ScErrorCode, ScErrorType, ScSymbol},
     Compare, Host, HostError, Symbol, SymbolObject, SymbolSmall, SymbolStr, U32Val, Vm, VmCaller,
+    VmStoreData,
 };
 
 use super::ErrorHandler;
@@ -75,7 +76,7 @@ impl Host {
 
     pub(crate) fn metered_vm_write_bytes_to_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vm: &Rc<Vm>,
         mem_pos: u32,
         buf: &[u8],
@@ -90,7 +91,7 @@ impl Host {
 
     pub(crate) fn metered_vm_read_bytes_from_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vm: &Rc<Vm>,
         mem_pos: u32,
         buf: &mut [u8],
@@ -108,7 +109,7 @@ impl Host {
     // closure and must be metered in the closure at the caller side.
     pub(crate) fn metered_vm_write_vals_to_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vm: &Rc<Vm>,
         mem_pos: u32,
         buf: &[VAL],
@@ -152,7 +153,7 @@ impl Host {
     // by the closure at the caller side.
     pub(crate) fn metered_vm_read_vals_from_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vm: &Rc<Vm>,
         mem_pos: u32,
         buf: &mut [VAL],
@@ -257,7 +258,7 @@ impl Host {
     // work done on the slice needs to be metered in the closure by the caller.
     pub(crate) fn metered_vm_scan_slices_in_linear_memory(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         vm: &Rc<Vm>,
         mem_pos: u32,
         num_slices: usize,
@@ -343,7 +344,7 @@ impl Host {
 
     pub(crate) fn memobj_copy_to_linear_memory<HOT: MemHostObjectType>(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         obj: HOT::Wrapper,
         obj_pos: U32Val,
         lm_pos: U32Val,
@@ -404,7 +405,7 @@ impl Host {
 
     pub(crate) fn memobj_copy_from_linear_memory<HOT: MemHostObjectType>(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         obj: HOT::Wrapper,
         obj_pos: U32Val,
         lm_pos: U32Val,
@@ -418,7 +419,7 @@ impl Host {
 
     pub(crate) fn memobj_new_from_linear_memory<HOT: MemHostObjectType>(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<HOT::Wrapper, HostError> {

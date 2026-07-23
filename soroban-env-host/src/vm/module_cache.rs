@@ -5,7 +5,7 @@ use crate::{
     budget::get_wasmi_config,
     host::metered_clone::MeteredClone,
     xdr::{Hash, ScErrorCode, ScErrorType},
-    Host, HostError,
+    Host, HostError, VmStoreData,
 };
 use std::{
     collections::BTreeMap,
@@ -20,7 +20,7 @@ use std::{
 #[derive(Clone, Default)]
 pub struct ModuleCache {
     pub(crate) wasmi_engine: wasmi::Engine,
-    pub(crate) wasmi_linker: wasmi::Linker<Host>,
+    pub(crate) wasmi_linker: wasmi::Linker<VmStoreData>,
     modules: ModuleCacheMap,
 }
 

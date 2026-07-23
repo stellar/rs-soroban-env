@@ -21,7 +21,8 @@ use crate::{
         ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
     },
     AddressObject, BytesObject, Compare, Env, EnvBase, ErrorHandler, ExecutableTagObject, Host,
-    HostError, MapObject, StorageType, Symbol, Tag, TryFromVal, U32Val, Val, VmCaller, Void,
+    HostError, MapObject, StorageType, Symbol, Tag, TryFromVal, U32Val, Val, VmCaller, VmStoreData,
+    Void,
 };
 
 impl Host {
@@ -798,7 +799,7 @@ impl Host {
     // If `sparse` is true, void values are excluded from the map.
     pub(crate) fn map_new_from_linear_memory_impl(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         keys_pos: U32Val,
         vals_pos: U32Val,
         len: U32Val,
@@ -985,7 +986,7 @@ impl Host {
     /// argument).
     pub(crate) fn map_unpack_to_linear_memory_impl(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        vmcaller: &mut VmCaller<VmStoreData>,
         map: MapObject,
         keys_pos: U32Val,
         vals_pos: U32Val,

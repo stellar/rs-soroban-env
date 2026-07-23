@@ -2,7 +2,7 @@ use crate::{
     cost_runner::{CostRunner, CostType},
     vm::ParsedModule,
     xdr::{ContractCostType::VmInstantiation, ContractId},
-    Host, Vm,
+    Vm, VmStoreData,
 };
 use std::{hint::black_box, rc::Rc, sync::Arc};
 
@@ -11,7 +11,7 @@ pub struct VmInstantiationSample {
     pub id: Option<ContractId>,
     pub wasm: Vec<u8>,
     pub module: Arc<ParsedModule>,
-    pub linker: wasmi::Linker<Host>,
+    pub linker: wasmi::Linker<VmStoreData>,
 }
 
 // Protocol 20 coarse and unified cost model
@@ -24,7 +24,7 @@ impl CostRunner for VmInstantiationRun {
 
     type SampleType = VmInstantiationSample;
 
-    type RecycledType = (Option<Rc<Vm>>, Vec<u8>, wasmi::Linker<Host>);
+    type RecycledType = (Option<Rc<Vm>>, Vec<u8>, wasmi::Linker<VmStoreData>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         let vm = black_box(
@@ -73,7 +73,11 @@ mod v21 {
 
                 type SampleType = VmInstantiationSample;
 
-                type RecycledType = (Option<Arc<ParsedModule>>, Vec<u8>, wasmi::Linker<Host>);
+                type RecycledType = (
+                    Option<Arc<ParsedModule>>,
+                    Vec<u8>,
+                    wasmi::Linker<VmStoreData>,
+                );
 
                 fn run_iter(
                     host: &crate::Host,
@@ -115,7 +119,7 @@ mod v21 {
 
                 type SampleType = VmInstantiationSample;
 
-                type RecycledType = (Option<Rc<Vm>>, Vec<u8>, wasmi::Linker<Host>);
+                type RecycledType = (Option<Rc<Vm>>, Vec<u8>, wasmi::Linker<VmStoreData>);
 
                 fn run_iter(
                     host: &crate::Host,

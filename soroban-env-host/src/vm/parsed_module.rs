@@ -6,7 +6,7 @@ use crate::{
         ContractCodeEntryExt, ContractCostType, Limited, ReadXdr, ScEnvMetaEntry,
         ScEnvMetaEntryInterfaceVersion, ScErrorCode, ScErrorType,
     },
-    ErrorHandler, Host, HostError, Val, DEFAULT_XDR_RW_LIMITS,
+    ErrorHandler, Host, HostError, Val, VmStoreData, DEFAULT_XDR_RW_LIMITS,
 };
 
 use super::{Vm, HOST_FUNCTIONS};
@@ -262,7 +262,7 @@ impl ParsedModule {
         callback(&symbols)
     }
 
-    pub fn make_wasmi_linker(&self, host: &Host) -> Result<wasmi::Linker<Host>, HostError> {
+    pub fn make_wasmi_linker(&self, host: &Host) -> Result<wasmi::Linker<VmStoreData>, HostError> {
         self.with_import_symbols(host, |symbols| {
             Host::make_minimal_wasmi_linker_for_symbols(host, self.wasmi_module.engine(), symbols)
         })

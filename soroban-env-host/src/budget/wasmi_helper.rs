@@ -1,8 +1,9 @@
 use crate::{
     budget::{AsBudget, Budget},
     host::error::TryBorrowOrErr,
+    vm::VmStoreData,
     xdr::ContractCostType,
-    Host, HostError,
+    HostError,
 };
 use wasmi::{errors, FuelConsumptionMode, FuelCosts, ResourceLimiter};
 
@@ -23,7 +24,10 @@ pub(crate) const WASMI_LIMITS_CONFIG: WasmiLimits = WasmiLimits {
     memories: 1,
 };
 
-impl ResourceLimiter for Host {
+// The `ResourceLimiter` is implemented for each VM store's data (rather than
+// for `Host`, which is shared by all stores): wasmi invokes the limiter on the
+// growing store's own data.
+impl ResourceLimiter for VmStoreData {
     fn memory_growing(
         &mut self,
         current: usize,
@@ -31,6 +35,7 @@ impl ResourceLimiter for Host {
         maximum: Option<usize>,
     ) -> Result<bool, errors::MemoryError> {
         let host_limit = self
+            .host
             .as_budget()
             .get_mem_bytes_remaining()
             .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
@@ -49,12 +54,14 @@ impl ResourceLimiter for Host {
         if allow {
             #[cfg(any(test, feature = "testutils", feature = "bench"))]
             {
-                self.as_budget()
+                self.host
+                    .as_budget()
                     .track_wasm_mem_alloc(delta)
                     .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
             }
 
-            self.as_budget()
+            self.host
+                .as_budget()
                 .charge(ContractCostType::MemAlloc, Some(delta))
                 .map(|_| true)
                 .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
