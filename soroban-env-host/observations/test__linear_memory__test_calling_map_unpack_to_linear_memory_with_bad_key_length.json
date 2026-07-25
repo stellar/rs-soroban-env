@@ -23,8 +23,8 @@
   "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#21))": "cpu:8075560, mem:1629791, objs:-/11@cb95f33b",
   "  22 push VM:89befed0:loadmem1(Map(obj#19), U32(264), U32(65024), U32(1))": "cpu:8715603, mem:1908940, objs:-/12@2d493c2f, vm:65536@b1cd98b9/4@70bfd778, stk:1@b17ef535, auth:1@87d4a23e/-",
   "  23 call map_unpack_to_linear_memory(Map(obj#19), U32(264), U32(65024), U32(1))": "cpu:8718520, mem:1909058, objs:1@2cbe5bc9/12@2d493c2f, vm:-/-, stk:1@f8376442",
-  "  24 ret map_unpack_to_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8727254",
+  "  24 ret map_unpack_to_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8727301",
   "  25 pop VM:89befed0:loadmem1 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@1ef083fd/4@70bfd778",
   "  26 ret call -> Err(Error(WasmVm, IndexBounds))": " objs:-/12@2d493c2f, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8727254, mem:1909058, prngs:-/9b4a753, objs:-/12@2d493c2f, vm:-/-, evt:-, store:-/2@fc1493c0, foot:2@c3a6a172, stk:-, auth:-/-"
+  "  27 end": "cpu:8727301, mem:1909058, prngs:-/9b4a753, objs:-/12@2d493c2f, vm:-/-, evt:-, store:-/2@fc1493c0, foot:2@c3a6a172, stk:-, auth:-/-"
 }
