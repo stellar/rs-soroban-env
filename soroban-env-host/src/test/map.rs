@@ -464,8 +464,7 @@ fn initialization_invalid() -> Result<(), HostError> {
 
 #[test]
 fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
-    let wasm_short =
-        wasm::wasm_module_with_large_map_from_linear_memory(100, U32Val::from(7).to_val());
+    let wasm_short = wasm::wasm_module_with_large_map_from_linear_memory(100);
 
     // sanity check, constructing a short map is ok
     let host = observe_host!(Host::test_host_with_recording_footprint());
@@ -485,8 +484,7 @@ fn instantiate_oversized_map_from_linear_memory() -> Result<(), HostError> {
 
     // constructing a big map will cause budget limit exceeded error
     let num_vals = 400_000;
-    let wasm_long =
-        wasm::wasm_module_with_large_map_from_linear_memory(num_vals, U32Val::from(7).to_val());
+    let wasm_long = wasm::wasm_module_with_large_map_from_linear_memory(num_vals);
     host.clear_module_cache()?;
     host.budget_ref().reset_unlimited()?;
     let contract_id_obj2 = host.register_test_contract_wasm(&wasm_long.as_slice());
@@ -615,4 +613,443 @@ fn linear_memory_operations() -> Result<(), HostError> {
         ));
     }
     Ok(())
+}
+
+mod map_new_and_unpack {
+    use super::*;
+
+    use crate::{host_object::HostVec, EnvBase, SymbolStr, VecObject};
+
+    fn void() -> Val {
+        Val::VOID.into()
+    }
+
+    fn symbol_val_to_str(host: &Host, v: Val) -> String {
+        SymbolStr::try_from_val(host, &Symbol::try_from_val(host, &v).unwrap())
+            .unwrap()
+            .to_string()
+    }
+
+    fn u32_val_to_u32(host: &Host, v: Val) -> u32 {
+        U32Val::try_from_val(host, &v).unwrap().into()
+    }
+
+    fn val_to_opt_u32(host: &Host, v: Val) -> Option<u32> {
+        if v.is_void() {
+            None
+        } else {
+            Some(u32_val_to_u32(host, v))
+        }
+    }
+
+    fn read_map(host: &Host, map: MapObject) -> Vec<(String, Option<u32>)> {
+        let keys = host
+            .visit_obj(host.map_keys(map).unwrap(), |v: &HostVec| {
+                Ok(v.iter()
+                    .cloned()
+                    .map(|k| symbol_val_to_str(host, k))
+                    .collect::<Vec<_>>())
+            })
+            .unwrap();
+        let vals = host
+            .visit_obj(host.map_values(map).unwrap(), |v: &HostVec| {
+                Ok(v.iter()
+                    .cloned()
+                    .map(|val| val_to_opt_u32(host, val))
+                    .collect::<Vec<_>>())
+            })
+            .unwrap();
+        keys.into_iter().zip(vals).collect()
+    }
+
+    fn read_vec(host: &Host, vec: VecObject) -> Vec<Option<u32>> {
+        host.visit_obj(vec, |v: &HostVec| {
+            Ok(v.iter()
+                .cloned()
+                .map(|val| val_to_opt_u32(host, val))
+                .collect::<Vec<_>>())
+        })
+        .unwrap()
+    }
+
+    fn create_map_from_linear_memory(
+        host: &Host,
+        keys: &[&str],
+        vals: &[Val],
+        sparse: bool,
+    ) -> Result<MapObject, HostError> {
+        let wasm = wasm::wasm_module_with_map_from_linear_memory(keys, vals, sparse);
+        let contract_id = host.register_test_contract_wasm(&wasm);
+        let res = host.call(
+            contract_id,
+            Symbol::try_from_small_str("test").unwrap(),
+            test_vec![host].into(),
+        )?;
+        Ok(MapObject::try_from_val(host, &res).unwrap())
+    }
+
+    fn unpack_map_from_linear_memory(
+        host: &Host,
+        map_keys: &[&str],
+        map_vals: &[Val],
+        query_keys: &[&str],
+        sparse: bool,
+    ) -> Result<Vec<Option<u32>>, HostError> {
+        let wasm = wasm::wasm_module_calling_map_unpack_to_linear_memory(
+            map_keys, map_vals, query_keys, sparse,
+        );
+        let contract_id = host.register_test_contract_wasm(&wasm);
+        let res = host.call(
+            contract_id,
+            Symbol::try_from_small_str("test").unwrap(),
+            test_vec![host].into(),
+        )?;
+        let vec_obj = VecObject::try_from_val(host, &res).unwrap();
+        Ok(read_vec(host, vec_obj))
+    }
+
+    fn run_dense_map_new_test(
+        host: &Host,
+        create: impl Fn(&[&str], &[Val]) -> Result<MapObject, HostError>,
+    ) {
+        let contents = |keys: &[&str], vals: &[Val]| create(keys, vals).map(|m| read_map(host, m));
+
+        // Dense map
+        assert_eq!(
+            contents(
+                &["a", "bbbbbbbbbbbb", "cc"],
+                &[10u32.into(), 20u32.into(), 30u32.into()]
+            )
+            .unwrap(),
+            vec![
+                ("a".to_string(), Some(10)),
+                ("bbbbbbbbbbbb".to_string(), Some(20)),
+                ("cc".to_string(), Some(30)),
+            ]
+        );
+
+        // Void values are not special (unlike sparse case).
+        assert_eq!(
+            contents(
+                &["a", "bbbbbbbbbbbb", "c", "dd"],
+                &[10u32.into(), void(), 30u32.into(), void()]
+            )
+            .unwrap(),
+            vec![
+                ("a".to_string(), Some(10)),
+                ("bbbbbbbbbbbb".to_string(), None),
+                ("c".to_string(), Some(30)),
+                ("dd".to_string(), None),
+            ]
+        );
+        assert_eq!(
+            contents(&["a", "b", "c", "d"], &[void(), void(), void(), void()]).unwrap(),
+            vec![
+                ("a".to_string(), None),
+                ("b".to_string(), None),
+                ("c".to_string(), None),
+                ("d".to_string(), None),
+            ]
+        );
+
+        // Keys must be in strictly-ascending order.
+        assert!(HostError::result_matches_err(
+            contents(&["b", "a"], &[10u32.into(), 20u32.into()]),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+
+        // Duplicate keys are rejected.
+        assert!(HostError::result_matches_err(
+            contents(&["a", "a"], &[10u32.into(), 20u32.into()]),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+
+        // Keys that are not valid symbols are rejected
+        assert!(HostError::result_matches_err(
+            contents(&["!"], &[10u32.into()]),
+            (ScErrorType::Value, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            contents(&[&"a".repeat(100)], &[10u32.into()]),
+            (ScErrorType::Value, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn test_map_new_from_slices() {
+        let host = observe_host!(Host::test_host());
+        run_dense_map_new_test(&host, |keys, vals| host.map_new_from_slices(keys, vals));
+
+        // Mismatched key/value lengths are rejected (applicable to slices
+        // version only).
+        assert!(HostError::result_matches_err(
+            host.map_new_from_slices(&["a", "bbbbbbbbbbbb"], &[10u32.into()]),
+            (ScErrorType::Object, ScErrorCode::UnexpectedSize)
+        ));
+    }
+
+    #[test]
+    fn test_map_new_from_linear_memory() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        run_dense_map_new_test(&host, |keys, vals| {
+            create_map_from_linear_memory(&host, keys, vals, false)
+        });
+    }
+
+    fn run_sparse_map_new_test(
+        host: &Host,
+        create: impl Fn(&[&str], &[Val]) -> Result<MapObject, HostError>,
+    ) {
+        let contents = |keys: &[&str], vals: &[Val]| create(keys, vals).map(|m| read_map(host, m));
+
+        // Dense map
+        assert_eq!(
+            contents(
+                &["a", "bbbbbbbbbbbb", "cc"],
+                &[10u32.into(), 20u32.into(), 30u32.into()]
+            )
+            .unwrap(),
+            vec![
+                ("a".to_string(), Some(10)),
+                ("bbbbbbbbbbbb".to_string(), Some(20)),
+                ("cc".to_string(), Some(30)),
+            ]
+        );
+
+        // Some Void values are skipped
+        assert_eq!(
+            contents(
+                &["a", "bbbbbbbbbbbb", "c", "dd"],
+                &[10u32.into(), void(), 30u32.into(), void()]
+            )
+            .unwrap(),
+            vec![("a".to_string(), Some(10)), ("c".to_string(), Some(30))]
+        );
+        // All values are Void and skipped
+        assert_eq!(
+            contents(
+                &["a", "b", "cccccccccccccc", "d"],
+                &[void(), void(), void(), void()]
+            )
+            .unwrap(),
+            vec![]
+        );
+
+        // Keys must be strictly ascending, even if they would be ascending
+        // after filtering out Void values.
+        assert!(HostError::result_matches_err(
+            contents(
+                &["aaaaaaaaaaaaaa", "c", "b"],
+                &[10u32.into(), void(), 20u32.into()]
+            ),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            contents(&["bbbbbbbbbbbbbbbbbbbb", "a"], &[void(), void()]),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+
+        // Duplicate keys are rejected even when some of them are Void-valued.
+        assert!(HostError::result_matches_err(
+            contents(
+                &["aaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaa"],
+                &[10u32.into(), void()]
+            ),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            contents(
+                &["abcdefghijkl", "abcdefghijkl", "abcdefghijkl"],
+                &[void(), void(), void()]
+            ),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+
+        // Keys that are not valid symbols are rejected, even if they are
+        // Void-valued.
+        assert!(HostError::result_matches_err(
+            contents(&["!"], &[10u32.into()]),
+            (ScErrorType::Value, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            contents(&["!"], &[void()]),
+            (ScErrorType::Value, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            contents(&[&"a".repeat(100)], &[void()]),
+            (ScErrorType::Value, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn test_sparse_map_new_from_slices() {
+        let host = observe_host!(Host::test_host());
+        run_sparse_map_new_test(&host, |keys, vals| {
+            host.sparse_map_new_from_slices(keys, vals)
+        });
+
+        // Mismatched key/value lengths are rejected (applicable to slices
+        // version only).
+        assert!(HostError::result_matches_err(
+            host.sparse_map_new_from_slices(&["a", "b"], &[10u32.into()]),
+            (ScErrorType::Object, ScErrorCode::UnexpectedSize)
+        ));
+    }
+
+    #[test]
+    fn test_sparse_map_new_from_linear_memory() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        run_sparse_map_new_test(&host, |keys, vals| {
+            create_map_from_linear_memory(&host, keys, vals, true)
+        });
+    }
+
+    fn run_dense_map_unpack_test(
+        unpack: impl Fn(&[&str], &[Val], &[&str]) -> Result<Vec<Option<u32>>, HostError>,
+    ) {
+        let map_keys: &[&str] = &["aa", "bbbbbbbbbbbb", "cc", "d", "eeeee"];
+        let map_vals: &[Val] = &[
+            10u32.into(),
+            20u32.into(),
+            30u32.into(),
+            void(),
+            50u32.into(),
+        ];
+        let unpack = |query: &[&str]| unpack(map_keys, map_vals, query);
+
+        // Only a query that exhausts every key is allowed.
+        assert_eq!(
+            unpack(&["aa", "bbbbbbbbbbbb", "cc", "d", "eeeee"]).unwrap(),
+            vec![Some(10), Some(20), Some(30), None, Some(50)]
+        );
+
+        // Providing a subset of keys is not allowed.
+        assert!(HostError::result_matches_err(
+            unpack(&["aa", "bbbbbbbbbbbb"]),
+            (ScErrorType::Object, ScErrorCode::UnexpectedSize)
+        ));
+
+        // Providing keys that are not in the map is not allowed.
+        assert!(HostError::result_matches_err(
+            unpack(&["aa", "bbbbbbbbbbbb", "cc", "d", "zzzzz"]),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+        assert!(HostError::result_matches_err(
+            unpack(&["aa", "bbbbbbbbbbbb", "cc", "d", "eeeee", "z"]),
+            (ScErrorType::Object, ScErrorCode::UnexpectedSize)
+        ));
+        // Notably we don't try to convert the keys to Symbol, so this fails
+        // because the key is not in the map, not because it's not a valid
+        // symbol.
+        assert!(HostError::result_matches_err(
+            unpack(&[&"a".repeat(100), "bbbbbbbbbbbb", "cc", "d", "eeeee"]),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+
+        // Keys must be strictly ascending.
+        assert!(HostError::result_matches_err(
+            unpack(&["aa", "cc", "bbbbbbbbbbbb", "d", "eeeee"]),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn test_map_unpack_to_slice() {
+        let host = observe_host!(Host::test_host());
+        run_dense_map_unpack_test(|map_keys, map_vals, query| {
+            let map = host.map_new_from_slices(map_keys, map_vals).unwrap();
+            let mut out = vec![void(); query.len()];
+            host.map_unpack_to_slice(map, query, &mut out)?;
+            Ok(out.iter().map(|v| val_to_opt_u32(&host, *v)).collect())
+        });
+    }
+
+    #[test]
+    fn test_map_unpack_to_linear_memory() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        run_dense_map_unpack_test(|map_keys, map_vals, query| {
+            unpack_map_from_linear_memory(&host, map_keys, map_vals, query, false)
+        });
+    }
+
+    fn run_sparse_map_unpack_test(
+        unpack: impl Fn(&[&str], &[Val], &[&str]) -> Result<Vec<Option<u32>>, HostError>,
+    ) {
+        let map_keys: &[&str] = &["aa", "bbbbbbbbbbbb", "cc", "d", "eeeee"];
+        let map_vals: &[Val] = &[
+            10u32.into(),
+            20u32.into(),
+            30u32.into(),
+            void(),
+            50u32.into(),
+        ];
+        let unpack = |query: &[&str]| unpack(map_keys, map_vals, query);
+
+        // Full map
+        assert_eq!(
+            unpack(&["aa", "bbbbbbbbbbbb", "cc", "d", "eeeee"]).unwrap(),
+            vec![Some(10), Some(20), Some(30), None, Some(50)]
+        );
+
+        // Select some keys
+        assert_eq!(
+            unpack(&["bbbbbbbbbbbb", "d"]).unwrap(),
+            vec![Some(20), None]
+        );
+
+        // Select no keys
+        assert_eq!(unpack(&[]).unwrap(), vec![]);
+
+        // Select only keys that are not in the map
+        assert_eq!(
+            unpack(&["x", "yyyyyyyyyyyyyy", "z"]).unwrap(),
+            vec![None, None, None]
+        );
+
+        // Select some keys that are in the map and some that are not
+        assert_eq!(
+            unpack(&["a", "bbbbbbbbbbbb", "cc", "e", "eeeee", "y", "z"]).unwrap(),
+            vec![None, Some(20), Some(30), None, Some(50), None, None]
+        );
+
+        // The lookup keys don't have to be convertible to Symbol, but they'll
+        // never match any keys in the map, so the result will always be None.
+        assert_eq!(unpack(&["!", &"a".repeat(100)]).unwrap(), vec![None, None]);
+
+        // Provided keys must be strictly ascending.
+        assert!(HostError::result_matches_err(
+            unpack(&["cc", "aaaaaaaaaaaaaaa"]),
+            (ScErrorType::Object, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn test_sparse_map_unpack_to_slice() {
+        let host = observe_host!(Host::test_host());
+        run_sparse_map_unpack_test(|map_keys, map_vals, query| {
+            let map = host.map_new_from_slices(map_keys, map_vals)?;
+            let mut out = vec![void(); query.len()];
+            host.sparse_map_unpack_to_slice(map, query, &mut out)?;
+            Ok(out.iter().map(|v| val_to_opt_u32(&host, *v)).collect())
+        });
+
+        // Mismatched key/value lengths are rejected (applicable to slices
+        // version only).
+        let map = host
+            .map_new_from_slices(&["aa", "bbb"], &[10u32.into(), 20u32.into()])
+            .unwrap();
+        let mut out = [void(); 2];
+        assert!(HostError::result_matches_err(
+            host.sparse_map_unpack_to_slice(map, &["aa"], &mut out),
+            (ScErrorType::Object, ScErrorCode::UnexpectedSize)
+        ));
+    }
+
+    #[test]
+    fn test_sparse_map_unpack_to_linear_memory() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        run_sparse_map_unpack_test(|map_keys, map_vals, query| {
+            unpack_map_from_linear_memory(&host, map_keys, map_vals, query, true)
+        });
+    }
 }

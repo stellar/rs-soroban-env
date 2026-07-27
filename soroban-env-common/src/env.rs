@@ -209,6 +209,26 @@ pub trait EnvBase: Sized + Clone {
         vals: &mut [Val],
     ) -> Result<Void, Self::Error>;
 
+    /// Form a new `Map` host object from a slice of symbol-names and a slice of
+    /// values, skipping any key-value pair whose value is `Void`.
+    /// Keys must be in sorted order.
+    fn sparse_map_new_from_slices(
+        &self,
+        keys: &[&str],
+        vals: &[Val],
+    ) -> Result<MapObject, Self::Error>;
+
+    /// Unpack a `Map` host object to a slice of `Val`s, writing the value for
+    /// each provided key, or `Void` when the key is absent from the map. Keys
+    /// must be in sorted order. Map keys that are not among the provided keys
+    /// are ignored.
+    fn sparse_map_unpack_to_slice(
+        &self,
+        map: MapObject,
+        keys: &[&str],
+        vals: &mut [Val],
+    ) -> Result<Void, Self::Error>;
+
     /// Form a new `Vec` host object from a slice of values.
     fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error>;
 

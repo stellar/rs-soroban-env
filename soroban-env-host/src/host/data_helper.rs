@@ -1,24 +1,27 @@
-use core::cmp::min;
-use std::rc::Rc;
+use core::cmp::{min, Ordering};
+use std::{ops::Range, rc::Rc};
 
 use crate::{
     budget::AsBudget,
     err,
-    host::metered_clone::{MeteredAlloc, MeteredClone},
-    host_object::ExecutableTag,
+    host::{
+        mem_helper::MemFnArgs,
+        metered_clone::{self, MeteredAlloc, MeteredClone, MeteredContainer},
+    },
+    host_object::{ExecutableTag, HostMap},
     storage::{InstanceStorageMap, Storage},
     vm::VersionedContractCodeCostInputs,
     xdr::{
-        AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
-        ContractDataEntry, ContractExecutable, ContractExecutableExternalRef, ContractId,
-        ContractIdPreimage, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
-        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScAddress,
-        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScVal, Signer, SignerKey,
-        ThresholdIndexes, TrustLineAsset, Uint256,
+        AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType,
+        ContractDataDurability, ContractDataEntry, ContractExecutable,
+        ContractExecutableExternalRef, ContractId, ContractIdPreimage, ExtensionPoint, Hash,
+        HashIdPreimage, HashIdPreimageContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt,
+        LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+        LedgerKeyTrustLine, PublicKey, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
+        ScMap, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
     },
-    AddressObject, BytesObject, Env, ErrorHandler, ExecutableTagObject, Host, HostError,
-    StorageType, Tag, U32Val, Val,
+    AddressObject, BytesObject, Compare, Env, EnvBase, ErrorHandler, ExecutableTagObject, Host,
+    HostError, MapObject, StorageType, Symbol, Tag, TryFromVal, U32Val, Val, VmCaller, Void,
 };
 
 impl Host {
@@ -735,6 +738,342 @@ impl Host {
         }
 
         Ok(())
+    }
+
+    // Creates a new map from keys and values slices.
+    // If `sparse` is true, void values are excluded from the map.
+    pub(crate) fn map_new_from_slices_impl<K>(
+        &self,
+        keys: &[K],
+        vals: &[Val],
+        sparse: bool,
+    ) -> Result<MapObject, HostError>
+    where
+        Symbol: TryFromVal<Host, K, Error = crate::Error>,
+    {
+        if keys.len() != vals.len() {
+            return Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::UnexpectedSize,
+                "differing key and value slice lengths when creating map from slices",
+                &[],
+            ));
+        }
+        Vec::<(Val, Val)>::charge_bulk_init_cpy(keys.len() as u64, self)?;
+
+        let mut prev_key = None;
+        let mut map_vec = Vec::<(Val, Val)>::with_capacity(keys.len());
+        for (key_str, val) in keys.iter().zip(vals.iter().copied()) {
+            let key = Symbol::try_from_val(self, key_str)?.to_val();
+            if let Some(prev_key) = prev_key {
+                // There is no need to verify that the keys are in ascending
+                // order for non-sparse case, as that's covered by
+                // `HostMap::from_map_with_host`. We need the comparison for
+                // the sparse case to avoid the cases where the keys are not in
+                // ascending order, but have their values excluded from the map
+                // due to being void (so they wouldn't be passed into
+                // `HostMap::from_map_with_host`).
+                if sparse && self.compare(&prev_key, &key)? != std::cmp::Ordering::Less {
+                    return Err(self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::InvalidInput,
+                        "keys not in ascending order when creating map from slices",
+                        &[],
+                    ));
+                }
+            }
+            prev_key = Some(key);
+
+            self.check_val_integrity(val)?;
+            if !sparse || !val.is_void() {
+                map_vec.push((key, val));
+            }
+        }
+        let map = HostMap::from_map_with_host(map_vec, self)?;
+        self.add_host_object(map)
+    }
+
+    // Creates a new map from key and value slices of length len stored in
+    // linear memory.
+    // If `sparse` is true, void values are excluded from the map.
+    pub(crate) fn map_new_from_linear_memory_impl(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        keys_pos: U32Val,
+        vals_pos: U32Val,
+        len: U32Val,
+        sparse: bool,
+    ) -> Result<MapObject, HostError> {
+        // Step 1: extract all key symbols.
+        let MemFnArgs {
+            vm,
+            pos: keys_pos,
+            len,
+        } = self.get_mem_fn_args(keys_pos, len)?;
+        let mut key_syms = Vec::<Symbol>::with_metered_capacity(len as usize, self)?;
+        self.metered_vm_scan_slices_in_linear_memory(
+            vmcaller,
+            &vm,
+            keys_pos,
+            len as usize,
+            |_n, slice| {
+                key_syms.push(Symbol::try_from_val(self, &slice)?);
+                Ok(())
+            },
+        )?;
+
+        // Step 2: extract all val Vals.
+        let vals_pos: u32 = vals_pos.into();
+        Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
+        let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
+        // The full slice memcpy is charged twice (2 *):
+        // - charge for conversion from bytes to `Val`s (1x)
+        // - for per-element relative-to-absolute object handle translation (1x)
+        self.charge_budget(
+            ContractCostType::MemCpy,
+            Some((len as u64).saturating_mul(2 * 8)),
+        )?;
+        self.metered_vm_read_vals_from_linear_memory(
+            vmcaller,
+            &vm,
+            vals_pos,
+            vals.as_mut_slice(),
+            |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
+        )?;
+
+        self.map_new_from_slices_impl(&key_syms, &vals, sparse)
+    }
+
+    /// Copies the values corresponding to the provided keys from the map into
+    /// the provided output `Val`s slice.
+    /// If `sparse` is true, the output slice will contain `Void` for keys that
+    /// are not present in the map, and it's allowed to not exhaust every map
+    /// key. If `sparse` is false, the key slice must match the map key set
+    /// one-to-one.
+    pub(crate) fn map_unpack_to_slice_impl(
+        &self,
+        map: MapObject,
+        keys: &[&str],
+        vals: &mut [Val],
+        sparse: bool,
+    ) -> Result<Void, HostError> {
+        if keys.len() != vals.len() {
+            return Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::UnexpectedSize,
+                "differing key and value slice lengths when unpacking map to slice",
+                &[],
+            ));
+        }
+        self.visit_obj(map, |host_map: &HostMap| {
+            // Dense map unpacking only supports queries that match the map's
+            // keys one-to-one, so we can short-circuit here.
+            if !sparse && host_map.len() != keys.len() {
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::UnexpectedSize,
+                    "differing key and value slice lengths when unpacking map to slice",
+                    &[],
+                ));
+            }
+
+            // Bulk charge for writing the values to the output slice.
+            metered_clone::charge_shallow_copy::<Val>(keys.len() as u64, self)?;
+
+            let mut map_iter = host_map.iter(self)?;
+            let mut map_iter_value = map_iter.next();
+            let mut prev_key: Option<&str> = None;
+            // Iterate the input keys and find the corresponding value in the
+            // map, if it exists (or else write Void into the corresponding
+            // output value, or return error in non-sparse mode).
+            // Since map keys are sorted and query keys are expected to be
+            // sorted, we can iterate through the map instead of doing key
+            // lookups.
+            for (out_val, key_str) in vals.iter_mut().zip(keys.iter()) {
+                if let Some(prev_key) = prev_key {
+                    if self
+                        .as_budget()
+                        .compare(&prev_key.as_bytes(), &key_str.as_bytes())?
+                        != Ordering::Less
+                    {
+                        return Err(self.err(
+                            ScErrorType::Object,
+                            ScErrorCode::InvalidInput,
+                            "keys are not in ascending order when unpacking map to slice",
+                            &[],
+                        ));
+                    }
+                }
+
+                prev_key = Some(*key_str);
+                *out_val = Val::VOID.into();
+                while let Some((map_key, map_val)) = map_iter_value {
+                    let map_key_symbol = Symbol::try_from_val(self, map_key)?;
+                    let cmp = self.compare_symbol_to_bytes(map_key_symbol, key_str.as_bytes())?;
+                    if sparse {
+                        match cmp {
+                            // Map key is less than the lookup key, need to keep
+                            // iterating map forward.
+                            Ordering::Less => {
+                                map_iter_value = map_iter.next();
+                                continue;
+                            }
+                            // Found a match, write the output value and advance the
+                            // map iterator.
+                            Ordering::Equal => {
+                                *out_val = *map_val;
+                                map_iter_value = map_iter.next();
+                                break;
+                            }
+                            // Map key is greater than the lookup key, so we
+                            // can't find the current key, but need to keep the
+                            // map iterator at the current position for the next
+                            // lookup.
+                            Ordering::Greater => break,
+                        }
+                    } else {
+                        if cmp != Ordering::Equal {
+                            return Err(self.err(
+                                ScErrorType::Object,
+                                ScErrorCode::InvalidInput,
+                                "key not found in map when unpacking map to slice",
+                                &[],
+                            ));
+                        }
+                        *out_val = *map_val;
+                        map_iter_value = map_iter.next();
+                        break;
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        Ok(Val::VOID)
+    }
+
+    /// Copies the values corresponding to the provided lineary memory keys
+    /// from the map into the provided linear memory output slice.
+    /// If `sparse` is true, the output slice will contain `Void` for keys that
+    /// are not present in the map, and it's allowed to not exhaust every map
+    /// key. If `sparse` is false, the key slice must match the map key set
+    /// one-to-one.
+    pub(crate) fn map_unpack_to_linear_memory_impl(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        map: MapObject,
+        keys_pos: U32Val,
+        vals_pos: U32Val,
+        len: U32Val,
+        sparse: bool,
+    ) -> Result<Void, HostError> {
+        let MemFnArgs {
+            vm,
+            pos: keys_pos,
+            len,
+        } = self.get_mem_fn_args(keys_pos, len)?;
+        let mem_data = vm.get_memory(self)?.data_mut(vmcaller.try_mut()?);
+        let val_pos: u32 = vals_pos.into();
+        let mut val_pos = val_pos as usize;
+
+        // Implementation note: this is very similar to
+        // `map_unpack_to_slice_impl`, but unfortunately generalizing this logic
+        // is really tricky due to input and output slices belonging to the same
+        // mutable object (linear memory), which makes borrow checker unhappy
+        // unless we do complex and clunky workarounds that end up with more
+        // code than is duplicated here.
+        self.visit_obj(map, |hm: &HostMap| {
+            // Dense map unpacking only supports queries that match the map's
+            // keys one-to-one, so we can short-circuit here.
+            if !sparse && hm.len() != len as usize {
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::UnexpectedSize,
+                    "differing host map and output slice lengths when unpacking map to linear memory",
+                    &[],
+                ));
+            }
+            // Bulk charge for scanning the key slices and  writing the values
+            // to the output slice.
+            metered_clone::charge_shallow_copy::<Val>((len as u64) * 3, self)?;
+
+            let mut map_iter = hm.iter(self)?;
+            let mut map_iter_value = map_iter.next();
+            let mut prev_key_slice: Option<Range<usize>> = None;
+            // Iterate the input keys and find the corresponding value in the
+            // map, if it exists (or else write Void into the corresponding
+            // output value, or return error in non-sparse mode).
+            // Since map keys are sorted and query keys are expected to be
+            // sorted, we can iterate through the map instead of doing key
+            // lookups.
+            for i in 0..len as usize {
+                let key_slice = self.scan_linear_memory_slice(mem_data, keys_pos, i)?;
+                let key = mem_data
+                    .get(key_slice.clone())
+                    .ok_or_else(|| self.err_oob_linear_memory())?;
+                if let Some(prev_key_slice) = &prev_key_slice {
+                    let prev_key = mem_data.get(prev_key_slice.clone()).ok_or_else(|| self.err_oob_linear_memory())?;
+                    if self.as_budget().compare(&prev_key, &key)? != Ordering::Less {
+                        return Err(self.err(
+                            ScErrorType::Object,
+                            ScErrorCode::InvalidInput,
+                            "keys are not in ascending order when unpacking map to slice",
+                            &[],
+                        ));
+                    }
+                }
+
+                prev_key_slice = Some(key_slice);
+                let mut out_val = Val::VOID.into();
+                while let Some((map_key, map_val)) = map_iter_value {
+                    let map_key = Symbol::try_from_val(self, map_key)?;
+                    let cmp: Ordering = self.compare_symbol_to_bytes(map_key, key)?;
+                    if sparse {
+                        match cmp {
+                            // Map key is less than the lookup key, need to keep
+                            // iterating map forward.
+                            Ordering::Less => {
+                                map_iter_value = map_iter.next();
+                                continue;
+                            }
+                            // Found a match, write the output value and advance
+                            // the map iterator.
+                            Ordering::Equal => {
+                                out_val = *map_val;
+                                map_iter_value = map_iter.next();
+                                break;
+                            }
+                            // Map key is greater than the lookup key, so we
+                            // can't find the current key, but need to keep the
+                            // map iterator at the current position for the next
+                            // lookup.
+                            Ordering::Greater => break,
+                        }
+                    } else {
+                        if cmp != Ordering::Equal {
+                            return Err(self.err(
+                                ScErrorType::Object,
+                                ScErrorCode::InvalidInput,
+                                "key not found in map when unpacking map to slice",
+                                &[],
+                            ));
+                        }
+                        out_val = *map_val;
+                        map_iter_value = map_iter.next();
+                        break;
+                    }
+                }
+                let val_bytes = u64::to_le_bytes(
+                        self.absolute_to_relative(out_val)?.get_payload()
+                    );
+                let val_end = val_pos.checked_add(val_bytes.len()).ok_or_else(|| self.err_arith_overflow())?;
+                mem_data.get_mut(val_pos..val_end).ok_or_else(|| self.err_oob_linear_memory())?.copy_from_slice(&val_bytes);
+                val_pos = val_end;
+            }
+
+            Ok(())
+        })?;
+
+        Ok(Val::VOID)
     }
 }
 

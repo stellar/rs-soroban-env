@@ -1003,26 +1003,7 @@ impl EnvBase for Host {
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
         call_trace_env_call!(self, keys.len());
-        if keys.len() != vals.len() {
-            return Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::UnexpectedSize,
-                "differing key and value slice lengths when creating map from slices",
-                &[],
-            ));
-        }
-        Vec::<(Val, Val)>::charge_bulk_init_cpy(keys.len() as u64, self)?;
-        let map_vec = keys
-            .iter()
-            .zip(vals.iter().copied())
-            .map(|(key_str, val)| {
-                let sym = Symbol::try_from_val(self, key_str)?;
-                self.check_val_integrity(val)?;
-                Ok((sym.to_val(), val))
-            })
-            .collect::<Result<Vec<(Val, Val)>, HostError>>()?;
-        let map = HostMap::from_map_with_host(map_vec, self)?;
-        let res = self.add_host_object(map);
+        let res = self.map_new_from_slices_impl(keys, vals, false);
         call_trace_env_ret!(self, res);
         res
     }
@@ -1034,36 +1015,30 @@ impl EnvBase for Host {
         vals: &mut [Val],
     ) -> Result<Void, HostError> {
         call_trace_env_call!(self, map, keys.len());
-        if keys.len() != vals.len() {
-            return Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::UnexpectedSize,
-                "differing key and value slice lengths when unpacking map to slice",
-                &[],
-            ));
-        }
-        self.visit_obj(map, |hm: &HostMap| {
-            if hm.len() != vals.len() {
-                return Err(self.err(
-                    ScErrorType::Object,
-                    ScErrorCode::UnexpectedSize,
-                    "differing host map and output slice lengths when unpacking map to slice",
-                    &[],
-                ));
-            }
+        let res = self.map_unpack_to_slice_impl(map, keys, vals, false);
+        call_trace_env_ret!(self, res);
+        res
+    }
 
-            for (ik, mk) in keys.iter().zip(hm.keys(self)?) {
-                let sym: Symbol = mk.try_into()?;
-                self.check_symbol_matches(ik.as_bytes(), sym)?;
-            }
+    fn sparse_map_new_from_slices(
+        &self,
+        keys: &[&str],
+        vals: &[Val],
+    ) -> Result<MapObject, HostError> {
+        call_trace_env_call!(self, keys.len());
+        let res = self.map_new_from_slices_impl(keys, vals, true);
+        call_trace_env_ret!(self, res);
+        res
+    }
 
-            metered_clone::charge_shallow_copy::<Val>(keys.len() as u64, self)?;
-            for (iv, mv) in vals.iter_mut().zip(hm.values(self)?) {
-                *iv = *mv;
-            }
-            Ok(())
-        })?;
-        let res = Ok(Val::VOID);
+    fn sparse_map_unpack_to_slice(
+        &self,
+        map: MapObject,
+        keys: &[&str],
+        vals: &mut [Val],
+    ) -> Result<Void, HostError> {
+        call_trace_env_call!(self, map, keys.len());
+        let res = self.map_unpack_to_slice_impl(map, keys, vals, true);
         call_trace_env_ret!(self, res);
         res
     }
@@ -1192,7 +1167,7 @@ impl VmCallerEnv for Host {
                 ContractCostType::MemCpy,
                 Some((len as u64).saturating_mul(8)),
             )?;
-            self.metered_vm_read_vals_from_linear_memory::<8, Val>(
+            self.metered_vm_read_vals_from_linear_memory(
                 vmcaller,
                 &vm,
                 pos,
@@ -1793,53 +1768,7 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<MapObject, HostError> {
-        // Step 1: extract all key symbols.
-        let MemFnArgs {
-            vm,
-            pos: keys_pos,
-            len,
-        } = self.get_mem_fn_args(keys_pos, len)?;
-        let mut key_syms = Vec::<Symbol>::with_metered_capacity(len as usize, self)?;
-        self.metered_vm_scan_slices_in_linear_memory(
-            vmcaller,
-            &vm,
-            keys_pos,
-            len as usize,
-            |_n, slice| {
-                key_syms.push(Symbol::try_from_val(self, &slice)?);
-                Ok(())
-            },
-        )?;
-
-        // Step 2: extract all val Vals.
-        let vals_pos: u32 = vals_pos.into();
-        Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
-        let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
-        // The full slice memcpy is charged twice (2 *):
-        // - charge for conversion from bytes to `Val`s (1x)
-        // - for per-element relative-to-absolute object handle translation (1x)
-        self.charge_budget(
-            ContractCostType::MemCpy,
-            Some((len as u64).saturating_mul(2 * 8)),
-        )?;
-        self.metered_vm_read_vals_from_linear_memory::<8, Val>(
-            vmcaller,
-            &vm,
-            vals_pos,
-            vals.as_mut_slice(),
-            |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
-        )?;
-        for v in vals.iter() {
-            self.check_val_integrity(*v)?;
-        }
-
-        // Step 3: turn pairs into a map.
-        let pair_iter = key_syms
-            .iter()
-            .map(|s| s.to_val())
-            .zip(vals.iter().cloned());
-        let map = HostMap::from_exact_iter(pair_iter, self)?;
-        self.add_host_object(map)
+        self.map_new_from_linear_memory_impl(vmcaller, keys_pos, vals_pos, len, false)
     }
 
     fn map_unpack_to_linear_memory(
@@ -1850,64 +1779,28 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        let MemFnArgs {
-            vm,
-            pos: keys_pos,
-            len,
-        } = self.get_mem_fn_args(keys_pos, len)?;
-        self.visit_obj(map, |mapobj: &HostMap| {
-            if mapobj.len() != len as usize {
-                return Err(self.err(
-                    ScErrorType::Object,
-                    ScErrorCode::UnexpectedSize,
-                    "differing host map and output slice lengths when unpacking map to linear memory",
-                    &[],
-                ));
-            }
-            // Step 1: check all key symbols.
-            self.metered_vm_scan_slices_in_linear_memory(
-                vmcaller,
-                &vm,
-                keys_pos,
-                len as usize,
-                |n, slice| {
-                    let sym = Symbol::try_from(
-                        mapobj.get_at_index(n, self).map_err(|he|
-                            if he.error.is_type(ScErrorType::Budget) {
-                                he
-                            } else {
-                                self.err(
-                                    ScErrorType::Object,
-                                    ScErrorCode::IndexBounds,
-                                    "vector out of bounds while unpacking map to linear memory",
-                                    &[],
-                                )
-                            }
-                        )?.0
-                    )?;
-                    self.check_symbol_matches(slice, sym)?;
-                    Ok(())
-                },
-            )?;
+        self.map_unpack_to_linear_memory_impl(vmcaller, map, keys_pos, vals_pos, len, false)
+    }
 
-            // Step 2: write all vals.
-            // charges memcpy of converting map entries into bytes
-            self.charge_budget(ContractCostType::MemCpy, Some((len as u64).saturating_mul(8)))?;
-            self.metered_vm_write_vals_to_linear_memory(
-                vmcaller,
-                &vm,
-                vals_pos.into(),
-                mapobj.map.as_slice(),
-                |pair| {
-                    Ok(u64::to_le_bytes(
-                        self.absolute_to_relative(pair.1)?.get_payload(),
-                    ))
-                },
-            )?;
-            Ok(())
-        })?;
+    fn sparse_map_new_from_linear_memory(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        keys_pos: U32Val,
+        vals_pos: U32Val,
+        len: U32Val,
+    ) -> Result<MapObject, HostError> {
+        self.map_new_from_linear_memory_impl(vmcaller, keys_pos, vals_pos, len, true)
+    }
 
-        Ok(Val::VOID)
+    fn sparse_map_unpack_to_linear_memory(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        map: MapObject,
+        keys_pos: U32Val,
+        vals_pos: U32Val,
+        len: U32Val,
+    ) -> Result<Void, HostError> {
+        self.map_unpack_to_linear_memory_impl(vmcaller, map, keys_pos, vals_pos, len, true)
     }
 
     // endregion: "map" module functions
@@ -2122,7 +2015,7 @@ impl VmCallerEnv for Host {
             ContractCostType::MemCpy,
             Some((2u64.saturating_mul(len as u64)).saturating_mul(8)),
         )?;
-        self.metered_vm_read_vals_from_linear_memory::<8, Val>(
+        self.metered_vm_read_vals_from_linear_memory(
             vmcaller,
             &vm,
             pos,
