@@ -58,7 +58,7 @@ fn invoke_alloc() -> Result<(), HostError> {
     assert!(res.shallow_eq(&8128_u32.into()));
     let peak_bytes = host.budget_cloned().get_mem_bytes_consumed()?;
     let net_bytes = host.budget_cloned().get_mem_bytes_net()?;
-    // This contract grows its WASM linear memory via a sequence of
+    // This contract grows its Wasm linear memory via a sequence of
     // vector-doublings (+0x10000, +0x20000, +0x30000, +0x50000, +0x90000 = 20
     // pages ≈ 1.3 MiB), on top of the initial ~17-page (1.1 MiB) reservation,
     // across two instantiated VMs (one at upload, one at execution).

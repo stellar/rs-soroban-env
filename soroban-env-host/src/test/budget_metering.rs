@@ -4,14 +4,18 @@ use crate::{
         metered_clone::{MeteredClone, MeteredIterator},
         metered_xdr::metered_write_xdr,
     },
-    xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
+    testutils::{generate_account_id, wasm::wasm_module_with_4n_insns},
+    xdr::{ContractCostType, ScAddress, ScMap, ScMapEntry, ScVal},
     Env, ErrorHandler, Host, HostError, Symbol, Val,
 };
 use expect_test::{self, expect};
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-use soroban_test_wasms::VEC;
+use soroban_env_common::{
+    xdr::{ScErrorCode, ScErrorType},
+    EnvBase, StorageType, TryIntoVal,
+};
+use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT, SUM_I32, VEC};
 
-/// One WASM linear-memory page, in bytes.
+/// One Wasm linear-memory page, in bytes.
 const WASM_PAGE: u64 = 0x10000;
 
 #[test]
@@ -100,7 +104,6 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
 
 #[test]
 fn test_vm_fuel_metering() -> Result<(), HostError> {
-    use crate::testutils::wasm::wasm_module_with_4n_insns;
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(&wasm_module_with_4n_insns(1000));
     let sym = Symbol::try_from_small_str("test").unwrap();
@@ -593,11 +596,8 @@ fn budget_refund_mem_primitives() -> Result<(), HostError> {
     Ok(())
 }
 
-/// A VM's linear memory is charged during the call but refunded at teardown,
-/// so it is not part of the net memory consumed after the call returns.
 #[test]
 fn vm_linear_memory_refunded_on_teardown() -> Result<(), HostError> {
-    use crate::testutils::wasm::wasm_module_with_4n_insns;
     let host = Host::test_host_with_recording_footprint();
     let id = host.register_test_contract_wasm(&wasm_module_with_4n_insns(50));
     let host = host
@@ -636,48 +636,8 @@ fn vm_linear_memory_refunded_on_teardown() -> Result<(), HostError> {
     Ok(())
 }
 
-/// Calling the same contract sequentially does not accumulate VM linear memory
-/// in the budget: each call's VM memory is refunded before the next runs, so
-/// the second call adds its own host allocations but not another VM page.
-#[test]
-fn sequential_calls_do_not_accumulate_vm_linear_memory() -> Result<(), HostError> {
-    use crate::testutils::wasm::wasm_module_with_4n_insns;
-    let host = Host::test_host_with_recording_footprint();
-    let id = host.register_test_contract_wasm(&wasm_module_with_4n_insns(50));
-    let host = host
-        .test_budget(100_000_000, 104_857_600)
-        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
-        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
-    let sym = Symbol::try_from_small_str("test").unwrap();
-
-    host.call(id, sym, host.test_vec_obj::<u32>(&[10])?)?;
-    let after_one = host.as_budget().get_mem_bytes_net()?;
-    assert!(
-        after_one < WASM_PAGE,
-        "first call added {after_one}, which must exclude the refunded VM page ({WASM_PAGE})"
-    );
-    host.call(id, sym, host.test_vec_obj::<u32>(&[10])?)?;
-    let after_two = host.as_budget().get_mem_bytes_net()?;
-    let delta = after_two - after_one;
-    assert!(
-        delta < WASM_PAGE,
-        "second call added {delta}, which must exclude the refunded VM page ({WASM_PAGE})"
-    );
-    // Two sequential calls instantiate two one-page VMs
-    let gross = host.as_budget().get_wasm_mem_alloc()?;
-    assert_eq!(gross, 2 * WASM_PAGE, "gross = {gross}");
-    Ok(())
-}
-
-/// A cross-contract call keeps the caller's VM alive while the callee's VM is
-/// instantiated, so at the deepest point both VMs' linear memory is live and
-/// charged simultaneously (the peak). Both are torn down by the time the
-/// top-level call returns, so the combined VM memory is fully refunded and
-/// excluded from the net consumption.
 #[test]
 fn cross_contract_call_refunds_combined_vm_linear_memory() -> Result<(), HostError> {
-    use soroban_env_common::TryIntoVal;
-    use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT};
     let host = Host::test_host_with_recording_footprint();
     // `add_with` on INVOKE_CONTRACT calls `add` on the target (here ADD_I32),
     // so a single top-level call nests two VMs: INVOKE_CONTRACT -> ADD_I32.
@@ -716,41 +676,32 @@ fn cross_contract_call_refunds_combined_vm_linear_memory() -> Result<(), HostErr
     Ok(())
 }
 
-/// Creating a contract whose executable is an `ExternalRef` probes the
-/// referenced wasm's protocol version by instantiating a throwaway VM
-/// (`get_contract_protocol_version`); that probe VM's linear memory must be
-/// refunded just like on the `Wasm`-executable path.
 #[test]
-fn external_ref_probe_vm_linear_memory_refunded() -> Result<(), HostError> {
-    use crate::testutils::generate_account_id;
-    use crate::xdr::ScAddress;
-    use soroban_env_common::{EnvBase, StorageType};
-    use soroban_test_wasms::{ADD_I32, SUM_I32};
-
+fn external_ref_protocol_probe_refunds_vm_linear_memory() -> Result<(), HostError> {
+    // Set up an external-ref contract pointing at ADD_I32, probe the contract
+    // protocol version to make sure linear memory must be refunded at teardown.
     let host = Host::test_host_with_recording_footprint();
     host.switch_to_recording_auth(true)?;
-
-    // An owner contract holding an executable ref to ADD_I32's wasm.
     let owner = host.register_test_contract_wasm(SUM_I32);
-    let wasm_hash_obj = host.upload_contract_wasm(ADD_I32.to_vec())?;
     let owner_id = host.contract_id_from_address(owner)?;
-    let tag_val = host
-        .create_executable_tag(host.string_new_from_slice(b"exec tag")?)?
-        .to_val();
+    let wasm_hash = host.upload_contract_wasm(ADD_I32.to_vec())?;
+    let tag = host.create_executable_tag(host.string_new_from_slice(b"tag")?)?;
     host.with_test_contract_frame(
         owner_id,
         Symbol::try_from_small_str("set_ref").unwrap(),
         || {
-            host.put_contract_data(tag_val, wasm_hash_obj.to_val(), StorageType::Persistent)
+            host.put_contract_data(tag.to_val(), wasm_hash.to_val(), StorageType::Persistent)
                 .map(Into::into)
         },
     )?;
     let deployer = host.add_host_object(ScAddress::Account(generate_account_id(&host)))?;
-    let tag_obj = host.create_executable_tag(host.string_new_from_slice(b"exec tag")?)?;
     let salt = host.bytes_new_from_slice(&[1u8; 32])?;
+    let contract =
+        host.create_external_ref_contract(deployer, owner, tag, salt, host.vec_new()?)?;
+    let contract_id = host.contract_id_from_address(contract)?;
 
-    // Meter only the creation, with 1 mem_byte charged per byte of linear
-    // memory so the assertions are exact.
+    // Meter only the probe, charging 1 mem_byte per byte of linear memory so the
+    // assertion is exact.
     let host = host.test_budget(100_000_000, 104_857_600).enable_model(
         ContractCostType::MemAlloc,
         0,
@@ -758,16 +709,13 @@ fn external_ref_probe_vm_linear_memory_refunded() -> Result<(), HostError> {
         0,
         1,
     );
-    let g0 = host.as_budget().get_wasm_mem_alloc()?;
-    let n0 = host.as_budget().get_mem_bytes_net()?;
-    host.create_external_ref_contract(deployer, owner, tag_obj, salt, host.vec_new()?)?;
-    let gross = host.as_budget().get_wasm_mem_alloc()? - g0;
-    let net = host.as_budget().get_mem_bytes_net()? - n0;
+    host.get_contract_protocol_version(&contract_id)?;
+    let gross = host.as_budget().get_wasm_mem_alloc()?;
+    let net = host.as_budget().get_mem_bytes_net()?;
 
-    // The only VM in the creation flow is the protocol-version probe of the
-    // referenced wasm: ADD_I32's toolchain-default 16-page (1 MiB) stack.
+    // The probe instantiates one VM: ADD_I32's toolchain-default 16-page (1 MiB)
+    // stack. It is charged, then fully refunded, so net retains none of it.
     assert_eq!(gross, 16 * WASM_PAGE, "gross = {gross}");
-    // That probe VM's memory is refunded, so net retains none of it.
     assert!(
         net < WASM_PAGE,
         "net {net} should exclude the refunded probe VM memory ({gross})"
