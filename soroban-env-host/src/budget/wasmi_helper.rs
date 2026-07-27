@@ -62,28 +62,17 @@ impl ResourceLimiter for VmStoreData {
                     .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
             }
 
-            // VM linear memory is charged only to the real budget and refunded
-            // only from the real budget (see `Vm::execute_with_mem_refund`);
-            // guest memory only grows during instantiation or execution,
-            // neither of which runs in shadow mode. This is just a defensive
-            // check.
-            if self
-                .host
-                .as_budget()
-                .is_in_shadow_mode()
-                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?
-            {
-                return Err(errors::MemoryError::OutOfBoundsGrowth);
-            }
-
             self.host
                 .as_budget()
                 .charge(ContractCostType::MemAlloc, Some(delta))
                 .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
 
-            // Accumulate the charge in this store's data so that the VM's
-            // usage scope can refund it when the VM is torn down (see
-            // `Vm::execute_with_mem_refund`).
+            // Accumulate the charge in this store's data so that the VM's usage
+            // scope can refund it when the VM is torn down (see
+            // `Vm::execute_with_mem_refund`). This always mirrors a real-budget
+            // charge: guest memory only grows during VM instantiation or
+            // execution, neither of which runs in shadow mode, so the charge
+            // never lands on the shadow budget.
             let charged = self
                 .host
                 .as_budget()
