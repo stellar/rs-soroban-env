@@ -946,6 +946,15 @@ impl Host {
                     }
                 }
             }
+
+            // Iterate through the rest of the map to ensure that all the keys
+            // are Symbols. That's just a sanity check on the off-chance the
+            // user has called this for the wrong map and we happened to exhaust
+            // the keys before exhausting the map.
+            while let Some((map_key, _)) = map_iter_value {
+                let _ = Symbol::try_from_val(self, map_key)?;
+                map_iter_value = map_iter.next();
+            }
             Ok(())
         })
     }
