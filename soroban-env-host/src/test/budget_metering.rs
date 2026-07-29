@@ -121,7 +121,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     })?;
     assert_eq!(
         (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
-        (4005, 24030, 65536, 73862)
+        (4005, 24030, 65536, 73870)
     );
 
     // giving it the exact required amount will succeed
@@ -584,14 +584,19 @@ fn mem_refund_lowers_consumed_and_saturates() -> Result<(), HostError> {
 
     budget.charge(ContractCostType::MemAlloc, Some(1000))?;
     budget.charge(ContractCostType::MemAlloc, Some(500))?;
+    assert_eq!(budget.get_mem_bytes_net()?, 1500);
+    assert_eq!(budget.get_mem_bytes_consumed()?, 1500); // peak
+
+    // The refund lowers the net but leaves the peak (high-water mark) intact.
+    budget.refund_mem_bytes(400)?;
+    assert_eq!(budget.get_mem_bytes_net()?, 1100);
     assert_eq!(budget.get_mem_bytes_consumed()?, 1500);
 
-    budget.refund_mem_bytes(400)?;
-    assert_eq!(budget.get_mem_bytes_consumed()?, 1100);
-
-    // Refunding more than is outstanding saturates at zero, never underflows.
+    // Refunding more than is outstanding saturates the net at zero, never
+    // underflows; the peak is still unaffected.
     budget.refund_mem_bytes(10_000)?;
-    assert_eq!(budget.get_mem_bytes_consumed()?, 0);
+    assert_eq!(budget.get_mem_bytes_net()?, 0);
+    assert_eq!(budget.get_mem_bytes_consumed()?, 1500);
     Ok(())
 }
 
@@ -609,8 +614,9 @@ fn vm_linear_memory_refunded_on_teardown() -> Result<(), HostError> {
     let res = invoke_via_host_function(&host, contract, "sum", vec![ScVal::U32(128)])?;
     assert_eq!(res, ScVal::U32(8128));
 
-    let (net, linear_mem, memalloc_charged) = host.with_budget(|budget| {
+    let (net, peak, linear_mem, memalloc_charged) = host.with_budget(|budget| {
         Ok((
+            budget.get_mem_bytes_net()?,
             budget.get_mem_bytes_consumed()?,
             budget.get_wasm_mem_alloc()?,
             budget.get_tracker(ContractCostType::MemAlloc)?.mem,
@@ -620,9 +626,13 @@ fn vm_linear_memory_refunded_on_teardown() -> Result<(), HostError> {
     // The VM really did allocate (and grow) linear memory.
     assert!(linear_mem > 0);
     // Under this 1-byte-per-byte model the VM's whole linear-memory charge is
-    // `linear_mem`, and it is refunded at frame pop: what remains counted in the
-    // net is exactly the non-VM `MemAlloc` (`memalloc_charged - linear_mem`).
+    // `linear_mem`, and it is refunded from the net at frame pop: what remains
+    // counted in the net is exactly the non-VM `MemAlloc`.
     assert_eq!(net + linear_mem, memalloc_charged);
+    // The peak (what a caller must provision) still reflects the transient VM
+    // memory and sits above the refunded net.
+    assert!(peak >= linear_mem);
+    assert!(net < peak);
     Ok(())
 }
 
@@ -650,8 +660,9 @@ fn cross_contract_call_refunds_all_vm_linear_memory() -> Result<(), HostError> {
     )?;
     assert_eq!(res, ScVal::I32(11));
 
-    let (net, linear_mem, memalloc_charged) = host.with_budget(|budget| {
+    let (net, peak, linear_mem, memalloc_charged) = host.with_budget(|budget| {
         Ok((
+            budget.get_mem_bytes_net()?,
             budget.get_mem_bytes_consumed()?,
             budget.get_wasm_mem_alloc()?,
             budget.get_tracker(ContractCostType::MemAlloc)?.mem,
@@ -659,7 +670,11 @@ fn cross_contract_call_refunds_all_vm_linear_memory() -> Result<(), HostError> {
     })?;
 
     assert!(linear_mem > 0);
-    // Total refunded across both frames equals the combined VM linear memory.
+    // Total refunded from the net across both frames equals the combined VM
+    // linear memory.
     assert_eq!(net + linear_mem, memalloc_charged);
+    // The peak still reflects both VMs' linear memory, above the refunded net.
+    assert!(peak >= linear_mem);
+    assert!(net < peak);
     Ok(())
 }

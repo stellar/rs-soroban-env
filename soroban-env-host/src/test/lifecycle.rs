@@ -1835,8 +1835,8 @@ mod cap_58_constructor {
                     DetailedInvocationResources {
                         invocation: CreateContractEntryPoint,
                         resources: SubInvocationResources {
-                            instructions: 900782,
-                            mem_bytes: 3471641,
+                            instructions: 900788,
+                            mem_bytes: 3467179,
                             disk_read_entries: 0,
                             memory_read_entries: 6,
                             write_entries: 3,
@@ -1861,8 +1861,8 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 630488,
-                                    mem_bytes: 2339657,
+                                    instructions: 630492,
+                                    mem_bytes: 2335267,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
                                     write_entries: 2,
@@ -1887,8 +1887,8 @@ mod cap_58_constructor {
                                             ),
                                         ),
                                         resources: SubInvocationResources {
-                                            instructions: 348578,
-                                            mem_bytes: 1207659,
+                                            instructions: 348580,
+                                            mem_bytes: 1207667,
                                             disk_read_entries: 0,
                                             memory_read_entries: 2,
                                             write_entries: 0,
@@ -1993,8 +1993,8 @@ mod cap_58_constructor {
                             ),
                         ),
                         resources: SubInvocationResources {
-                            instructions: 2405557,
-                            mem_bytes: 5950376,
+                            instructions: 2405567,
+                            mem_bytes: 4769354,
                             disk_read_entries: 0,
                             memory_read_entries: 8,
                             write_entries: 3,
@@ -2019,8 +2019,8 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 915470,
-                                    mem_bytes: 2387855,
+                                    instructions: 915474,
+                                    mem_bytes: 2382585,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
                                     write_entries: 2,
@@ -2045,8 +2045,8 @@ mod cap_58_constructor {
                                             ),
                                         ),
                                         resources: SubInvocationResources {
-                                            instructions: 350168,
-                                            mem_bytes: 1207919,
+                                            instructions: 350170,
+                                            mem_bytes: 1207927,
                                             disk_read_entries: 0,
                                             memory_read_entries: 2,
                                             write_entries: 0,
@@ -2074,8 +2074,8 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 546289,
-                                    mem_bytes: 1175536,
+                                    instructions: 546291,
+                                    mem_bytes: 0,
                                     disk_read_entries: 0,
                                     memory_read_entries: 0,
                                     write_entries: 0,

@@ -218,9 +218,10 @@ impl Display for TraceState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "cpu:{}, mem:{}, prngs:{}/{}, objs:{}/{}, vm:{}/{}, evt:{}, store:{}/{}, foot:{}, stk:{}, auth:{}/{}",
+            "cpu:{}, mem:{}, mem_peak:{}, prngs:{}/{}, objs:{}/{}, vm:{}/{}, evt:{}, store:{}/{}, foot:{}, stk:{}, auth:{}/{}",
             self.cpu_insns,
             self.mem_bytes,
+            self.mem_peak,
             RenderHash(self.local_prng_hash),
             RenderHash(self.base_prng_hash),
             RenderSizeAndHash(self.local_objs_size, self.local_objs_hash),
