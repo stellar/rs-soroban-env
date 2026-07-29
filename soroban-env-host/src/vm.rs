@@ -74,16 +74,27 @@ impl Drop for VmInstantiationTimer {
 }
 
 /// The data owned by each VM's [wasmi::Store]: the [Host] handle used to
-/// dispatch host functions and meter resource usage. Wrapping the [Host] in a
-/// dedicated store-data type (rather than storing the [Host] directly) lets
-/// per-store state live here.
+/// dispatch host functions and meter resource usage, plus the cumulative
+/// `mem_bytes` charged to the budget for this store's linear memory (initial
+/// allocation + runtime grows), accumulated by the store's
+/// [wasmi::ResourceLimiter].
+///
+/// A VM's linear memory is transient -- it is freed when the VM is torn down
+/// -- but the charge accumulated here stays in the budget unless explicitly
+/// refunded. The only refund site is [Vm::execute_with_mem_refund], the
+/// canonical way to use a VM (see the rationale there); a VM used outside
+/// that scope (tests and benches) keeps its memory charged.
 pub struct VmStoreData {
     pub(crate) host: Host,
+    pub(crate) linear_mem_charged: u64,
 }
 
 impl VmStoreData {
     pub(crate) fn new(host: Host) -> Self {
-        Self { host }
+        Self {
+            host,
+            linear_mem_charged: 0,
+        }
     }
 }
 
@@ -181,6 +192,15 @@ impl Vm {
         let _span = tracy_span!("Vm::instantiate_wasmi");
 
         let wasmi_engine = parsed_module.wasmi_module.engine();
+        // The store data accumulates the linear-memory `MemAlloc` charged for
+        // this store (during instantiation and any runtime `memory.grow`), so
+        // that the VM's usage scope can refund it when the VM is torn down (see
+        // `Vm::execute_with_mem_refund`). If instantiation fails below, the
+        // partially-charged store is simply dropped un-refunded: the failure is
+        // either a memory-limit exceedance (unrecoverable, so a refund could
+        // not benefit any subsequent work) or a structural failure which is
+        // practically unreachable for stored wasm (and is unrecoverable);
+        // either way the stale charge is harmless.
         let mut store = {
             let _span = tracy_span!("Vm::instantiate_wasmi - store");
             wasmi::Store::new(wasmi_engine, VmStoreData::new(host.clone()))
@@ -413,6 +433,55 @@ impl Vm {
         )
     }
 
+    /// The canonical way to use a VM: runs `f` with this VM and -- when the
+    /// scope ends refunds the linear-memory `mem_bytes` charged for this VM
+    /// (tracked in its store's [VmStoreData]) back to the budget.
+    ///
+    /// The refund exists solely to return transient memory headroom for
+    /// subsequent metered work: each VM instantiation typically charges ~1MiB
+    /// of linear memory, which would otherwise accumulate against the memory
+    /// budget under deep or wide cross-contract calling even though the VMs'
+    /// memory is freed along the way. Consequently:
+    ///
+    /// - The refund runs whether `f` succeeded or failed: a failed callee whose
+    ///   error the caller catches (via `try_call`) must still return its
+    ///   memory, since the caller continues doing metered work. On the failure
+    ///   path the original error takes precedence over any refund error.
+    ///
+    /// - The Vm is pre-instantiated before entering this scope. Thus refund
+    ///   does not cover instantiation-time failure (see rationale in
+    ///   instantiate_wasmi)
+    ///
+    /// - All production VM use sites go through this method: contract
+    ///   invocation, the contract-protocol-version probe, and wasm upload
+    ///   validation.
+    ///
+    /// Correctness relies on this scope holding the last live reference to the
+    /// VM when `f` returns: the only clone handed out is the one held by the
+    /// contract frame, and `with_frame` pops that frame (dropping the clone).
+    /// If a future change retains a `Vm` reference past its frame's pop, the
+    /// refund here would fire while the memory is still live, under-counting
+    /// the budget.
+    pub(crate) fn execute_with_mem_refund<T>(
+        self: Rc<Self>,
+        host: &Host,
+        f: impl FnOnce(&Rc<Self>) -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
+        let _span = tracy_span!("Vm::execute_with_mem_refund");
+        let res = f(&self);
+        let settle = self
+            .linear_mem_charge()
+            .and_then(|charged| host.as_budget().refund_mem(charged));
+        match (res, settle) {
+            (Ok(v), Ok(())) => Ok(v),
+            // The call succeeded but the refund failed: surface the refund
+            // error as the call's error.
+            (Ok(_), Err(e)) => Err(e),
+            // The call failed: the primary error wins over any refund error.
+            (Err(e), _) => Err(e),
+        }
+    }
+
     pub(crate) fn invoke_function_raw(
         self: &Rc<Self>,
         host: &Host,
@@ -438,6 +507,17 @@ impl Vm {
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
         self.module.custom_section(name)
+    }
+
+    /// The linear-memory `mem_bytes` charged to the budget for this VM's
+    /// store (initial allocation + runtime grows) so far, as accumulated in
+    /// its [VmStoreData].
+    pub(crate) fn linear_mem_charge(&self) -> Result<u64, HostError> {
+        Ok(self
+            .wasmi_store
+            .try_borrow_or_err()?
+            .data()
+            .linear_mem_charged)
     }
 
     /// Utility function that synthesizes a `VmCaller<VmStoreData>` configured to point

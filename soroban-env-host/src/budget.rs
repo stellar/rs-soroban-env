@@ -1057,12 +1057,15 @@ impl Debug for BudgetImpl {
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
-            self.cpu_insns.limit, self.cpu_insns.total_count
+            self.cpu_insns.limit, self.cpu_insns.net_count
         )?;
+        // Memory reports both the running net (reduced by refunds) and the
+        // peak high-water mark; the peak is the quantity bounded by the limit.
+        // CPU is never refunded, so its net is its peak -- a single `used`.
         writeln!(
             f,
-            "Mem limit: {}; used: {}",
-            self.mem_bytes.limit, self.mem_bytes.total_count
+            "Mem limit: {}; used(net): {}; peak: {}",
+            self.mem_bytes.limit, self.mem_bytes.net_count, self.mem_bytes.peak_count
         )?;
         writeln!(f, "{:=<175}", "")?;
         writeln!(
@@ -1107,12 +1110,12 @@ impl Debug for BudgetImpl {
         writeln!(
             f,
             "Shadow cpu limit: {}; used: {}",
-            self.cpu_insns.shadow_limit, self.cpu_insns.shadow_total_count
+            self.cpu_insns.shadow_limit, self.cpu_insns.shadow_net_count
         )?;
         writeln!(
             f,
             "Shadow mem limit: {}; used: {}",
-            self.mem_bytes.shadow_limit, self.mem_bytes.shadow_total_count
+            self.mem_bytes.shadow_limit, self.mem_bytes.shadow_net_count
         )?;
         writeln!(f, "{:=<175}", "")?;
         Ok(())
@@ -1125,12 +1128,14 @@ impl Display for BudgetImpl {
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
-            self.cpu_insns.limit, self.cpu_insns.total_count
+            self.cpu_insns.limit, self.cpu_insns.net_count
         )?;
+        // Report the peak: it is the quantity bounded by the limit. (CPU is
+        // never refunded, so its net above is already its peak.)
         writeln!(
             f,
             "Mem limit: {}; used: {}",
-            self.mem_bytes.limit, self.mem_bytes.total_count
+            self.mem_bytes.limit, self.mem_bytes.peak_count
         )?;
         writeln!(f, "{:=<65}", "")?;
         writeln!(
@@ -1332,6 +1337,13 @@ impl Budget {
             .get_memory_cost(ty, 1, input)
     }
 
+    /// Refunds `amount` to the memory dimension (transient linear memory freed
+    /// at VM teardown).
+    pub(crate) fn refund_mem(&self, amount: u64) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.mem_bytes.refund(amount);
+        Ok(())
+    }
+
     /// Runs a user provided closure in shadow mode -- all metering is done
     /// through the shadow budget.
     ///
@@ -1407,12 +1419,31 @@ impl Budget {
             .track_time(ty, duration)
     }
 
+    /// The CPU consumed by this invocation. CPU is never refunded, so its net
+    /// count is equal to its peak; we read the net directly.
     pub fn get_cpu_insns_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.cpu_insns.get_total_count())
+        Ok(self.0.try_borrow_or_err()?.cpu_insns.get_net_count())
     }
 
+    /// The memory a caller must provision for this invocation: the *peak*
+    /// `mem_bytes`, i.e. the high-water mark of the memory dimension because:
+    /// transient allocations (e.g. VM linear memory) are refunded when freed,
+    /// so reporting the net would underestimate the memory requirement.
     pub fn get_mem_bytes_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_total_count())
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_peak_count())
+    }
+
+    /// The running *net* `mem_bytes` (currently-live usage, reduced by refunds).
+    /// Internal-only: the execution trace uses this, but callers outside the
+    /// crate must not, since it understates the peak (see
+    /// [`Self::get_mem_bytes_consumed`]).
+    // NB: in this commit the only callers are `#[cfg(test)]` net-assertion
+    // tests; the production caller (the trace) is introduced together with the
+    // separate `mem_peak` observation field in the following commit, at which
+    // point this `allow` is removed.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn get_mem_bytes_net(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_net_count())
     }
 
     pub fn get_cpu_insns_remaining(&self) -> Result<u64, HostError> {

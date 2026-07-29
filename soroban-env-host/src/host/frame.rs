@@ -753,17 +753,19 @@ impl Host {
             }
         };
         let vm = self.instantiate_vm(id, wasm_hash)?;
-        let relative_objects = Vec::new();
-        self.with_frame(
-            Frame::ContractVM {
-                vm: Rc::clone(&vm),
-                fn_name: *func,
-                args: args_vec,
-                instance,
-                relative_objects,
-            },
-            || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
-        )
+        vm.execute_with_mem_refund(self, |vm| {
+            let relative_objects = Vec::new();
+            self.with_frame(
+                Frame::ContractVM {
+                    vm: Rc::clone(vm),
+                    fn_name: *func,
+                    args: args_vec,
+                    instance,
+                    relative_objects,
+                },
+                || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
+            )
+        })
     }
 
     fn instantiate_vm(&self, id: &ContractId, wasm_hash: &Hash) -> Result<Rc<Vm>, HostError> {
@@ -891,12 +893,12 @@ impl Host {
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 let vm = self.instantiate_vm(contract_id, wasm_hash)?;
-                Ok(vm.module.proto_version)
+                vm.execute_with_mem_refund(self, |vm| Ok(vm.module.proto_version))
             }
             ContractExecutable::ExternalRef(external_ref) => {
                 let wasm_hash = self.resolve_external_ref_wasm_hash(external_ref)?;
                 let vm = self.instantiate_vm(contract_id, &wasm_hash)?;
-                Ok(vm.module.proto_version)
+                vm.execute_with_mem_refund(self, |vm| Ok(vm.module.proto_version))
             }
             ContractExecutable::StellarAsset => self.get_ledger_protocol_version(),
         }

@@ -11,6 +11,9 @@ use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_test_wasms::VEC;
 
+/// One WASM linear-memory page, in bytes.
+const WASM_PAGE: u64 = 0x10000;
+
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
     let host = observe_host!(Host::test_host_with_prng());
@@ -57,7 +60,10 @@ fn xdr_object_conversion() -> Result<(), HostError> {
 fn vm_hostfn_invocation() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(VEC);
-    // this contract requests initial pages = 16 worth of linear memory, not sure why
+    // This contract reserves 16 pages (1 MiB) of initial linear memory: that
+    // is the shadow stack the Rust/LLVM toolchain reserves by default
+    // (`-z stack-size=1048576` with `--stack-first`, the rustc default since
+    // 1.67), placed at the bottom of linear memory.
     let _ = host
         .clone()
         .test_budget(100_000, 1_048_576)
@@ -107,23 +113,33 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     host.call(id_obj, sym, args)?;
-    let (cpu_count, cpu_consumed, mem_consumed, wasm_mem_alloc) = host.with_budget(|budget| {
-        Ok((
-            budget
-                .get_tracker(ContractCostType::WasmInsnExec)?
-                .iterations,
-            budget.get_cpu_insns_consumed()?,
-            budget.get_mem_bytes_consumed()?,
-            budget.get_wasm_mem_alloc()?,
-        ))
-    })?;
+    let (cpu_count, cpu_consumed, mem_net, mem_peak, wasm_mem_alloc) =
+        host.with_budget(|budget| {
+            Ok((
+                budget
+                    .get_tracker(ContractCostType::WasmInsnExec)?
+                    .iterations,
+                budget.get_cpu_insns_consumed()?,
+                budget.get_mem_bytes_net()?,
+                budget.get_mem_bytes_consumed()?,
+                budget.get_wasm_mem_alloc()?,
+            ))
+        })?;
+    // `mem_net` is the running net after the call VM's linear memory (65536,
+    // one page) is refunded at teardown; `mem_peak` (the reported consumption)
+    // is the gross peak that still includes it.
     assert_eq!(
-        (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
-        (4005, 24030, 65536, 73862)
+        (cpu_count, cpu_consumed, wasm_mem_alloc, mem_net, mem_peak),
+        (4005, 24030, 65536, 8326, 73862)
     );
+    // A single VM whose whole linear memory is live at the peak: peak equals
+    // the net plus that one refunded page.
+    assert_eq!(mem_peak, mem_net + wasm_mem_alloc);
 
-    // giving it the exact required amount will succeed
-    let (cpu_required, mem_required) = (cpu_consumed, mem_consumed);
+    // Giving it the exact required amount will succeed. The mem limit must
+    // cover the *peak* live memory (`mem_peak`), i.e. the value the reported
+    // consumption now surfaces directly.
+    let (cpu_required, mem_required) = (cpu_consumed, mem_peak);
     let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
@@ -137,7 +153,8 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     })?;
 
     // give it one less cpu results in failure with no cpu consumption but full mem consumption
-    let (cpu_required, mem_required) = (cpu_consumed - 1, mem_consumed);
+    // (mem limit is the gross peak so mem is not the limiting factor here).
+    let (cpu_required, mem_required) = (cpu_consumed - 1, mem_peak);
     let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
@@ -442,7 +459,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let expected = expect![[r#"
         ===============================================================================================================================================================================
         Cpu limit: 100000000; used: 68471938
-        Mem limit: 41943040; used: 727679
+        Mem limit: 41943040; used(net): 727679; peak: 727679
         ===============================================================================================================================================================================
         CostType                           iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec                       246            None           984            0              4                   0                   0                   0                   
@@ -550,5 +567,210 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         host.as_budget().get_shadow_mem_bytes_consumed()?
     );
 
+    Ok(())
+}
+
+#[test]
+fn budget_refund_mem_primitives() -> Result<(), HostError> {
+    let host = Host::test_host();
+    let budget = host.budget_cloned();
+    budget.reset_default()?;
+    // Charge some memory, then refund it.
+    budget.charge(ContractCostType::MemAlloc, Some(4096))?;
+    let after_charge = budget.get_mem_bytes_net()?;
+    assert!(after_charge >= 4096);
+    budget.refund_mem(4096)?;
+    // Refund lowers the running net...
+    assert_eq!(budget.get_mem_bytes_net()?, after_charge - 4096);
+    // ...but never the peak: `get_mem_bytes_consumed` (the reported peak) stays
+    // at the high-water mark reached before the refund.
+    assert_eq!(budget.get_mem_bytes_consumed()?, after_charge);
+    // Refund is saturating: refunding more than consumed floors the net at 0
+    // (and still does not touch the peak).
+    budget.refund_mem(u64::MAX)?;
+    assert_eq!(budget.get_mem_bytes_net()?, 0);
+    assert_eq!(budget.get_mem_bytes_consumed()?, after_charge);
+    Ok(())
+}
+
+/// A VM's linear memory is charged during the call but refunded at teardown,
+/// so it is not part of the net memory consumed after the call returns.
+#[test]
+fn vm_linear_memory_refunded_on_teardown() -> Result<(), HostError> {
+    use crate::testutils::wasm::wasm_module_with_4n_insns;
+    let host = Host::test_host_with_recording_footprint();
+    let id = host.register_test_contract_wasm(&wasm_module_with_4n_insns(50));
+    let host = host
+        .test_budget(10_000_000, 10_485_760)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    let sym = Symbol::try_from_small_str("test").unwrap();
+    host.call(id, sym, host.test_vec_obj::<u32>(&[10])?)?;
+    let (net, peak, vm_page) = host.with_budget(|b| {
+        Ok((
+            b.get_mem_bytes_net()?,
+            b.get_mem_bytes_consumed()?,
+            b.get_wasm_mem_alloc()?,
+        ))
+    })?;
+    // The synthetic module declares `(memory 1)`, so its VM reserves exactly
+    // one 64KiB page. With the `MemAlloc` model set to 1 mem_byte per byte,
+    // the gross linear memory charged is exactly that page.
+    assert_eq!(vm_page, WASM_PAGE, "vm_page = {vm_page}");
+    // That whole page is refunded at teardown, so the net consumption retains
+    // none of it: net is strictly the (much smaller) persistent host
+    // allocations.
+    assert!(
+        net < WASM_PAGE,
+        "net {net} should exclude the refunded VM page ({WASM_PAGE})"
+    );
+    // But the reported (peak) consumption still includes it. With a single VM
+    // whose whole linear memory is live at the peak, the peak is exactly the
+    // net plus that one refunded page:
+    //   peak == net + wasm_mem_alloc.
+    assert_eq!(
+        peak,
+        net + vm_page,
+        "peak {peak} should equal net {net} + refunded VM memory {vm_page}"
+    );
+    Ok(())
+}
+
+/// Calling the same contract sequentially does not accumulate VM linear memory
+/// in the budget: each call's VM memory is refunded before the next runs, so
+/// the second call adds its own host allocations but not another VM page.
+#[test]
+fn sequential_calls_do_not_accumulate_vm_linear_memory() -> Result<(), HostError> {
+    use crate::testutils::wasm::wasm_module_with_4n_insns;
+    let host = Host::test_host_with_recording_footprint();
+    let id = host.register_test_contract_wasm(&wasm_module_with_4n_insns(50));
+    let host = host
+        .test_budget(100_000_000, 104_857_600)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    let sym = Symbol::try_from_small_str("test").unwrap();
+
+    host.call(id, sym, host.test_vec_obj::<u32>(&[10])?)?;
+    let after_one = host.as_budget().get_mem_bytes_net()?;
+    assert!(
+        after_one < WASM_PAGE,
+        "first call added {after_one}, which must exclude the refunded VM page ({WASM_PAGE})"
+    );
+    host.call(id, sym, host.test_vec_obj::<u32>(&[10])?)?;
+    let after_two = host.as_budget().get_mem_bytes_net()?;
+    let delta = after_two - after_one;
+    assert!(
+        delta < WASM_PAGE,
+        "second call added {delta}, which must exclude the refunded VM page ({WASM_PAGE})"
+    );
+    // Two sequential calls instantiate two one-page VMs
+    let gross = host.as_budget().get_wasm_mem_alloc()?;
+    assert_eq!(gross, 2 * WASM_PAGE, "gross = {gross}");
+    Ok(())
+}
+
+/// A cross-contract call keeps the caller's VM alive while the callee's VM is
+/// instantiated, so at the deepest point both VMs' linear memory is live and
+/// charged simultaneously (the peak). Both are torn down by the time the
+/// top-level call returns, so the combined VM memory is fully refunded and
+/// excluded from the net consumption.
+#[test]
+fn cross_contract_call_refunds_combined_vm_linear_memory() -> Result<(), HostError> {
+    use soroban_env_common::TryIntoVal;
+    use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT};
+    let host = Host::test_host_with_recording_footprint();
+    // `add_with` on INVOKE_CONTRACT calls `add` on the target (here ADD_I32),
+    // so a single top-level call nests two VMs: INVOKE_CONTRACT -> ADD_I32.
+    let add_id = host.register_test_contract_wasm(ADD_I32);
+    let invoke_id = host.register_test_contract_wasm(INVOKE_CONTRACT);
+    let host = host
+        .test_budget(100_000_000, 104_857_600)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        // 1 mem_byte charged per byte of linear memory, so the gross tracker
+        // equals the raw page bytes and the assertions below are exact.
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    let (a, b) = (3i32, 4i32);
+    let add_with = Symbol::try_from_small_str("add_with").unwrap();
+
+    host.call(invoke_id, add_with, test_vec![&host, a, b, add_id].into())?;
+    let gross = host.as_budget().get_wasm_mem_alloc()?;
+    let net = host.as_budget().get_mem_bytes_net()?;
+
+    // Peak: both VMs' linear memory is charged at once. Each contract declares
+    // its initial linear memory statically (verified against the compiled
+    // wasm memory sections; neither performs a runtime `memory.grow`):
+    //   - ADD_I32:         `(memory 16)` -- exactly the toolchain-default
+    //                      16-page (1 MiB)
+    //   - INVOKE_CONTRACT: `(memory 17)` -- the same 16-page shadow stack plus
+    //                      one page for its static data segment (SDK error
+    //                      strings from the `try_invoke_contract` path)
+    // So the combined peak is 16 + 17 = 33 pages.
+    assert_eq!(gross, 33 * WASM_PAGE, "gross = {gross}");
+    // Refund: both VMs are torn down by the time the call returns. The 33-page
+    // combined VM memory was refunded, leaving only small persistent host
+    // allocations.
+    assert!(
+        net < WASM_PAGE,
+        "net {net} should exclude the {gross} of refunded VM linear memory"
+    );
+    Ok(())
+}
+
+/// Creating a contract whose executable is an `ExternalRef` probes the
+/// referenced wasm's protocol version by instantiating a throwaway VM
+/// (`get_contract_protocol_version`); that probe VM's linear memory must be
+/// refunded just like on the `Wasm`-executable path.
+#[test]
+fn external_ref_probe_vm_linear_memory_refunded() -> Result<(), HostError> {
+    use crate::testutils::generate_account_id;
+    use crate::xdr::ScAddress;
+    use soroban_env_common::{EnvBase, StorageType};
+    use soroban_test_wasms::{ADD_I32, SUM_I32};
+
+    let host = Host::test_host_with_recording_footprint();
+    host.switch_to_recording_auth(true)?;
+
+    // An owner contract holding an executable ref to ADD_I32's wasm.
+    let owner = host.register_test_contract_wasm(SUM_I32);
+    let wasm_hash_obj = host.upload_contract_wasm(ADD_I32.to_vec())?;
+    let owner_id = host.contract_id_from_address(owner)?;
+    let tag_val = host
+        .create_executable_tag(host.string_new_from_slice(b"exec tag")?)?
+        .to_val();
+    host.with_test_contract_frame(
+        owner_id,
+        Symbol::try_from_small_str("set_ref").unwrap(),
+        || {
+            host.put_contract_data(tag_val, wasm_hash_obj.to_val(), StorageType::Persistent)
+                .map(Into::into)
+        },
+    )?;
+    let deployer = host.add_host_object(ScAddress::Account(generate_account_id(&host)))?;
+    let tag_obj = host.create_executable_tag(host.string_new_from_slice(b"exec tag")?)?;
+    let salt = host.bytes_new_from_slice(&[1u8; 32])?;
+
+    // Meter only the creation, with 1 mem_byte charged per byte of linear
+    // memory so the assertions are exact.
+    let host = host.test_budget(100_000_000, 104_857_600).enable_model(
+        ContractCostType::MemAlloc,
+        0,
+        0,
+        0,
+        1,
+    );
+    let g0 = host.as_budget().get_wasm_mem_alloc()?;
+    let n0 = host.as_budget().get_mem_bytes_net()?;
+    host.create_external_ref_contract(deployer, owner, tag_obj, salt, host.vec_new()?)?;
+    let gross = host.as_budget().get_wasm_mem_alloc()? - g0;
+    let net = host.as_budget().get_mem_bytes_net()? - n0;
+
+    // The only VM in the creation flow is the protocol-version probe of the
+    // referenced wasm: ADD_I32's toolchain-default 16-page (1 MiB) stack.
+    assert_eq!(gross, 16 * WASM_PAGE, "gross = {gross}");
+    // That probe VM's memory is refunded, so net retains none of it.
+    assert!(
+        net < WASM_PAGE,
+        "net {net} should exclude the refunded probe VM memory ({gross})"
+    );
     Ok(())
 }

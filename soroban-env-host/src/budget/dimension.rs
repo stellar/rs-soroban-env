@@ -22,8 +22,19 @@ pub(crate) struct BudgetDimension {
     pub(crate) limit: u64,
 
     /// Tracks the sum of _output_ values from the cost model, for purposes
-    /// of comparing to limit.
-    pub(crate) total_count: u64,
+    /// of comparing to limit. This is the running *net* value: for the memory
+    /// dimension it is decremented by `refund` when transient allocations
+    /// (e.g. a VM's linear memory) are freed, so it reflects currently-live
+    /// usage rather than cumulative usage.
+    pub(crate) net_count: u64,
+
+    /// The high-water mark of `net_count` over the lifetime of this budget
+    /// Advanced by `charge`, never lowered by `refund`, so it records the
+    /// *peak* value `net_count` ever reached. This is the quantity reported to
+    /// callers  (see `Budget::get_mem_bytes_consumed`). For the CPU dimension
+    /// it always equals `net_count` (never refunded); for the memory dimension
+    /// it can exceed `net_count` once transient allocations are refunded.
+    pub(crate) peak_count: u64,
 
     /// The shadow limit tracks work done internally that is not exposed to the
     /// external user -- it does not affect fees or decide the invocation outcome
@@ -32,8 +43,8 @@ pub(crate) struct BudgetDimension {
     /// exists only for preflight.
     pub(crate) shadow_limit: u64,
 
-    /// Similar to `total_count`, but towards the `shadow_limit`
-    pub(crate) shadow_total_count: u64,
+    /// Similar to `net_count`, but towards the `shadow_limit`
+    pub(crate) shadow_net_count: u64,
 }
 
 impl Default for BudgetDimension {
@@ -41,9 +52,10 @@ impl Default for BudgetDimension {
         Self {
             cost_models: [MeteredCostComponent::default(); ContractCostType::variants().len()],
             limit: 0,
-            total_count: 0,
+            net_count: 0,
+            peak_count: 0,
             shadow_limit: 0,
-            shadow_total_count: 0,
+            shadow_net_count: 0,
         }
     }
 }
@@ -52,8 +64,8 @@ impl Debug for BudgetDimension {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(
             f,
-            "limit: {}, total_count: {}",
-            self.limit, self.total_count
+            "limit: {}, net_count: {}, peak_count: {}",
+            self.limit, self.net_count, self.peak_count
         )?;
 
         for ct in ContractCostType::variants() {
@@ -63,8 +75,8 @@ impl Debug for BudgetDimension {
 
         writeln!(
             f,
-            "shadow limit: {}, shadow_total_count: {}",
-            self.shadow_limit, self.shadow_total_count
+            "shadow limit: {}, shadow_net_count: {}",
+            self.shadow_limit, self.shadow_net_count
         )?;
         Ok(())
     }
@@ -121,12 +133,16 @@ impl BudgetDimension {
         })
     }
 
-    pub(crate) fn get_total_count(&self) -> u64 {
-        self.total_count
+    pub(crate) fn get_net_count(&self) -> u64 {
+        self.net_count
+    }
+
+    pub(crate) fn get_peak_count(&self) -> u64 {
+        self.peak_count
     }
 
     pub(crate) fn get_remaining(&self) -> u64 {
-        self.limit.saturating_sub(self.total_count)
+        self.limit.saturating_sub(self.net_count)
     }
 
     pub(crate) fn reset(&mut self, limit: u64) {
@@ -136,15 +152,29 @@ impl BudgetDimension {
     }
 
     pub(crate) fn reset_count(&mut self) {
-        self.total_count = 0;
-        self.shadow_total_count = 0;
+        self.net_count = 0;
+        self.peak_count = 0;
+        self.shadow_net_count = 0;
+    }
+
+    /// Raises the running `net_count` by `amount` and advances `peak_count`
+    /// (the high-water mark) in the same step.
+    fn add_to_net(&mut self, amount: u64) {
+        self.net_count = self.net_count.saturating_add(amount);
+        self.peak_count = self.peak_count.max(self.net_count);
+    }
+
+    /// Credits `amount` back to this dimension (used to refund transient
+    /// allocations, e.g. a VM's linear memory freed at teardown).
+    pub(crate) fn refund(&mut self, amount: u64) {
+        self.net_count = self.net_count.saturating_sub(amount);
     }
 
     pub(crate) fn check_budget_limit(&self, is_shadow: IsShadowMode) -> Result<(), HostError> {
         let over_limit = if is_shadow.0 {
-            self.shadow_total_count > self.shadow_limit
+            self.shadow_net_count > self.shadow_limit
         } else {
-            self.total_count > self.limit
+            self.net_count > self.limit
         };
 
         if over_limit {
@@ -179,9 +209,10 @@ impl BudgetDimension {
         }
 
         if is_shadow.0 {
-            self.shadow_total_count = self.shadow_total_count.saturating_add(amount);
+            self.shadow_net_count = self.shadow_net_count.saturating_add(amount);
         } else {
-            self.total_count = self.total_count.saturating_add(amount);
+            // Raise the net count and advance the peak atomically
+            self.add_to_net(amount);
         }
 
         Ok(amount)

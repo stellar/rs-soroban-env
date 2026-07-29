@@ -1092,7 +1092,7 @@ mod test {
         expect![[r#"
             InvocationResources {
                 instructions: 4146007,
-                mem_bytes: 2861644,
+                mem_bytes: 1812972,
                 disk_read_entries: 0,
                 memory_read_entries: 2,
                 write_entries: 2,
@@ -1110,7 +1110,7 @@ mod test {
                 invocation: CreateContractEntryPoint,
                 resources: SubInvocationResources {
                     instructions: 4146007,
-                    mem_bytes: 2861644,
+                    mem_bytes: 1812972,
                     disk_read_entries: 0,
                     memory_read_entries: 2,
                     write_entries: 2,

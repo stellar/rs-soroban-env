@@ -313,22 +313,26 @@ impl Host {
             // native test contracts behave like wasm. They will never be
             // instantiated, this is just to exercise their storage logic.
         } else {
-            let _check_vm = Vm::new(
+            let check_vm = Vm::new(
                 self,
                 ContractId(Hash(hash_bytes.metered_clone(self)?)),
                 wasm_bytes_m.as_slice(),
             )?;
-            // At this point we do a secondary parse on what we've checked to be a valid
-            // module in order to extract a refined cost model, which we'll store in the
-            // code entry's ext field, for future parsing and instantiations.
-            _check_vm.module.cost_inputs.charge_for_parsing(self)?;
-            ext = crate::xdr::ContractCodeEntryExt::V1(crate::xdr::ContractCodeEntryV1 {
-                ext: ExtensionPoint::V0,
-                cost_inputs: crate::vm::ParsedModule::extract_refined_contract_cost_inputs(
-                    self,
-                    wasm_bytes_m.as_slice(),
-                )?,
-            });
+            ext = check_vm.execute_with_mem_refund(self, |check_vm| {
+                // At this point we do a secondary parse on what we've checked to be a valid
+                // module in order to extract a refined cost model, which we'll store in the
+                // code entry's ext field, for future parsing and instantiations.
+                check_vm.module.cost_inputs.charge_for_parsing(self)?;
+                Ok(crate::xdr::ContractCodeEntryExt::V1(
+                    crate::xdr::ContractCodeEntryV1 {
+                        ext: ExtensionPoint::V0,
+                        cost_inputs: crate::vm::ParsedModule::extract_refined_contract_cost_inputs(
+                            self,
+                            wasm_bytes_m.as_slice(),
+                        )?,
+                    },
+                ))
+            })?;
         }
 
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;

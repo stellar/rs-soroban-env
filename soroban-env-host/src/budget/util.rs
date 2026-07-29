@@ -56,12 +56,12 @@ impl Budget {
 
     pub fn cpu_limit_exceeded(&self) -> Result<bool, HostError> {
         let cpu = &self.0.try_borrow_or_err()?.cpu_insns;
-        Ok(cpu.total_count > cpu.limit)
+        Ok(cpu.net_count > cpu.limit)
     }
 
     pub fn mem_limit_exceeded(&self) -> Result<bool, HostError> {
         let mem = &self.0.try_borrow_or_err()?.mem_bytes;
-        Ok(mem.total_count > mem.limit)
+        Ok(mem.net_count > mem.limit)
     }
 
     pub fn reset_tracker(&self) -> Result<(), HostError> {
@@ -108,22 +108,22 @@ impl Budget {
     }
 
     pub fn get_shadow_cpu_insns_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.cpu_insns.shadow_total_count)
+        Ok(self.0.try_borrow_or_err()?.cpu_insns.shadow_net_count)
     }
 
     pub fn get_shadow_mem_bytes_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.mem_bytes.shadow_total_count)
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.shadow_net_count)
     }
 
     #[allow(unused)]
     pub fn shadow_cpu_limit_exceeded(&self) -> Result<bool, HostError> {
         let cpu = &self.0.try_borrow_or_err()?.cpu_insns;
-        Ok(cpu.shadow_total_count > cpu.shadow_limit)
+        Ok(cpu.shadow_net_count > cpu.shadow_limit)
     }
 
     pub fn shadow_mem_limit_exceeded(&self) -> Result<bool, HostError> {
         let mem = &self.0.try_borrow_or_err()?.mem_bytes;
-        Ok(mem.shadow_total_count > mem.shadow_limit)
+        Ok(mem.shadow_net_count > mem.shadow_limit)
     }
 }
 

@@ -25,8 +25,10 @@ pub(crate) const WASMI_LIMITS_CONFIG: WasmiLimits = WasmiLimits {
 };
 
 // The `ResourceLimiter` is implemented for each VM store's data (rather than
-// for `Host`, which is shared by all stores): wasmi invokes the limiter on the
-// growing store's own data.
+// for `Host`, which is shared by all stores) so that the linear-memory
+// charges accumulate structurally in the store that owns the growing memory:
+// wasmi invokes the limiter on the growing store's own data, both during
+// instantiation and for runtime `memory.grow`.
 impl ResourceLimiter for VmStoreData {
     fn memory_growing(
         &mut self,
@@ -60,11 +62,36 @@ impl ResourceLimiter for VmStoreData {
                     .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
             }
 
+            // VM linear memory is charged only to the real budget and refunded
+            // only from the real budget (see `Vm::execute_with_mem_refund`);
+            // guest memory only grows during instantiation or execution,
+            // neither of which runs in shadow mode. This is just a defensive
+            // check.
+            if self
+                .host
+                .as_budget()
+                .is_in_shadow_mode()
+                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?
+            {
+                return Err(errors::MemoryError::OutOfBoundsGrowth);
+            }
+
             self.host
                 .as_budget()
                 .charge(ContractCostType::MemAlloc, Some(delta))
-                .map(|_| true)
-                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
+                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+
+            // Accumulate the charge in this store's data so that the VM's
+            // usage scope can refund it when the VM is torn down (see
+            // `Vm::execute_with_mem_refund`).
+            let charged = self
+                .host
+                .as_budget()
+                .get_memory_cost(ContractCostType::MemAlloc, Some(delta))
+                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+            self.linear_mem_charged = self.linear_mem_charged.saturating_add(charged);
+
+            Ok(true)
         } else {
             Err(errors::MemoryError::OutOfBoundsGrowth)
         }
