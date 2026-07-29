@@ -140,6 +140,12 @@ impl BudgetDimension {
         self.shadow_total_count = 0;
     }
 
+    /// Credits `amount` back to the running count, used to return a transient
+    /// allocation (e.g. a torn-down VM's linear memory) that has been freed.
+    pub(crate) fn refund(&mut self, amount: u64) {
+        self.total_count = self.total_count.saturating_sub(amount);
+    }
+
     pub(crate) fn check_budget_limit(&self, is_shadow: IsShadowMode) -> Result<(), HostError> {
         let over_limit = if is_shadow.0 {
             self.shadow_total_count > self.shadow_limit

@@ -1423,6 +1423,13 @@ impl Budget {
         Ok(self.0.try_borrow_or_err()?.mem_bytes.get_remaining())
     }
 
+    /// Credits `amount` back to the memory budget, used to refund a torn-down
+    /// VM's transient linear memory when its frame pops.
+    pub(crate) fn refund_mem_bytes(&self, amount: u64) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.mem_bytes.refund(amount);
+        Ok(())
+    }
+
     pub(crate) fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
         self.0.try_borrow_mut_or_err()?.get_wasmi_fuel_remaining()
     }

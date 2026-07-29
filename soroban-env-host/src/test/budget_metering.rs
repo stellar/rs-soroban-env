@@ -4,12 +4,14 @@ use crate::{
         metered_clone::{MeteredClone, MeteredIterator},
         metered_xdr::metered_write_xdr,
     },
-    xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
-    Env, ErrorHandler, Host, HostError, Symbol, Val,
+    xdr::{
+        ContractCostType, HostFunction, InvokeContractArgs, ScAddress, ScMap, ScMapEntry, ScVal,
+    },
+    AddressObject, Env, ErrorHandler, Host, HostError, Symbol, Val,
 };
 use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-use soroban_test_wasms::VEC;
+use soroban_test_wasms::{ADD_I32, ALLOC, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
@@ -550,5 +552,114 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         host.as_budget().get_shadow_mem_bytes_consumed()?
     );
 
+    Ok(())
+}
+
+// Invoke a contract through the production `invoke_function` entry, which
+// pushes a `Frame::HostFunction` which owns the outermost VM's linear memory to
+// be refunded (unlike `host.call`)
+fn invoke_via_host_function(
+    host: &Host,
+    contract: AddressObject,
+    func: &str,
+    args: Vec<ScVal>,
+) -> Result<ScVal, HostError> {
+    let contract_id = host.contract_id_from_address(contract)?;
+    host.invoke_function(HostFunction::InvokeContract(InvokeContractArgs {
+        contract_address: ScAddress::Contract(contract_id),
+        function_name: func.try_into().unwrap(),
+        args: args.try_into().unwrap(),
+    }))
+}
+
+#[test]
+fn mem_refund_lowers_consumed_and_saturates() -> Result<(), HostError> {
+    // A purely linear `MemAlloc` model (charge == input bytes) keeps the
+    // arithmetic exact, and it is the only cost type with a non-zero model, so
+    // nothing else perturbs `mem_bytes`.
+    let host = Host::test_host()
+        .test_budget(u64::MAX, u64::MAX)
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    let budget = host.as_budget();
+
+    budget.charge(ContractCostType::MemAlloc, Some(1000))?;
+    budget.charge(ContractCostType::MemAlloc, Some(500))?;
+    assert_eq!(budget.get_mem_bytes_consumed()?, 1500);
+
+    budget.refund_mem_bytes(400)?;
+    assert_eq!(budget.get_mem_bytes_consumed()?, 1100);
+
+    // Refunding more than is outstanding saturates at zero, never underflows.
+    budget.refund_mem_bytes(10_000)?;
+    assert_eq!(budget.get_mem_bytes_consumed()?, 0);
+    Ok(())
+}
+
+#[test]
+fn vm_linear_memory_refunded_on_teardown() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let contract = host.register_test_contract_wasm(ALLOC);
+    // Linear `MemAlloc` model (charge == bytes), and a clean memory accounting
+    // slate so the measurements below reflect only this invocation.
+    let host =
+        host.test_budget(u64::MAX, u64::MAX)
+            .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    host.as_budget().reset_tracker()?;
+
+    let res = invoke_via_host_function(&host, contract, "sum", vec![ScVal::U32(128)])?;
+    assert_eq!(res, ScVal::U32(8128));
+
+    let (net, linear_mem, memalloc_charged) = host.with_budget(|budget| {
+        Ok((
+            budget.get_mem_bytes_consumed()?,
+            budget.get_wasm_mem_alloc()?,
+            budget.get_tracker(ContractCostType::MemAlloc)?.mem,
+        ))
+    })?;
+
+    // The VM really did allocate (and grow) linear memory.
+    assert!(linear_mem > 0);
+    // Under this 1-byte-per-byte model the VM's whole linear-memory charge is
+    // `linear_mem`, and it is refunded at frame pop: what remains counted in the
+    // net is exactly the non-VM `MemAlloc` (`memalloc_charged - linear_mem`).
+    assert_eq!(net + linear_mem, memalloc_charged);
+    Ok(())
+}
+
+#[test]
+fn cross_contract_call_refunds_all_vm_linear_memory() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let invoker = host.register_test_contract_wasm(INVOKE_CONTRACT);
+    let adder = host.register_test_contract_wasm(ADD_I32);
+    let host =
+        host.test_budget(u64::MAX, u64::MAX)
+            .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    host.as_budget().reset_tracker()?;
+
+    // `add_with(5, 6, adder)` makes INVOKE_CONTRACT call adder.add(5, 6).
+    let adder_id = host.contract_id_from_address(adder)?;
+    let res = invoke_via_host_function(
+        &host,
+        invoker,
+        "add_with",
+        vec![
+            ScVal::I32(5),
+            ScVal::I32(6),
+            ScVal::Address(ScAddress::Contract(adder_id)),
+        ],
+    )?;
+    assert_eq!(res, ScVal::I32(11));
+
+    let (net, linear_mem, memalloc_charged) = host.with_budget(|budget| {
+        Ok((
+            budget.get_mem_bytes_consumed()?,
+            budget.get_wasm_mem_alloc()?,
+            budget.get_tracker(ContractCostType::MemAlloc)?.mem,
+        ))
+    })?;
+
+    assert!(linear_mem > 0);
+    // Total refunded across both frames equals the combined VM linear memory.
+    assert_eq!(net + linear_mem, memalloc_charged);
     Ok(())
 }
