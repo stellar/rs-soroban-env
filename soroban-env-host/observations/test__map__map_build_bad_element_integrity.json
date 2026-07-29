@@ -9,10 +9,10 @@
   "   7 call map_put(Map(obj#1), Map(obj#1), Address(obj#1))": "",
   "   8 call map_put(Map(obj#1), Address(obj#1), Map(obj#1))": "cpu:3160",
   "   9 call map_new_from_slices(1)": "cpu:3280",
-  "  10 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:3867, mem:360",
+  "  10 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:3867, mem:360, mem_peak:360",
   "  11 call map_put(Map(obj#1), Map(obj#1), Map(obj#16711681))": "",
   "  12 call map_put(Map(obj#1), Map(obj#16711681), Map(obj#1))": "cpu:4047",
   "  13 call map_new_from_slices(1)": "cpu:4167",
-  "  14 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:4754, mem:400",
-  "  15 end": "cpu:4754, mem:400, prngs:-/-, objs:-/3@58bdb096, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  14 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:4754, mem:400, mem_peak:400",
+  "  15 end": "cpu:4754, mem:400, mem_peak:400, prngs:-/-, objs:-/3@58bdb096, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

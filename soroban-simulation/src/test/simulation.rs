@@ -557,7 +557,7 @@ fn test_simulate_invoke_contract_with_auth() {
             resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    expect!["20618153"].assert_eq(&res.simulated_memory.to_string());
+    expect!["16711761"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -778,7 +778,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
             resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    expect!["5296848"].assert_eq(&res.simulated_memory.to_string());
+    expect!["4819689"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![

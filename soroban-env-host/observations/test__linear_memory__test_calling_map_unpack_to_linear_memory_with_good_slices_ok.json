@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8074129",
   "  19 pop VM:89befed0:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8074631, mem:1629631, objs:-/9@9500758e, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#21))": "cpu:8075653, mem:1629791, objs:-/11@d33fbf46",
-  "  22 push VM:89befed0:loadmem1(Map(obj#19), U32(0), U32(65024), U32(32))": "cpu:8715696, mem:1908940, objs:-/12@d37dc0ef, vm:65536@b1cd98b9/4@70bfd778, stk:1@f9cfe88a, auth:1@87d4a23e/-",
-  "  23 call map_unpack_to_linear_memory(Map(obj#19), U32(0), U32(65024), U32(32))": "cpu:8718613, mem:1909058, objs:1@2cbe5bc9/12@d37dc0ef, vm:-/-, stk:1@3bdb0d93",
-  "  24 ret map_unpack_to_linear_memory -> Ok(Void)": "cpu:8731084, mem:1909330",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8074631, mem:1432975, objs:-/9@9500758e, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#21))": "cpu:8075653, mem:1433135, objs:-/11@d33fbf46",
+  "  22 push VM:89befed0:loadmem1(Map(obj#19), U32(0), U32(65024), U32(32))": "cpu:8715696, mem:1712284, mem_peak:1712284, objs:-/12@d37dc0ef, vm:65536@b1cd98b9/4@70bfd778, stk:1@f9cfe88a, auth:1@87d4a23e/-",
+  "  23 call map_unpack_to_linear_memory(Map(obj#19), U32(0), U32(65024), U32(32))": "cpu:8718613, mem:1712402, mem_peak:1712402, objs:1@2cbe5bc9/12@d37dc0ef, vm:-/-, stk:1@3bdb0d93",
+  "  24 ret map_unpack_to_linear_memory -> Ok(Void)": "cpu:8731084, mem:1712674, mem_peak:1712674",
   "  25 pop VM:89befed0:loadmem1 -> Ok(Void)": " vm:65536@1ef083fd/4@70bfd778",
-  "  26 ret call -> Ok(Void)": " objs:-/12@d37dc0ef, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8731084, mem:1909330, prngs:-/9b4a753, objs:-/12@d37dc0ef, vm:-/-, evt:-, store:-/2@fc1493c0, foot:2@c3a6a172, stk:-, auth:-/-"
+  "  26 ret call -> Ok(Void)": " mem:1647122, objs:-/12@d37dc0ef, vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8731084, mem:1647122, mem_peak:1712674, prngs:-/9b4a753, objs:-/12@d37dc0ef, vm:-/-, evt:-, store:-/2@fc1493c0, foot:2@c3a6a172, stk:-, auth:-/-"
 }

@@ -19,12 +19,12 @@
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
   "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:8067510",
   "  19 pop VM:49605a:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8068012, mem:1628699, objs:-/9@aee45def, vm:-/-, stk:-, auth:-/-",
-  "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8068454, mem:1628779, objs:-/10@9afebef0",
-  "  22 push VM:49605a:loadmem2(U32(0), U32(65024), U32(32))": "cpu:8707895, mem:1907754, objs:-/11@124ef31, vm:65536@b1cd98b9/4@70bfd778, stk:1@674a9e57, auth:1@d114d61d/-",
-  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8710373, mem:1907832, vm:-/-",
-  "  24 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:8721437, mem:1909160",
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8068012, mem:1432043, objs:-/9@aee45def, vm:-/-, stk:-, auth:-/-",
+  "  21 call call(Address(obj#17), Symbol(loadmem2), Vec(obj#19))": "cpu:8068454, mem:1432123, objs:-/10@9afebef0",
+  "  22 push VM:49605a:loadmem2(U32(0), U32(65024), U32(32))": "cpu:8707895, mem:1711098, mem_peak:1711098, objs:-/11@124ef31, vm:65536@b1cd98b9/4@70bfd778, stk:1@674a9e57, auth:1@d114d61d/-",
+  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8710373, mem:1711176, mem_peak:1711176, vm:-/-",
+  "  24 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:8721437, mem:1712504, mem_peak:1712504",
   "  25 pop VM:49605a:loadmem2 -> Err(Error(Value, InvalidInput))": " vm:65536@6d331be9/4@70bfd778",
-  "  26 ret call -> Err(Error(Value, InvalidInput))": " vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8721437, mem:1909160, prngs:-/9b4a753, objs:-/11@124ef31, vm:-/-, evt:-, store:-/2@49a91c13, foot:2@655bfa0d, stk:-, auth:-/-"
+  "  26 ret call -> Err(Error(Value, InvalidInput))": " mem:1646952, vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8721437, mem:1646952, mem_peak:1712504, prngs:-/9b4a753, objs:-/11@124ef31, vm:-/-, evt:-, store:-/2@49a91c13, foot:2@655bfa0d, stk:-, auth:-/-"
 }
