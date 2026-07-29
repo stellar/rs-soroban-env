@@ -1,6 +1,6 @@
 {
-  "   0 begin": "cpu:14285, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
-  "   1 push UploadContractWasm:()": "cpu:16507, mem:608, stk:1@41146a5",
-  "   2 pop UploadContractWasm: -> Err(Error(WasmVm, InvalidAction))": "cpu:451381, mem:134654",
-  "   3 end": "cpu:451381, mem:134654, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "   0 begin": "cpu:14285, mem:0, mem_peak:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 push UploadContractWasm:()": "cpu:16507, mem:608, mem_peak:608, stk:1@41146a5",
+  "   2 pop UploadContractWasm: -> Err(Error(WasmVm, InvalidAction))": "cpu:451381, mem:134654, mem_peak:134654",
+  "   3 end": "cpu:451381, mem:134654, mem_peak:134654, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

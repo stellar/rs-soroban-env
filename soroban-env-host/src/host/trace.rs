@@ -57,7 +57,11 @@ impl<'a> TraceRecord<'a> {
 /// why its constructor returns an `Option`).
 pub struct TraceState {
     cpu_insns: u64,
+    /// The running *net* memory (reduced by refunds), for the running trace.
     mem_bytes: u64,
+    /// The *peak* memory high-water mark (the reported/provisioning value), so
+    /// the trace observes both the running net and the peak.
+    mem_peak: u64,
     local_prng_hash: u64,
     base_prng_hash: u64,
     local_objs_size: usize,
@@ -106,7 +110,8 @@ impl TraceState {
             let (auth_trackers_hash, auth_trackers_size) = host.auth_trackers_hash_and_size();
             state = Some(TraceState {
                 cpu_insns: host.as_budget().get_cpu_insns_consumed()?,
-                mem_bytes: host.as_budget().get_mem_bytes_consumed()?,
+                mem_bytes: host.as_budget().get_mem_bytes_net()?,
+                mem_peak: host.as_budget().get_mem_bytes_consumed()?,
                 local_prng_hash: host.local_prng_hash(),
                 base_prng_hash: host.base_prng_hash(),
                 local_objs_size: host.local_objs_size(),

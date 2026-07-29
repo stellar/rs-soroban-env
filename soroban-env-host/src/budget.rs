@@ -1437,11 +1437,6 @@ impl Budget {
     /// Internal-only: the execution trace uses this, but callers outside the
     /// crate must not, since it understates the peak (see
     /// [`Self::get_mem_bytes_consumed`]).
-    // NB: in this commit the only callers are `#[cfg(test)]` net-assertion
-    // tests; the production caller (the trace) is introduced together with the
-    // separate `mem_peak` observation field in the following commit, at which
-    // point this `allow` is removed.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn get_mem_bytes_net(&self) -> Result<u64, HostError> {
         Ok(self.0.try_borrow_or_err()?.mem_bytes.get_net_count())
     }

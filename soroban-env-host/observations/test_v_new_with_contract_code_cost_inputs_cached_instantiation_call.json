@@ -1,14 +1,14 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/2@bd85d3f3, foot:2@f0a688bd, stk:-, auth:-/-",
-  "   1 call vec_new()": "cpu:135468, mem:28214, objs:-/1@10432200",
-  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:135970, mem:28294, objs:-/2@acf0be8f",
+  "   0 begin": "cpu:0, mem:0, mem_peak:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/2@bd85d3f3, foot:2@f0a688bd, stk:-, auth:-/-",
+  "   1 call vec_new()": "cpu:135468, mem:28214, mem_peak:28214, objs:-/1@10432200",
+  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:135970, mem:28294, mem_peak:28294, objs:-/2@acf0be8f",
   "   3 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "",
-  "   4 push VM:e4b7da03:test()": "cpu:214809, mem:169765, objs:-/3@2988da9d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@29e1a6d0, auth:1@1d00dc6b/-",
-  "   5 pop VM:e4b7da03:test -> Ok(Symbol(pass))": "cpu:217303, mem:169795",
-  "   6 ret call -> Ok(Symbol(pass))": " vm:-/-, stk:-, auth:-/-",
+  "   4 push VM:e4b7da03:test()": "cpu:214809, mem:169765, mem_peak:169765, objs:-/3@2988da9d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@29e1a6d0, auth:1@1d00dc6b/-",
+  "   5 pop VM:e4b7da03:test -> Ok(Symbol(pass))": "cpu:217303, mem:169795, mem_peak:169795",
+  "   6 ret call -> Ok(Symbol(pass))": " mem:104243, vm:-/-, stk:-, auth:-/-",
   "   7 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "",
-  "   8 push VM:e4b7da03:test()": "cpu:296142, mem:311266, objs:-/4@ac1a9dd, vm:65536@b1cd98b9/2@2f94d90d, stk:1@29e1a6d0, auth:1@d2c32768/-",
-  "   9 pop VM:e4b7da03:test -> Ok(Symbol(pass))": "cpu:298636, mem:311296",
-  "  10 ret call -> Ok(Symbol(pass))": " vm:-/-, stk:-, auth:-/-",
-  "  11 end": "cpu:298636, mem:311296, prngs:-/-, objs:-/4@ac1a9dd, vm:-/-, evt:-, store:-/2@bd85d3f3, foot:2@f0a688bd, stk:-, auth:-/-"
+  "   8 push VM:e4b7da03:test()": "cpu:296142, mem:245714, mem_peak:245714, objs:-/4@ac1a9dd, vm:65536@b1cd98b9/2@2f94d90d, stk:1@29e1a6d0, auth:1@d2c32768/-",
+  "   9 pop VM:e4b7da03:test -> Ok(Symbol(pass))": "cpu:298636, mem:245744, mem_peak:245744",
+  "  10 ret call -> Ok(Symbol(pass))": " mem:180192, vm:-/-, stk:-, auth:-/-",
+  "  11 end": "cpu:298636, mem:180192, mem_peak:245744, prngs:-/-, objs:-/4@ac1a9dd, vm:-/-, evt:-, store:-/2@bd85d3f3, foot:2@f0a688bd, stk:-, auth:-/-"
 }
