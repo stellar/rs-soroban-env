@@ -37,9 +37,8 @@ wasmparser = "=0.116.1"
 [workspace.dependencies.stellar-xdr]
 version = "=27.0.0"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "a90de0c0d6eba8be668e9074cfb7b285ac0ecd34"
+rev = "3305b3e31f19fdb4e64e4b7a4354bb120cdf4415"
 default-features = false
-features = ["cap_0085_executable_ref"]
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
