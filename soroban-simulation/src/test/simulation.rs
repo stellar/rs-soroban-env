@@ -132,7 +132,7 @@ fn test_simulate_upload_wasm() {
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
 
-    expect!["1671695"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["1671719"].assert_eq(&res.simulated_instructions.to_string());
     expect!["684"].assert_eq(
         &res.transaction_data
             .as_ref()
@@ -164,7 +164,7 @@ fn test_simulate_upload_wasm() {
             resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    expect!["835846"].assert_eq(&res.simulated_memory.to_string());
+    expect!["685200"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -260,8 +260,8 @@ fn test_simulation_returns_insufficient_budget_error() {
     assert!(res.diagnostic_events.is_empty());
 
     assert_eq!(res.transaction_data, None);
-    expect!["111612"].assert_eq(&res.simulated_instructions.to_string());
-    expect!["45054"].assert_eq(&res.simulated_memory.to_string());
+    expect!["111636"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["45066"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(res.modified_entries, vec![]);
 }
 
@@ -294,8 +294,8 @@ fn test_simulation_returns_logic_error() {
     assert!(!res.diagnostic_events.is_empty());
 
     assert_eq!(res.transaction_data, None);
-    expect!["151664"].assert_eq(&res.simulated_instructions.to_string());
-    expect!["75832"].assert_eq(&res.simulated_memory.to_string());
+    expect!["151688"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["75844"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(res.modified_entries, vec![]);
 }
 
@@ -340,7 +340,7 @@ fn test_simulate_create_contract() {
     );
     assert!(res.contract_events.is_empty());
     assert!(res.diagnostic_events.is_empty());
-    expect!["2561212"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["2561236"].assert_eq(&res.simulated_instructions.to_string());
     expect!["104"].assert_eq(
         &res.transaction_data
             .as_ref()
@@ -372,7 +372,7 @@ fn test_simulate_create_contract() {
             resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    expect!["1280604"].assert_eq(&res.simulated_memory.to_string());
+    expect!["1084692"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -497,7 +497,7 @@ fn test_simulate_invoke_contract_with_auth() {
     assert!(res.contract_events.is_empty());
     assert!(!res.diagnostic_events.is_empty());
 
-    expect!["41236360"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["41236552"].assert_eq(&res.simulated_instructions.to_string());
     expect!["144"].assert_eq(
         &res.transaction_data
             .as_ref()
@@ -557,7 +557,7 @@ fn test_simulate_invoke_contract_with_auth() {
             resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    expect!["20618153"].assert_eq(&res.simulated_memory.to_string());
+    expect!["16711857"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![LedgerEntryDiff {
@@ -746,7 +746,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
         .to_xdr(Limits::none())
         .unwrap()
         .len() as u32;
-    expect!["10593718"].assert_eq(&res.simulated_instructions.to_string());
+    expect!["10593790"].assert_eq(&res.simulated_instructions.to_string());
     expect!["6230998"].assert_eq(
         &res.transaction_data
             .as_ref()
@@ -778,7 +778,7 @@ fn test_simulate_invoke_contract_with_autorestore() {
             resource_fee: res.transaction_data.as_ref().unwrap().resource_fee,
         })
     );
-    expect!["5296848"].assert_eq(&res.simulated_memory.to_string());
+    expect!["4819725"].assert_eq(&res.simulated_memory.to_string());
     assert_eq!(
         res.modified_entries,
         vec![
@@ -1413,7 +1413,7 @@ fn test_simulate_successful_sac_call() {
             },
         },]
     );
-    expect!["2815998"].assert_eq(
+    expect!["2816046"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()
@@ -1437,7 +1437,7 @@ fn test_simulate_successful_sac_call() {
             .write_bytes
             .to_string(),
     );
-    expect!["52351"].assert_eq(
+    expect!["52352"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()
@@ -1547,7 +1547,7 @@ fn test_simulate_unsuccessful_sac_call_with_try_call() {
             issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
         }),
     });
-    expect!["4696513"].assert_eq(
+    expect!["4696585"].assert_eq(
         &res.transaction_data
             .as_ref()
             .unwrap()

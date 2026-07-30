@@ -117,7 +117,7 @@ impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
 impl_declared_size_type!(HostObject, 64);
 impl_declared_size_type!(HostError, 16);
-impl_declared_size_type!(Context, 544);
+impl_declared_size_type!(Context, 552);
 impl_declared_size_type!(Address, 16);
 
 impl_declared_size_type!(AccessType, 1);
@@ -455,12 +455,12 @@ mod test {
         #[rustversion::before(1.79)]
         #[cfg(target_arch = "aarch64")]
         fn check_aarch64_size_that_changed_at_rust_1_79() {
-            expect!["528"].assert_eq(size_of::<Context>().to_string().as_str());
+            expect!["536"].assert_eq(size_of::<Context>().to_string().as_str());
         }
         #[rustversion::since(1.79)]
         #[cfg(target_arch = "aarch64")]
         fn check_aarch64_size_that_changed_at_rust_1_79() {
-            expect!["520"].assert_eq(size_of::<Context>().to_string().as_str());
+            expect!["528"].assert_eq(size_of::<Context>().to_string().as_str());
         }
         #[cfg(target_arch = "aarch64")]
         check_aarch64_size_that_changed_at_rust_1_79();
