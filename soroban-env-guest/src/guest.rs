@@ -145,6 +145,35 @@ impl EnvBase for Guest {
         self.map_unpack_to_linear_memory(map, keys_lm_pos, vals_lm_pos, len)
     }
 
+    fn sparse_map_new_from_slices(
+        &self,
+        keys: &[&str],
+        vals: &[Val],
+    ) -> Result<MapObject, Self::Error> {
+        sa::assert_eq_size!(u32, *const u8);
+        sa::assert_eq_size!(u32, usize);
+        require(keys.len() == vals.len());
+        let keys_lm_pos: U32Val = Val::from_u32(keys.as_ptr() as u32);
+        let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(keys.len() as u32);
+        self.sparse_map_new_from_linear_memory(keys_lm_pos, vals_lm_pos, len)
+    }
+
+    fn sparse_map_unpack_to_slice(
+        &self,
+        map: MapObject,
+        keys: &[&str],
+        vals: &mut [Val],
+    ) -> Result<Void, Self::Error> {
+        sa::assert_eq_size!(u32, *const u8);
+        sa::assert_eq_size!(u32, usize);
+        require(keys.len() == vals.len());
+        let keys_lm_pos: U32Val = Val::from_u32(keys.as_ptr() as u32);
+        let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(keys.len() as u32);
+        self.sparse_map_unpack_to_linear_memory(map, keys_lm_pos, vals_lm_pos, len)
+    }
+
     fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);

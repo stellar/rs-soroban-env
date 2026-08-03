@@ -1,10 +1,10 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   0 begin": "cpu:0, mem:0, mem_peak:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call string_new_from_slice(14)": "",
-  "   2 ret string_new_from_slice -> Ok(String(obj#1))": "cpu:965, mem:110, objs:-/1@bf4fa394",
+  "   2 ret string_new_from_slice -> Ok(String(obj#1))": "cpu:965, mem:110, mem_peak:110, objs:-/1@bf4fa394",
   "   3 call create_executable_tag(String(obj#1))": "",
-  "   4 ret create_executable_tag -> Ok(ExecutableTag(obj#3))": "cpu:2110, mem:220, objs:-/2@6932b310",
-  "   5 call obj_cmp(ExecutableTag(obj#3), ExecutableTag(obj#5))": "cpu:3658, mem:360, objs:-/3@de87c3a9",
+  "   4 ret create_executable_tag -> Ok(ExecutableTag(obj#3))": "cpu:2110, mem:220, mem_peak:220, objs:-/2@6932b310",
+  "   5 call obj_cmp(ExecutableTag(obj#3), ExecutableTag(obj#5))": "cpu:3658, mem:360, mem_peak:360, objs:-/3@de87c3a9",
   "   6 ret obj_cmp -> Ok(0)": "cpu:3943",
-  "   7 end": "cpu:3943, mem:360, prngs:-/-, objs:-/3@de87c3a9, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "   7 end": "cpu:3943, mem:360, mem_peak:360, prngs:-/-, objs:-/3@de87c3a9, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

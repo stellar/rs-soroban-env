@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::ErrorHandler;
-use std::{cmp::Ordering, rc::Rc};
+use std::{cmp::Ordering, ops::Range, rc::Rc};
 
 /// Helper type for host functions that receive a position and length pair and
 /// expect to operate on a VM. Pos and len are not validated and len may be a
@@ -193,6 +193,51 @@ impl Host {
         Ok(())
     }
 
+    // Returns a slice at given index from a VM linear memory `mem`.
+    // This is _very specific_ about what it's reading: the slice is read
+    // as 8 bytes located at `index` offset from `mem_pos`. The slice is
+    // arranged as a 4 byte pointer followed by a 4 byte length.
+    pub(crate) fn scan_linear_memory_slice(
+        &self,
+        mem: &[u8],
+        mem_pos: u32,
+        index: usize,
+    ) -> Result<Range<usize>, HostError> {
+        let slice_pos = (mem_pos as usize)
+            .checked_add(
+                index
+                    .checked_mul(8)
+                    .ok_or_else(|| self.err_arith_overflow())?,
+            )
+            .ok_or_else(|| self.err_arith_overflow())?;
+        let slice_end = slice_pos
+            .checked_add(8)
+            .ok_or_else(|| self.err_arith_overflow())?;
+        let slice_range = slice_pos..slice_end;
+        let slice_ref_slice = mem
+            .get(slice_range)
+            .ok_or_else(|| self.err_oob_linear_memory())?;
+
+        if let Ok(s) = TryInto::<&[u8; 8]>::try_into(slice_ref_slice) {
+            let ptr_bytes: [u8; 4] = s[0..4].try_into().unwrap();
+            let len_bytes: [u8; 4] = s[4..8].try_into().unwrap();
+            let slice_ptr = u32::from_le_bytes(ptr_bytes);
+            let slice_len = u32::from_le_bytes(len_bytes);
+            let slice_end = slice_ptr
+                .checked_add(slice_len)
+                .ok_or_else(|| self.err_arith_overflow())?;
+            Ok(slice_ptr as usize..slice_end as usize)
+        } else {
+            // This should be impossible unless there's an error above, but just in case.
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "slice-scan produced slice of unexpected length",
+                &[],
+            ))
+        }
+    }
+
     // This is the most complex one: it reads a sequence of slices _stored in
     // linear memory_ and then _follows_ each of them to read the slice of
     // linear memory they point at, and calls a callback with each of those
@@ -214,7 +259,7 @@ impl Host {
         &self,
         vmcaller: &mut VmCaller<Host>,
         vm: &Rc<Vm>,
-        mut mem_pos: u32,
+        mem_pos: u32,
         num_slices: usize,
         mut callback: impl FnMut(usize, &[u8]) -> Result<(), HostError>,
     ) -> Result<(), HostError> {
@@ -227,40 +272,13 @@ impl Host {
         )?;
 
         for i in 0..num_slices {
-            // This is _very specific_ about what it's reading: 8 bytes
-            // arranged as a 4 byte pointer followed by a 4 byte length.
-
-            let next_pos = mem_pos
-                .checked_add(8)
-                .ok_or_else(|| self.err_arith_overflow())?;
-            let slice_ref_range = mem_pos as usize..next_pos as usize;
-            let slice_ref_slice = mem_data
-                .get(slice_ref_range)
-                .ok_or_else(|| self.err_oob_linear_memory())?;
-            mem_pos = next_pos;
-
-            if let Ok(s) = TryInto::<&[u8; 8]>::try_into(slice_ref_slice) {
-                let ptr_bytes: [u8; 4] = s[0..4].try_into().unwrap();
-                let len_bytes: [u8; 4] = s[4..8].try_into().unwrap();
-                let slice_ptr = u32::from_le_bytes(ptr_bytes);
-                let slice_len = u32::from_le_bytes(len_bytes);
-                let slice_end = slice_ptr
-                    .checked_add(slice_len)
-                    .ok_or_else(|| self.err_arith_overflow())?;
-                let slice_range = slice_ptr as usize..slice_end as usize;
-                let slice = mem_data
+            let slice_range = self.scan_linear_memory_slice(mem_data, mem_pos, i)?;
+            callback(
+                i,
+                mem_data
                     .get(slice_range)
-                    .ok_or_else(|| self.err_oob_linear_memory())?;
-                callback(i, slice)?
-            } else {
-                // This should be impossible unless there's an error above, but just in case.
-                return Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                    "slice-scan produced slice of unexpected length",
-                    &[],
-                ));
-            }
+                    .ok_or_else(|| self.err_oob_linear_memory())?,
+            )?;
         }
         Ok(())
     }
@@ -411,34 +429,24 @@ impl Host {
         self.add_host_object::<HOT>(HOT::try_from_bytes(self, vnew)?)
     }
 
-    pub(crate) fn symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<bool, HostError> {
+    pub(crate) fn compare_symbol_to_bytes(
+        &self,
+        sym: Symbol,
+        b: &[u8],
+    ) -> Result<Ordering, HostError> {
         if let Ok(ss) = SymbolSmall::try_from(sym) {
             let sstr: SymbolStr = ss.into();
-            let slice: &[u8] = sstr.as_ref();
-            self.as_budget()
-                .compare(&slice, &s)
-                .map(|c| c == Ordering::Equal)
+            self.as_budget().compare(&sstr.as_ref(), &b)
         } else {
             let sobj: SymbolObject = sym.try_into()?;
             self.visit_obj(sobj, |scsym: &ScSymbol| {
-                self.as_budget()
-                    .compare(&scsym.as_slice(), &s)
-                    .map(|c| c == Ordering::Equal)
+                self.as_budget().compare(&scsym.as_slice(), &b)
             })
         }
     }
 
-    pub(crate) fn check_symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<(), HostError> {
-        if self.symbol_matches(s, sym)? {
-            Ok(())
-        } else {
-            Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::InvalidInput,
-                "symbol mismatch",
-                &[sym.to_val()],
-            ))
-        }
+    pub(crate) fn symbol_matches(&self, b: &[u8], sym: Symbol) -> Result<bool, HostError> {
+        Ok(self.compare_symbol_to_bytes(sym, b)? == Ordering::Equal)
     }
 
     // Test function for calibration purpose. The caller needs to ensure `src` and `dest` has

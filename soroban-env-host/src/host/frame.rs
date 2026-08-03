@@ -96,6 +96,12 @@ pub(crate) struct Context {
     pub(crate) frame: Frame,
     pub(crate) prng: Option<Prng>,
     pub(crate) storage: Option<InstanceStorageMap>,
+    /// Real-budget linear memory (`mem_bytes`) charged for the VM(s) this frame
+    /// owns -- the initial allocation done at instantiation plus any runtime
+    /// `memory.grow`. That memory is freed when the frame's VM is torn down, so
+    /// this amount is refunded to the budget when the frame pops. Non-VM frames
+    /// normally leave it at 0.
+    pub(crate) linear_mem_charged: u64,
 }
 
 pub(crate) struct CallParams {
@@ -184,6 +190,42 @@ impl Host {
         self.with_current_frame_opt(|opt| Ok(opt.is_some()))
     }
 
+    /// Linear-memory charge accumulated on the current (top) context, or 0 if
+    /// the context stack is empty.
+    fn current_frame_linear_mem_charged(&self) -> Result<u64, HostError> {
+        Ok(self
+            .try_borrow_context_stack()?
+            .last()
+            .map_or(0, |ctx| ctx.linear_mem_charged))
+    }
+
+    /// Removes and returns the linear-memory charge accrued on the current
+    /// (top) context since `mark`. Used to move a freshly instantiated VM's
+    /// initial linear-memory charge off the caller (which was the top frame
+    /// during instantiation) and onto the VM's own frame.
+    fn reclaim_frame_linear_mem_since(&self, mark: u64) -> Result<u64, HostError> {
+        let mut stack = self.try_borrow_context_stack_mut()?;
+        Ok(match stack.last_mut() {
+            Some(ctx) => {
+                let delta = ctx.linear_mem_charged.saturating_sub(mark);
+                ctx.linear_mem_charged = mark;
+                delta
+            }
+            None => 0,
+        })
+    }
+
+    /// Adds `amount` to the current (top) context's linear-memory charge, if a
+    /// frame is present. Called by `memory_growing`; a no-op when no frame is on
+    /// the stack (the charge is then simply not tracked for refund).
+    pub(crate) fn charge_current_frame_linear_mem(&self, amount: u64) -> Result<(), HostError> {
+        let mut stack = self.try_borrow_context_stack_mut()?;
+        if let Some(ctx) = stack.last_mut() {
+            ctx.linear_mem_charged = ctx.linear_mem_charged.saturating_add(amount);
+        }
+        Ok(())
+    }
+
     /// Helper function for [`Host::with_frame`] below. Pushes a new [`Context`]
     /// on the context stack, returning a [`RollbackPoint`] such that if
     /// operation fails, it can be used to roll the [`Host`] back to the state
@@ -228,14 +270,22 @@ impl Host {
         }
         self.try_borrow_authorization_manager()?
             .pop_frame(self, auth_snapshot)?;
-        ctx.ok_or_else(|| {
+        let ctx = ctx.ok_or_else(|| {
             self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
                 "unmatched host context push/pop",
                 &[],
             )
-        })
+        })?;
+        // The VM(s) owned by this frame are freed now that the frame is gone, so
+        // return their transient linear memory to the budget. This runs on both
+        // the success and rollback paths, so a callee whose error the caller
+        // catches via `try_call` still gives its memory back.
+        if ctx.linear_mem_charged != 0 {
+            self.as_budget().refund_mem_bytes(ctx.linear_mem_charged)?;
+        }
+        Ok(ctx)
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
@@ -406,6 +456,22 @@ impl Host {
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
+        self.with_frame_and_initial_mem_charge(0, frame, f)
+    }
+
+    /// Like [`Host::with_frame`], but opens the pushed [`Context`]'s
+    /// `linear_mem_charged` at `linear_mem_charged` rather than zero. Used by
+    /// [`Host::call_contract_fn`] to hand a freshly instantiated VM's initial
+    /// linear-memory charge to the VM's own frame.
+    fn with_frame_and_initial_mem_charge<F>(
+        &self,
+        linear_mem_charged: u64,
+        frame: Frame,
+        f: F,
+    ) -> Result<Val, HostError>
+    where
+        F: FnOnce() -> Result<Val, HostError>,
+    {
         let start_depth = self.try_borrow_context_stack()?.len();
         if start_depth as u32 >= DEFAULT_HOST_DEPTH_LIMIT {
             return Err(Error::from_type_and_code(
@@ -428,6 +494,7 @@ impl Host {
             frame,
             prng: None,
             storage: None,
+            linear_mem_charged,
         };
         let rp = self.push_context(ctx)?;
         {
@@ -752,9 +819,17 @@ impl Host {
                 );
             }
         };
+        // The VM's initial linear memory is allocated (and charged) during
+        // instantiation, before its own frame exists, so `memory_growing` bills
+        // it to the caller (the current top frame). Reclaim that delta and hand
+        // it to the new frame as its opening balance, so it is refunded promptly
+        // when this frame pops rather than lingering on the caller.
+        let caller_mark = self.current_frame_linear_mem_charged()?;
         let vm = self.instantiate_vm(id, wasm_hash)?;
+        let vm_linear_mem = self.reclaim_frame_linear_mem_since(caller_mark)?;
         let relative_objects = Vec::new();
-        self.with_frame(
+        self.with_frame_and_initial_mem_charge(
+            vm_linear_mem,
             Frame::ContractVM {
                 vm: Rc::clone(&vm),
                 fn_name: *func,

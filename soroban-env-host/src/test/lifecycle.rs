@@ -1835,8 +1835,8 @@ mod cap_58_constructor {
                     DetailedInvocationResources {
                         invocation: CreateContractEntryPoint,
                         resources: SubInvocationResources {
-                            instructions: 900782,
-                            mem_bytes: 3471641,
+                            instructions: 900788,
+                            mem_bytes: 3467179,
                             disk_read_entries: 0,
                             memory_read_entries: 6,
                             write_entries: 3,
@@ -1861,8 +1861,8 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 630488,
-                                    mem_bytes: 2339657,
+                                    instructions: 630492,
+                                    mem_bytes: 2335267,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
                                     write_entries: 2,
@@ -1887,8 +1887,8 @@ mod cap_58_constructor {
                                             ),
                                         ),
                                         resources: SubInvocationResources {
-                                            instructions: 348578,
-                                            mem_bytes: 1207659,
+                                            instructions: 348580,
+                                            mem_bytes: 1207667,
                                             disk_read_entries: 0,
                                             memory_read_entries: 2,
                                             write_entries: 0,
@@ -1993,8 +1993,8 @@ mod cap_58_constructor {
                             ),
                         ),
                         resources: SubInvocationResources {
-                            instructions: 2405491,
-                            mem_bytes: 5950376,
+                            instructions: 2405567,
+                            mem_bytes: 4769354,
                             disk_read_entries: 0,
                             memory_read_entries: 8,
                             write_entries: 3,
@@ -2019,8 +2019,8 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 915470,
-                                    mem_bytes: 2387855,
+                                    instructions: 915474,
+                                    mem_bytes: 2382585,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
                                     write_entries: 2,
@@ -2045,8 +2045,8 @@ mod cap_58_constructor {
                                             ),
                                         ),
                                         resources: SubInvocationResources {
-                                            instructions: 350168,
-                                            mem_bytes: 1207919,
+                                            instructions: 350170,
+                                            mem_bytes: 1207927,
                                             disk_read_entries: 0,
                                             memory_read_entries: 2,
                                             write_entries: 0,
@@ -2074,8 +2074,8 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 546289,
-                                    mem_bytes: 1175536,
+                                    instructions: 546291,
+                                    mem_bytes: 0,
                                     disk_read_entries: 0,
                                     memory_read_entries: 0,
                                     write_entries: 0,
@@ -2664,7 +2664,7 @@ mod cap_58_constructor {
 
 mod preimage_executable_mismatch {
     use super::*;
-    use crate::xdr::Asset;
+    use crate::xdr::{Asset, ContractExecutableExternalRef, ScString};
 
     #[test]
     fn address_preimage_with_stellar_asset_executable_fails() {
@@ -2679,15 +2679,14 @@ mod preimage_executable_mismatch {
             salt: Uint256(salt),
         });
 
-        let res = host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
-            contract_id_preimage,
-            executable: ContractExecutable::StellarAsset,
-            constructor_args: Default::default(),
-        }));
-        assert!(res.is_err());
-        let err = res.err().unwrap().error;
-        assert!(err.is_type(ScErrorType::Value));
-        assert!(err.is_code(ScErrorCode::InvalidInput));
+        assert!(HostError::result_matches_err(
+            host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
+                contract_id_preimage,
+                executable: ContractExecutable::StellarAsset,
+                constructor_args: Default::default(),
+            })),
+            (ScErrorType::Value, ScErrorCode::InvalidInput)
+        ));
     }
 
     #[test]
@@ -2707,15 +2706,51 @@ mod preimage_executable_mismatch {
             .hash_from_bytesobj_input("wasm_hash", wasm_hash_obj.try_into().unwrap())
             .unwrap();
 
-        let res = host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
-            contract_id_preimage: ContractIdPreimage::Asset(Asset::Native),
-            executable: ContractExecutable::Wasm(wasm_hash),
-            constructor_args: Default::default(),
-        }));
-        assert!(res.is_err());
-        let err = res.err().unwrap().error;
-        assert!(err.is_type(ScErrorType::Value));
-        assert!(err.is_code(ScErrorCode::InvalidInput));
+        assert!(HostError::result_matches_err(
+            host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
+                contract_id_preimage: ContractIdPreimage::Asset(Asset::Native),
+                executable: ContractExecutable::Wasm(wasm_hash),
+                constructor_args: Default::default(),
+            })),
+            (ScErrorType::Value, ScErrorCode::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn asset_preimage_with_external_ref_executable_fails() {
+        let host = observe_host!(Host::test_host_with_recording_footprint());
+        host.switch_to_recording_auth(true).unwrap();
+
+        let owner = host.register_test_contract_wasm(ADD_I32);
+        let wasm_hash = host.upload_contract_wasm(ADD_I32.to_vec()).unwrap();
+        let owner_id = host.contract_id_from_address(owner).unwrap();
+        let tag_str = b"asset mismatch ref";
+        let tag = host
+            .create_executable_tag(host.string_new_from_slice(tag_str).unwrap())
+            .unwrap()
+            .to_val();
+        host.with_test_contract_frame(
+            owner_id.clone(),
+            Symbol::try_from_small_str("set_ref").unwrap(),
+            || {
+                host.put_contract_data(tag, wasm_hash.to_val(), StorageType::Persistent)
+                    .map(Into::into)
+            },
+        )
+        .unwrap();
+        let executable = ContractExecutable::ExternalRef(ContractExecutableExternalRef {
+            executable_owner: host.scaddress_from_address(owner).unwrap(),
+            tag: ScString(tag_str.try_into().unwrap()),
+        });
+
+        assert!(HostError::result_matches_err(
+            host.invoke_function(HostFunction::CreateContractV2(CreateContractArgsV2 {
+                contract_id_preimage: ContractIdPreimage::Asset(Asset::Native),
+                executable,
+                constructor_args: Default::default(),
+            })),
+            (ScErrorType::Value, ScErrorCode::InvalidInput)
+        ));
     }
 
     #[test]

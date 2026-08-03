@@ -1057,12 +1057,12 @@ impl Debug for BudgetImpl {
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
-            self.cpu_insns.limit, self.cpu_insns.total_count
+            self.cpu_insns.limit, self.cpu_insns.net_count
         )?;
         writeln!(
             f,
             "Mem limit: {}; used: {}",
-            self.mem_bytes.limit, self.mem_bytes.total_count
+            self.mem_bytes.limit, self.mem_bytes.net_count
         )?;
         writeln!(f, "{:=<175}", "")?;
         writeln!(
@@ -1107,12 +1107,12 @@ impl Debug for BudgetImpl {
         writeln!(
             f,
             "Shadow cpu limit: {}; used: {}",
-            self.cpu_insns.shadow_limit, self.cpu_insns.shadow_total_count
+            self.cpu_insns.shadow_limit, self.cpu_insns.shadow_net_count
         )?;
         writeln!(
             f,
             "Shadow mem limit: {}; used: {}",
-            self.mem_bytes.shadow_limit, self.mem_bytes.shadow_total_count
+            self.mem_bytes.shadow_limit, self.mem_bytes.shadow_net_count
         )?;
         writeln!(f, "{:=<175}", "")?;
         Ok(())
@@ -1125,12 +1125,12 @@ impl Display for BudgetImpl {
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
-            self.cpu_insns.limit, self.cpu_insns.total_count
+            self.cpu_insns.limit, self.cpu_insns.net_count
         )?;
         writeln!(
             f,
             "Mem limit: {}; used: {}",
-            self.mem_bytes.limit, self.mem_bytes.total_count
+            self.mem_bytes.limit, self.mem_bytes.net_count
         )?;
         writeln!(f, "{:=<65}", "")?;
         writeln!(
@@ -1408,11 +1408,23 @@ impl Budget {
     }
 
     pub fn get_cpu_insns_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.cpu_insns.get_total_count())
+        // Cpu is never refunded, so its net count equals its peak.
+        Ok(self.0.try_borrow_or_err()?.cpu_insns.get_net_count())
     }
 
     pub fn get_mem_bytes_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_total_count())
+        // The provisioning-relevant quantity is the *peak*: transient VM linear
+        // memory is refunded when freed, so the net would under-report the
+        // amount a caller must provision for the invocation.
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_peak_count())
+    }
+
+    /// The running *net* `mem_bytes` (currently-live usage, lowered by refunds).
+    /// Internal-only: the execution trace records it alongside the peak, but
+    /// callers outside the crate must use [`Self::get_mem_bytes_consumed`] (the
+    /// peak) for provisioning.
+    pub(crate) fn get_mem_bytes_net(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_net_count())
     }
 
     pub fn get_cpu_insns_remaining(&self) -> Result<u64, HostError> {
@@ -1421,6 +1433,13 @@ impl Budget {
 
     pub fn get_mem_bytes_remaining(&self) -> Result<u64, HostError> {
         Ok(self.0.try_borrow_or_err()?.mem_bytes.get_remaining())
+    }
+
+    /// Credits `amount` back to the memory budget, used to refund a torn-down
+    /// VM's transient linear memory when its frame pops.
+    pub(crate) fn refund_mem_bytes(&self, amount: u64) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.mem_bytes.refund(amount);
+        Ok(())
     }
 
     pub(crate) fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {

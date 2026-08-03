@@ -1,12 +1,12 @@
 {
-  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/2@bd85d3f3, foot:2@f0a688bd, stk:-, auth:-/-",
-  "   1 call vec_new()": "cpu:135468, mem:28214, objs:-/1@10432200",
-  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:135970, mem:28294, objs:-/2@acf0be8f",
+  "   0 begin": "cpu:0, mem:0, mem_peak:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/2@bd85d3f3, foot:2@f0a688bd, stk:-, auth:-/-",
+  "   1 call vec_new()": "cpu:135468, mem:28214, mem_peak:28214, objs:-/1@10432200",
+  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:135970, mem:28294, mem_peak:28294, objs:-/2@acf0be8f",
   "   3 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "",
-  "   4 push VM:e4b7da03:test()": "cpu:214809, mem:169765, objs:-/3@2988da9d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@29e1a6d0, auth:1@1d00dc6b/-",
-  "   5 pop VM:e4b7da03:test -> Ok(Symbol(pass))": "cpu:217303, mem:169795",
+  "   4 push VM:e4b7da03:test()": "cpu:214811, mem:169773, mem_peak:169773, objs:-/3@2988da9d, vm:65536@b1cd98b9/2@2f94d90d, stk:1@b8f30825, auth:1@1d00dc6b/-",
+  "   5 pop VM:e4b7da03:test -> Ok(Symbol(pass))": "cpu:217305, mem:169803, mem_peak:169803",
   "   6 ret call -> Ok(Symbol(pass))": " vm:-/-, stk:-, auth:-/-",
-  "   7 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "cpu:259206, mem:170136, store:-/1@5e896e10, foot:1@2784223c",
-  "   8 ret call -> Err(Error(Storage, ExceededLimit))": "cpu:267180, mem:170720, objs:-/4@b5d55a61",
-  "   9 end": "cpu:267180, mem:170720, prngs:-/-, objs:-/4@b5d55a61, vm:-/-, evt:-, store:-/1@5e896e10, foot:1@2784223c, stk:-, auth:-/-"
+  "   7 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "cpu:259208, mem:170144, mem_peak:170144, store:-/1@5e896e10, foot:1@2784223c",
+  "   8 ret call -> Err(Error(Storage, ExceededLimit))": "cpu:267182, mem:170728, mem_peak:170728, objs:-/4@b5d55a61",
+  "   9 end": "cpu:267182, mem:170728, mem_peak:170728, prngs:-/-, objs:-/4@b5d55a61, vm:-/-, evt:-, store:-/1@5e896e10, foot:1@2784223c, stk:-, auth:-/-"
 }
