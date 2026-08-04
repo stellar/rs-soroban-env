@@ -1,3 +1,6 @@
+#[cfg(any(test, feature = "testutils"))]
+use sha2::Sha256;
+
 use crate::{
     crypto,
     host::{
@@ -239,20 +242,52 @@ impl Host {
         let id_preimage =
             self.get_full_contract_id_preimage(args.contract_id_preimage.metered_clone(self)?)?;
         let contract_id = ContractId(Hash(self.metered_hash_xdr(&id_preimage)?));
+
+        // Manually snapshot and rollback the storage in test mode. Normally
+        // we don't need to worry about host functions performing rollbacks,
+        // because they must belong to a frame. However, in the unit tests it's
+        // possible for the users to call create_contract host functions
+        // directly (e.g. to test the constructor logic), and lack of rollback
+        // would incorrectly leave the storage in a modified state
+        // after a failed contract creation.
+        // This rollback is harmless in case if this has been called from within
+        // a frame, as it will be overridden with the default rollback
+        // machinery.
+        #[cfg(any(test, feature = "testutils"))]
+        let storage_snapshot = self.try_borrow_storage()?.map.clone();
+
+        let res = self.create_instance_and_call_constructor(&contract_id, &args, constructor_args);
+
+        #[cfg(any(test, feature = "testutils"))]
+        if res.is_err() {
+            self.try_borrow_storage_mut()?.map = storage_snapshot;
+        }
+
+        res?;
+
+        self.add_host_object(ScAddress::Contract(contract_id))
+    }
+
+    fn create_instance_and_call_constructor(
+        &self,
+        contract_id: &ContractId,
+        args: &CreateContractArgsV2,
+        constructor_args: Vec<Val>,
+    ) -> Result<(), HostError> {
         self.create_contract_with_id(
             contract_id.metered_clone(self)?,
             args.executable.metered_clone(self)?,
         )?;
-        self.maybe_initialize_stellar_asset_contract(&contract_id, &args.contract_id_preimage)?;
+        self.maybe_initialize_stellar_asset_contract(contract_id, &args.contract_id_preimage)?;
         // Wasm-backed contracts (whether via a direct Wasm hash or an external
         // reference that resolves to one) run their `__constructor`.
         if matches!(
             args.executable,
             ContractExecutable::Wasm(_) | ContractExecutable::ExternalRef(_)
         ) {
-            self.call_constructor(&contract_id, constructor_args)?;
+            self.call_constructor(contract_id, constructor_args)?;
         }
-        self.add_host_object(ScAddress::Contract(contract_id))
+        Ok(())
     }
 
     pub(crate) fn get_contract_id_hash(
@@ -298,8 +333,6 @@ impl Host {
             )
         })?;
 
-        let mut ext = crate::xdr::ContractCodeEntryExt::V0;
-
         // Instantiate a temporary / throwaway VM using this wasm. This will do
         // both quick checks like "does this wasm have the right protocol number
         // to run on this network" and also a full parse-and-link pass to check
@@ -308,11 +341,7 @@ impl Host {
         // but really "instantiating a VM" is mostly just "parsing the module
         // and doing those checks" anyway. Revisit in the future if you want to
         // try to split these costs up some.
-        if cfg!(any(test, feature = "testutils")) && wasm_bytes_m.as_slice().is_empty() {
-            // Allow a zero-byte contract when testing, as this is used to make
-            // native test contracts behave like wasm. They will never be
-            // instantiated, this is just to exercise their storage logic.
-        } else {
+        let ext = {
             let _check_vm = Vm::new(
                 self,
                 ContractId(Hash(hash_bytes.metered_clone(self)?)),
@@ -322,14 +351,14 @@ impl Host {
             // module in order to extract a refined cost model, which we'll store in the
             // code entry's ext field, for future parsing and instantiations.
             _check_vm.module.cost_inputs.charge_for_parsing(self)?;
-            ext = crate::xdr::ContractCodeEntryExt::V1(crate::xdr::ContractCodeEntryV1 {
+            crate::xdr::ContractCodeEntryExt::V1(crate::xdr::ContractCodeEntryV1 {
                 ext: ExtensionPoint::V0,
                 cost_inputs: crate::vm::ParsedModule::extract_refined_contract_cost_inputs(
                     self,
                     wasm_bytes_m.as_slice(),
                 )?,
-            });
-        }
+            })
+        };
 
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
         let code_key = Rc::metered_new(
@@ -378,10 +407,142 @@ impl Host {
 use super::frame::CallParams;
 #[cfg(any(test, feature = "testutils"))]
 use super::ContractFunctionSet;
+#[cfg(any(test, feature = "testutils"))]
+use std::collections::HashMap;
+
+// Native test contracts have a corresponding contract code entry, but instead
+// of the actual Wasm, their code is just `TEST_CONTRACT_WASM_PREFIX` followed
+// by a unique integer ID.
+#[cfg(any(test, feature = "testutils"))]
+const TEST_CONTRACT_WASM_PREFIX: &str = "test_contract_";
+
+// Registry that ties the native test contracts to their corresponding contract
+// code entries via Wasm hashes.
+#[cfg(any(test, feature = "testutils"))]
+#[derive(Clone, Default)]
+pub(crate) struct TestContractRegistry {
+    // Maps the Wasm hash of the test contract code entry to the corresponding
+    // contract function set.
+    fns_by_wasm_hash: HashMap<Hash, Rc<dyn ContractFunctionSet>>,
+    // Maps the pointer address of the contract function set to an
+    // auto-increment ID used to identify a test contract in the Wasm blob.
+    // We use this map instead of a simple counter in order to ensure that the
+    // same contract function set always gets the same ID and thus ends up
+    // with the same Wasm entry, which is more faithful to the actual Wasm
+    // contracts that are stored once per unique Wasm.
+    ids_by_fns_addr: HashMap<usize, u32>,
+    // Hashes of the test contract Wasms that have already been registered,
+    // indexed by their auto-increment ID.
+    wasm_hashes: Vec<Hash>,
+}
+
+#[cfg(any(test, feature = "testutils"))]
+impl TestContractRegistry {
+    // Adds a test contract to the registry.
+    // Returns the hash of the test contract Wasm and the corresponding Wasm
+    // blob, or `None` if the contract was already added.
+    pub(crate) fn add_test_contract(
+        &mut self,
+        contract_fns: Rc<dyn ContractFunctionSet>,
+    ) -> (Hash, Option<Vec<u8>>) {
+        let addr = Rc::as_ptr(&contract_fns) as *const () as usize;
+        let next_id = self.ids_by_fns_addr.len() as u32;
+        let id = *self.ids_by_fns_addr.entry(addr).or_insert(next_id);
+        if id != next_id {
+            // Already registered.
+            return (self.wasm_hashes[id as usize].clone(), None);
+        }
+
+        let wasm = format!("{TEST_CONTRACT_WASM_PREFIX}{id}").into_bytes();
+        let hash = Self::wasm_hash(wasm.as_slice());
+        self.wasm_hashes.push(hash.clone());
+        self.fns_by_wasm_hash.insert(hash.clone(), contract_fns);
+        (hash, Some(wasm))
+    }
+
+    // Returns true if the given Wasm blob is a registered native test contract.
+    pub(crate) fn is_test_contract_wasm(&self, wasm: &[u8]) -> bool {
+        self.fns_by_wasm_hash.contains_key(&Self::wasm_hash(wasm))
+    }
+
+    // Returns the contract function set for a given Wasm hash, if any is
+    // registered, `None` otherwise.
+    pub(crate) fn get_contract_fn_set(
+        &self,
+        wasm_hash: &Hash,
+    ) -> Option<Rc<dyn ContractFunctionSet>> {
+        self.fns_by_wasm_hash.get(wasm_hash).cloned()
+    }
+
+    // Internal, non-metered helper for computing Wasm hashes. This is only to
+    // be used by this registry.
+    fn wasm_hash(wasm: &[u8]) -> Hash {
+        Hash(<Sha256 as sha2::Digest>::digest(wasm).into())
+    }
+}
 
 // "testutils" is not covered by budget metering.
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
+    /// Uploads the native test contract to the host storage and returns the
+    /// Wasm hash of the uploaded contract.
+    ///
+    /// Test contracts are stored in the host storage as Wasm code entries with
+    /// a short identifier in place of the actual Wasm code.
+    ///
+    /// The returned hash can be used in the same way as the regular Wasm hash,
+    /// so it's possible to create contract instances that refer to this hash.
+    pub fn upload_test_contract_wasm(
+        &self,
+        contract_fns: Rc<dyn ContractFunctionSet>,
+    ) -> Result<BytesObject, HostError> {
+        #[cfg(any(test, feature = "testutils"))]
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::WasmUploadEntryPoint,
+        );
+
+        // Generate the dummy Wasm blob to write into the contract code entry.
+        let (wasm_hash, maybe_wasm) = self
+            .try_borrow_test_contract_registry_mut()?
+            .add_test_contract(contract_fns);
+        let hash_obj = self.add_host_object(self.scbytes_from_slice(wasm_hash.as_slice())?)?;
+        // If the contract was already uploaded, just short-circuit and return
+        // the hash without doing anything else.
+        let Some(wasm) = maybe_wasm else {
+            return Ok(hash_obj);
+        };
+
+        // Now write the wasm into the storage similarly to
+        // `upload_contract_wasm`, but without all the Wasm validation/cost
+        // logic.
+        // This is unfortunately inconvenient to deduplicate with
+        // `upload_contract_wasm`, as it would require too many feature-gated
+        // branches and would make the production code path hard to read and
+        // maintain.
+        // We also skip most of the metering and error handling here for
+        // brevity, there is really no point in avoiding crashes on internal
+        // errors (because it's a test-only path), and trying to emulate the
+        // real Wasm upload costs (the bulk of cost comes from the Wasm parsing
+        // and VM instantiation which we can't emulate for native contracts).
+
+        let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
+            hash: wasm_hash.clone(),
+        }));
+        let data = ContractCodeEntry {
+            hash: wasm_hash,
+            ext: crate::xdr::ContractCodeEntryExt::V0,
+            code: wasm.try_into().unwrap(),
+        };
+        self.try_borrow_storage_mut()?.put(
+            &code_key,
+            &Host::new_contract_code(self, data)?,
+            Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
+            self,
+            None,
+        )?;
+        Ok(hash_obj)
+    }
+
     pub fn register_test_contract(
         &self,
         contract_address: AddressObject,
@@ -413,23 +574,28 @@ impl Host {
 
         let contract_id = self.contract_id_from_address(contract_address)?;
         let instance_key = self.contract_instance_ledger_key(&contract_id)?;
-        let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
+        let wasm_hash_obj = self.upload_test_contract_wasm(contract_fns)?;
         let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;
-        // Use the empty Wasm as an executable to a) mark that the contract
-        // calls should be dispatched via provided `contract_fns` and b) have
-        // the same ledger entries as for 'real' contracts that consist of Wasm
-        // entry and the instance entry, so that instance-related host functions
-        // work properly.
-        self.store_contract_instance(
-            Some(ContractExecutable::Wasm(wasm_hash)),
-            None,
-            contract_id.clone(),
-            &instance_key,
-        )?;
-        self.try_borrow_contracts_mut()?
-            .insert(contract_id.clone(), contract_fns);
 
-        self.call_constructor(&contract_id, self.call_args_from_obj(constructor_args)?)
+        // Snapshot and roll back the storage around the constructor call for
+        // the same reason as in `create_contract_with_optional_auth`: the
+        // instance is stored before the constructor runs, and a failed
+        // constructor must not leave it behind.
+        let storage_snapshot = self.try_borrow_storage()?.map.clone();
+        let res = self
+            .store_contract_instance(
+                Some(ContractExecutable::Wasm(wasm_hash)),
+                None,
+                contract_id.clone(),
+                &instance_key,
+            )
+            .and_then(|_| {
+                self.call_constructor(&contract_id, self.call_args_from_obj(constructor_args)?)
+            });
+        if res.is_err() {
+            self.try_borrow_storage_mut()?.map = storage_snapshot;
+        }
+        res
     }
 
     // This is a test utility that allows calling constructor on a contract that

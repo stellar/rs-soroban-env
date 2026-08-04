@@ -1835,8 +1835,8 @@ mod cap_58_constructor {
                     DetailedInvocationResources {
                         invocation: CreateContractEntryPoint,
                         resources: SubInvocationResources {
-                            instructions: 900788,
-                            mem_bytes: 3467179,
+                            instructions: 883364,
+                            mem_bytes: 3466531,
                             disk_read_entries: 0,
                             memory_read_entries: 6,
                             write_entries: 3,
@@ -1861,8 +1861,8 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 630492,
-                                    mem_bytes: 2335267,
+                                    instructions: 618926,
+                                    mem_bytes: 2334835,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
                                     write_entries: 2,
@@ -1887,8 +1887,8 @@ mod cap_58_constructor {
                                             ),
                                         ),
                                         resources: SubInvocationResources {
-                                            instructions: 348580,
-                                            mem_bytes: 1207667,
+                                            instructions: 342872,
+                                            mem_bytes: 1207451,
                                             disk_read_entries: 0,
                                             memory_read_entries: 2,
                                             write_entries: 0,
@@ -1993,8 +1993,8 @@ mod cap_58_constructor {
                             ),
                         ),
                         resources: SubInvocationResources {
-                            instructions: 2405567,
-                            mem_bytes: 4769354,
+                            instructions: 2375179,
+                            mem_bytes: 4768490,
                             disk_read_entries: 0,
                             memory_read_entries: 8,
                             write_entries: 3,
@@ -2019,8 +2019,8 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 915474,
-                                    mem_bytes: 2382585,
+                                    instructions: 903896,
+                                    mem_bytes: 2382153,
                                     disk_read_entries: 0,
                                     memory_read_entries: 4,
                                     write_entries: 2,
@@ -2045,8 +2045,8 @@ mod cap_58_constructor {
                                             ),
                                         ),
                                         resources: SubInvocationResources {
-                                            instructions: 350170,
-                                            mem_bytes: 1207927,
+                                            instructions: 344306,
+                                            mem_bytes: 1207711,
                                             disk_read_entries: 0,
                                             memory_read_entries: 2,
                                             write_entries: 0,
@@ -2074,7 +2074,7 @@ mod cap_58_constructor {
                                     ),
                                 ),
                                 resources: SubInvocationResources {
-                                    instructions: 546291,
+                                    instructions: 539047,
                                     mem_bytes: 0,
                                     disk_read_entries: 0,
                                     memory_read_entries: 0,
@@ -3496,5 +3496,394 @@ mod cap_85_executable_reference {
             res,
             (ScErrorType::Auth, ScErrorCode::InvalidAction)
         ));
+    }
+}
+
+mod native_test_contract_lifecycle {
+    use super::*;
+    use crate::{
+        xdr::{InvokeContractArgs, ScString},
+        AddressObject, Compare, ContractFunctionSet,
+    };
+    use pretty_assertions::assert_eq;
+
+    // A native contract whose constructor requires auth from the address passed
+    // as its only argument and stores that address in the instance storage.
+    struct ConstructorAuthContract;
+
+    impl ContractFunctionSet for ConstructorAuthContract {
+        fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Option<Val> {
+            let is_constructor = host
+                .compare(&symbol(host, "__constructor"), func)
+                .unwrap()
+                .is_eq();
+            if is_constructor {
+                host.require_auth(args[0].try_into().unwrap()).unwrap();
+                host.put_contract_data(
+                    symbol(host, "val").to_val(),
+                    args[1],
+                    StorageType::Instance,
+                )
+                .unwrap();
+                return Some(().into());
+            }
+            Some(
+                host.get_contract_data(symbol(host, "val").to_val(), StorageType::Instance)
+                    .unwrap(),
+            )
+        }
+    }
+
+    fn symbol(host: &Host, s: &str) -> Symbol {
+        host.symbol_new_from_slice(s.as_bytes()).unwrap().into()
+    }
+
+    fn code_live_until_ledger(host: &Host, wasm_hash: &Hash) -> u32 {
+        let key = host.contract_code_ledger_key(wasm_hash).unwrap();
+        host.get_ledger_entry(&key).unwrap().unwrap().1.unwrap()
+    }
+
+    fn check_code(host: &Host, wasm_hash: &Hash, id: u32) {
+        let (code, _) = host.retrieve_wasm_from_storage(&wasm_hash).unwrap();
+        let wasm_str = format!("test_contract_{}", id);
+        assert_eq!(code.as_slice(), wasm_str.as_bytes());
+        assert_eq!(wasm_hash, &Hash(Sha256::digest(wasm_str.as_bytes()).into()));
+    }
+
+    #[test]
+    fn test_upload_and_create_instance_separately() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_debug().unwrap();
+        host.switch_to_recording_auth(true).unwrap();
+
+        let cfs: Rc<dyn ContractFunctionSet> = Rc::new(ConstructorAuthContract);
+
+        // Upload the test contract and verify that it has a dummy Wasm entry.,
+        let wasm_hash_obj = host.upload_test_contract_wasm(cfs.clone()).unwrap();
+        let wasm_hash = host
+            .hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)
+            .unwrap();
+
+        check_code(&host, &wasm_hash, 0);
+
+        // Uploading the same contract again is a no-op that returns the same
+        // hash and does not change the contents or TTL of the stored code
+        // entry.
+        let live_until_ledger = code_live_until_ledger(&host, &wasm_hash);
+        host.with_mut_ledger_info(|li| li.sequence_number += 1000)
+            .unwrap();
+        let wasm_hash2 = host.upload_test_contract_wasm(cfs.clone()).unwrap();
+        assert_eq!(
+            host.hash_from_bytesobj_input("wasm_hash", wasm_hash2)
+                .unwrap(),
+            wasm_hash
+        );
+        check_code(&host, &wasm_hash, 0);
+        assert_eq!(code_live_until_ledger(&host, &wasm_hash), live_until_ledger);
+
+        // Now we can instantiate contracts using the uploaded Wasm.
+        let creator = generate_account_id(&host);
+        let creator_address = ScAddress::Account(creator.clone());
+        let creator_address_obj = host
+            .add_host_object(ScAddress::Account(creator.clone()))
+            .unwrap();
+
+        let create_contract = |salt: [u8; 32], constructor_arg: &str| {
+            let arg_obj = host
+                .add_host_object(ScString(constructor_arg.try_into().unwrap()))
+                .unwrap();
+            host.create_contract_with_constructor(
+                creator_address_obj,
+                wasm_hash_obj,
+                host.bytes_new_from_slice(&salt).unwrap(),
+                host.vec_new_from_slice(&[creator_address_obj.to_val(), arg_obj.to_val()])
+                    .unwrap(),
+            )
+            .unwrap()
+        };
+
+        let expected_auth_payload = |salt: [u8; 32], contract, constructor_arg: &str| {
+            let constructor_args: VecM<ScVal> = vec![
+                ScVal::Address(creator_address.clone()),
+                ScVal::String(ScString(constructor_arg.try_into().unwrap())),
+            ]
+            .try_into()
+            .unwrap();
+            RecordedAuthPayload {
+                address: Some(creator_address.clone()),
+                nonce: Some(0),
+                invocation: SorobanAuthorizedInvocation {
+                    function: SorobanAuthorizedFunction::CreateContractV2HostFn(
+                        CreateContractArgsV2 {
+                            contract_id_preimage: ContractIdPreimage::Address(
+                                ContractIdPreimageFromAddress {
+                                    address: creator_address.clone(),
+                                    salt: Uint256(salt),
+                                },
+                            ),
+                            executable: ContractExecutable::Wasm(wasm_hash.clone()),
+                            constructor_args: constructor_args.clone(),
+                        },
+                    ),
+                    sub_invocations: vec![SorobanAuthorizedInvocation {
+                        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                            contract_address: ScAddress::Contract(
+                                host.contract_id_from_address(contract).unwrap(),
+                            ),
+                            function_name: "__constructor".try_into().unwrap(),
+                            args: constructor_args.clone(),
+                        }),
+                        sub_invocations: Default::default(),
+                    }]
+                    .try_into()
+                    .unwrap(),
+                },
+            }
+        };
+
+        // We can verify auth payloads used specifically for the contract
+        // creation call.
+        let first = create_contract([1; 32], "first");
+        assert_eq!(
+            host.get_recorded_auth_payloads().unwrap(),
+            vec![expected_auth_payload([1; 32], first, "first")]
+        );
+        let second = create_contract([2; 32], "second");
+        assert_eq!(
+            host.get_recorded_auth_payloads().unwrap(),
+            vec![expected_auth_payload([2; 32], second, "second")]
+        );
+
+        // Verify that the contracts have an expected Wasm executable, and that
+        // they can be called using the contract function set.
+        let check_val = |contract, expected: &str| {
+            let val = host
+                .call(contract, symbol(&host, "get_val"), host.vec_new().unwrap())
+                .unwrap();
+            assert_eq!(
+                host.from_host_val(val).unwrap(),
+                ScVal::String(ScString(expected.try_into().unwrap()))
+            );
+        };
+        assert_eq!(
+            get_contract_wasm_ref(&host, host.contract_id_from_address(first).unwrap()),
+            wasm_hash
+        );
+        check_val(first, "first");
+        assert_eq!(
+            get_contract_wasm_ref(&host, host.contract_id_from_address(second).unwrap()),
+            wasm_hash
+        );
+        check_val(second, "second");
+    }
+
+    #[test]
+    fn test_create_instance_with_enforcing_auth() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_debug().unwrap();
+
+        let wasm_hash_obj = host
+            .upload_test_contract_wasm(Rc::new(ConstructorAuthContract))
+            .unwrap();
+        let wasm_hash = host
+            .hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)
+            .unwrap();
+
+        let creator = generate_account_id(&host);
+        let creator_address = ScAddress::Account(creator.clone());
+        let creator_address_obj = host.add_host_object(creator_address.clone()).unwrap();
+        host.set_source_account(creator.clone()).unwrap();
+
+        let constructor_args: VecM<ScVal> = vec![
+            ScVal::Address(creator_address.clone()),
+            ScVal::String(ScString("val".try_into().unwrap())),
+        ]
+        .try_into()
+        .unwrap();
+
+        let salt = [111; 32];
+        let salt_obj = host.bytes_new_from_slice(&salt).unwrap();
+        let contract_id = host
+            .get_contract_id_hash(creator_address_obj, salt_obj)
+            .unwrap();
+
+        let try_create =
+            |authorized_constructor_args: Option<VecM<ScVal>>| -> Result<AddressObject, HostError> {
+                // The constructor call is authorized as a sub-invocation of the
+                // contract creation.
+                let sub_invocations = match authorized_constructor_args {
+                    Some(args) => vec![SorobanAuthorizedInvocation {
+                        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                            contract_address: ScAddress::Contract(contract_id.clone()),
+                            function_name: "__constructor".try_into().unwrap(),
+                            args,
+                        }),
+                        sub_invocations: Default::default(),
+                    }],
+                    None => vec![],
+                };
+                host.set_authorization_entries(vec![SorobanAuthorizationEntry {
+                    credentials: SorobanCredentials::SourceAccount,
+                    root_invocation: SorobanAuthorizedInvocation {
+                        function: SorobanAuthorizedFunction::CreateContractV2HostFn(
+                            CreateContractArgsV2 {
+                                contract_id_preimage: ContractIdPreimage::Address(
+                                    ContractIdPreimageFromAddress {
+                                        address: creator_address.clone(),
+                                        salt: Uint256(salt),
+                                    },
+                                ),
+                                executable: ContractExecutable::Wasm(wasm_hash.clone()),
+                                constructor_args: constructor_args.clone(),
+                            },
+                        ),
+                        sub_invocations: sub_invocations.try_into().unwrap(),
+                    },
+                }])
+                .unwrap();
+                let arg_obj = host
+                    .add_host_object(ScString("val".try_into().unwrap()))
+                    .unwrap();
+                host.create_contract_with_constructor(
+                    creator_address_obj,
+                    wasm_hash_obj,
+                    salt_obj,
+                    host.vec_new_from_slice(&[creator_address_obj.to_val(), arg_obj.to_val()])
+                        .unwrap(),
+                )
+            };
+
+        // The contract creation itself is authorized, but the constructor's own
+        // `require_auth` isn't. Note, that the auth error is masked by the
+        // generic 'constructor has failed' error, like for any other error
+        // coming out of a constructor.
+        assert!(HostError::result_matches_err(
+            try_create(None),
+            (ScErrorType::Context, ScErrorCode::InvalidAction)
+        ));
+        // The constructor is authorized for a different set of arguments than
+        // it's actually called with.
+        let mismatching_constructor_args: VecM<ScVal> = vec![
+            ScVal::Address(creator_address.clone()),
+            ScVal::String(ScString("wrong_val".try_into().unwrap())),
+        ]
+        .try_into()
+        .unwrap();
+        assert!(HostError::result_matches_err(
+            try_create(Some(mismatching_constructor_args)),
+            (ScErrorType::Context, ScErrorCode::InvalidAction)
+        ));
+
+        // The full, matching auth tree lets the creation through and the
+        // constructor runs.
+        let contract = try_create(Some(constructor_args.clone())).unwrap();
+        assert_eq!(
+            host.contract_id_from_address(contract).unwrap(),
+            contract_id
+        );
+        let val = host
+            .call(contract, symbol(&host, "get_val"), host.vec_new().unwrap())
+            .unwrap();
+        assert_eq!(
+            host.from_host_val(val).unwrap(),
+            ScVal::String(ScString("val".try_into().unwrap()))
+        );
+    }
+
+    #[test]
+    fn test_upload_multiple_test_contracts() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_debug().unwrap();
+
+        let upload = |cfs: &Rc<dyn ContractFunctionSet>| {
+            host.hash_from_bytesobj_input(
+                "wasm_hash",
+                host.upload_test_contract_wasm(cfs.clone()).unwrap(),
+            )
+            .unwrap()
+        };
+
+        let mut uploaded = vec![];
+        for id in 0..5_u32 {
+            let cfs: Rc<dyn ContractFunctionSet> = Rc::new(ConstructorAuthContract);
+            let wasm_hash = upload(&cfs);
+            check_code(&host, &wasm_hash, id);
+            uploaded.push((cfs, wasm_hash));
+        }
+
+        // The assigned ids are stable, i.e. re-uploading any of the function
+        // sets returns the dummy Wasm that it has been assigned initially.
+        for id in (0..5_u32).rev() {
+            let (cfs, wasm_hash) = &uploaded[id as usize];
+            assert_eq!(&upload(cfs), wasm_hash);
+            check_code(&host, wasm_hash, id as u32);
+        }
+    }
+
+    #[test]
+    fn test_failed_registration_is_rolled_back() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_debug().unwrap();
+
+        let cfs: Rc<dyn ContractFunctionSet> = Rc::new(ConstructorAuthContract);
+        let contract_address_obj = host
+            .add_host_object(ScAddress::Contract(ContractId(Hash([222; 32]))))
+            .unwrap();
+        let owner = generate_account_id(&host);
+        let owner_obj = host
+            .add_host_object(ScAddress::Account(owner.clone()))
+            .unwrap();
+        let arg_obj = host
+            .add_host_object(ScString("val".try_into().unwrap()))
+            .unwrap();
+        let constructor_args = host
+            .vec_new_from_slice(&[owner_obj.to_val(), arg_obj.to_val()])
+            .unwrap();
+        // The Wasm hash the contract is going to be registered under.
+        let wasm_hash = Hash(Sha256::digest(b"test_contract_0").into());
+        let instance_key = host
+            .contract_instance_ledger_key(&ContractId(Hash([222; 32])))
+            .unwrap();
+
+        // The constructor's `require_auth` fails, as there is no authorization
+        // provided at all.
+        assert!(HostError::result_matches_err(
+            host.register_test_contract_with_constructor(
+                contract_address_obj,
+                cfs.clone(),
+                constructor_args,
+            ),
+            (ScErrorType::Context, ScErrorCode::InvalidAction)
+        ));
+        // The contract instance is not created, but the contract itself is
+        // uploaded (the function is not considered to be atomic, so only the
+        // fallible constructor step is rolled back).
+        assert!(host.get_ledger_entry(&instance_key).unwrap().is_none());
+        check_code(&host, &wasm_hash, 0);
+
+        // Registering the same contract again succeeds.
+        host.switch_to_recording_auth(false).unwrap();
+        host.register_test_contract_with_constructor(
+            contract_address_obj,
+            cfs.clone(),
+            constructor_args,
+        )
+        .unwrap();
+        check_code(&host, &wasm_hash, 0);
+        assert_eq!(
+            get_contract_wasm_ref(&host, ContractId(Hash([222; 32]))),
+            wasm_hash
+        );
+        let val = host
+            .call(
+                contract_address_obj,
+                symbol(&host, "get_val"),
+                host.vec_new().unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            host.from_host_val(val).unwrap(),
+            ScVal::String(ScString("val".try_into().unwrap()))
+        );
     }
 }
