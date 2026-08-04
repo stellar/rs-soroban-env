@@ -1820,6 +1820,30 @@ mod test {
     }
 
     #[test]
+    fn test_disabling_resource_limits_makes_budget_unlimited() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_invocation_metering();
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number = 100;
+            li.max_entry_ttl = 10000;
+            li.min_persistent_entry_ttl = 1000;
+            li.min_temp_entry_ttl = 16;
+        })
+        .unwrap();
+        host.set_invocation_resource_limits(None).unwrap();
+
+        let loadgen_contract_id = host.register_test_contract_wasm(LOADGEN);
+
+        let res = host.call(
+            loadgen_contract_id,
+            Symbol::try_from_val(&host, &"do_cpu_only_work").unwrap(),
+            test_vec![&host, 20000_u32, 30000_u32, 10_u32].into(),
+        );
+        assert!(res.is_ok());
+        assert!(host.budget_ref().get_cpu_insns_consumed().unwrap() > 100_000_000);
+    }
+
+    #[test]
     fn test_resource_limits_exceeded() {
         let host = Host::test_host_with_recording_footprint();
         host.enable_invocation_metering();
