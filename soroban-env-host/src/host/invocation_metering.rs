@@ -1837,7 +1837,7 @@ mod test {
         // Set very low limits to trigger the exceeded limits error.
         host.set_invocation_resource_limits(Some(InvocationResourceLimits {
             // Instruction and memory limits should remain high for the purpose
-            // of this test, as they will make the test fail due to exceeding 
+            // of this test, as they will make the test fail due to exceeding
             // the budget before reaching the resource limit enforcement logic.
             instructions: 100_000_000,
             mem_bytes: 20_000_000,
