@@ -918,6 +918,17 @@ impl Host {
             if !meter.enabled {
                 panic!("can't set invocation resource limits when invocation metering is disabled");
             }
+            if let Some(limits) = &limits {
+                self.budget_ref().reset_limits(
+                    limits.instructions.max(0) as u64,
+                    limits.mem_bytes.max(0) as u64,
+                )?;
+            } else {
+                // Limits are disabled, so we should disable the budget limit
+                // checks as well (or else the invocations will still fail due
+                // to exceeding the budget limit).
+                self.budget_ref().reset_unlimited()?;
+            }
             meter.resource_limit = limits;
         }
         Ok(())
@@ -1809,6 +1820,30 @@ mod test {
     }
 
     #[test]
+    fn test_disabling_resource_limits_makes_budget_unlimited() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_invocation_metering();
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number = 100;
+            li.max_entry_ttl = 10000;
+            li.min_persistent_entry_ttl = 1000;
+            li.min_temp_entry_ttl = 16;
+        })
+        .unwrap();
+        host.set_invocation_resource_limits(None).unwrap();
+
+        let loadgen_contract_id = host.register_test_contract_wasm(LOADGEN);
+
+        let res = host.call(
+            loadgen_contract_id,
+            Symbol::try_from_val(&host, &"do_cpu_only_work").unwrap(),
+            test_vec![&host, 20000_u32, 30000_u32, 10_u32].into(),
+        );
+        assert!(res.is_ok());
+        assert!(host.budget_ref().get_cpu_insns_consumed().unwrap() > 100_000_000);
+    }
+
+    #[test]
     fn test_resource_limits_exceeded() {
         let host = Host::test_host_with_recording_footprint();
         host.enable_invocation_metering();
@@ -1825,8 +1860,11 @@ mod test {
 
         // Set very low limits to trigger the exceeded limits error.
         host.set_invocation_resource_limits(Some(InvocationResourceLimits {
-            instructions: 10,
-            mem_bytes: 20,
+            // Instruction and memory limits should remain high for the purpose
+            // of this test, as they will make the test fail due to exceeding
+            // the budget before reaching the resource limit enforcement logic.
+            instructions: 100_000_000,
+            mem_bytes: 20_000_000,
             disk_read_entries: 1,
             write_entries: 0,
             ledger_entries: 4,
@@ -1874,7 +1912,7 @@ mod test {
                             ),
                             data: String(
                                 ScString(
-                                    StringM(invocation resource limits are exceeded: instructions: 1788422 > 10, memory bytes: 1163569 > 20, contract events size bytes: 800 > 50, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(1a2ee5a89dd2162a20e716b3e2de70a2d662480a9565350378661871bcf8e398) })' size: 1840 > 45),
+                                    StringM(invocation resource limits are exceeded: contract events size bytes: 800 > 50, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(2e0ff7a55065f3a896723a964c3d9862a4722bfc77229fe4875f390ef2a0027e))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(1a2ee5a89dd2162a20e716b3e2de70a2d662480a9565350378661871bcf8e398) })' size: 1840 > 45),
                                 ),
                             ),
                         },
@@ -1927,7 +1965,7 @@ mod test {
                             ),
                             data: String(
                                 ScString(
-                                    StringM(invocation resource limits are exceeded: instructions: 320870 > 10, memory bytes: 1135982 > 20, total footprint ledger entries: 5 > 4, disk read ledger entries: 2 > 1, disk read bytes: 3132 > 30, write ledger entries: 2 > 0, write bytes: 3132 > 40, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: Symbol(ScSymbol(StringM(key_1))), durability: Persistent })' size: 60 > 25, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(fc644715caaead746e6145f4331ff75c427c965c20d2995a9942b01247515962) })' size: 3028 > 45),
+                                    StringM(invocation resource limits are exceeded: total footprint ledger entries: 5 > 4, disk read ledger entries: 2 > 1, disk read bytes: 3132 > 30, write ledger entries: 2 > 0, write bytes: 3132 > 40, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: Symbol(ScSymbol(StringM(key_1))), durability: Persistent })' size: 60 > 25, contract data key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 48 > 25, contract data entry with key 'ContractData(LedgerKeyContractData { contract: Contract(ContractId(Hash(ba863dea340f907c97f640ecbe669125e9f8f3b63ed1f4ed0f30073b869e5441))), key: LedgerKeyContractInstance, durability: Persistent })' size: 104 > 35, contract code entry with key 'ContractCode(LedgerKeyContractCode { hash: Hash(fc644715caaead746e6145f4331ff75c427c965c20d2995a9942b01247515962) })' size: 3028 > 45),
                                 ),
                             ),
                         },
