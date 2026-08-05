@@ -496,7 +496,7 @@ impl Host {
         &self,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<BytesObject, HostError> {
-        let invocation_meter_scope = self.maybe_meter_invocation(
+        let _invocation_meter_scope = self.maybe_meter_invocation(
             crate::host::invocation_metering::MeteringInvocation::WasmUploadEntryPoint,
         );
 
