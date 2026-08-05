@@ -11,14 +11,14 @@
   "   9 ret obj_cmp -> Ok(0)": "cpu:31999039",
   "  10 call get_ledger_network_id()": "cpu:31999091, auth:1@c8520dca/1@2921f17",
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:32000122, mem:3938707, mem_peak:3938707, objs:-/6@f4ceeece",
-  "  12 call symbol_new_from_slice(13)": "cpu:32244605, mem:4270327, mem_peak:4270327, store:-/2@5d9d9730, foot:2@43d7a2e3",
-  "  13 ret symbol_new_from_slice -> Ok(Symbol(obj#13))": "cpu:32245615, mem:4270436, mem_peak:4270436, objs:-/7@31d3ac2a",
-  "  14 push VM:591a3569:sym#13()": "cpu:32474591, mem:4599790, mem_peak:4599790, objs:-/8@b2aa5e1a, vm:65536@b1cd98b9/2@2f94d90d, stk:1@72eeb84e, auth:2@9181059c/1@a0643f7c",
-  "  15 call symbol_len(Symbol(obj#13))": "cpu:32477057, mem:4599820, mem_peak:4599820",
-  "  16 ret symbol_len -> Ok(U32(13))": "cpu:32477177",
+  "  12 call symbol_new_from_slice(13)": "cpu:32238924, mem:4270111, mem_peak:4270111, store:-/2@5d9d9730, foot:2@43d7a2e3",
+  "  13 ret symbol_new_from_slice -> Ok(Symbol(obj#13))": "cpu:32239934, mem:4270220, mem_peak:4270220, objs:-/7@31d3ac2a",
+  "  14 push VM:591a3569:sym#13()": "cpu:32463229, mem:4599358, mem_peak:4599358, objs:-/8@b2aa5e1a, vm:65536@b1cd98b9/2@2f94d90d, stk:1@72eeb84e, auth:2@9181059c/1@a0643f7c",
+  "  15 call symbol_len(Symbol(obj#13))": "cpu:32465695, mem:4599388, mem_peak:4599388",
+  "  16 ret symbol_len -> Ok(U32(13))": "cpu:32465815",
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
-  "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:32477280",
+  "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:32465918",
   "  19 pop VM:591a3569:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:32477782, mem:4599900, mem_peak:4599900, objs:-/9@618958de, vm:-/-, stk:-, auth:-/-",
-  "  21 end": "cpu:32477782, mem:4599900, mem_peak:4599900, prngs:-/9b4a753, objs:-/9@618958de, vm:-/-, evt:-, store:-/2@5d9d9730, foot:2@43d7a2e3, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:32466420, mem:4599468, mem_peak:4599468, objs:-/9@618958de, vm:-/-, stk:-, auth:-/-",
+  "  21 end": "cpu:32466420, mem:4599468, mem_peak:4599468, prngs:-/9b4a753, objs:-/9@618958de, vm:-/-, evt:-, store:-/2@5d9d9730, foot:2@43d7a2e3, stk:-, auth:-/-"
 }

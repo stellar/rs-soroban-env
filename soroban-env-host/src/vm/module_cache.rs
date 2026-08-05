@@ -106,13 +106,18 @@ impl ModuleCache {
                     if let LedgerEntryData::ContractCode(ContractCodeEntry { code, hash, ext }) =
                         &e.data
                     {
-                        // We allow empty contracts in testing mode; they exist
-                        // to exercise as much of the contract-code-storage
-                        // infrastructure as possible, while still redirecting
-                        // the actual execution into a `ContractFunctionSet`.
-                        // They should never be called, so we do not have to go
-                        // as far as making a fake `ParsedModule` for them.
-                        if code.as_slice().is_empty() {
+                        // We support native contracts in testing mode; they
+                        // have a special Wasm contents in order to to exercise
+                        // as much of the contract-code-storage infrastructure
+                        // as possible, while still redirecting the actual
+                        // execution into a `ContractFunctionSet`.
+                        // The special Wasms should never be actually called, so
+                        // we do not have to go as far as making a fake
+                        // `ParsedModule` for them.
+                        if host
+                            .try_borrow_test_contract_registry()?
+                            .is_test_contract_wasm(code.as_slice())
+                        {
                             continue;
                         }
 

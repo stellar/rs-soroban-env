@@ -7,6 +7,6 @@
   "   5 ret obj_cmp -> Ok(0)": "cpu:1460744",
   "   6 call get_ledger_network_id()": "cpu:1460796, auth:1@8db3bc90/1@5cfc24a6",
   "   7 ret get_ledger_network_id -> Ok(Bytes(obj#9))": "cpu:1461827, mem:384867, objs:-/5@e4947c99",
-  "   8 pop CreateContract: -> Ok(Address(obj#11))": "cpu:1884205, mem:1541218, mem_peak:1541218, objs:-/6@bdd6d9d4, store:-/2@54cc6f79, foot:2@8c5cee49, stk:1@740bc77e, auth:-/1@2f80d14b",
-  "   9 end": "cpu:1884313, mem:492626, mem_peak:1541218, prngs:-/9b4a753, objs:-/6@bdd6d9d4, vm:-/-, evt:-, store:-/2@54cc6f79, foot:2@8c5cee49, stk:-, auth:-/-"
+  "   8 pop CreateContract: -> Ok(Address(obj#11))": "cpu:1878524, mem:1541002, mem_peak:1541002, objs:-/6@bdd6d9d4, store:-/2@54cc6f79, foot:2@8c5cee49, stk:1@740bc77e, auth:-/1@2f80d14b",
+  "   9 end": "cpu:1878632, mem:492410, mem_peak:1541002, prngs:-/9b4a753, objs:-/6@bdd6d9d4, vm:-/-, evt:-, store:-/2@54cc6f79, foot:2@8c5cee49, stk:-, auth:-/-"
 }
