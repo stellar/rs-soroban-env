@@ -11,14 +11,14 @@
   "   9 ret obj_cmp -> Ok(0)": "cpu:1422108",
   "  10 call get_ledger_network_id()": "cpu:1422160, auth:1@98410582/1@43f8e377",
   "  11 ret get_ledger_network_id -> Ok(Bytes(obj#11))": "cpu:1423191, mem:459918, mem_peak:459918, objs:-/6@1362abc5",
-  "  12 call symbol_new_from_slice(13)": "cpu:1654415, mem:632514, mem_peak:632514, store:-/2@bd85d3f3, foot:2@f0a688bd",
-  "  13 ret symbol_new_from_slice -> Ok(Symbol(obj#13))": "cpu:1655425, mem:632623, mem_peak:632623, objs:-/7@47fd8a66",
-  "  14 push VM:e4b7da03:sym#13()": "cpu:1871142, mem:802953, mem_peak:802953, objs:-/8@661fdcc1, vm:65536@b1cd98b9/2@2f94d90d, stk:1@98e7a016, auth:2@e5627947/1@1ce0cc06",
-  "  15 call symbol_len(Symbol(obj#13))": "cpu:1873608, mem:802983, mem_peak:802983",
-  "  16 ret symbol_len -> Ok(U32(13))": "cpu:1873728",
+  "  12 call symbol_new_from_slice(13)": "cpu:1648734, mem:632298, mem_peak:632298, store:-/2@bd85d3f3, foot:2@f0a688bd",
+  "  13 ret symbol_new_from_slice -> Ok(Symbol(obj#13))": "cpu:1649744, mem:632407, mem_peak:632407, objs:-/7@47fd8a66",
+  "  14 push VM:e4b7da03:sym#13()": "cpu:1859780, mem:802521, mem_peak:802521, objs:-/8@661fdcc1, vm:65536@b1cd98b9/2@2f94d90d, stk:1@98e7a016, auth:2@e5627947/1@1ce0cc06",
+  "  15 call symbol_len(Symbol(obj#13))": "cpu:1862246, mem:802551, mem_peak:802551",
+  "  16 ret symbol_len -> Ok(U32(13))": "cpu:1862366",
   "  17 call symbol_copy_to_slice(Symbol(obj#13), U32(0), 13)": "",
-  "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1873831",
+  "  18 ret symbol_copy_to_slice -> Ok(())": "cpu:1862469",
   "  19 pop VM:e4b7da03:sym#13 -> Ok(Void)": "",
-  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1874333, mem:803063, mem_peak:803063, objs:-/9@ca49c6cb, vm:-/-, stk:-, auth:-/-",
-  "  21 end": "cpu:1883443, mem:803935, mem_peak:803935, prngs:-/9b4a753, objs:-/9@ca49c6cb, vm:-/-, evt:-, store:-/2@d5911345, foot:2@f0a688bd, stk:-, auth:-/-"
+  "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1862971, mem:802631, mem_peak:802631, objs:-/9@ca49c6cb, vm:-/-, stk:-, auth:-/-",
+  "  21 end": "cpu:1872081, mem:803503, mem_peak:803503, prngs:-/9b4a753, objs:-/9@ca49c6cb, vm:-/-, evt:-, store:-/2@d5911345, foot:2@f0a688bd, stk:-, auth:-/-"
 }
