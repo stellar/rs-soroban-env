@@ -3886,4 +3886,125 @@ mod native_test_contract_lifecycle {
             ScVal::String(ScString("val".try_into().unwrap()))
         );
     }
+
+    // A native contract that returns a constant from any function call and
+    // relies on the default no-op constructor.
+    struct ConstContract(i32);
+
+    impl ContractFunctionSet for ConstContract {
+        fn call(&self, func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
+            let is_constructor = host
+                .compare(&symbol(host, "__constructor"), func)
+                .unwrap()
+                .is_eq();
+            if is_constructor {
+                return None;
+            }
+            Some(Val::from_i32(self.0).into())
+        }
+    }
+
+    fn call_const_fn(host: &Host, contract: AddressObject) -> i32 {
+        host.call(contract, symbol(host, "get_val"), host.vec_new().unwrap())
+            .unwrap()
+            .try_into_val(host)
+            .unwrap()
+    }
+
+    #[test]
+    fn test_upload_with_explicit_wasm_hash() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_debug().unwrap();
+        host.switch_to_recording_auth(true).unwrap();
+
+        // Register the native contract under an externally provided Wasm hash
+        // instead of a host-determined one.
+        let wasm_hash = Hash([7; 32]);
+        let wasm_hash_obj = host.bytes_new_from_slice(&wasm_hash.0).unwrap();
+        host.upload_test_contract_wasm_with_hash(Rc::new(ConstContract(111)), wasm_hash_obj)
+            .unwrap();
+
+        // A stub code entry has been created for the provided hash. Unlike the
+        // host-determined hashes, the provided hash is not the actual hash of
+        // the stub code.
+        let (code, _) = host.retrieve_wasm_from_storage(&wasm_hash).unwrap();
+        let expected_code = format!("test_contract_{}", "07".repeat(32));
+        assert_eq!(code.as_slice(), expected_code.as_bytes());
+
+        // Instances created from the provided hash are dispatched to the
+        // native function set.
+        let creator_address_obj = host
+            .add_host_object(ScAddress::Account(generate_account_id(&host)))
+            .unwrap();
+        let contract = host
+            .create_contract(
+                creator_address_obj,
+                wasm_hash_obj,
+                host.bytes_new_from_slice(&[0; 32]).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            get_contract_wasm_ref(&host, host.contract_id_from_address(contract).unwrap()),
+            wasm_hash
+        );
+        assert_eq!(call_const_fn(&host, contract), 111);
+
+        // Re-registering a different function set under the same hash
+        // overrides the previous registration without touching the code entry.
+        host.upload_test_contract_wasm_with_hash(Rc::new(ConstContract(222)), wasm_hash_obj)
+            .unwrap();
+        let (code, _) = host.retrieve_wasm_from_storage(&wasm_hash).unwrap();
+        assert_eq!(code.as_slice(), expected_code.as_bytes());
+        assert_eq!(call_const_fn(&host, contract), 222);
+    }
+
+    #[test]
+    fn test_native_contract_overrides_existing_wasm() {
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_debug().unwrap();
+
+        // Create a regular Wasm contract and make sure it's executed via the
+        // Wasm VM.
+        let contract = host.register_test_contract_wasm(ADD_I32);
+        let contract_id = host.contract_id_from_address(contract).unwrap();
+        let wasm_hash = get_contract_wasm_ref(&host, contract_id);
+        let call_add = || -> i32 {
+            host.call(
+                contract,
+                Symbol::try_from_small_str("add").unwrap(),
+                test_vec![&host, 10_i32, 20_i32].into(),
+            )
+            .unwrap()
+            .try_into_val(&host)
+            .unwrap()
+        };
+        assert_eq!(call_add(), 30);
+
+        // Override the existing Wasm with a native implementation.
+        let wasm_hash_obj = host.bytes_new_from_slice(&wasm_hash.0).unwrap();
+        host.upload_test_contract_wasm_with_hash(Rc::new(ConstContract(42)), wasm_hash_obj)
+            .unwrap();
+        // Calls to the existing contract instance are now dispatched to the
+        // native function set.
+        assert_eq!(call_add(), 42);
+        // The overridden code entry is left untouched and still contains the
+        // actual Wasm.
+        let (code, _) = host.retrieve_wasm_from_storage(&wasm_hash).unwrap();
+        assert_eq!(code.as_slice(), ADD_I32);
+
+        // New instances created from the overridden Wasm hash are dispatched
+        // to the native function set as well.
+        host.switch_to_recording_auth(true).unwrap();
+        let creator_address_obj = host
+            .add_host_object(ScAddress::Account(generate_account_id(&host)))
+            .unwrap();
+        let new_contract = host
+            .create_contract(
+                creator_address_obj,
+                wasm_hash_obj,
+                host.bytes_new_from_slice(&[1; 32]).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(call_const_fn(&host, new_contract), 42);
+    }
 }

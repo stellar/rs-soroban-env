@@ -412,7 +412,9 @@ use std::collections::HashMap;
 
 // Native test contracts have a corresponding contract code entry, but instead
 // of the actual Wasm, their code is just `TEST_CONTRACT_WASM_PREFIX` followed
-// by a unique integer ID.
+// by a unique identifier (an auto-increment ID for the contracts with a
+// host-determined Wasm hash, or the hex-encoded hash for the contracts
+// registered under an externally provided Wasm hash).
 #[cfg(any(test, feature = "testutils"))]
 const TEST_CONTRACT_WASM_PREFIX: &str = "test_contract_";
 
@@ -460,9 +462,15 @@ impl TestContractRegistry {
         (hash, Some(wasm))
     }
 
-    // Returns true if the given Wasm blob is a registered native test contract.
-    pub(crate) fn is_test_contract_wasm(&self, wasm: &[u8]) -> bool {
-        self.fns_by_wasm_hash.contains_key(&Self::wasm_hash(wasm))
+    // Registers a test contract under an externally provided Wasm hash,
+    // overriding the function set previously registered for that hash (if
+    // any).
+    pub(crate) fn add_test_contract_with_hash(
+        &mut self,
+        wasm_hash: Hash,
+        contract_fns: Rc<dyn ContractFunctionSet>,
+    ) {
+        self.fns_by_wasm_hash.insert(wasm_hash, contract_fns);
     }
 
     // Returns the contract function set for a given Wasm hash, if any is
@@ -523,7 +531,54 @@ impl Host {
         // errors (because it's a test-only path), and trying to emulate the
         // real Wasm upload costs (the bulk of cost comes from the Wasm parsing
         // and VM instantiation which we can't emulate for native contracts).
+        self.store_test_contract_code_entry(wasm_hash, wasm)?;
+        Ok(hash_obj)
+    }
 
+    /// Registers the native test contract under an externally provided Wasm
+    /// hash, instead of a host-determined one (unlike
+    /// `upload_test_contract_wasm`).
+    ///
+    /// After this call every contract instance that has `wasm_hash` as its
+    /// executable is dispatched to `contract_fns`. This overrides whatever
+    /// executable the hash referred to before: an actual Wasm uploaded via
+    /// `upload_contract_wasm`, or a previously registered native test
+    /// contract.
+    ///
+    /// If the storage doesn't have a contract code entry for `wasm_hash` yet,
+    /// a stub entry is created (in the same fashion as in
+    /// `upload_test_contract_wasm`), so that the hash can be used in the same
+    /// way as the hash of a regular uploaded Wasm. An already existing code
+    /// entry is left untouched.
+    pub fn upload_test_contract_wasm_with_hash(
+        &self,
+        contract_fns: Rc<dyn ContractFunctionSet>,
+        wasm_hash: BytesObject,
+    ) -> Result<(), HostError> {
+        let _invocation_meter_scope = self.maybe_meter_invocation(
+            crate::host::invocation_metering::MeteringInvocation::WasmUploadEntryPoint,
+        );
+
+        let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?;
+        self.try_borrow_test_contract_registry_mut()?
+            .add_test_contract_with_hash(wasm_hash.clone(), contract_fns);
+
+        let code_key = self.contract_code_ledger_key(&wasm_hash)?;
+        if !self.try_borrow_storage_mut()?.has(&code_key, self, None)? {
+            let hash_hex: String = wasm_hash.0.iter().map(|b| format!("{b:02x}")).collect();
+            let wasm = format!("{TEST_CONTRACT_WASM_PREFIX}{hash_hex}").into_bytes();
+            self.store_test_contract_code_entry(wasm_hash, wasm)?;
+        }
+        Ok(())
+    }
+
+    // Writes a stub contract code entry for a native test contract into the
+    // storage.
+    fn store_test_contract_code_entry(
+        &self,
+        wasm_hash: Hash,
+        wasm: Vec<u8>,
+    ) -> Result<(), HostError> {
         let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: wasm_hash.clone(),
         }));
@@ -538,8 +593,7 @@ impl Host {
             Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
             self,
             None,
-        )?;
-        Ok(hash_obj)
+        )
     }
 
     pub fn register_test_contract(

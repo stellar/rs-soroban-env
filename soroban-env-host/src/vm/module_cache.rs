@@ -107,16 +107,18 @@ impl ModuleCache {
                         &e.data
                     {
                         // We support native contracts in testing mode; they
-                        // have a special Wasm contents in order to to exercise
-                        // as much of the contract-code-storage infrastructure
-                        // as possible, while still redirecting the actual
-                        // execution into a `ContractFunctionSet`.
-                        // The special Wasms should never be actually called, so
-                        // we do not have to go as far as making a fake
-                        // `ParsedModule` for them.
+                        // have a special Wasm contents (or an actual Wasm
+                        // overridden by a native implementation) in order to
+                        // exercise as much of the contract-code-storage
+                        // infrastructure as possible, while still redirecting
+                        // the actual execution into a `ContractFunctionSet`.
+                        // These entries should never be actually executed via
+                        // the VM, so we do not have to go as far as making a
+                        // fake `ParsedModule` for them.
                         if host
                             .try_borrow_test_contract_registry()?
-                            .is_test_contract_wasm(code.as_slice())
+                            .get_contract_fn_set(hash)
+                            .is_some()
                         {
                             continue;
                         }
