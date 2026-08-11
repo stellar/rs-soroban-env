@@ -411,6 +411,8 @@ use super::frame::CallParams;
 use super::ContractFunctionSet;
 #[cfg(any(test, feature = "testutils"))]
 use std::collections::HashMap;
+#[cfg(any(test, feature = "testutils"))]
+use std::fmt::Write;
 
 // Native test contracts have a corresponding contract code entry, but instead
 // of the actual Wasm, their code is either `TEST_CONTRACT_WASM_OVERRIDE_PREFIX`
@@ -501,7 +503,13 @@ impl Host {
 
         let (wasm, wasm_hash) = if let Some(wasm_hash) = wasm_hash {
             let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?;
-            let hash_hex: String = wasm_hash.0.iter().map(|b| format!("{b:02x}")).collect();
+            let hash_hex: String = wasm_hash.0.iter().fold(
+                String::with_capacity(wasm_hash.0.len() * 2),
+                |mut output, b| {
+                    let _ = write!(&mut output, "{b:02x}");
+                    output
+                },
+            );
             let wasm = format!("{TEST_CONTRACT_WASM_OVERRIDE_PREFIX}{hash_hex}").into_bytes();
             (wasm, wasm_hash)
         } else if let Some(contract_address) = contract_address {
