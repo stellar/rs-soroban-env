@@ -412,9 +412,7 @@ use std::collections::HashMap;
 
 // Native test contracts have a corresponding contract code entry, but instead
 // of the actual Wasm, their code is just `TEST_CONTRACT_WASM_PREFIX` followed
-// by a unique identifier (an auto-increment ID for the contracts with a
-// host-determined Wasm hash, or the hex-encoded hash for the contracts
-// registered under an externally provided Wasm hash).
+// by the hex-encoded Wasm hash the contract is registered under.
 #[cfg(any(test, feature = "testutils"))]
 const TEST_CONTRACT_WASM_PREFIX: &str = "test_contract_";
 
@@ -426,46 +424,13 @@ pub(crate) struct TestContractRegistry {
     // Maps the Wasm hash of the test contract code entry to the corresponding
     // contract function set.
     fns_by_wasm_hash: HashMap<Hash, Rc<dyn ContractFunctionSet>>,
-    // Maps the pointer address of the contract function set to an
-    // auto-increment ID used to identify a test contract in the Wasm blob.
-    // We use this map instead of a simple counter in order to ensure that the
-    // same contract function set always gets the same ID and thus ends up
-    // with the same Wasm entry, which is more faithful to the actual Wasm
-    // contracts that are stored once per unique Wasm.
-    ids_by_fns_addr: HashMap<usize, u32>,
-    // Hashes of the test contract Wasms that have already been registered,
-    // indexed by their auto-increment ID.
-    wasm_hashes: Vec<Hash>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
 impl TestContractRegistry {
-    // Adds a test contract to the registry.
-    // Returns the hash of the test contract Wasm and the corresponding Wasm
-    // blob, or `None` if the contract was already added.
+    // Registers a test contract under the provided Wasm hash, overriding the
+    // function set previously registered for that hash (if any).
     pub(crate) fn add_test_contract(
-        &mut self,
-        contract_fns: Rc<dyn ContractFunctionSet>,
-    ) -> (Hash, Option<Vec<u8>>) {
-        let addr = Rc::as_ptr(&contract_fns) as *const () as usize;
-        let next_id = self.ids_by_fns_addr.len() as u32;
-        let id = *self.ids_by_fns_addr.entry(addr).or_insert(next_id);
-        if id != next_id {
-            // Already registered.
-            return (self.wasm_hashes[id as usize].clone(), None);
-        }
-
-        let wasm = format!("{TEST_CONTRACT_WASM_PREFIX}{id}").into_bytes();
-        let hash = Self::wasm_hash(wasm.as_slice());
-        self.wasm_hashes.push(hash.clone());
-        self.fns_by_wasm_hash.insert(hash.clone(), contract_fns);
-        (hash, Some(wasm))
-    }
-
-    // Registers a test contract under an externally provided Wasm hash,
-    // overriding the function set previously registered for that hash (if
-    // any).
-    pub(crate) fn add_test_contract_with_hash(
         &mut self,
         wasm_hash: Hash,
         contract_fns: Rc<dyn ContractFunctionSet>,
@@ -487,63 +452,12 @@ impl TestContractRegistry {
     ) -> Option<Rc<dyn ContractFunctionSet>> {
         self.fns_by_wasm_hash.get(wasm_hash).cloned()
     }
-
-    // Internal, non-metered helper for computing Wasm hashes. This is only to
-    // be used by this registry.
-    fn wasm_hash(wasm: &[u8]) -> Hash {
-        Hash(<Sha256 as sha2::Digest>::digest(wasm).into())
-    }
 }
 
 // "testutils" is not covered by budget metering.
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
-    /// Uploads the native test contract to the host storage and returns the
-    /// Wasm hash of the uploaded contract.
-    ///
-    /// Test contracts are stored in the host storage as Wasm code entries with
-    /// a short identifier in place of the actual Wasm code.
-    ///
-    /// The returned hash can be used in the same way as the regular Wasm hash,
-    /// so it's possible to create contract instances that refer to this hash.
-    pub fn upload_test_contract_wasm(
-        &self,
-        contract_fns: Rc<dyn ContractFunctionSet>,
-    ) -> Result<BytesObject, HostError> {
-        let _invocation_meter_scope = self.maybe_meter_invocation(
-            crate::host::invocation_metering::MeteringInvocation::WasmUploadEntryPoint,
-        );
-
-        // Generate the dummy Wasm blob to write into the contract code entry.
-        let (wasm_hash, maybe_wasm) = self
-            .try_borrow_test_contract_registry_mut()?
-            .add_test_contract(contract_fns);
-        let hash_obj = self.add_host_object(self.scbytes_from_slice(wasm_hash.as_slice())?)?;
-        // If the contract was already uploaded, just short-circuit and return
-        // the hash without doing anything else.
-        let Some(wasm) = maybe_wasm else {
-            return Ok(hash_obj);
-        };
-
-        // Now write the wasm into the storage similarly to
-        // `upload_contract_wasm`, but without all the Wasm validation/cost
-        // logic.
-        // This is unfortunately inconvenient to deduplicate with
-        // `upload_contract_wasm`, as it would require too many feature-gated
-        // branches and would make the production code path hard to read and
-        // maintain.
-        // We also skip most of the metering and error handling here for
-        // brevity, there is really no point in avoiding crashes on internal
-        // errors (because it's a test-only path), and trying to emulate the
-        // real Wasm upload costs (the bulk of cost comes from the Wasm parsing
-        // and VM instantiation which we can't emulate for native contracts).
-        self.store_test_contract_code_entry(wasm_hash, wasm)?;
-        Ok(hash_obj)
-    }
-
-    /// Registers the native test contract under an externally provided Wasm
-    /// hash, instead of a host-determined one (unlike
-    /// `upload_test_contract_wasm`).
+    /// Registers the native test contract under the provided Wasm hash.
     ///
     /// After this call every contract instance that has `wasm_hash` as its
     /// executable is dispatched to `contract_fns`. This overrides whatever
@@ -552,11 +466,11 @@ impl Host {
     /// contract.
     ///
     /// If the storage doesn't have a contract code entry for `wasm_hash` yet,
-    /// a stub entry is created (in the same fashion as in
-    /// `upload_test_contract_wasm`), so that the hash can be used in the same
-    /// way as the hash of a regular uploaded Wasm. An already existing code
-    /// entry is left untouched.
-    pub fn upload_test_contract_wasm_with_hash(
+    /// a stub entry is created, so that the hash can be used in the same way
+    /// as the hash of a regular uploaded Wasm (e.g. to create contract
+    /// instances that refer to this hash). An already existing code entry is
+    /// left untouched.
+    pub fn upload_test_contract_wasm(
         &self,
         contract_fns: Rc<dyn ContractFunctionSet>,
         wasm_hash: BytesObject,
@@ -567,7 +481,7 @@ impl Host {
 
         let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?;
         self.try_borrow_test_contract_registry_mut()?
-            .add_test_contract_with_hash(wasm_hash.clone(), contract_fns);
+            .add_test_contract(wasm_hash.clone(), contract_fns);
 
         let code_key = self.contract_code_ledger_key(&wasm_hash)?;
         if !self.try_borrow_storage_mut()?.has(&code_key, self, None)? {
@@ -580,6 +494,18 @@ impl Host {
 
     // Writes a stub contract code entry for a native test contract into the
     // storage.
+    //
+    // This writes the entry similarly to `upload_contract_wasm`, but without
+    // all the Wasm validation/cost logic.
+    // This is unfortunately inconvenient to deduplicate with
+    // `upload_contract_wasm`, as it would require too many feature-gated
+    // branches and would make the production code path hard to read and
+    // maintain.
+    // We also skip most of the metering and error handling here for brevity,
+    // there is really no point in avoiding crashes on internal errors (because
+    // it's a test-only path), and trying to emulate the real Wasm upload costs
+    // (the bulk of cost comes from the Wasm parsing and VM instantiation which
+    // we can't emulate for native contracts).
     fn store_test_contract_code_entry(
         &self,
         wasm_hash: Hash,
@@ -633,8 +559,12 @@ impl Host {
 
         let contract_id = self.contract_id_from_address(contract_address)?;
         let instance_key = self.contract_instance_ledger_key(&contract_id)?;
-        let wasm_hash_obj = self.upload_test_contract_wasm(contract_fns)?;
-        let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;
+        // The native test contract doesn't have an actual Wasm, so determine
+        // a unique Wasm hash to register it under by hashing the contract
+        // address it's registered at.
+        let wasm_hash = Hash(<Sha256 as sha2::Digest>::digest(contract_id.0.as_slice()).into());
+        let wasm_hash_obj = self.add_host_object(self.scbytes_from_slice(wasm_hash.as_slice())?)?;
+        self.upload_test_contract_wasm(contract_fns, wasm_hash_obj)?;
 
         // Snapshot and roll back the storage around the constructor call for
         // the same reason as in `create_contract_with_optional_auth`: the

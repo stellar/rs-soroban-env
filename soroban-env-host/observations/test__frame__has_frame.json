@@ -2,15 +2,15 @@
   "   0 begin": "cpu:14285, mem:0, mem_peak:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call vec_new()": "cpu:14727, mem:80, mem_peak:80, objs:-/1@6e27cef",
   "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:15229, mem:160, mem_peak:160, objs:-/2@19dff6ca",
-  "   3 call symbol_new_from_slice(13)": "cpu:26429, mem:1905, mem_peak:1905, objs:-/3@66be693d, store:-/2@ab5e476e, foot:2@f5adecef",
-  "   4 ret symbol_new_from_slice -> Ok(Symbol(obj#7))": "cpu:27439, mem:2014, mem_peak:2014, objs:-/4@e230b301",
-  "   5 push TEST:   0:sym#7()": "cpu:32793, mem:3062, mem_peak:3062, objs:-/5@36259f34, stk:1@2a0a9375, auth:1@8b9c58a5/-",
+  "   3 call symbol_new_from_slice(13)": "cpu:29138, mem:2198, mem_peak:2198, objs:-/3@1cfd37e9, store:-/2@8cd9e67f, foot:2@134bcd7",
+  "   4 ret symbol_new_from_slice -> Ok(Symbol(obj#7))": "cpu:30148, mem:2307, mem_peak:2307, objs:-/4@6a935921",
+  "   5 push TEST:   0:sym#7()": "cpu:35502, mem:3355, mem_peak:3355, objs:-/5@1376583d, stk:1@850f0ef2, auth:1@8b9c58a5/-",
   "   6 call symbol_new_from_slice(13)": "",
-  "   7 ret symbol_new_from_slice -> Ok(Symbol(obj#11))": "cpu:33803, mem:3171, mem_peak:3171, objs:-/6@2a505974",
+  "   7 ret symbol_new_from_slice -> Ok(Symbol(obj#11))": "cpu:36512, mem:3464, mem_peak:3464, objs:-/6@c5c70636",
   "   8 call obj_cmp(Symbol(obj#11), Symbol(obj#7))": "",
-  "   9 ret obj_cmp -> Ok(0)": "cpu:34088",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:36797",
   "  10 pop TEST:   0:sym#7 -> Ok(Void)": "",
-  "  11 push TEST:   0:()": "cpu:38875, mem:4203, mem_peak:4203, objs:-/7@5cf29856, stk:1@97ad58a8, auth:1@2014a68d/-",
+  "  11 push TEST:   0:()": "cpu:41584, mem:4496, mem_peak:4496, objs:-/7@7fac48d9, stk:1@c7b0c281, auth:1@2014a68d/-",
   "  12 pop TEST:   0: -> Ok(Void)": "",
-  "  13 end": "cpu:38875, mem:4203, mem_peak:4203, prngs:-/9b4a753, objs:-/7@5cf29856, vm:-/-, evt:-, store:-/2@ab5e476e, foot:2@f5adecef, stk:-, auth:-/-"
+  "  13 end": "cpu:41584, mem:4496, mem_peak:4496, prngs:-/9b4a753, objs:-/7@7fac48d9, vm:-/-, evt:-, store:-/2@8cd9e67f, foot:2@134bcd7, stk:-, auth:-/-"
 }
