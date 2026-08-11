@@ -117,8 +117,7 @@ impl ModuleCache {
                         // fake `ParsedModule` for them.
                         if host
                             .try_borrow_test_contract_registry()?
-                            .get_contract_fn_set(hash)
-                            .is_some()
+                            .is_test_contract_wasm(hash)
                         {
                             continue;
                         }

@@ -473,6 +473,12 @@ impl TestContractRegistry {
         self.fns_by_wasm_hash.insert(wasm_hash, contract_fns);
     }
 
+    // Returns true if a native test contract is registered under the given
+    // Wasm hash.
+    pub(crate) fn is_test_contract_wasm(&self, wasm_hash: &Hash) -> bool {
+        self.fns_by_wasm_hash.contains_key(wasm_hash)
+    }
+
     // Returns the contract function set for a given Wasm hash, if any is
     // registered, `None` otherwise.
     pub(crate) fn get_contract_fn_set(
