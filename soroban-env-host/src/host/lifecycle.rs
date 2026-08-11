@@ -410,7 +410,7 @@ use super::frame::CallParams;
 #[cfg(any(test, feature = "testutils"))]
 use super::ContractFunctionSet;
 #[cfg(any(test, feature = "testutils"))]
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 #[cfg(any(test, feature = "testutils"))]
 use std::fmt::Write;
 
@@ -432,7 +432,7 @@ const TEST_CONTRACT_WASM_FOR_CONTRACT_ID_PREFIX: &str = "test_contract_for_contr
 pub(crate) struct TestContractRegistry {
     // Maps the Wasm hash of the test contract code entry to the corresponding
     // contract function set.
-    fns_by_wasm_hash: HashMap<Hash, Rc<dyn ContractFunctionSet>>,
+    fns_by_wasm_hash: BTreeMap<Hash, Rc<dyn ContractFunctionSet>>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
