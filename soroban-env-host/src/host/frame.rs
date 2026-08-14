@@ -943,10 +943,13 @@ impl Host {
         // around) via `update_current_contract_wasm`.
         // "testutils" is not covered by budget metering.
         #[cfg(any(test, feature = "testutils"))]
-        if let Some(contract_fns) = self
+        let contract_fns = self
             .try_borrow_test_contract_registry()?
-            .get_contract_fn_set(wasm_hash)
-        {
+            .get_contract_fn_set(wasm_hash);
+        // NB: `if let` may hold the borrow on temporary registry ref, so we
+        // need to break down the call to `get_contract_fn_set` and `if let`.
+        #[cfg(any(test, feature = "testutils"))]
+        if let Some(contract_fns) = contract_fns {
             return self.call_test_contract_fn(
                 contract_fns,
                 TestContractFrame::new(contract_id.metered_clone(self)?, *func, args_vec, instance),
