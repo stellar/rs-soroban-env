@@ -46,7 +46,7 @@ pub(crate) fn write_allowance(
             Err(err!(
                 e,
                 ContractError::AllowanceError,
-                "live_until is greater than max",
+                "live_until is greater than max_live_until_ledger",
                 live_until,
                 max_live_until_ledger
             ))
