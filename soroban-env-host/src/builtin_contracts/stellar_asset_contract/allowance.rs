@@ -41,13 +41,14 @@ pub(crate) fn write_allowance(
     // Validates live_until and then returns the ledger seq
     // The live_until can be less than ledger seq if clearing an allowance
     let ledger_seq = e.with_ledger_info(|li| {
-        if live_until > e.max_live_until_ledger()? {
+        let max_live_until_ledger = e.max_live_until_ledger()?;
+        if live_until > max_live_until_ledger {
             Err(err!(
                 e,
                 ContractError::AllowanceError,
                 "live_until is greater than max",
                 live_until,
-                li.max_entry_ttl
+                max_live_until_ledger
             ))
         } else if amount > 0 && live_until < li.sequence_number {
             Err(err!(
