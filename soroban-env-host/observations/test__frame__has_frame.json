@@ -2,15 +2,15 @@
   "   0 begin": "cpu:14285, mem:0, mem_peak:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
   "   1 call vec_new()": "cpu:14727, mem:80, mem_peak:80, objs:-/1@6e27cef",
   "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:15229, mem:160, mem_peak:160, objs:-/2@19dff6ca",
-  "   3 call symbol_new_from_slice(13)": "cpu:28650, mem:2177, mem_peak:2177, store:-/2@fe1e5317, foot:2@282e4d64",
-  "   4 ret symbol_new_from_slice -> Ok(Symbol(obj#5))": "cpu:29660, mem:2286, mem_peak:2286, objs:-/3@77d38fb2",
-  "   5 push TEST:   0:sym#5()": "cpu:35014, mem:3334, mem_peak:3334, objs:-/4@858f79e0, stk:1@bd326d5, auth:1@c94ed0f3/-",
+  "   3 call symbol_new_from_slice(13)": "cpu:26490, mem:2052, mem_peak:2052, store:-/2@fe1e5317, foot:2@282e4d64",
+  "   4 ret symbol_new_from_slice -> Ok(Symbol(obj#5))": "cpu:27500, mem:2161, mem_peak:2161, objs:-/3@77d38fb2",
+  "   5 push TEST:   0:sym#5()": "cpu:32854, mem:3209, mem_peak:3209, objs:-/4@858f79e0, stk:1@bd326d5, auth:1@c94ed0f3/-",
   "   6 call symbol_new_from_slice(13)": "",
-  "   7 ret symbol_new_from_slice -> Ok(Symbol(obj#9))": "cpu:36024, mem:3443, mem_peak:3443, objs:-/5@85aecc39",
+  "   7 ret symbol_new_from_slice -> Ok(Symbol(obj#9))": "cpu:33864, mem:3318, mem_peak:3318, objs:-/5@85aecc39",
   "   8 call obj_cmp(Symbol(obj#9), Symbol(obj#5))": "",
-  "   9 ret obj_cmp -> Ok(0)": "cpu:36309",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:34149",
   "  10 pop TEST:   0:sym#5 -> Ok(Void)": "",
-  "  11 push TEST:   0:()": "cpu:41096, mem:4475, mem_peak:4475, objs:-/6@ffe2c74a, stk:1@1c31c87f, auth:1@8810fcf9/-",
+  "  11 push TEST:   0:()": "cpu:38936, mem:4350, mem_peak:4350, objs:-/6@ffe2c74a, stk:1@1c31c87f, auth:1@8810fcf9/-",
   "  12 pop TEST:   0: -> Ok(Void)": "",
-  "  13 end": "cpu:41096, mem:4475, mem_peak:4475, prngs:-/9b4a753, objs:-/6@ffe2c74a, vm:-/-, evt:-, store:-/2@fe1e5317, foot:2@282e4d64, stk:-, auth:-/-"
+  "  13 end": "cpu:38936, mem:4350, mem_peak:4350, prngs:-/9b4a753, objs:-/6@ffe2c74a, vm:-/-, evt:-, store:-/2@fe1e5317, foot:2@282e4d64, stk:-, auth:-/-"
 }
