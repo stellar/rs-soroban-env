@@ -526,7 +526,14 @@ impl Host {
             .register_test_contract(wasm_hash.clone(), contract_fns);
 
         let code_key = self.contract_code_ledger_key(&wasm_hash)?;
-        if !self.try_borrow_storage_mut()?.has(&code_key, self, None)? {
+        // Check the code entry existence directly in the storage map instead
+        // of going through the snapshot in the recording mode (as synthetic
+        // Wasms may not appear in the snapshot).
+        if self
+            .try_borrow_storage_mut()?
+            .get_from_map(&code_key, self)?
+            .is_none()
+        {
             self.store_test_contract_code_entry(wasm_hash.clone(), wasm)?;
         }
         Ok(wasm_hash)
