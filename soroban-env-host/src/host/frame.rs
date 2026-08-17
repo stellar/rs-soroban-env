@@ -796,7 +796,7 @@ impl Host {
         &self,
         cfs: Rc<dyn ContractFunctionSet>,
         frame: TestContractFrame,
-        contract_id: &ContractId,
+        _contract_id: &ContractId,
         func: &Symbol,
         args: &[Val],
         treat_missing_function_as_noop: bool,
@@ -828,7 +828,6 @@ impl Host {
                 crate::testutils::call_with_suppressed_panic_hook(closure);
             match res {
                 Ok(Some(val)) => {
-                    self.fn_return_diagnostics(contract_id, &func, &val);
                     Ok(val)
                 }
                 Ok(None) => {
