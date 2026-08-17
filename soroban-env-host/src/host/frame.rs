@@ -827,9 +827,7 @@ impl Host {
             let res: Result<Option<Val>, PanicVal> =
                 crate::testutils::call_with_suppressed_panic_hook(closure);
             match res {
-                Ok(Some(val)) => {
-                    Ok(val)
-                }
+                Ok(Some(val)) => Ok(val),
                 Ok(None) => {
                     if treat_missing_function_as_noop {
                         Ok(Val::VOID.into())
