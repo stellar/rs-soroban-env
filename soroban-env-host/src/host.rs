@@ -129,13 +129,15 @@ struct HostImpl {
     // yet another unmetered PRNG to the host.
     #[cfg(any(test, feature = "testutils"))]
     test_prng: RefCell<Option<ChaCha20Rng>>,
-    // Note: we're not going to charge metering for testutils because it's out of the scope
-    // of what users will be charged for in production -- it's scaffolding for testing a contract,
-    // but shouldn't be charged to the contract itself (and will never be compiled-in to
-    // production hosts)
+    // Container for the 'native' contract executables that executed via an
+    // externally provided compiled-in function set instead of the Wasm VM.
+    // This emulates the the contract lifecycle and storage layout for the most
+    // part, including storing the 'Wasm' code for the native contracts in a
+    // contract code entry. The code is just a short identifier string however,
+    // so do not expect this to approximate e.g. storage costs incurred by the
+    // real Wasm corresponding to the native contract.
     #[cfg(any(test, feature = "testutils"))]
-    contracts:
-        RefCell<std::collections::BTreeMap<crate::xdr::ContractId, Rc<dyn ContractFunctionSet>>>,
+    test_contract_registry: RefCell<lifecycle::TestContractRegistry>,
     // Store a copy of the `AuthorizationManager` for the last host function
     // invocation. In order to emulate the production behavior in tests, we reset
     // authorization manager after every invocation (as it's not meant to be
@@ -285,7 +287,12 @@ impl_checked_borrow_helpers!(
 );
 
 #[cfg(any(test, feature = "testutils"))]
-impl_checked_borrow_helpers!(contracts, std::collections::BTreeMap<crate::xdr::ContractId, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
+impl_checked_borrow_helpers!(
+    test_contract_registry,
+    lifecycle::TestContractRegistry,
+    try_borrow_test_contract_registry,
+    try_borrow_test_contract_registry_mut
+);
 
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
@@ -380,7 +387,7 @@ impl Host {
             #[cfg(any(test, feature = "testutils"))]
             test_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
-            contracts: Default::default(),
+            test_contract_registry: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
             trace_hook: RefCell::new(None),
