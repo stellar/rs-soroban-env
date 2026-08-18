@@ -3,6 +3,6 @@
   "   1 call vec_new()": "cpu:176688, mem:28582, mem_peak:28582, objs:-/1@10432200, store:-/2@4489282a",
   "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:177190, mem:28662, mem_peak:28662, objs:-/2@acf0be8f",
   "   3 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "",
-  "   4 ret call -> Err(Error(Storage, MissingValue))": "cpu:186255, mem:29414, mem_peak:29414",
-  "   5 end": "cpu:186255, mem:29414, mem_peak:29414, prngs:-/-, objs:-/2@acf0be8f, vm:-/-, evt:-, store:-/2@4489282a, foot:2@f0a688bd, stk:-, auth:-/-"
+  "   4 ret call -> Err(Error(Storage, MissingValue))": "cpu:181136, mem:29198, mem_peak:29198",
+  "   5 end": "cpu:181136, mem:29198, mem_peak:29198, prngs:-/-, objs:-/2@acf0be8f, vm:-/-, evt:-, store:-/2@4489282a, foot:2@f0a688bd, stk:-, auth:-/-"
 }
