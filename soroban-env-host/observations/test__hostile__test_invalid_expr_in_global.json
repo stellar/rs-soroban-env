@@ -1,16 +1,16 @@
 {
-  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
-  "   1 call bytes_new_from_slice(77)": "cpu:14535",
-  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15516, mem:173, objs:-/1@fb08bd83",
+  "   0 begin": "cpu:14285, mem:0, mem_peak:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(77)": "cpu:14332",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:15313, mem:173, mem_peak:173, objs:-/1@31cd59c2",
   "   3 call upload_wasm(Bytes(obj#1))": "",
-  "   4 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:503647, mem:133425",
-  "   5 call bytes_new_from_slice(80)": "cpu:503694",
-  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#3))": "cpu:504677, mem:133601, objs:-/2@d555dfd3",
+  "   4 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:469381, mem:136036, mem_peak:136036",
+  "   5 call bytes_new_from_slice(80)": "cpu:469428",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#3))": "cpu:470411, mem:136212, mem_peak:136212, objs:-/2@ea5aa060",
   "   7 call upload_wasm(Bytes(obj#3))": "",
-  "   8 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:994039, mem:266975",
-  "   9 call bytes_new_from_slice(93)": "cpu:994086",
-  "  10 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:995071, mem:267164, objs:-/3@dfbe7023",
+  "   8 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:925718, mem:272193, mem_peak:272193",
+  "   9 call bytes_new_from_slice(93)": "cpu:925765",
+  "  10 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:926750, mem:272382, mem_peak:272382, objs:-/3@fe8a14e8",
   "  11 call upload_wasm(Bytes(obj#5))": "",
-  "  12 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:1489758, mem:401065",
-  "  13 end": "cpu:1489758, mem:401065, prngs:-/9b4a753, objs:-/3@dfbe7023, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  12 ret upload_wasm -> Err(Error(WasmVm, InvalidAction))": "cpu:1387413, mem:408874, mem_peak:408874",
+  "  13 end": "cpu:1387413, mem:408874, mem_peak:408874, prngs:-/9b4a753, objs:-/3@fe8a14e8, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

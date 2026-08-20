@@ -1,12 +1,12 @@
 {
-  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
-  "   1 push UploadContractWasm:()": "cpu:16181, mem:560, stk:1@41146a5",
-  "   2 pop UploadContractWasm: -> Ok(Bytes(obj#1))": "cpu:1519979, mem:1427897, objs:-/1@a897a4bc, store:-/1@81e8c013, foot:1@c08c28ca",
-  "   3 push CreateContract:()": "cpu:1523356, mem:1428701, objs:-/2@4ee2f46a, stk:1@f6443829",
-  "   4 call obj_cmp(Address(obj#7), Address(obj#5))": "cpu:1525963, mem:1429053, objs:-/4@e0336280, auth:1@8db3bc90/-",
-  "   5 ret obj_cmp -> Ok(0)": "cpu:1526257",
-  "   6 call get_ledger_network_id()": "cpu:1526309, auth:1@8db3bc90/1@5cfc24a6",
-  "   7 ret get_ledger_network_id -> Ok(Bytes(obj#9))": "cpu:1527341, mem:1429181, objs:-/5@e4947c99",
-  "   8 pop CreateContract: -> Ok(Address(obj#11))": "cpu:1949514, mem:2585292, objs:-/6@bdd6d9d4, store:-/2@1602cc31, foot:2@8c5cee49, auth:-/1@2f80d14b",
-  "   9 end": "cpu:1949623, mem:2585292, prngs:-/9b4a753, objs:-/6@bdd6d9d4, vm:-/-, evt:-, store:-/2@1602cc31, foot:2@8c5cee49, stk:-, auth:-/-"
+  "   0 begin": "cpu:14285, mem:0, mem_peak:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 push UploadContractWasm:()": "cpu:15988, mem:600, mem_peak:600, stk:1@e9f8324b",
+  "   2 pop UploadContractWasm: -> Ok(Bytes(obj#1))": "cpu:1454446, mem:1432103, mem_peak:1432103, objs:-/1@a897a4bc, store:-/1@2d87e455, foot:1@c08c28ca, stk:1@ccab761f",
+  "   3 push CreateContract:()": "cpu:1457831, mem:384355, objs:-/2@4ee2f46a, stk:1@da0843da",
+  "   4 call obj_cmp(Address(obj#7), Address(obj#5))": "cpu:1460454, mem:384739, objs:-/4@e0336280, auth:1@8db3bc90/-",
+  "   5 ret obj_cmp -> Ok(0)": "cpu:1460744",
+  "   6 call get_ledger_network_id()": "cpu:1460796, auth:1@8db3bc90/1@5cfc24a6",
+  "   7 ret get_ledger_network_id -> Ok(Bytes(obj#9))": "cpu:1461827, mem:384867, objs:-/5@e4947c99",
+  "   8 pop CreateContract: -> Ok(Address(obj#11))": "cpu:1878524, mem:1541002, mem_peak:1541002, objs:-/6@bdd6d9d4, store:-/2@54cc6f79, foot:2@8c5cee49, stk:1@740bc77e, auth:-/1@2f80d14b",
+  "   9 end": "cpu:1878632, mem:492410, mem_peak:1541002, prngs:-/9b4a753, objs:-/6@bdd6d9d4, vm:-/-, evt:-, store:-/2@54cc6f79, foot:2@8c5cee49, stk:-, auth:-/-"
 }

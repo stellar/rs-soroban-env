@@ -1,0 +1,8 @@
+{
+  "   0 begin": "cpu:0, mem:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call map_new_from_slices(2)": "",
+  "   2 ret map_new_from_slices -> Ok(Map(obj#1))": "cpu:1023, mem:144, objs:-/1@5c028568",
+  "   3 call sparse_map_unpack_to_slice(Map(obj#1), 4)": "",
+  "   4 ret sparse_map_unpack_to_slice -> Ok(Void)": "cpu:1177",
+  "   5 end": "cpu:1177, mem:144, prngs:-/-, objs:-/1@5c028568, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}

@@ -12,7 +12,7 @@ use crate::{
     host::metered_clone::{MeteredClone, MeteredContainer},
     host_object::HostVec,
     xdr::{
-        self, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, ScAddress,
+        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgsV2, ScAddress,
         ScErrorCode, ScErrorType,
     },
     Host, HostError, TryFromVal, TryIntoVal, Val,
@@ -75,19 +75,8 @@ impl InvokerContractAuthEntry {
                 Ok(AuthorizedInvocation::new(function, sub_invocations))
             }
             InvokerContractAuthEntry::CreateContractHostFn(create_contract_fn) => {
-                let wasm_hash = match &create_contract_fn.executable {
-                    ContractExecutable::Wasm(b) => {
-                        host.hash_from_bytesobj_input("wasm_ref", b.as_object())?
-                    }
-                    ContractExecutable::StellarAsset => {
-                        return Err(host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InvalidInput,
-                            "Stellar Asset contract creation can't be authorized",
-                            &[],
-                        ));
-                    }
-                };
+                validate_executable_for_create_contract(host, &create_contract_fn.executable)?;
+                let executable = create_contract_fn.executable.to_xdr(host)?;
                 let function = AuthorizedFunction::CreateContractHostFn(CreateContractArgsV2 {
                     contract_id_preimage: ContractIdPreimage::Address(
                         ContractIdPreimageFromAddress {
@@ -98,25 +87,14 @@ impl InvokerContractAuthEntry {
                             )?,
                         },
                     ),
-                    executable: xdr::ContractExecutable::Wasm(wasm_hash),
+                    executable,
                     constructor_args: Default::default(),
                 });
                 Ok(AuthorizedInvocation::new(function, vec![]))
             }
             InvokerContractAuthEntry::CreateContractWithCtorHostFn(create_contract_fn) => {
-                let wasm_hash = match &create_contract_fn.executable {
-                    ContractExecutable::Wasm(b) => {
-                        host.hash_from_bytesobj_input("wasm_ref", b.as_object())?
-                    }
-                    ContractExecutable::StellarAsset => {
-                        return Err(host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InvalidInput,
-                            "Stellar Asset contract creation can't be authorized",
-                            &[],
-                        ));
-                    }
-                };
+                validate_executable_for_create_contract(host, &create_contract_fn.executable)?;
+                let executable = create_contract_fn.executable.to_xdr(host)?;
                 let function = AuthorizedFunction::CreateContractHostFn(CreateContractArgsV2 {
                     contract_id_preimage: ContractIdPreimage::Address(
                         ContractIdPreimageFromAddress {
@@ -127,13 +105,28 @@ impl InvokerContractAuthEntry {
                             )?,
                         },
                     ),
-                    executable: xdr::ContractExecutable::Wasm(wasm_hash),
+                    executable,
                     constructor_args: host
                         .vecobject_to_scval_vec(create_contract_fn.constructor_args.as_object())?,
                 });
                 Ok(AuthorizedInvocation::new(function, vec![]))
             }
         })
+    }
+}
+
+fn validate_executable_for_create_contract(
+    host: &Host,
+    executable: &ContractExecutable,
+) -> Result<(), HostError> {
+    match executable {
+        ContractExecutable::Wasm(_) | ContractExecutable::ExternalRef(_) => Ok(()),
+        ContractExecutable::StellarAsset => Err(host.err(
+            ScErrorType::Auth,
+            ScErrorCode::InvalidInput,
+            "StellarAsset executable is not allowed when authorizing create_contract host fn",
+            &[],
+        )),
     }
 }
 
