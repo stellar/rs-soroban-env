@@ -545,8 +545,8 @@ fn excessive_logging() -> Result<(), HostError> {
         let actual = format!("{}", host.as_budget());
         expect![[r#"
             =================================================================
-            Cpu limit: 2000000; used: 209090
-            Mem limit: 500000; used: 166732
+            Cpu limit: 2000000; used: 211132
+            Mem limit: 500000; used: 168057
             =================================================================
             CostType                           cpu_insns      mem_bytes      
             WasmInsnExec                       300            0              
@@ -577,21 +577,21 @@ fn excessive_logging() -> Result<(), HostError> {
             ParseWasmGlobals                   1377           104            
             ParseWasmTableEntries              29989          6285           
             ParseWasmTypes                     8292           505            
-            ParseWasmDataSegments              0              0              
+            ParseWasmDataSegments              1854           227            
             ParseWasmElemSegments              0              0              
             ParseWasmImports                   5483           806            
             ParseWasmExports                   6709           568            
-            ParseWasmDataSegmentBytes          0              0              
+            ParseWasmDataSegmentBytes          6              58             
             InstantiateWasmInstructions        43030          70704          
             InstantiateWasmFunctions           59             114            
             InstantiateWasmGlobals             83             53             
             InstantiateWasmTableEntries        3300           1025           
             InstantiateWasmTypes               0              0              
-            InstantiateWasmDataSegments        0              0              
+            InstantiateWasmDataSegments        179            1012           
             InstantiateWasmElemSegments        0              0              
             InstantiateWasmImports             6476           762            
             InstantiateWasmExports             4642           143            
-            InstantiateWasmDataSegmentBytes    0              0              
+            InstantiateWasmDataSegmentBytes    3              28             
             Sec1DecodePointUncompressed        0              0              
             VerifyEcdsaSecp256r1Sig            0              0              
             Bls12381EncodeFp                   0              0              
