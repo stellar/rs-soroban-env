@@ -62,7 +62,7 @@ ml-dsa = { git = "https://github.com/RustCrypto/signatures.git", rev = "c97a631"
 tracy-client = { version = "0.17.0", features = ["enable", "timer-fallback"], default-features = false, optional = true }
 
 [dev-dependencies]
-hex = "0.4.3"
+hex = { version = "0.4.3", features = ["serde"] }
 itertools = "0.13.0"
 tabwriter = "1.3.0"
 thousands = "0.2.0"
