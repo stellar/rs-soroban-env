@@ -697,47 +697,41 @@ impl Default for BudgetImpl {
                     cpu.const_term = 1185193;
                     cpu.lin_term = ScaledU64(41568084);
                 }
-                // TODO: calibrate this! The ML-DSA numbers below come from a
-                // low-sample-count local run of the calibration benches, not
-                // from a reference-hardware calibration, so they carry a 1.5x
-                // margin over what was measured: under-charging an
-                // uncalibrated crypto cost type is a DoS vector, while
-                // over-charging merely wastes budget.
                 ContractCostType::MlDsa44DecodeVerifyingKey => {
-                    cpu.const_term = 700_000;
+                    cpu.const_term = 849110;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa65DecodeVerifyingKey => {
-                    cpu.const_term = 1_200_000;
+                    cpu.const_term = 1505271;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa87DecodeVerifyingKey => {
-                    cpu.const_term = 2_000_000;
+                    cpu.const_term = 2625760;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa44DecodeSignature => {
-                    cpu.const_term = 60_000;
+                    cpu.const_term = 37888;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa65DecodeSignature => {
-                    cpu.const_term = 75_000;
+                    cpu.const_term = 47691;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa87DecodeSignature => {
-                    cpu.const_term = 105_000;
+                    cpu.const_term = 66346;
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::VerifyMlDsa44Sig => {
-                    cpu.const_term = 1_120_000;
-                    cpu.lin_term = ScaledU64(2_000);
+                    cpu.const_term = 685165;
+                    cpu.lin_term = ScaledU64(6103);
                 }
                 ContractCostType::VerifyMlDsa65Sig => {
-                    cpu.const_term = 1_530_000;
-                    cpu.lin_term = ScaledU64(2_700);
+                    cpu.const_term = 983619;
+                    cpu.lin_term = ScaledU64(6103);
                 }
                 ContractCostType::VerifyMlDsa87Sig => {
-                    cpu.const_term = 2_170_000;
-                    cpu.lin_term = ScaledU64(2_700);
+                    cpu.const_term = 1437210;
+                    cpu.lin_term = ScaledU64(6102);
                 }
             }
 
@@ -1094,36 +1088,28 @@ impl Default for BudgetImpl {
                     mem.const_term = 73061;
                     mem.lin_term = ScaledU64(229779);
                 }
-                // TODO: calibrate this! As with the CPU models above, these
-                // are from a local bench run rather than a reference
-                // calibration. Allocation sizes are deterministic rather than
-                // timing-noisy, so these track what was measured: the
-                // expanded NTT-domain `A_hat` matrix plus `t1 * 2^d` for key
-                // decoding, and the unpacked response and hint vectors for
-                // signature decoding. Verification proper works in place over
-                // those, so it allocates nothing further.
                 ContractCostType::MlDsa44DecodeVerifyingKey => {
-                    mem.const_term = 25_000;
+                    mem.const_term = 24656;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa65DecodeVerifyingKey => {
-                    mem.const_term = 44_000;
+                    mem.const_term = 43088;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa87DecodeVerifyingKey => {
-                    mem.const_term = 74_000;
+                    mem.const_term = 73808;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa44DecodeSignature => {
-                    mem.const_term = 4_200;
+                    mem.const_term = 4104;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa65DecodeSignature => {
-                    mem.const_term = 5_200;
+                    mem.const_term = 5128;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MlDsa87DecodeSignature => {
-                    mem.const_term = 7_200;
+                    mem.const_term = 7176;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::VerifyMlDsa44Sig => {
