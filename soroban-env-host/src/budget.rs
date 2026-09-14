@@ -156,6 +156,17 @@ impl Default for BudgetTracker {
                 ContractCostType::Bn254FrMul => (),
                 ContractCostType::Bn254FrPow => init_input(), // input is number of bits in the u64 exponent excluding leading zeros
                 ContractCostType::Bn254FrInv => (),
+                ContractCostType::MlDsa44DecodeVerifyingKey => (),
+                ContractCostType::MlDsa65DecodeVerifyingKey => (),
+                ContractCostType::MlDsa87DecodeVerifyingKey => (),
+                ContractCostType::MlDsa44DecodeSignature => (),
+                ContractCostType::MlDsa65DecodeSignature => (),
+                ContractCostType::MlDsa87DecodeSignature => (),
+                // input is the combined message and context byte length, which
+                // is what the SHAKE-256 computation of `mu` absorbs
+                ContractCostType::VerifyMlDsa44Sig => init_input(),
+                ContractCostType::VerifyMlDsa65Sig => init_input(),
+                ContractCostType::VerifyMlDsa87Sig => init_input(),
             }
         }
         mt
@@ -686,6 +697,48 @@ impl Default for BudgetImpl {
                     cpu.const_term = 1185193;
                     cpu.lin_term = ScaledU64(41568084);
                 }
+                // TODO: calibrate this! The ML-DSA numbers below come from a
+                // low-sample-count local run of the calibration benches, not
+                // from a reference-hardware calibration, so they carry a 1.5x
+                // margin over what was measured: under-charging an
+                // uncalibrated crypto cost type is a DoS vector, while
+                // over-charging merely wastes budget.
+                ContractCostType::MlDsa44DecodeVerifyingKey => {
+                    cpu.const_term = 700_000;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa65DecodeVerifyingKey => {
+                    cpu.const_term = 1_200_000;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa87DecodeVerifyingKey => {
+                    cpu.const_term = 2_000_000;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa44DecodeSignature => {
+                    cpu.const_term = 60_000;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa65DecodeSignature => {
+                    cpu.const_term = 75_000;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa87DecodeSignature => {
+                    cpu.const_term = 105_000;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VerifyMlDsa44Sig => {
+                    cpu.const_term = 1_120_000;
+                    cpu.lin_term = ScaledU64(2_000);
+                }
+                ContractCostType::VerifyMlDsa65Sig => {
+                    cpu.const_term = 1_530_000;
+                    cpu.lin_term = ScaledU64(2_700);
+                }
+                ContractCostType::VerifyMlDsa87Sig => {
+                    cpu.const_term = 2_170_000;
+                    cpu.lin_term = ScaledU64(2_700);
+                }
             }
 
             // define the memory cost model parameters
@@ -1040,6 +1093,50 @@ impl Default for BudgetImpl {
                 ContractCostType::Bn254G1Msm => {
                     mem.const_term = 73061;
                     mem.lin_term = ScaledU64(229779);
+                }
+                // TODO: calibrate this! As with the CPU models above, these
+                // are from a local bench run rather than a reference
+                // calibration. Allocation sizes are deterministic rather than
+                // timing-noisy, so these track what was measured: the
+                // expanded NTT-domain `A_hat` matrix plus `t1 * 2^d` for key
+                // decoding, and the unpacked response and hint vectors for
+                // signature decoding. Verification proper works in place over
+                // those, so it allocates nothing further.
+                ContractCostType::MlDsa44DecodeVerifyingKey => {
+                    mem.const_term = 25_000;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa65DecodeVerifyingKey => {
+                    mem.const_term = 44_000;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa87DecodeVerifyingKey => {
+                    mem.const_term = 74_000;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa44DecodeSignature => {
+                    mem.const_term = 4_200;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa65DecodeSignature => {
+                    mem.const_term = 5_200;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa87DecodeSignature => {
+                    mem.const_term = 7_200;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VerifyMlDsa44Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VerifyMlDsa65Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VerifyMlDsa87Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
                 }
             }
         }

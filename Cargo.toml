@@ -22,7 +22,8 @@ exclude = ["soroban-test-wasms/wasm-workspace"]
 # code guarded by `unstable-*` features to make it enabled
 # unconditionally.
 version = "29.0.0"
-rust-version = "1.84.0"
+# NB: raised from 1.84 for the `ml-dsa` dependency, which is edition 2024.
+rust-version = "1.85.0"
 
 [workspace.dependencies]
 soroban-env-common = { version = "=29.0.0", path = "soroban-env-common", default-features = false }
@@ -35,9 +36,13 @@ wasmparser = "=0.116.1"
 
 [workspace.dependencies.stellar-xdr]
 version = "=28.0.0"
-#git = "https://github.com/stellar/rs-stellar-xdr"
-#rev = "3305b3e31f19fdb4e64e4b7a4354bb120cdf4415"
+# TODO: repin to stellar/rs-stellar-xdr once the CAP-0087 ML-DSA cost types
+# land upstream. This fork branch also repoints the xdr submodule at
+# jayz22/stellar-xdr so the pinned .x commit is fetchable.
+git = "https://github.com/jayz22/rs-stellar-xdr"
+rev = "cdd1bf1a8b04d35fd24f56c9140b17f132026dd8"
 default-features = false
+features = ["cap_0087_ml_dsa"]
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
