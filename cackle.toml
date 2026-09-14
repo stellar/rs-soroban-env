@@ -191,6 +191,15 @@ allow_unsafe = true
 [pkg.keccak]
 allow_unsafe = true
 
+[pkg.hybrid-array]
+allow_unsafe = true
+
+[pkg.sponge-cursor]
+allow_unsafe = true
+
+[pkg.cmov]
+allow_unsafe = true
+
 [pkg.hashbrown]
 allow_unsafe = true
 

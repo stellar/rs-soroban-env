@@ -3492,6 +3492,45 @@ impl VmCallerEnv for Host {
         }
     }
 
+    // Notes on metering: covered by components.
+    fn verify_sig_ml_dsa_44(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        public_key: BytesObject,
+        msg: BytesObject,
+        signature: BytesObject,
+        context: BytesObject,
+    ) -> Result<Void, HostError> {
+        let res = self.verify_sig_ml_dsa::<ml_dsa::MlDsa44>(public_key, msg, signature, context);
+        Ok(res?.into())
+    }
+
+    // Notes on metering: covered by components.
+    fn verify_sig_ml_dsa_65(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        public_key: BytesObject,
+        msg: BytesObject,
+        signature: BytesObject,
+        context: BytesObject,
+    ) -> Result<Void, HostError> {
+        let res = self.verify_sig_ml_dsa::<ml_dsa::MlDsa65>(public_key, msg, signature, context);
+        Ok(res?.into())
+    }
+
+    // Notes on metering: covered by components.
+    fn verify_sig_ml_dsa_87(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        public_key: BytesObject,
+        msg: BytesObject,
+        signature: BytesObject,
+        context: BytesObject,
+    ) -> Result<Void, HostError> {
+        let res = self.verify_sig_ml_dsa::<ml_dsa::MlDsa87>(public_key, msg, signature, context);
+        Ok(res?.into())
+    }
+
     // endregion: "crypto" module functions
     // region: "test" module functions
 

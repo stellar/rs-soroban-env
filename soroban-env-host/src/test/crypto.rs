@@ -419,3 +419,132 @@ fn test_secp256r1_signature_verification() -> Result<(), HostError> {
 
     Ok(())
 }
+
+mod ml_dsa {
+    use super::{is_budget_exceeded, is_crypto_error, is_object_error};
+    use crate::{budget::AsBudget, BytesObject, Env, EnvBase, Host, HostError, Void};
+    use ml_dsa::{ExpandedSigningKey, MlDsa44, MlDsa65, MlDsa87, MlDsaParams, Seed};
+
+    const ML_DSA_MIN_PROTOCOL: u32 = 30;
+
+    type VerifyFn =
+        fn(&Host, BytesObject, BytesObject, BytesObject, BytesObject) -> Result<Void, HostError>;
+
+    fn signing_key<P: MlDsaParams>(seed_byte: u8) -> ExpandedSigningKey<P> {
+        let seed = [seed_byte; 32];
+        ExpandedSigningKey::<P>::from_seed(&Seed::try_from(&seed[..]).unwrap())
+    }
+
+    // Exercises the CAP-0087 error mapping, which is two distinct classes:
+    // every length violation is Object/UnexpectedSize, while a structurally
+    // malformed signature and a failed verification are both
+    // Crypto/InvalidInput.
+    fn check_error_paths<P: MlDsaParams>(verify: VerifyFn, foreign_pk: Vec<u8>) {
+        if Host::current_test_protocol() < ML_DSA_MIN_PROTOCOL {
+            return;
+        }
+        let host = Host::test_host();
+
+        let sk = signing_key::<P>(1);
+        let pk = sk.verifying_key().encode().to_vec();
+        let msg = b"CAP-0087 ML-DSA test message".to_vec();
+
+        let call = |pk: &[u8], msg: &[u8], sig: &[u8], ctx: &[u8]| -> Result<(), HostError> {
+            host.as_budget().reset_default()?;
+            let pk_obj = host.bytes_new_from_slice(pk)?;
+            let msg_obj = host.bytes_new_from_slice(msg)?;
+            let sig_obj = host.bytes_new_from_slice(sig)?;
+            let ctx_obj = host.bytes_new_from_slice(ctx)?;
+            verify(&host, pk_obj, msg_obj, sig_obj, ctx_obj).map(|_| ())
+        };
+
+        let sign = |m: &[u8], ctx: &[u8]| sk.sign_deterministic(m, ctx).unwrap().encode().to_vec();
+
+        let sig = sign(&msg, &[]);
+        assert!(call(&pk, &msg, &sig, &[]).is_ok());
+
+        // 255 bytes is the largest legal context.
+        let long_ctx = vec![7u8; 255];
+        let sig_long_ctx = sign(&msg, &long_ctx);
+        assert!(call(&pk, &msg, &sig_long_ctx, &long_ctx).is_ok());
+
+        let err = |r: Result<(), HostError>| r.err().unwrap();
+
+        assert!(is_object_error(err(call(
+            &pk,
+            &msg,
+            &sig_long_ctx,
+            &vec![7u8; 256]
+        ))));
+
+        assert!(is_object_error(err(call(
+            &pk[..pk.len() - 1],
+            &msg,
+            &sig,
+            &[]
+        ))));
+        let mut pk_long = pk.clone();
+        pk_long.push(0);
+        assert!(is_object_error(err(call(&pk_long, &msg, &sig, &[]))));
+        assert!(is_object_error(err(call(&foreign_pk, &msg, &sig, &[]))));
+
+        assert!(is_object_error(err(call(
+            &pk,
+            &msg,
+            &sig[..sig.len() - 1],
+            &[]
+        ))));
+        let mut sig_long = sig.clone();
+        sig_long.push(0);
+        assert!(is_object_error(err(call(&pk, &msg, &sig_long, &[]))));
+
+        let mut flipped_msg = msg.clone();
+        flipped_msg[0] ^= 1;
+        assert!(is_crypto_error(err(call(&pk, &flipped_msg, &sig, &[]))));
+
+        // First byte of the encoded signature is part of c_tilde.
+        let mut flipped_c_tilde = sig.clone();
+        flipped_c_tilde[0] ^= 1;
+        assert!(is_crypto_error(err(call(&pk, &msg, &flipped_c_tilde, &[]))));
+
+        // Trailing bytes are the packed hint; corrupting them makes hint
+        // decoding fail rather than the commitment comparison.
+        let mut corrupt_hint = sig.clone();
+        let last = corrupt_hint.len() - 1;
+        corrupt_hint[last] ^= 0xff;
+        assert!(is_crypto_error(err(call(&pk, &msg, &corrupt_hint, &[]))));
+
+        assert!(is_crypto_error(err(call(&pk, &msg, &sig, b"wrong ctx"))));
+
+        let other_pk = signing_key::<P>(2).verifying_key().encode().to_vec();
+        assert!(is_crypto_error(err(call(&other_pk, &msg, &sig, &[]))));
+
+        let huge = vec![b'a'; 10_000_000];
+        let huge_sig = sign(&huge, &[]);
+        assert!(is_budget_exceeded(err(call(&pk, &huge, &huge_sig, &[]))));
+    }
+
+    #[test]
+    fn ml_dsa_44_error_paths() {
+        check_error_paths::<MlDsa44>(
+            Host::verify_sig_ml_dsa_44,
+            signing_key::<MlDsa65>(1).verifying_key().encode().to_vec(),
+        );
+    }
+
+    #[test]
+    fn ml_dsa_65_error_paths() {
+        check_error_paths::<MlDsa65>(
+            Host::verify_sig_ml_dsa_65,
+            signing_key::<MlDsa87>(1).verifying_key().encode().to_vec(),
+        );
+    }
+
+    #[test]
+    fn ml_dsa_87_error_paths() {
+        check_error_paths::<MlDsa87>(
+            Host::verify_sig_ml_dsa_87,
+            signing_key::<MlDsa44>(1).verifying_key().encode().to_vec(),
+        );
+    }
+}
