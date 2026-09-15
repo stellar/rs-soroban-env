@@ -111,7 +111,7 @@ impl_declared_size_type!(SymbolObject, 8);
 impl_declared_size_type!(Value, 16);
 
 // other env types
-impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT);
+impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT as u64);
 impl_declared_size_type!(SymbolSmallIter, 8);
 impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);

@@ -8,7 +8,7 @@ license = "Apache-2.0"
 version.workspace = true
 readme = "../README.md"
 edition = "2021"
-rust-version = "1.84.0"
+rust-version.workspace = true
 build = "build.rs"
 
 exclude = ["observations/"]
@@ -52,6 +52,8 @@ ark-bn254 = { version = "0.5.0"}
 ark-serialize = { version = "0.5.0"}
 ark-ff = { version = "0.5.0"}
 ark-ec = { version = "0.5.0"}
+# NB: `alloc` keeps the expanded A_hat matrix on the heap rather than the stack.
+ml-dsa = { version = "0.1.1", default-features = false, features = ["alloc"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "0.17.0", features = ["enable", "timer-fallback"], default-features = false, optional = true }
@@ -73,13 +75,15 @@ more-asserts = "0.3.1"
 pretty_assertions = "1.4.0"
 backtrace = "0.3.75"
 serde_json = "1.0.108"
-serde = "1.0.192"
+# NB: `derive` used to arrive via wycheproof's feature unification; it stopped
+# enabling it in 0.7.
+serde = { version = "1.0.192", features = ["derive"] }
 arbitrary = "1.3.2"
 lstsq = "0.5.0"
 nalgebra = { version = "0.32.3", default-features = false, features = ["std"]}
 wasm-encoder = "0.38.1"
 rustversion = "1.0"
-wycheproof = "0.5.1"
+wycheproof = { version = "0.7.0", default-features = false, features = ["ecdsa", "mldsa_verify"] }
 k256 = {version = "0.13.1", default-features = false, features = ["alloc"]}
 p256 = {version = "0.13.2", default-features = false, features = ["alloc"]}
 lazy_static = "1.5.0"
@@ -124,6 +128,11 @@ required-features = ["testutils"]
 [[test]]
 name = "bls-signature"
 path = "tests/bls.rs"
+required-features = ["testutils"]
+
+[[test]]
+name = "ml_dsa_sig_ver"
+path = "tests/ml_dsa_sig_ver.rs"
 required-features = ["testutils"]
 
 [package.metadata.docs.rs]

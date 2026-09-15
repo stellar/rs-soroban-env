@@ -246,6 +246,13 @@ skip = [
     { name = "hashbrown", version = "=0.14.1" },
     { name = "syn", version = "=1.0.109" },
     { name = "crate-git-revision", version = "=0.0.6" },
+    # ml-dsa is on the newer RustCrypto generation while sha2/sha3/k256/p256/
+    # ed25519-dalek are still on the previous one.
+    { name = "cpufeatures", version = "=0.2.8" },
+    { name = "crypto-common", version = "=0.1.6" },
+    { name = "digest", version = "=0.10.7" },
+    { name = "keccak", version = "=0.1.4" },
+    { name = "signature", version = "=2.1.0" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
