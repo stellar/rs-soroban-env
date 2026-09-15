@@ -1,0 +1,12 @@
+{
+  "   0 begin": "cpu:0, mem:0, mem_peak:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(1312)": "",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1291, mem:1408, mem_peak:1408, objs:-/1@c7b64956",
+  "   3 call bytes_new_from_slice(28)": "",
+  "   4 ret bytes_new_from_slice -> Ok(Bytes(obj#3))": "cpu:2260, mem:1532, mem_peak:1532, objs:-/2@31dfcd84",
+  "   5 call bytes_new_from_slice(2420)": "",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:3827, mem:4048, mem_peak:4048, objs:-/3@d4b87487",
+  "   7 call bytes_new_from_slice(0)": "",
+  "   8 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:4790, mem:4144, mem_peak:4144, objs:-/4@f7c5209",
+  "   9 end": "cpu:4790, mem:4144, mem_peak:4144, prngs:-/-, objs:-/4@f7c5209, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
