@@ -292,7 +292,7 @@ impl HostObjectType for MuxedScAddress {
 
 impl MemHostObjectType for xdr::ScSymbol {
     fn try_from_bytes(host: &Host, bytes: Vec<u8>) -> Result<Self, HostError> {
-        if bytes.len() as u64 > SCSYMBOL_LIMIT {
+        if bytes.len() > SCSYMBOL_LIMIT as usize {
             return Err(host.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
