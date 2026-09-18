@@ -50,10 +50,8 @@ fn test_muxed_address_to_components_conversion() {
     assert_eq!(mux_id_val, ScVal::U64(123));
 }
 
-// CAP-0084: `get_address_from_muxed_address` / `get_id_from_muxed_address` on a
-// muxed contract return the underlying contract address and the mux id.
 #[test]
-fn test_muxed_contract_to_components_conversion() {
+fn test_cap_84_muxed_contract_to_components_conversion() {
     use crate::xdr::MuxedContract;
     let host = observe_host!(Host::test_host());
     let muxed_address_obj = host

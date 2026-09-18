@@ -42,9 +42,6 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
             };
             write!(f, "{}", strkey)
         }
-        // CAP-0084: muxed contracts have no canonical strkey form yet, so this
-        // is a diagnostic-only rendering. In practice muxed contract addresses
-        // are de-muxed before they reach events, making this arm unreachable.
         ScAddress::MuxedContract(muxed_contract) => {
             let strkey = stellar_strkey::Contract(muxed_contract.contract_id.0 .0);
             write!(f, "{}:{}", strkey, muxed_contract.id)

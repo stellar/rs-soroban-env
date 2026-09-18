@@ -484,10 +484,8 @@ fn muxed_address_storage_key_conversion() {
     assert!(res_non_storage.is_ok());
 }
 
-// CAP-0084: a muxed contract address routes through the same `MuxedAddress`
-// vehicle, so it inherits the storage-key prohibition.
 #[test]
-fn muxed_contract_storage_key_conversion() {
+fn test_cap_84_muxed_contract_storage_key_conversion() {
     use crate::xdr::MuxedContract;
     let host = observe_host!(Host::test_host_with_recording_footprint());
     let muxed_address = MuxedScAddress(ScAddress::MuxedContract(MuxedContract {
@@ -513,9 +511,8 @@ fn muxed_contract_storage_key_conversion() {
 
 // Drives an end-to-end contract call for every storage type to assert that
 // `muxed_address` is rejected as a storage key (directly, via `put`/`get`)
-// while still being usable as a stored value. Shared by the CAP-67
-// (muxed account) and CAP-0084 (muxed contract) cases, which differ only in
-// the address they feed in.
+// while still being usable as a stored value. Shared by the muxed account
+// and muxed contract cases, which differ only in the address they feed in.
 fn check_muxed_address_is_not_allowed_as_storage_key(muxed_address: MuxedScAddress) {
     let host = Host::test_host_with_recording_footprint();
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_WITH_VALS);
@@ -583,10 +580,8 @@ fn test_muxed_account_is_not_allowed_as_storage_key() {
     )));
 }
 
-// CAP-0084: the muxed contract twin of
-// `test_muxed_account_is_not_allowed_as_storage_key`.
 #[test]
-fn test_muxed_contract_is_not_allowed_as_storage_key() {
+fn test_cap_84_muxed_contract_is_not_allowed_as_storage_key() {
     use crate::xdr::MuxedContract;
     check_muxed_address_is_not_allowed_as_storage_key(MuxedScAddress(ScAddress::MuxedContract(
         MuxedContract {
