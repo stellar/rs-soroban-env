@@ -42,6 +42,10 @@ fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fm
             };
             write!(f, "{}", strkey)
         }
+        ScAddress::MuxedContract(muxed_contract) => {
+            let strkey = stellar_strkey::Contract(muxed_contract.contract_id.0 .0);
+            write!(f, "{}:{}", strkey, muxed_contract.id)
+        }
         // Note, that claimable balance and liquidity pool types can't normally
         // appear in host, so we have the proper rendering for these here just
         // for consistency (similar to e.g. non-representable ScVal types).
