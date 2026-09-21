@@ -381,6 +381,13 @@ where
     }
 }
 
+fn run_iterations<HCM: HostCostMeasurement>() -> u64 {
+    std::env::var("RUN_ITERATIONS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(<HCM::Runner as CostRunner>::RUN_ITERATIONS)
+}
+
 fn measure_costs_inner<HCM: HostCostMeasurement, F, R>(
     mut next_sample: F,
     mut runner: R,
@@ -410,7 +417,7 @@ where
         };
         // This part is the `N_r * Overhead_s` part of equation [2].
         // This is 0 unless we are doing wasm-insn level calibration
-        let samples_cpu_insns_overhead = <HCM::Runner as CostRunner>::RUN_ITERATIONS
+        let samples_cpu_insns_overhead = run_iterations::<HCM>()
             .saturating_mul(HCM::get_insns_overhead_per_sample(&host, &sample));
 
         let mut mes = harness::<HCM, _>(
@@ -418,7 +425,7 @@ where
             Some(&mut alloc_group_token),
             &mut runner,
             sample,
-            <HCM::Runner as CostRunner>::RUN_ITERATIONS,
+            run_iterations::<HCM>(),
         );
         mes.cpu_insns -= samples_cpu_insns_overhead;
         // the return result contains `N_r * (f(x) + Overhead_b)` (see equation [2])

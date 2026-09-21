@@ -156,6 +156,17 @@ impl Default for BudgetTracker {
                 ContractCostType::Bn254FrMul => (),
                 ContractCostType::Bn254FrPow => init_input(), // input is number of bits in the u64 exponent excluding leading zeros
                 ContractCostType::Bn254FrInv => (),
+                ContractCostType::MlDsa44DecodeVerifyingKey => (),
+                ContractCostType::MlDsa65DecodeVerifyingKey => (),
+                ContractCostType::MlDsa87DecodeVerifyingKey => (),
+                ContractCostType::MlDsa44DecodeSignature => (),
+                ContractCostType::MlDsa65DecodeSignature => (),
+                ContractCostType::MlDsa87DecodeSignature => (),
+                // input is the combined message and context byte length, which
+                // is what the SHAKE-256 computation of `mu` absorbs
+                ContractCostType::VerifyMlDsa44Sig => init_input(),
+                ContractCostType::VerifyMlDsa65Sig => init_input(),
+                ContractCostType::VerifyMlDsa87Sig => init_input(),
             }
         }
         mt
@@ -686,6 +697,42 @@ impl Default for BudgetImpl {
                     cpu.const_term = 1185193;
                     cpu.lin_term = ScaledU64(41568084);
                 }
+                ContractCostType::MlDsa44DecodeVerifyingKey => {
+                    cpu.const_term = 849110;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa65DecodeVerifyingKey => {
+                    cpu.const_term = 1505271;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa87DecodeVerifyingKey => {
+                    cpu.const_term = 2625760;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa44DecodeSignature => {
+                    cpu.const_term = 37888;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa65DecodeSignature => {
+                    cpu.const_term = 47691;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa87DecodeSignature => {
+                    cpu.const_term = 66346;
+                    cpu.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VerifyMlDsa44Sig => {
+                    cpu.const_term = 685165;
+                    cpu.lin_term = ScaledU64(6103);
+                }
+                ContractCostType::VerifyMlDsa65Sig => {
+                    cpu.const_term = 983619;
+                    cpu.lin_term = ScaledU64(6103);
+                }
+                ContractCostType::VerifyMlDsa87Sig => {
+                    cpu.const_term = 1437210;
+                    cpu.lin_term = ScaledU64(6102);
+                }
             }
 
             // define the memory cost model parameters
@@ -1040,6 +1087,42 @@ impl Default for BudgetImpl {
                 ContractCostType::Bn254G1Msm => {
                     mem.const_term = 73061;
                     mem.lin_term = ScaledU64(229779);
+                }
+                ContractCostType::MlDsa44DecodeVerifyingKey => {
+                    mem.const_term = 24656;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa65DecodeVerifyingKey => {
+                    mem.const_term = 43088;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa87DecodeVerifyingKey => {
+                    mem.const_term = 73808;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa44DecodeSignature => {
+                    mem.const_term = 4104;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa65DecodeSignature => {
+                    mem.const_term = 5128;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::MlDsa87DecodeSignature => {
+                    mem.const_term = 7176;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VerifyMlDsa44Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VerifyMlDsa65Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::VerifyMlDsa87Sig => {
+                    mem.const_term = 0;
+                    mem.lin_term = ScaledU64(0);
                 }
             }
         }
