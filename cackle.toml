@@ -534,6 +534,15 @@ allow_unsafe = true
 [pkg.data-encoding]
 allow_unsafe = true
 
+[pkg.heapless]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.stellar-strkey]
+allow_unsafe = true
+
 [pkg.ark-ff]
 allow_unsafe = true
 
