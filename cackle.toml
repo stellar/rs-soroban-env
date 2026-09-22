@@ -551,6 +551,9 @@ allow_unsafe = true
 [pkg.hash32]
 allow_unsafe = true
 
+[pkg.stable_deref_trait]
+allow_unsafe = true
+
 [pkg.ark-ff]
 allow_unsafe = true
 
