@@ -3637,7 +3637,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Val, Self::Error> {
         let sc_addr = self.strkey_to_scaddress(strkey_obj, true)?;
         match &sc_addr {
-            ScAddress::MuxedAccount(_) => {
+            ScAddress::MuxedAccount(_) | ScAddress::MuxedContract(_) => {
                 Ok(self.add_host_object(MuxedScAddress(sc_addr))?.to_val())
             }
             _ => Ok(self.add_host_object(sc_addr)?.to_val()),
