@@ -545,6 +545,9 @@ allow_unsafe = true
 [pkg.stellar-strkey]
 allow_unsafe = true
 
+[pkg.byteorder]
+allow_unsafe = true
+
 [pkg.ark-ff]
 allow_unsafe = true
 
