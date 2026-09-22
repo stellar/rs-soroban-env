@@ -537,6 +537,8 @@ allow_unsafe = true
 [pkg.heapless]
 build.allow_apis = [
     "env",
+    "fs",
+    "process",
 ]
 allow_unsafe = true
 
