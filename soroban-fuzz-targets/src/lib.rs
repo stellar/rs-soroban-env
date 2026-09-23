@@ -12,6 +12,7 @@
 //! this crate to be called from multiple different fuzzing harnesses, including
 //! those in external workspaces like stellar-core.
 
+pub mod checked_arith;
 pub mod expr;
 pub mod wasmi;
 
