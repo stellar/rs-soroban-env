@@ -988,6 +988,17 @@ fn test_simulate_extend_ttl_op() {
         }
     );
 
+    // `extend_to` that overflows the ledger sequence is an error, not a panic.
+    assert!(simulate_extend_ttl_op(
+        &snapshot_source,
+        &network_config,
+        &SimulationAdjustmentConfig::no_adjustments(),
+        &ledger_info,
+        &keys,
+        u32::MAX,
+    )
+    .is_err());
+
     // Extending expired entries is not allowed.
     let mut ledger_info_with_increased_ledger_seq = ledger_info;
     ledger_info_with_increased_ledger_seq.sequence_number += 101;
