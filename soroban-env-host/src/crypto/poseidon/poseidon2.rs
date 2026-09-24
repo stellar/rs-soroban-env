@@ -89,7 +89,7 @@ impl<F: MeteredScalar> Poseidon2<F> {
     /// (https://eprint.iacr.org/2023/323)
     fn matmul_m4(&self, host: &Host, state: &mut [F]) -> Result<(), HostError> {
         let t = self.params.t;
-        if t % 4 != 0 {
+        if !t.is_multiple_of(4) {
             return Err(host.error(
                 INVALID_INPUT,
                 "Poseidon2: matmul_m4 state size must be divisible by 4",
