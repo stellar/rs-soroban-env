@@ -5,7 +5,7 @@ use crate::host_object::MuxedScAddress;
 use crate::storage::{AccessType, Footprint, Storage};
 use crate::xdr::{
     ContractDataDurability, ContractId, LedgerKey, LedgerKeyContractData, MuxedEd25519Account,
-    ScAddress, ScErrorCode, ScErrorType, ScVal, Uint256,
+    ScAddress, ScErrorCode, ScErrorType, ScSymbol, ScVal, Uint256,
 };
 use crate::{Host, HostError, MeteredOrdMap};
 use soroban_env_common::{AddressObject, Env, MuxedAddressObject, Symbol, TryFromVal, TryIntoVal};
@@ -112,7 +112,41 @@ fn storage_fn_name(host: &Host, fn_name: &str, storage: &str) -> Symbol {
     Symbol::try_from_val(host, &format!("{}_{}", fn_name, storage).as_str()).unwrap()
 }
 
+fn get_live_until(host: &Host, key: &Rc<LedgerKey>) -> u32 {
+    host.with_mut_storage(|s| Ok(s.get_with_live_until_ledger(key, host, None)?.1.unwrap()))
+        .unwrap()
+}
+
+fn make_data_key(host: &Host, contract_id: AddressObject, storage: &str) -> Rc<LedgerKey> {
+    let contract_id_hash = host.contract_id_from_address(contract_id).unwrap();
+    let durability = match storage {
+        "persistent" => ContractDataDurability::Persistent,
+        "temporary" => ContractDataDurability::Temporary,
+        _ => panic!("unexpected storage type"),
+    };
+    Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+        contract: ScAddress::Contract(contract_id_hash),
+        key: ScVal::Symbol(ScSymbol("key_1".try_into().unwrap())),
+        durability,
+    }))
+}
+
+fn live_until_ledger(host: &Host, contract_id: AddressObject, storage: &str) -> u32 {
+    let ledger_key = if storage == "instance" {
+        let contract_id_hash = host.contract_id_from_address(contract_id).unwrap();
+        host.contract_instance_ledger_key(&contract_id_hash)
+            .unwrap()
+    } else {
+        make_data_key(host, contract_id, storage)
+    };
+    get_live_until(host, &ledger_key)
+}
+
 fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
+    // Non-zero, so that `ledger_seq + extend_to` can overflow below.
+    host.with_mut_ledger_info(|li| li.sequence_number = 1000)
+        .unwrap();
+
     let key_1 = Symbol::try_from_small_str("key_1").unwrap();
     let key_2 = Symbol::try_from_val(host, &"this_is_key_2").unwrap();
     // Check that the key is not in the storage yet
@@ -193,6 +227,34 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
             extend_args_past_max.into(),
         )
         .unwrap();
+    }
+
+    // A huge `extend_to` saturates and clamps to the max TTL instead of erroring.
+    let extend_args_overflow = if storage == "instance" {
+        test_vec![host, u32::MAX, u32::MAX]
+    } else {
+        test_vec![host, key_1, u32::MAX, u32::MAX]
+    };
+
+    if storage == "temporary" {
+        assert!(host
+            .call(
+                contract_id,
+                storage_fn_name(host, "extend", storage),
+                extend_args_overflow.into(),
+            )
+            .is_err());
+    } else {
+        host.call(
+            contract_id,
+            storage_fn_name(host, "extend", storage),
+            extend_args_overflow.into(),
+        )
+        .unwrap();
+        assert_eq!(
+            live_until_ledger(host, contract_id, storage),
+            max_live_until_ledger
+        );
     }
 
     // Put another key and verify it's there
@@ -572,7 +634,7 @@ fn test_large_instance_key() {
 
 mod ttl_extension_v2_tests {
     use super::*;
-    use crate::xdr::{ContractDataDurability, LedgerKeyContractData, ScSymbol, ScVal};
+    use crate::xdr::{ScSymbol, ScVal};
     use soroban_env_common::{ContractTtlExtension, StorageType};
     use soroban_test_wasms::CONTRACT_STORAGE_P26;
 
@@ -586,25 +648,6 @@ mod ttl_extension_v2_tests {
         })
         .unwrap();
         host
-    }
-
-    fn get_live_until(host: &Host, key: &Rc<LedgerKey>) -> u32 {
-        host.with_mut_storage(|s| Ok(s.get_with_live_until_ledger(key, host, None)?.1.unwrap()))
-            .unwrap()
-    }
-
-    fn make_data_key(host: &Host, contract_id: AddressObject, storage: &str) -> Rc<LedgerKey> {
-        let contract_id_hash = host.contract_id_from_address(contract_id).unwrap();
-        let durability = match storage {
-            "persistent" => ContractDataDurability::Persistent,
-            "temporary" => ContractDataDurability::Temporary,
-            _ => panic!("unexpected storage type"),
-        };
-        Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract(contract_id_hash),
-            key: ScVal::Symbol(ScSymbol("key_1".try_into().unwrap())),
-            durability,
-        }))
     }
 
     fn extend_v2_fn_name(host: &Host, storage: &str) -> Symbol {

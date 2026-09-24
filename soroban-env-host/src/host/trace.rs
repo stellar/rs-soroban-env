@@ -58,6 +58,7 @@ impl<'a> TraceRecord<'a> {
 pub struct TraceState {
     cpu_insns: u64,
     mem_bytes: u64,
+    mem_peak: u64,
     local_prng_hash: u64,
     base_prng_hash: u64,
     local_objs_size: usize,
@@ -106,7 +107,8 @@ impl TraceState {
             let (auth_trackers_hash, auth_trackers_size) = host.auth_trackers_hash_and_size();
             state = Some(TraceState {
                 cpu_insns: host.as_budget().get_cpu_insns_consumed()?,
-                mem_bytes: host.as_budget().get_mem_bytes_consumed()?,
+                mem_bytes: host.as_budget().get_mem_bytes_net()?,
+                mem_peak: host.as_budget().get_mem_bytes_consumed()?,
                 local_prng_hash: host.local_prng_hash(),
                 base_prng_hash: host.base_prng_hash(),
                 local_objs_size: host.local_objs_size(),
@@ -298,7 +300,7 @@ impl Host {
                     match v {
                         Some((entry, ttl)) => {
                             0.metered_hash(&mut state, budget)?;
-                            entry.metered_hash_xdr(&mut state, budget)?;
+                            entry.metered_hash(&mut state, budget)?;
                             ttl.metered_hash(&mut state, budget)?;
                         }
                         None => {

@@ -2794,6 +2794,29 @@ impl AccountAuthorizationTracker {
                             .try_borrow_storage_mut()?
                             .try_get(&wasm_key, host, None)?;
                     }
+                    ContractExecutable::ExternalRef(external_ref) => {
+                        let ref_key = host.executable_ref_ledger_key(&external_ref)?;
+                        if let Some(ref_entry) = host
+                            .try_borrow_storage_mut()?
+                            .try_get(&ref_key, host, None)?
+                        {
+                            if let LedgerEntryData::ContractData(e) = &ref_entry.data {
+                                if let ScVal::Bytes(bytes) = &e.val {
+                                    if let Ok(wasm_hash) = host
+                                        .fixed_length_bytes_from_slice::<crate::xdr::Hash, 32>(
+                                            "executable_ref_wasm_hash",
+                                            bytes.as_slice(),
+                                        )
+                                    {
+                                        let wasm_key = host.contract_code_ledger_key(&wasm_hash)?;
+                                        let _ = host
+                                            .try_borrow_storage_mut()?
+                                            .try_get(&wasm_key, host, None)?;
+                                    }
+                                }
+                            }
+                        }
+                    }
                     ContractExecutable::StellarAsset => (),
                 }
             }

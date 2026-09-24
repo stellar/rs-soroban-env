@@ -23,7 +23,7 @@ use std::{cell::RefCell, mem, rc::Rc};
 use crate::{
     budget::{AsBudget, DepthLimiter},
     builtin_contracts::base_types::Address,
-    host_object::MuxedScAddress,
+    host_object::{ExecutableTag, MuxedScAddress},
     storage::AccessType,
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, Asset, BytesM,
@@ -326,7 +326,21 @@ impl MeteredClone for ContractId {}
 impl MeteredClone for Uint256 {}
 impl MeteredClone for ContractCodeCostInputs {}
 impl MeteredClone for ContractCodeEntryV1 {}
-impl MeteredClone for ContractExecutable {}
+impl MeteredClone for ContractExecutable {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match self {
+            // The Wasm hash and StellarAsset variants carry no heap
+            // substructure. For an external reference, the owner `ScAddress` is
+            // shallow, but the tag `ScString` owns heap data.
+            ContractExecutable::Wasm(_) | ContractExecutable::StellarAsset => Ok(()),
+            ContractExecutable::ExternalRef(external_ref) => {
+                StringM::charge_for_substructure(&external_ref.tag, budget)
+            }
+        }
+    }
+}
 impl MeteredClone for AccountId {}
 impl MeteredClone for SponsorshipDescriptor {}
 impl MeteredClone for ScAddress {}
@@ -454,6 +468,7 @@ impl MeteredClone for ScVal {
                 ScVal::Bytes(b) => BytesM::charge_for_substructure(b, budget),
                 ScVal::String(s) => StringM::charge_for_substructure(s, budget),
                 ScVal::Symbol(s) => StringM::charge_for_substructure(s, budget),
+                ScVal::ExecutableTag(s) => StringM::charge_for_substructure(s, budget),
                 ScVal::ContractInstance(i) => {
                     ScContractInstance::charge_for_substructure(i, budget)
                 }
@@ -544,6 +559,14 @@ impl MeteredClone for ScString {
     }
 }
 
+impl MeteredClone for ExecutableTag {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.0.charge_for_substructure(budget)
+    }
+}
+
 impl MeteredClone for ScSymbol {
     const IS_SHALLOW: bool = false;
 
@@ -556,6 +579,7 @@ impl MeteredClone for ScContractInstance {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.executable.charge_for_substructure(budget.clone())?;
         self.storage.charge_for_substructure(budget)
     }
 }

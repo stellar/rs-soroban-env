@@ -139,3 +139,7 @@ pub const CONTRACT_STORAGE_P26: &[u8] =
 // Protocol 27 Wasms.
 pub const DELEGATED_AUTH_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/27/test_builtin_auth_delegation.wasm").as_slice();
+
+// Protocol 28 Wasms.
+pub const UPDATE_EXEC_REF_TEST_CONTRACT: &[u8] =
+    include_bytes!("../wasm-workspace/opt/28/test_update_exec_ref.wasm").as_slice();

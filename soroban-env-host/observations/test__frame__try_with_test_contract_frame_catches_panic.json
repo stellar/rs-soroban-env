@@ -1,16 +1,16 @@
 {
-  "   0 begin": "cpu:14488, mem:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
-  "   1 call vec_new()": "cpu:14930, mem:80, objs:-/1@6e27cef",
-  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:15433, mem:160, objs:-/2@19dff6ca",
-  "   3 call symbol_new_from_slice(13)": "cpu:36979, mem:2038, objs:-/3@52e71cc, store:-/2@7bc024e1, foot:2@d6be0e71",
-  "   4 ret symbol_new_from_slice -> Ok(Symbol(obj#7))": "cpu:37989, mem:2147, objs:-/4@d72f5dc1",
-  "   5 push TEST:   0:sym#7()": "cpu:48533, mem:3291, objs:-/5@af7c85bb, stk:1@8e5c3d6a, auth:1@8b9c58a5/-",
+  "   0 begin": "cpu:14285, mem:0, mem_peak:0, prngs:-/9b4a753, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call vec_new()": "cpu:14727, mem:80, mem_peak:80, objs:-/1@6e27cef",
+  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:15229, mem:160, mem_peak:160, objs:-/2@19dff6ca",
+  "   3 call symbol_new_from_slice(13)": "cpu:26490, mem:2052, mem_peak:2052, store:-/2@fe1e5317, foot:2@282e4d64",
+  "   4 ret symbol_new_from_slice -> Ok(Symbol(obj#5))": "cpu:27500, mem:2161, mem_peak:2161, objs:-/3@77d38fb2",
+  "   5 push TEST:   0:sym#5()": "cpu:32854, mem:3209, mem_peak:3209, objs:-/4@858f79e0, stk:1@bd326d5, auth:1@c94ed0f3/-",
   "   6 call symbol_new_from_slice(13)": "",
-  "   7 ret symbol_new_from_slice -> Ok(Symbol(obj#11))": "cpu:49543, mem:3400, objs:-/6@6c5fdc1a",
-  "   8 call obj_cmp(Symbol(obj#11), Symbol(obj#7))": "",
-  "   9 ret obj_cmp -> Ok(0)": "cpu:49832",
-  "  10 pop TEST:   0:sym#7 -> Ok(Void)": "",
-  "  11 push TEST:   0:test()": "cpu:54601, mem:4360, objs:-/7@e5e0c6fc, stk:1@6c0a26dc, auth:1@ff08e997/-",
+  "   7 ret symbol_new_from_slice -> Ok(Symbol(obj#9))": "cpu:33864, mem:3318, mem_peak:3318, objs:-/5@85aecc39",
+  "   8 call obj_cmp(Symbol(obj#9), Symbol(obj#5))": "",
+  "   9 ret obj_cmp -> Ok(0)": "cpu:34149",
+  "  10 pop TEST:   0:sym#5 -> Ok(Void)": "",
+  "  11 push TEST:   0:test()": "cpu:38936, mem:4350, mem_peak:4350, objs:-/6@ffe2c74a, stk:1@45cc1fde, auth:1@8897abd3/-",
   "  12 pop TEST:   0:test -> Err(Error(WasmVm, InvalidAction))": "",
-  "  13 end": "cpu:54601, mem:4360, prngs:-/9b4a753, objs:-/7@e5e0c6fc, vm:-/-, evt:-, store:-/2@7bc024e1, foot:2@d6be0e71, stk:-, auth:-/-"
+  "  13 end": "cpu:38936, mem:4350, mem_peak:4350, prngs:-/9b4a753, objs:-/6@ffe2c74a, vm:-/-, evt:-, store:-/2@fe1e5317, foot:2@282e4d64, stk:-, auth:-/-"
 }

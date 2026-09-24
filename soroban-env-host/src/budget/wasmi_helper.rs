@@ -56,8 +56,27 @@ impl ResourceLimiter for Host {
 
             self.as_budget()
                 .charge(ContractCostType::MemAlloc, Some(delta))
-                .map(|_| true)
-                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
+                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+
+            // Attribute the (real-budget) linear-memory charge to the frame that
+            // owns the growing VM, so it can be refunded when that frame pops.
+            // During execution the top frame *is* the growing VM's frame; during
+            // instantiation the VM has no frame yet, so this bills the caller and
+            // `call_contract_fn` reclaims the delta onto the new frame at push.
+            // Shadow-mode charges are never refunded, so they aren't attributed.
+            if !self
+                .as_budget()
+                .is_in_shadow_mode()
+                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?
+            {
+                let charged = self
+                    .as_budget()
+                    .get_memory_cost(ContractCostType::MemAlloc, Some(delta))
+                    .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+                self.charge_current_frame_linear_mem(charged)
+                    .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+            }
+            Ok(true)
         } else {
             Err(errors::MemoryError::OutOfBoundsGrowth)
         }

@@ -96,6 +96,12 @@ pub(crate) struct Context {
     pub(crate) frame: Frame,
     pub(crate) prng: Option<Prng>,
     pub(crate) storage: Option<InstanceStorageMap>,
+    /// Real-budget linear memory (`mem_bytes`) charged for the VM(s) this frame
+    /// owns -- the initial allocation done at instantiation plus any runtime
+    /// `memory.grow`. That memory is freed when the frame's VM is torn down, so
+    /// this amount is refunded to the budget when the frame pops. Non-VM frames
+    /// normally leave it at 0.
+    pub(crate) linear_mem_charged: u64,
 }
 
 pub(crate) struct CallParams {
@@ -184,6 +190,42 @@ impl Host {
         self.with_current_frame_opt(|opt| Ok(opt.is_some()))
     }
 
+    /// Linear-memory charge accumulated on the current (top) context, or 0 if
+    /// the context stack is empty.
+    fn current_frame_linear_mem_charged(&self) -> Result<u64, HostError> {
+        Ok(self
+            .try_borrow_context_stack()?
+            .last()
+            .map_or(0, |ctx| ctx.linear_mem_charged))
+    }
+
+    /// Removes and returns the linear-memory charge accrued on the current
+    /// (top) context since `mark`. Used to move a freshly instantiated VM's
+    /// initial linear-memory charge off the caller (which was the top frame
+    /// during instantiation) and onto the VM's own frame.
+    fn reclaim_frame_linear_mem_since(&self, mark: u64) -> Result<u64, HostError> {
+        let mut stack = self.try_borrow_context_stack_mut()?;
+        Ok(match stack.last_mut() {
+            Some(ctx) => {
+                let delta = ctx.linear_mem_charged.saturating_sub(mark);
+                ctx.linear_mem_charged = mark;
+                delta
+            }
+            None => 0,
+        })
+    }
+
+    /// Adds `amount` to the current (top) context's linear-memory charge, if a
+    /// frame is present. Called by `memory_growing`; a no-op when no frame is on
+    /// the stack (the charge is then simply not tracked for refund).
+    pub(crate) fn charge_current_frame_linear_mem(&self, amount: u64) -> Result<(), HostError> {
+        let mut stack = self.try_borrow_context_stack_mut()?;
+        if let Some(ctx) = stack.last_mut() {
+            ctx.linear_mem_charged = ctx.linear_mem_charged.saturating_add(amount);
+        }
+        Ok(())
+    }
+
     /// Helper function for [`Host::with_frame`] below. Pushes a new [`Context`]
     /// on the context stack, returning a [`RollbackPoint`] such that if
     /// operation fails, it can be used to roll the [`Host`] back to the state
@@ -228,14 +270,22 @@ impl Host {
         }
         self.try_borrow_authorization_manager()?
             .pop_frame(self, auth_snapshot)?;
-        ctx.ok_or_else(|| {
+        let ctx = ctx.ok_or_else(|| {
             self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
                 "unmatched host context push/pop",
                 &[],
             )
-        })
+        })?;
+        // The VM(s) owned by this frame are freed now that the frame is gone, so
+        // return their transient linear memory to the budget. This runs on both
+        // the success and rollback paths, so a callee whose error the caller
+        // catches via `try_call` still gives its memory back.
+        if ctx.linear_mem_charged != 0 {
+            self.as_budget().refund_mem_bytes(ctx.linear_mem_charged)?;
+        }
+        Ok(ctx)
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
@@ -406,6 +456,22 @@ impl Host {
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
+        self.with_frame_and_initial_mem_charge(0, frame, f)
+    }
+
+    /// Like [`Host::with_frame`], but opens the pushed [`Context`]'s
+    /// `linear_mem_charged` at `linear_mem_charged` rather than zero. Used by
+    /// [`Host::call_contract_fn`] to hand a freshly instantiated VM's initial
+    /// linear-memory charge to the VM's own frame.
+    fn with_frame_and_initial_mem_charge<F>(
+        &self,
+        linear_mem_charged: u64,
+        frame: Frame,
+        f: F,
+    ) -> Result<Val, HostError>
+    where
+        F: FnOnce() -> Result<Val, HostError>,
+    {
         let start_depth = self.try_borrow_context_stack()?.len();
         if start_depth as u32 >= DEFAULT_HOST_DEPTH_LIMIT {
             return Err(Error::from_type_and_code(
@@ -428,6 +494,7 @@ impl Host {
             frame,
             prng: None,
             storage: None,
+            linear_mem_charged,
         };
         let rp = self.push_context(ctx)?;
         {
@@ -722,42 +789,193 @@ impl Host {
         Ok(TestContractFrame::new(id, func, args.to_vec(), instance))
     }
 
+    // Invokes a function of a natively-compiled test contract via its
+    // `ContractFunctionSet`.
+    #[cfg(any(test, feature = "testutils"))]
+    fn call_test_contract_fn(
+        &self,
+        cfs: Rc<dyn ContractFunctionSet>,
+        frame: TestContractFrame,
+        _contract_id: &ContractId,
+        func: &Symbol,
+        args: &[Val],
+        treat_missing_function_as_noop: bool,
+    ) -> Result<Val, HostError> {
+        let func = *func;
+        let panic = frame.panic.clone();
+        self.with_frame(Frame::TestContract(frame), || {
+            use std::any::Any;
+            use std::panic::AssertUnwindSafe;
+            type PanicVal = Box<dyn Any + Send>;
+
+            // We're directly invoking a native rust contract here, which we
+            // allow only in local testing scenarios, and we want it to behave
+            // as close to the way it would behave if the contract were actually
+            // compiled to Wasm and running in a VM.
+            //
+            // In particular: if the contract function panics, if it were Wasm
+            // it would cause the VM to trap, so we do something "as similar as
+            // we can" in the native case here, catch the native panic, and
+            // attempt to continue by translating the panic back to an error, so
+            // that `with_frame` will rollback the host to its pre-call state
+            // (as best it can) and propagate the error to its caller (which
+            // might be another contract doing try_call).
+            //
+            // This is somewhat best-effort, but it's compiled-out when building
+            // a host for production use, so we're willing to be a bit forgiving.
+            let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
+            let res: Result<Option<Val>, PanicVal> =
+                crate::testutils::call_with_suppressed_panic_hook(closure);
+            match res {
+                Ok(Some(val)) => Ok(val),
+                Ok(None) => {
+                    if treat_missing_function_as_noop {
+                        Ok(Val::VOID.into())
+                    } else {
+                        Err(self.err(
+                            ScErrorType::Context,
+                            ScErrorCode::MissingValue,
+                            "calling unknown contract function",
+                            &[func.to_val()],
+                        ))
+                    }
+                }
+                Err(panic_payload) => {
+                    // Return an error indicating the contract function panicked.
+                    //
+                    // If it was a panic generated by a Env-upgraded HostError,
+                    // it had its `Error` captured by
+                    // `VmCallerEnv::escalate_error_to_panic`: fish the `Error`
+                    // stored in the frame back out and propagate it.
+                    //
+                    // If it was a panic generated by user code calling
+                    // panic!(...) we won't retrieve such a stored `Error`. Since
+                    // we're trying to emulate what-the-VM-would-do here, and the
+                    // VM traps with an unreachable error on contract panic, we
+                    // generate same error (by converting a wasm trap-unreachable
+                    // code). It's a little weird because we're not actually
+                    // running a VM, but we prioritize emulation fidelity over
+                    // honesty here.
+                    let mut error: Error =
+                        Error::from(wasmi::core::TrapCode::UnreachableCodeReached);
+
+                    let mut recovered_error_from_panic_refcell = false;
+                    if let Ok(panic) = panic.try_borrow() {
+                        if let Some(err) = *panic {
+                            recovered_error_from_panic_refcell = true;
+                            error = err;
+                        }
+                    }
+
+                    // If we didn't manage to recover a structured error code
+                    // from the frame's refcell, and we're allowed to record
+                    // dynamic strings (which happens when diagnostics are
+                    // active), and we got a panic payload of a simple string,
+                    // log that panic payload into the diagnostic event buffer.
+                    // This code path will get hit when contracts do
+                    // `panic!("some string")` in native testing mode.
+                    if !recovered_error_from_panic_refcell {
+                        self.with_debug_mode(|| {
+                            if let Some(str) = panic_payload.downcast_ref::<&str>() {
+                                let msg: String = format!(
+                                    "caught panic '{}' from contract function '{:?}'",
+                                    str, func
+                                );
+                                let _ = self.log_diagnostics(&msg, args);
+                            } else if let Some(str) = panic_payload.downcast_ref::<String>() {
+                                let msg: String = format!(
+                                    "caught panic '{}' from contract function '{:?}'",
+                                    str, func
+                                );
+                                let _ = self.log_diagnostics(&msg, args);
+                            };
+                            Ok(())
+                        })
+                    }
+                    Err(self.error(error, "caught error from function", &[]))
+                }
+            }
+        })
+    }
+
     // Notes on metering: this is covered by the called components.
     fn call_contract_fn(
         &self,
-        id: &ContractId,
+        contract_id: &ContractId,
         func: &Symbol,
         args: &[Val],
         treat_missing_function_as_noop: bool,
     ) -> Result<Val, HostError> {
         // Create key for storage
-        let storage_key = self.contract_instance_ledger_key(id)?;
+        let storage_key = self.contract_instance_ledger_key(contract_id)?;
         let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
         Vec::<Val>::charge_bulk_init_cpy(args.len() as u64, self.as_budget())?;
         let args_vec = args.to_vec();
-        match &instance.executable {
-            ContractExecutable::Wasm(wasm_hash) => {
-                let vm = self.instantiate_vm(id, wasm_hash)?;
-                let relative_objects = Vec::new();
-                self.with_frame(
-                    Frame::ContractVM {
-                        vm: Rc::clone(&vm),
-                        fn_name: *func,
-                        args: args_vec,
-                        instance,
-                        relative_objects,
-                    },
-                    || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
-                )
+        let owned_external_ref_wasm_hash;
+        let wasm_hash = match &instance.executable {
+            ContractExecutable::Wasm(wasm_hash) => wasm_hash,
+            ContractExecutable::ExternalRef(external_ref) => {
+                owned_external_ref_wasm_hash = self.resolve_external_ref_wasm_hash(external_ref)?;
+                &owned_external_ref_wasm_hash
             }
-            ContractExecutable::StellarAsset => self.with_frame(
-                Frame::StellarAssetContract(id.metered_clone(self)?, *func, args_vec, instance),
-                || {
-                    use crate::builtin_contracts::{BuiltinContract, StellarAssetContract};
-                    StellarAssetContract.call(func, self, args)
-                },
-            ),
+            ContractExecutable::StellarAsset => {
+                return self.with_frame(
+                    Frame::StellarAssetContract(
+                        contract_id.metered_clone(self)?,
+                        *func,
+                        args_vec,
+                        instance,
+                    ),
+                    || {
+                        use crate::builtin_contracts::{BuiltinContract, StellarAssetContract};
+                        StellarAssetContract.call(func, self, args)
+                    },
+                );
+            }
+        };
+        // Dispatch the contracts whose 'Wasm' is the pseudo-Wasm of a natively
+        // compiled test contract to the respective function set. This happens
+        // after the executable has been resolved, so that it's possible to
+        // switch the compiled-in implementation back to Wasm (and the other way
+        // around) via `update_current_contract_wasm`.
+        // "testutils" is not covered by budget metering.
+        #[cfg(any(test, feature = "testutils"))]
+        let contract_fns = self
+            .try_borrow_test_contract_registry()?
+            .get_contract_fn_set(wasm_hash);
+        // NB: `if let` may hold the borrow on temporary registry ref, so we
+        // need to break down the call to `get_contract_fn_set` and `if let`.
+        #[cfg(any(test, feature = "testutils"))]
+        if let Some(contract_fns) = contract_fns {
+            return self.call_test_contract_fn(
+                contract_fns,
+                TestContractFrame::new(contract_id.metered_clone(self)?, *func, args_vec, instance),
+                contract_id,
+                func,
+                args,
+                treat_missing_function_as_noop,
+            );
         }
+        // The VM's initial linear memory is allocated (and charged) during
+        // instantiation, before its own frame exists, so `memory_growing` bills
+        // it to the caller (the current top frame). Reclaim that delta and hand
+        // it to the new frame as its opening balance, so it is refunded promptly
+        // when this frame pops rather than lingering on the caller.
+        let caller_mark = self.current_frame_linear_mem_charged()?;
+        let vm = self.instantiate_vm(contract_id, wasm_hash)?;
+        let vm_linear_mem = self.reclaim_frame_linear_mem_since(caller_mark)?;
+        let relative_objects = Vec::new();
+        self.with_frame_and_initial_mem_charge(
+            vm_linear_mem,
+            Frame::ContractVM {
+                vm: Rc::clone(&vm),
+                fn_name: *func,
+                args: args_vec,
+                instance,
+                relative_objects,
+            },
+            || vm.invoke_function_raw(self, func, args, treat_missing_function_as_noop),
+        )
     }
 
     fn instantiate_vm(&self, id: &ContractId, wasm_hash: &Hash) -> Result<Rc<Vm>, HostError> {
@@ -876,19 +1094,27 @@ impl Host {
         &self,
         contract_id: &ContractId,
     ) -> Result<u32, HostError> {
-        #[cfg(any(test, feature = "testutils"))]
-        if self.is_test_contract_executable(contract_id)? {
-            return self.get_ledger_protocol_version();
-        }
         let storage_key = self.contract_instance_ledger_key(contract_id)?;
         let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
-        match &instance.executable {
-            ContractExecutable::Wasm(wasm_hash) => {
-                let vm = self.instantiate_vm(contract_id, wasm_hash)?;
-                Ok(vm.module.proto_version)
+        let owned_external_ref_wasm_hash;
+        let wasm_hash = match &instance.executable {
+            ContractExecutable::Wasm(wasm_hash) => wasm_hash,
+            ContractExecutable::ExternalRef(external_ref) => {
+                owned_external_ref_wasm_hash = self.resolve_external_ref_wasm_hash(external_ref)?;
+                &owned_external_ref_wasm_hash
             }
-            ContractExecutable::StellarAsset => self.get_ledger_protocol_version(),
+            ContractExecutable::StellarAsset => return self.get_ledger_protocol_version(),
+        };
+        #[cfg(any(test, feature = "testutils"))]
+        if self
+            .try_borrow_test_contract_registry()?
+            .get_contract_fn_set(wasm_hash)
+            .is_some()
+        {
+            return self.get_ledger_protocol_version();
         }
+        let vm = self.instantiate_vm(contract_id, wasm_hash)?;
+        Ok(vm.module.proto_version)
     }
 
     // Notes on metering: this is covered by the called components.
@@ -956,131 +1182,6 @@ impl Host {
         }
 
         self.fn_call_diagnostics(id, &func, args);
-
-        // Try dispatching the contract to the compiled-in registred
-        // implmentation. Only the contracts with the special (empty) executable
-        // are dispatched in this way, so that it's possible to switch the
-        // compiled-in implementation back to Wasm via
-        // `update_current_contract_wasm`.
-        // "testutils" is not covered by budget metering.
-        #[cfg(any(test, feature = "testutils"))]
-        if self.is_test_contract_executable(id)? {
-            // This looks a little un-idiomatic, but this avoids maintaining a borrow of
-            // self.0.contracts. Implementing it as
-            //
-            //     if let Some(cfs) = self.try_borrow_contracts()?.get(&id).cloned() { ... }
-            //
-            // maintains a borrow of self.0.contracts, which can cause borrow errors.
-            let cfs_option = self.try_borrow_contracts()?.get(&id).cloned();
-            if let Some(cfs) = cfs_option {
-                let frame = self.create_test_contract_frame(id.clone(), func, args.to_vec())?;
-                let panic = frame.panic.clone();
-                return self.with_frame(Frame::TestContract(frame), || {
-                    use std::any::Any;
-                    use std::panic::AssertUnwindSafe;
-                    type PanicVal = Box<dyn Any + Send>;
-
-                    // We're directly invoking a native rust contract here,
-                    // which we allow only in local testing scenarios, and we
-                    // want it to behave as close to the way it would behave if
-                    // the contract were actually compiled to WASM and running
-                    // in a VM.
-                    //
-                    // In particular: if the contract function panics, if it
-                    // were WASM it would cause the VM to trap, so we do
-                    // something "as similar as we can" in the native case here,
-                    // catch the native panic and attempt to continue by
-                    // translating the panic back to an error, so that
-                    // `with_frame` will rollback the host to its pre-call state
-                    // (as best it can) and propagate the error to its caller
-                    // (which might be another contract doing try_call).
-                    //
-                    // This is somewhat best-effort, but it's compiled-out when
-                    // building a host for production use, so we're willing to
-                    // be a bit forgiving.
-                    let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
-                    let res: Result<Option<Val>, PanicVal> =
-                        crate::testutils::call_with_suppressed_panic_hook(closure);
-                    match res {
-                        Ok(Some(val)) => {
-                            self.fn_return_diagnostics(id, &func, &val);
-                            Ok(val)
-                        }
-                        Ok(None) => {
-                            if call_params.treat_missing_function_as_noop {
-                                Ok(Val::VOID.into())
-                            } else {
-                                Err(self.err(
-                                    ScErrorType::Context,
-                                    ScErrorCode::MissingValue,
-                                    "calling unknown contract function",
-                                    &[func.to_val()],
-                                ))
-                            }
-                        }
-                        Err(panic_payload) => {
-                            // Return an error indicating the contract function
-                            // panicked.
-                            //
-                            // If it was a panic generated by a Env-upgraded
-                            // HostError, it had its `Error` captured by
-                            // `VmCallerEnv::escalate_error_to_panic`: fish the
-                            // `Error` stored in the frame back out and
-                            // propagate it.
-                            //
-                            // If it was a panic generated by user code calling
-                            // panic!(...) we won't retrieve such a stored
-                            // `Error`. Since we're trying to emulate
-                            // what-the-VM-would-do here, and the VM traps with
-                            // an unreachable error on contract panic, we
-                            // generate same error (by converting a wasm
-                            // trap-unreachable code). It's a little weird
-                            // because we're not actually running a VM, but we
-                            // prioritize emulation fidelity over honesty here.
-                            let mut error: Error =
-                                Error::from(wasmi::core::TrapCode::UnreachableCodeReached);
-
-                            let mut recovered_error_from_panic_refcell = false;
-                            if let Ok(panic) = panic.try_borrow() {
-                                if let Some(err) = *panic {
-                                    recovered_error_from_panic_refcell = true;
-                                    error = err;
-                                }
-                            }
-
-                            // If we didn't manage to recover a structured error
-                            // code from the frame's refcell, and we're allowed
-                            // to record dynamic strings (which happens when
-                            // diagnostics are active), and we got a panic
-                            // payload of a simple string, log that panic
-                            // payload into the diagnostic event buffer. This
-                            // code path will get hit when contracts do
-                            // `panic!("some string")` in native testing mode.
-                            if !recovered_error_from_panic_refcell {
-                                self.with_debug_mode(|| {
-                                    if let Some(str) = panic_payload.downcast_ref::<&str>() {
-                                        let msg: String = format!(
-                                            "caught panic '{}' from contract function '{:?}'",
-                                            str, func
-                                        );
-                                        let _ = self.log_diagnostics(&msg, args);
-                                    } else if let Some(str) = panic_payload.downcast_ref::<String>()
-                                    {
-                                        let msg: String = format!(
-                                            "caught panic '{}' from contract function '{:?}'",
-                                            str, func
-                                        );
-                                        let _ = self.log_diagnostics(&msg, args);
-                                    };
-                                    Ok(())
-                                })
-                            }
-                            Err(self.error(error, "caught error from function", &[]))
-                        }
-                    }
-                });
-            }
-        }
 
         let res =
             self.call_contract_fn(id, &func, args, call_params.treat_missing_function_as_noop);

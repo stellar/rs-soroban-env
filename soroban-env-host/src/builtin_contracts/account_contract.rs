@@ -80,9 +80,10 @@ impl AuthorizationContext {
                 ))
             }
             AuthorizedFunction::CreateContractHostFn(args) => {
-                let wasm_hash = match &args.executable {
-                    xdr::ContractExecutable::Wasm(wasm_hash) => {
-                        BytesN::<32>::from_slice(host, wasm_hash.as_slice())?
+                let executable = match &args.executable {
+                    xdr::ContractExecutable::Wasm(_)
+                    | xdr::ContractExecutable::ExternalRef(_) => {
+                        ContractExecutable::from_xdr(host, &args.executable)?
                     }
                     xdr::ContractExecutable::StellarAsset => return Err(host.err(
                         ScErrorType::Auth,
@@ -104,16 +105,13 @@ impl AuthorizationContext {
                 };
                 if args.constructor_args.is_empty() {
                     Ok(AuthorizationContext::CreateContractHostFn(
-                        CreateContractHostFnContext {
-                            executable: ContractExecutable::Wasm(wasm_hash),
-                            salt,
-                        },
+                        CreateContractHostFnContext { executable, salt },
                     ))
                 } else {
                     let args_vec = host.scvals_to_val_vec(&args.constructor_args.as_slice())?;
                     Ok(AuthorizationContext::CreateContractWithCtorHostFn(
                         CreateContractWithConstructorHostFnContext {
-                            executable: ContractExecutable::Wasm(wasm_hash),
+                            executable,
                             salt,
                             constructor_args: args_vec.try_into_val(host)?,
                         },

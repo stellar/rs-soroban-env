@@ -1,4 +1,4 @@
-use crate::e2e_invoke::ledger_entry_to_ledger_key;
+use crate::host::ledger_entry::ledger_entry_to_ledger_key;
 use crate::storage::EntryWithLiveUntil;
 use crate::ErrorHandler;
 use crate::{
@@ -117,18 +117,22 @@ pub fn generate_bytes_array(host: &Host) -> [u8; 32] {
     bytes
 }
 
-pub struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
+pub(crate) fn ledger_entry_to_ledger_key_unmetered(le: &LedgerEntry) -> LedgerKey {
+    let host = Host::default();
+    ledger_entry_to_ledger_key(le, &host).unwrap()
+}
+
+pub struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, EntryWithLiveUntil>);
 
 impl MockSnapshotSource {
     pub fn new() -> Self {
-        Self(BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new())
+        Self(BTreeMap::<Rc<LedgerKey>, EntryWithLiveUntil>::new())
     }
 
     pub fn from_entries(entries: Vec<(LedgerEntry, Option<u32>)>) -> Self {
-        let mut map = BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new();
-        let dummy_budget = Budget::default();
+        let mut map = BTreeMap::<Rc<LedgerKey>, EntryWithLiveUntil>::new();
         for (e, maybe_ttl) in entries {
-            let key = Rc::new(ledger_entry_to_ledger_key(&e, &dummy_budget).unwrap());
+            let key = Rc::new(ledger_entry_to_ledger_key_unmetered(&e));
             map.insert(key, (Rc::new(e), maybe_ttl));
         }
         Self(map)
@@ -749,44 +753,160 @@ pub(crate) mod wasm {
         fe.finish_and_export("test").finish()
     }
 
-    pub(crate) fn wasm_module_with_large_map_from_linear_memory(
-        num_vals: u32,
-        initial: Val,
+    // Encodes the string keys as a contiguous byte array and an array of
+    // slices pointing into that byte array, as expected by the map host
+    // functions that read these from linear memory.
+    fn encode_map_keys_for_linear_memory(keys: &[&str], key_bytes_pos: u32) -> (Vec<u8>, Vec<u8>) {
+        let mut key_bytes = Vec::new();
+        let mut slices = Vec::new();
+        let mut curr_ptr = key_bytes_pos as u64;
+        for k in keys {
+            let len = k.len() as u64;
+            slices.extend_from_slice(&(len << 32 | curr_ptr).to_le_bytes());
+            key_bytes.extend_from_slice(k.as_bytes());
+            curr_ptr += len;
+        }
+        (key_bytes, slices)
+    }
+
+    /// Encodes the values as their little-endian `Val` payloads, as expected by
+    /// the map host functions that read these from linear memory.
+    fn encode_map_vals_for_linear_memory(vals: &[Val]) -> Vec<u8> {
+        vals.iter()
+            .flat_map(|v| v.get_payload().to_le_bytes())
+            .collect()
+    }
+
+    /// Creates a Wasm module with a function `test` that creates a map from
+    /// linear memory using the provided keys and values, and returns the
+    /// resulting map object.
+    /// The `sparse` parameter determines whether `map_new_from_linear_memory`
+    /// or `sparse_map_new_from_linear_memory` will be used.
+    pub(crate) fn wasm_module_with_map_from_linear_memory(
+        keys: &[&str],
+        vals: &[Val],
+        sparse: bool,
     ) -> Vec<u8> {
-        // slice is 8 bytes, we choose 8 byte key, val is 8 bytes
-        let num_pages = (num_vals * 8) * 3 / 0x10_000 + 1;
-        let mut me = ModEmitter::from_configs(num_pages, 128);
-
-        let key_bytes: Vec<u8> = (0..num_vals)
-            .map(|i| format!("{:0>width$}", i, width = 8))
-            .flat_map(|s| s.into_bytes().into_iter())
-            .collect();
-
-        let val_bytes: Vec<u8> = (0..num_vals)
-            .map(|_| initial.get_payload().to_le_bytes())
-            .flat_map(|a| a.into_iter())
-            .collect();
-
-        let slices: Vec<u8> = (0..num_vals)
-            .map(|ptr| {
-                let slice = 8_u64 << 32 | (ptr * 8) as u64;
-                slice.to_le_bytes()
-            })
-            .flat_map(|s| s.into_iter())
-            .collect();
+        // It makes no sense to have different lengths, as host fn takes just
+        // a single length anyway, so it would just end up reading garbage from
+        // linear memory instead of failing (so there is nothing meaningful to
+        // test here).
+        assert!(keys.len() == vals.len());
+        // Linear-memory layout: [key_bytes][val_bytes][key_slices].
+        let (key_bytes, key_slices) = encode_map_keys_for_linear_memory(keys, 0);
+        let val_bytes = encode_map_vals_for_linear_memory(vals);
+        let vals_pos = key_bytes.len() as u32;
+        let key_slices_pos = vals_pos + val_bytes.len() as u32;
 
         let bytes: Vec<u8> = key_bytes
             .into_iter()
             .chain(val_bytes)
-            .chain(slices)
+            .chain(key_slices)
             .collect();
 
+        let num_pages = bytes.len() as u32 / 0x10_000 + 1;
+        let mut me = ModEmitter::from_configs(num_pages, 128);
         me.define_data_segment(0, bytes);
         let mut fe = me.func(Arity(0), 0);
 
-        let vals_pos = U32Val::from(num_vals * 8);
-        let keys_pos = U32Val::from(num_vals * 16);
-        fe.map_new_from_linear_memory(keys_pos, vals_pos, U32Val::from(num_vals));
+        if sparse {
+            fe.sparse_map_new_from_linear_memory(
+                U32Val::from(key_slices_pos),
+                U32Val::from(vals_pos),
+                U32Val::from(keys.len() as u32),
+            );
+        } else {
+            fe.map_new_from_linear_memory(
+                U32Val::from(key_slices_pos),
+                U32Val::from(vals_pos),
+                U32Val::from(keys.len() as u32),
+            );
+        }
+
+        fe.finish_and_export("test").finish()
+    }
+
+    pub(crate) fn wasm_module_with_large_map_from_linear_memory(num_vals: u32) -> Vec<u8> {
+        let keys: Vec<String> = (0..num_vals).map(|i| format!("{:0>8}", i)).collect();
+        let key_refs: Vec<&str> = keys.iter().map(|k| k.as_str()).collect();
+        let vals: Vec<Val> = (0..num_vals).map(|i| U32Val::from(i).to_val()).collect();
+        wasm_module_with_map_from_linear_memory(&key_refs, &vals, false)
+    }
+
+    /// Creates a Wasm module with a function `test` that creates a map from
+    /// given keys and values, then unpacks it into linear using the provided
+    /// query keys, and returns the unpacked values as a `VecObject`.
+    /// The `sparse` parameter determines whether `map_unpack_to_linear_memory`
+    /// or `sparse_map_unpack_to_linear_memory` will be used for unpacking.
+    /// The created map is always 'dense' (i.e. it is created with
+    /// `map_new_from_linear_memory` and stores `Void` values explicitly).
+    pub(crate) fn wasm_module_calling_map_unpack_to_linear_memory(
+        map_keys: &[&str],
+        map_vals: &[Val],
+        query_keys: &[&str],
+        sparse: bool,
+    ) -> Vec<u8> {
+        assert!(map_keys.len() == map_vals.len());
+        let map_len = map_keys.len() as u32;
+        let query_len = query_keys.len() as u32;
+
+        // Linear-memory layout (byte offsets, in order):
+        //   [map_key_bytes][map_val_bytes][map_key_slices]
+        //   [query_key_bytes][query_key_slices]
+        //   [out_val_bytes]
+        let (map_key_bytes, map_key_slices) = encode_map_keys_for_linear_memory(map_keys, 0);
+        let map_val_bytes = encode_map_vals_for_linear_memory(map_vals);
+        let map_vals_pos = map_key_bytes.len() as u32;
+        let map_slices_pos = map_vals_pos + map_val_bytes.len() as u32;
+
+        let query_bytes_pos = map_slices_pos + map_key_slices.len() as u32;
+        let (query_key_bytes, query_key_slices) =
+            encode_map_keys_for_linear_memory(query_keys, query_bytes_pos);
+        let query_slices_pos = query_bytes_pos + query_key_bytes.len() as u32;
+        let out_pos = query_slices_pos + query_key_slices.len() as u32;
+
+        let bytes: Vec<u8> = map_key_bytes
+            .into_iter()
+            .chain(map_val_bytes)
+            .chain(map_key_slices)
+            .chain(query_key_bytes)
+            .chain(query_key_slices)
+            .collect();
+
+        let num_pages = bytes.len() as u32 / 0x10_000 + 1;
+        let mut me = ModEmitter::from_configs(num_pages, 128);
+        me.define_data_segment(0, bytes);
+
+        // Create the map from linear memory and store it in a local variable.
+        let mut fe = me.func(Arity(0), 1);
+        fe.map_new_from_linear_memory(
+            U32Val::from(map_slices_pos),
+            U32Val::from(map_vals_pos),
+            U32Val::from(map_len),
+        );
+        let map_local = fe.alloc_and_store_local("MapObject");
+
+        // Unpack the requested keys into the output region.
+        if sparse {
+            fe.sparse_map_unpack_to_linear_memory(
+                map_local,
+                U32Val::from(query_slices_pos),
+                U32Val::from(out_pos),
+                U32Val::from(query_len),
+            );
+        } else {
+            fe.map_unpack_to_linear_memory(
+                map_local,
+                U32Val::from(query_slices_pos),
+                U32Val::from(out_pos),
+                U32Val::from(query_len),
+            );
+        }
+        fe.drop();
+
+        // Return the unpacked values as a vector read back from the output
+        // region.
+        fe.vec_new_from_linear_memory(U32Val::from(out_pos), U32Val::from(query_len));
 
         fe.finish_and_export("test").finish()
     }

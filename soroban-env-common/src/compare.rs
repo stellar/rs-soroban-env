@@ -195,7 +195,8 @@ impl<E: Env> Compare<Val> for E {
                 | Tag::VecObject
                 | Tag::MapObject
                 | Tag::AddressObject
-                | Tag::MuxedAddressObject => Err(self.error_from_error_val(
+                | Tag::MuxedAddressObject
+                | Tag::ExecutableTagObject => Err(self.error_from_error_val(
                     Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError),
                 )),
 

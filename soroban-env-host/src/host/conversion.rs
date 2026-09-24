@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::host_object::{MemHostObjectType, MuxedScAddress};
+use crate::host_object::{ExecutableTag, MemHostObjectType, MuxedScAddress};
 use crate::{
     budget::{AsBudget, DepthLimiter},
     crypto::metered_scalar::MeteredScalar,
@@ -13,8 +13,8 @@ use crate::{
     xdr::{
         self, int128_helpers, AccountId, ContractCostType, ContractDataDurability, ContractId,
         Hash, Int128Parts, Int256Parts, LedgerKey, LedgerKeyContractData, MuxedEd25519Account,
-        PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScSymbol,
-        ScVal, ScVec, UInt128Parts, UInt256Parts, Uint256, VecM,
+        PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScString,
+        ScSymbol, ScVal, ScVec, UInt128Parts, UInt256Parts, Uint256, VecM,
     },
     AddressObject, BytesObject, Convert, Host, HostError, Object, ScValObjRef, ScValObject, Symbol,
     SymbolObject, TryFromVal, TryIntoVal, U256Val, U32Val, Val, VecObject,
@@ -224,10 +224,7 @@ impl Host {
         &self,
     ) -> Result<Option<BytesObject>, HostError> {
         if let Some(id) = self.get_current_contract_id_opt_internal()? {
-            let obj = self.add_host_object::<ScBytes>(
-                self.metered_slice_to_vec(id.0.as_slice())?.try_into()?,
-            )?;
-            Ok(Some(obj))
+            Ok(Some(id.0.as_slice().try_into_val(self)?))
         } else {
             Ok(None)
         }
@@ -534,6 +531,9 @@ impl Host {
                         }
                         ScVal::Address(addr.0.metered_clone(self)?)
                     }
+                    HostObject::ExecutableTag(et) => {
+                        ScVal::ExecutableTag(et.0.metered_clone(self)?)
+                    }
                 };
                 Ok(ScValObject::unchecked_from_val(val))
             })
@@ -638,6 +638,10 @@ impl Host {
                 }
                 // ,
             }
+
+            ScVal::ExecutableTag(s) => Ok(self
+                .add_host_object(ExecutableTag(s.metered_clone(self)?))?
+                .into()),
 
             // None of the following cases should have made it into this function, they
             // are excluded by the ScValObjRef::classify function.
@@ -814,5 +818,39 @@ impl Host {
                 )),
             }
         })
+    }
+}
+
+// The following TryFromVal implementations are specifically cherry-picked for
+// the types that we use in `err!` macros, as we can't use bespoke
+// `add_host_object` logic there and we also can't create `Val`s beforehand as
+// that would be wasteful.
+// The implementations are metered and perfectly safe to use in any context
+// though.
+impl TryFromVal<Host, &Hash> for Val {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, v: &&Hash) -> Result<Self, Self::Error> {
+        let obj =
+            env.add_host_object::<ScBytes>(env.metered_slice_to_vec(v.0.as_slice())?.try_into()?)?;
+        Ok(obj.to_val())
+    }
+}
+
+impl TryFromVal<Host, &ScString> for Val {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, v: &&ScString) -> Result<Self, Self::Error> {
+        let s = v.metered_clone(env)?;
+        Ok(env.add_host_object(s)?.to_val())
+    }
+}
+
+impl TryFromVal<Host, &ScAddress> for Val {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, v: &&ScAddress) -> Result<Self, Self::Error> {
+        let addr = v.metered_clone(env)?;
+        Ok(env.add_host_object(addr)?.to_val())
     }
 }

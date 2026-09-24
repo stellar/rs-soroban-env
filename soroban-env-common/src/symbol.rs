@@ -129,6 +129,14 @@ impl<E: Env> TryFromVal<E, &str> for Symbol {
     }
 }
 
+impl<E: Env> TryFromVal<E, Symbol> for Symbol {
+    type Error = crate::Error;
+
+    fn try_from_val(_env: &E, v: &Symbol) -> Result<Self, Self::Error> {
+        Ok(*v)
+    }
+}
+
 impl<E: Env> Compare<Symbol> for E {
     type Error = E::Error;
     fn compare(&self, a: &Symbol, b: &Symbol) -> Result<Ordering, Self::Error> {

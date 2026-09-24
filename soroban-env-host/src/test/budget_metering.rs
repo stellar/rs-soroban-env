@@ -4,12 +4,14 @@ use crate::{
         metered_clone::{MeteredClone, MeteredIterator},
         metered_xdr::metered_write_xdr,
     },
-    xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
-    Env, ErrorHandler, Host, HostError, Symbol, Val,
+    xdr::{
+        ContractCostType, HostFunction, InvokeContractArgs, ScAddress, ScMap, ScMapEntry, ScVal,
+    },
+    AddressObject, Env, ErrorHandler, Host, HostError, Symbol, Val,
 };
 use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-use soroban_test_wasms::VEC;
+use soroban_test_wasms::{ADD_I32, ALLOC, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
@@ -119,7 +121,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     })?;
     assert_eq!(
         (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
-        (4005, 24030, 65536, 73734)
+        (4005, 24030, 65536, 73686)
     );
 
     // giving it the exact required amount will succeed
@@ -304,7 +306,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     /* MemAlloc          |            8x3      +    24x3              +             128x6                                                    = 864 */
     /* MemCpy            |  24    +   8x3      +    24x3              +             128x6                                                    = 888 */
     //*********************************************************************************************************************************************/
-    expect!["864"].assert_eq(
+    expect!["1248"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::MemAlloc)?
             .inputs
@@ -314,7 +316,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     );
     // 600 = 576 + 24 is correct because we need to copy all the memory allocated, as well as the
     // memory layout of the top level type (Vec).
-    expect!["888"].assert_eq(
+    expect!["1272"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::MemCpy)?
             .inputs
@@ -441,33 +443,33 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
 
     let expected = expect![[r#"
         ===============================================================================================================================================================================
-        Cpu limit: 100000000; used: 68564977
-        Mem limit: 41943040; used: 725156
+        Cpu limit: 100000000; used: 68471938
+        Mem limit: 41943040; used: 727679
         ===============================================================================================================================================================================
         CostType                           iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec                       246            None           984            0              4                   0                   0                   0                   
         MemAlloc                           1              Some(152)      453            168            434                 16                  16                  128                 
         MemCpy                             1              Some(65)       50             0              42                  16                  0                   0                   
         MemCmp                             1              Some(74)       53             0              44                  16                  0                   0                   
-        DispatchHostFunction               176            None           54560          0              310                 0                   0                   0                   
-        VisitObject                        97             None           5917           0              61                  0                   0                   0                   
-        ValSer                             1              Some(49)       241            389            230                 29                  242                 384                 
-        ValDeser                           1              Some(103)      62271          309            59052               4001                0                   384                 
-        ComputeSha256Hash                  1              Some(193)      14310          0              3738                7012                0                   0                   
-        ComputeEd25519PubKey               226            None           9097178        0              40253               0                   0                   0                   
-        VerifyEd25519Sig                   1              Some(227)      384738         0              377524              4068                0                   0                   
-        VmInstantiation                    1              Some(147)      503770         135880         451626              45405               130065              5064                
+        DispatchHostFunction               176            None           51920          0              295                 0                   0                   0                   
+        VisitObject                        97             None           5820           0              60                  0                   0                   0                   
+        ValSer                             1              Some(49)       230            389            221                 26                  242                 384                 
+        ValDeser                           1              Some(103)      3846           309            331                 4369                0                   384                 
+        ComputeSha256Hash                  1              Some(193)      14210          0              3636                7013                0                   0                   
+        ComputeEd25519PubKey               226            None           9097856        0              40256               0                   0                   0                   
+        VerifyEd25519Sig                   1              Some(227)      384749         0              377551              4059                0                   0                   
+        VmInstantiation                    1              Some(147)      469979         138403         417482              45712               132773              4903                
         VmCachedInstantiation              1              Some(147)      41870          70869          41142               634                 69472               1217                
-        InvokeVmFunction                   47             None           91556          658            1948                0                   14                  0                   
-        ComputeKeccak256Hash               1              Some(1)        3812           0              3766                5969                0                   0                   
-        DecodeEcdsaCurve256Sig             1              None           710            0              710                 0                   0                   0                   
-        RecoverEcdsaSecp256k1Key           1              None           2315295        181            2315295             0                   181                 0                   
-        Int256AddSub                       1              None           4404           99             4404                0                   99                  0                   
-        Int256Mul                          1              None           4947           99             4947                0                   99                  0                   
-        Int256Div                          1              None           4911           99             4911                0                   99                  0                   
-        Int256Pow                          1              None           4286           99             4286                0                   99                  0                   
-        Int256Shift                        1              None           913            99             913                 0                   99                  0                   
-        ChaCha20DrawBytes                  1              Some(1)        1061           0              1058                501                 0                   0                   
+        InvokeVmFunction                   47             None           91415          658            1945                0                   14                  0                   
+        ComputeKeccak256Hash               1              Some(1)        6527           0              6481                5943                0                   0                   
+        DecodeEcdsaCurve256Sig             1              None           711            0              711                 0                   0                   0                   
+        RecoverEcdsaSecp256k1Key           1              None           2314804        181            2314804             0                   181                 0                   
+        Int256AddSub                       1              None           4176           99             4176                0                   99                  0                   
+        Int256Mul                          1              None           4716           99             4716                0                   99                  0                   
+        Int256Div                          1              None           4680           99             4680                0                   99                  0                   
+        Int256Pow                          1              None           4256           99             4256                0                   99                  0                   
+        Int256Shift                        1              None           884            99             884                 0                   99                  0                   
+        ChaCha20DrawBytes                  1              Some(1)        1062           0              1059                502                 0                   0                   
         ParseWasmInstructions              1              Some(1)        73275          17614          73077               25410               17564               6457                
         ParseWasmFunctions                 1              Some(1)        4224           370            0                   540752              0                   47464               
         ParseWasmGlobals                   1              Some(1)        1377           104            0                   176363              0                   13420               
@@ -534,8 +536,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 70
-        Shadow cpu limit: 100000000; used: 68564977
-        Shadow mem limit: 41943040; used: 725156
+        Shadow cpu limit: 100000000; used: 68471938
+        Shadow mem limit: 41943040; used: 727679
         ===============================================================================================================================================================================
 
     "#]];
@@ -550,5 +552,129 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         host.as_budget().get_shadow_mem_bytes_consumed()?
     );
 
+    Ok(())
+}
+
+// Invoke a contract through the production `invoke_function` entry, which
+// pushes a `Frame::HostFunction` which owns the outermost VM's linear memory to
+// be refunded (unlike `host.call`)
+fn invoke_via_host_function(
+    host: &Host,
+    contract: AddressObject,
+    func: &str,
+    args: Vec<ScVal>,
+) -> Result<ScVal, HostError> {
+    let contract_id = host.contract_id_from_address(contract)?;
+    host.invoke_function(HostFunction::InvokeContract(InvokeContractArgs {
+        contract_address: ScAddress::Contract(contract_id),
+        function_name: func.try_into().unwrap(),
+        args: args.try_into().unwrap(),
+    }))
+}
+
+#[test]
+fn mem_refund_lowers_consumed_and_saturates() -> Result<(), HostError> {
+    // A purely linear `MemAlloc` model (charge == input bytes) keeps the
+    // arithmetic exact, and it is the only cost type with a non-zero model, so
+    // nothing else perturbs `mem_bytes`.
+    let host = Host::test_host()
+        .test_budget(u64::MAX, u64::MAX)
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    let budget = host.as_budget();
+
+    budget.charge(ContractCostType::MemAlloc, Some(1000))?;
+    budget.charge(ContractCostType::MemAlloc, Some(500))?;
+    assert_eq!(budget.get_mem_bytes_net()?, 1500);
+    assert_eq!(budget.get_mem_bytes_consumed()?, 1500); // peak
+
+    // The refund lowers the net but leaves the peak (high-water mark) intact.
+    budget.refund_mem_bytes(400)?;
+    assert_eq!(budget.get_mem_bytes_net()?, 1100);
+    assert_eq!(budget.get_mem_bytes_consumed()?, 1500);
+
+    // Refunding more than is outstanding saturates the net at zero, never
+    // underflows; the peak is still unaffected.
+    budget.refund_mem_bytes(10_000)?;
+    assert_eq!(budget.get_mem_bytes_net()?, 0);
+    assert_eq!(budget.get_mem_bytes_consumed()?, 1500);
+    Ok(())
+}
+
+#[test]
+fn vm_linear_memory_refunded_on_teardown() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let contract = host.register_test_contract_wasm(ALLOC);
+    // Linear `MemAlloc` model (charge == bytes), and a clean memory accounting
+    // slate so the measurements below reflect only this invocation.
+    let host =
+        host.test_budget(u64::MAX, u64::MAX)
+            .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    host.as_budget().reset_tracker()?;
+
+    let res = invoke_via_host_function(&host, contract, "sum", vec![ScVal::U32(128)])?;
+    assert_eq!(res, ScVal::U32(8128));
+
+    let (net, peak, linear_mem, memalloc_charged) = host.with_budget(|budget| {
+        Ok((
+            budget.get_mem_bytes_net()?,
+            budget.get_mem_bytes_consumed()?,
+            budget.get_wasm_mem_alloc()?,
+            budget.get_tracker(ContractCostType::MemAlloc)?.mem,
+        ))
+    })?;
+
+    // The VM really did allocate (and grow) linear memory.
+    assert!(linear_mem > 0);
+    // Under this 1-byte-per-byte model the VM's whole linear-memory charge is
+    // `linear_mem`, and it is refunded from the net at frame pop: what remains
+    // counted in the net is exactly the non-VM `MemAlloc`.
+    assert_eq!(net + linear_mem, memalloc_charged);
+    // The peak (what a caller must provision) still reflects the transient VM
+    // memory and sits above the refunded net.
+    assert!(peak >= linear_mem);
+    assert!(net < peak);
+    Ok(())
+}
+
+#[test]
+fn cross_contract_call_refunds_all_vm_linear_memory() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let invoker = host.register_test_contract_wasm(INVOKE_CONTRACT);
+    let adder = host.register_test_contract_wasm(ADD_I32);
+    let host =
+        host.test_budget(u64::MAX, u64::MAX)
+            .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
+    host.as_budget().reset_tracker()?;
+
+    // `add_with(5, 6, adder)` makes INVOKE_CONTRACT call adder.add(5, 6).
+    let adder_id = host.contract_id_from_address(adder)?;
+    let res = invoke_via_host_function(
+        &host,
+        invoker,
+        "add_with",
+        vec![
+            ScVal::I32(5),
+            ScVal::I32(6),
+            ScVal::Address(ScAddress::Contract(adder_id)),
+        ],
+    )?;
+    assert_eq!(res, ScVal::I32(11));
+
+    let (net, peak, linear_mem, memalloc_charged) = host.with_budget(|budget| {
+        Ok((
+            budget.get_mem_bytes_net()?,
+            budget.get_mem_bytes_consumed()?,
+            budget.get_wasm_mem_alloc()?,
+            budget.get_tracker(ContractCostType::MemAlloc)?.mem,
+        ))
+    })?;
+
+    assert!(linear_mem > 0);
+    // Total refunded from the net across both frames equals the combined VM
+    // linear memory.
+    assert_eq!(net + linear_mem, memalloc_charged);
+    // The peak still reflects both VMs' linear memory, above the refunded net.
+    assert!(peak >= linear_mem);
+    assert!(net < peak);
     Ok(())
 }

@@ -4,10 +4,10 @@ use crate::Object;
 
 use super::Symbol;
 use super::{
-    AddressObject, Bool, BytesObject, ContractTtlExtension, DurationObject, Error, I128Object,
-    I256Object, I256Val, I64Object, MapObject, MuxedAddressObject, StorageType, StringObject,
-    SymbolObject, TimepointObject, U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val,
-    VecObject, Void,
+    AddressObject, Bool, BytesObject, ContractTtlExtension, DurationObject, Error,
+    ExecutableTagObject, I128Object, I256Object, I256Val, I64Object, MapObject, MuxedAddressObject,
+    StorageType, StringObject, SymbolObject, TimepointObject, U128Object, U256Object, U256Val,
+    U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use crate::xdr::{ScErrorCode, ScErrorType};
 
@@ -209,6 +209,26 @@ pub trait EnvBase: Sized + Clone {
         vals: &mut [Val],
     ) -> Result<Void, Self::Error>;
 
+    /// Form a new `Map` host object from a slice of symbol-names and a slice of
+    /// values, skipping any key-value pair whose value is `Void`.
+    /// Keys must be in sorted order.
+    fn sparse_map_new_from_slices(
+        &self,
+        keys: &[&str],
+        vals: &[Val],
+    ) -> Result<MapObject, Self::Error>;
+
+    /// Unpack a `Map` host object to a slice of `Val`s, writing the value for
+    /// each provided key, or `Void` when the key is absent from the map. Keys
+    /// must be in sorted order. Map keys that are not among the provided keys
+    /// are ignored.
+    fn sparse_map_unpack_to_slice(
+        &self,
+        map: MapObject,
+        keys: &[&str],
+        vals: &mut [Val],
+    ) -> Result<Void, Self::Error>;
+
     /// Form a new `Vec` host object from a slice of values.
     fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error>;
 
@@ -271,6 +291,7 @@ impl_checkedenvarg_for_val_or_wrapper!(DurationObject);
 impl_checkedenvarg_for_val_or_wrapper!(TimepointObject);
 impl_checkedenvarg_for_val_or_wrapper!(SymbolObject);
 impl_checkedenvarg_for_val_or_wrapper!(StringObject);
+impl_checkedenvarg_for_val_or_wrapper!(ExecutableTagObject);
 
 impl_checkedenvarg_for_val_or_wrapper!(VecObject);
 impl_checkedenvarg_for_val_or_wrapper!(MapObject);

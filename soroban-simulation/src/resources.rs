@@ -134,7 +134,6 @@ pub(crate) fn simulate_extend_ttl_op_resources(
 ) -> Result<(SorobanResources, Vec<LedgerEntryRentChange>)> {
     let mut rent_changes = Vec::<LedgerEntryRentChange>::with_capacity(keys_to_extend.len());
     let mut extended_keys = Vec::<LedgerKey>::with_capacity(keys_to_extend.len());
-    let budget = network_config.create_budget()?;
     let new_live_until_ledger = current_ledger_seq + extend_to;
     for key in keys_to_extend {
         let durability = get_key_durability(key).ok_or_else(|| anyhow!("Can't extend TTL for ledger entry with key `{:?}`. Only entries with TTL (contract data or code entries) can have it extended", key))?;
@@ -154,6 +153,7 @@ pub(crate) fn simulate_extend_ttl_op_resources(
             "Can't extend for an expired entry with key: {key:?}. The entry must be restored before it can be extended."
         );
         extended_keys.push(key.clone());
+        let budget = network_config.create_budget()?;
         let entry_xdr_size = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
         let entry_size: u32 = entry_size_for_rent(&budget, &entry, entry_xdr_size)?;
         rent_changes.push(LedgerEntryRentChange {
@@ -192,8 +192,6 @@ pub(crate) fn simulate_restore_op_resources(
     let mut restored_bytes = 0_u32;
     let mut rent_changes: Vec<LedgerEntryRentChange> = Vec::with_capacity(keys_to_restore.len());
     let mut restored_keys = Vec::<LedgerKey>::with_capacity(keys_to_restore.len());
-    let budget = network_config.create_budget()?;
-
     for key in keys_to_restore {
         let durability = get_key_durability(key);
         ensure!(
@@ -214,6 +212,7 @@ pub(crate) fn simulate_restore_op_resources(
         }
         restored_keys.push(key.clone());
 
+        let budget = network_config.create_budget()?;
         let entry_xdr_size: u32 = entry.to_xdr(DEFAULT_XDR_RW_LIMITS)?.len().try_into()?;
         let entry_rent_size: u32 = entry_size_for_rent(&budget, &entry, entry_xdr_size)?;
         restored_bytes = restored_bytes.saturating_add(entry_xdr_size);
