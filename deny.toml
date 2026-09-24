@@ -246,10 +246,6 @@ skip = [
     { name = "hashbrown", version = "=0.14.1" },
     { name = "syn", version = "=1.0.109" },
     { name = "crate-git-revision", version = "=0.0.6" },
-    # TEMP CAP-0084: stellar-xdr still pulls stellar-strkey 0.0.13 from crates.io
-    # while the host uses the git pin for the muxed contract strkey. Remove once
-    # both are on the released stellar-strkey.
-    { name = "stellar-strkey", version = "=0.0.13" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
