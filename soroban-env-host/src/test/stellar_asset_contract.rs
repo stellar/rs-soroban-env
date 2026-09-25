@@ -1032,6 +1032,54 @@ fn test_cap_84_issuer_transfer_to_muxed_contract_emits_mint() {
 }
 
 #[test]
+fn test_cap_84_muxed_contract_rejected_by_mint_and_transfer_from() {
+    use crate::builtin_contracts::testutils::muxed_contract_address;
+
+    // CAP-84 only extends `transfer`. `mint` and `transfer_from` keep taking a
+    // plain `Address` destination, so a muxed contract is rejected at argument
+    // conversion, before any SAC logic or auth runs.
+    let test = StellarAssetContractTest::setup(function_name!());
+    let contract = test.default_stellar_asset_contract();
+    let user = TestSigner::account(&test.user_key);
+    test.create_default_account(&user);
+    test.create_default_trustline(&user);
+
+    let dst_contract_id = generate_bytes_array(&test.host);
+    let muxed_dst = muxed_contract_address(&test.host, dst_contract_id, 0xCAFE);
+
+    let call = |function_name: &str,
+                args: crate::builtin_contracts::base_types::Vec|
+     -> Result<Val, HostError> {
+        test.host.call(
+            contract.address.clone().into(),
+            Symbol::try_from_val(&test.host, &function_name).unwrap(),
+            args.into(),
+        )
+    };
+
+    let res = call("mint", test_vec![&test.host, muxed_dst.clone(), 1_i128]);
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+    ));
+
+    let res = call(
+        "transfer_from",
+        test_vec![
+            &test.host,
+            user.address(&test.host),
+            user.address(&test.host),
+            muxed_dst,
+            1_i128
+        ],
+    );
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Value, ScErrorCode::UnexpectedType)
+    ));
+}
+
+#[test]
 fn test_native_self_transfer() {
     let test = StellarAssetContractTest::setup(function_name!());
 
