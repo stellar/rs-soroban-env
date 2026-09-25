@@ -109,6 +109,9 @@ allow_apis = [
 
 [pkg.rand]
 allow_unsafe = true
+allow_apis = [
+    "rand",
+]
 
 [pkg.backtrace]
 allow_apis = [
