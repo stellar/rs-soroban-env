@@ -517,9 +517,32 @@ fn check_muxed_address_is_not_allowed_as_storage_key(muxed_address: MuxedScAddre
     let host = Host::test_host_with_recording_footprint();
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE_WITH_VALS);
     let muxed_address_val = host.add_host_object(muxed_address.clone()).unwrap();
+    // A muxed address nested inside a container is not allowed as a storage
+    // key either.
+    let nested_key_val: crate::Val = test_vec![&host, muxed_address_val]
+        .try_into_val(&host)
+        .unwrap();
 
     let run_test = |storage: &str| {
-        // Muxed address can't be used as a storage key.
+        // Muxed address can't be used as a storage key, directly or nested.
+        assert!(HostError::result_matches_err(
+            host.call(
+                contract_id,
+                storage_fn_name(&host, "put", storage),
+                test_vec![&host, nested_key_val, 1234_u64].into(),
+            ),
+            (ScErrorType::Storage, ScErrorCode::InvalidInput)
+        ));
+        if storage != "instance" {
+            assert!(HostError::result_matches_err(
+                host.call(
+                    contract_id,
+                    storage_fn_name(&host, "get", storage),
+                    test_vec![&host, nested_key_val].into(),
+                ),
+                (ScErrorType::Storage, ScErrorCode::InvalidInput)
+            ));
+        }
         if storage != "instance" {
             // For instance storage we allow checking for presence of
             // MuxedAddress as ledger key, so there won't be a storage error
