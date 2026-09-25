@@ -12,9 +12,9 @@ use crate::{
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     xdr::{
         self, int128_helpers, AccountId, ContractCostType, ContractDataDurability, ContractId,
-        Hash, Int128Parts, Int256Parts, LedgerKey, LedgerKeyContractData, MuxedEd25519Account,
-        PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScString,
-        ScSymbol, ScVal, ScVec, UInt128Parts, UInt256Parts, Uint256, VecM,
+        Hash, Int128Parts, Int256Parts, LedgerKey, LedgerKeyContractData, MuxedContract,
+        MuxedEd25519Account, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap,
+        ScMapEntry, ScString, ScSymbol, ScVal, ScVec, UInt128Parts, UInt256Parts, Uint256, VecM,
     },
     AddressObject, BytesObject, Convert, Host, HostError, Object, ScValObjRef, ScValObject, Symbol,
     SymbolObject, TryFromVal, TryIntoVal, U256Val, U32Val, Val, VecObject,
@@ -629,6 +629,9 @@ impl Host {
                     ScAddress::MuxedAccount(_) => Ok(self
                         .add_host_object(MuxedScAddress(addr.metered_clone(self)?))?
                         .into()),
+                    ScAddress::MuxedContract(_) => Ok(self
+                        .add_host_object(MuxedScAddress(addr.metered_clone(self)?))?
+                        .into()),
                     _ => Err(self.err(
                         ScErrorType::Object,
                         ScErrorCode::UnexpectedType,
@@ -697,8 +700,8 @@ impl Host {
         &self,
         muxed_addr: &MuxedScAddress,
     ) -> Result<String, HostError> {
-        // Approximate the strkey encoding cost for muxed accounts
-        // (32-byte key + 8-byte id + 3 bytes for version/checksum)
+        // Approximate the strkey encoding cost for muxed addresses
+        // (32-byte key/hash + 8-byte id + 3 bytes for version/checksum)
         const MUXED_PAYLOAD_LEN: u64 = 32 + 8 + 3;
         Vec::<u8>::charge_bulk_init_cpy(
             MUXED_PAYLOAD_LEN + (MUXED_PAYLOAD_LEN * 8).div_ceil(5),
@@ -714,6 +717,13 @@ impl Host {
                 );
                 Ok(strkey.to_string().as_str().to_string())
             }
+            ScAddress::MuxedContract(muxed_contract) => {
+                let strkey = stellar_strkey::Strkey::MuxedContract(stellar_strkey::MuxedContract {
+                    id: muxed_contract.id,
+                    contract_id: muxed_contract.contract_id.0 .0.metered_clone(self)?,
+                });
+                Ok(strkey.to_string().as_str().to_string())
+            }
             _ => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::InternalError,
@@ -725,7 +735,8 @@ impl Host {
 
     /// Parses a strkey from a String or Bytes object into an ScAddress.
     ///
-    /// When `allow_muxed` is true, accepts Account, Contract, and MuxedAccount strkeys.
+    /// When `allow_muxed` is true, accepts Account, Contract, MuxedAccount and
+    /// MuxedContract strkeys.
     /// When `allow_muxed` is false, only accepts Account and Contract strkeys.
     pub(crate) fn strkey_to_scaddress(
         &self,
@@ -756,7 +767,7 @@ impl Host {
             };
             // Expected strkey lengths:
             // - Account/Contract: PAYLOAD_LEN = 32 + 3 = 35 bytes → 56 chars in base32
-            // - Muxed account: MUXED_PAYLOAD_LEN = 32 + 8 + 3 = 43 bytes → 69 chars in base32
+            // - Muxed account/contract: MUXED_PAYLOAD_LEN = 32 + 8 + 3 = 43 bytes → 69 chars in base32
             const PAYLOAD_LEN: u64 = 32 + 3;
             const MUXED_PAYLOAD_LEN: u64 = 32 + 8 + 3;
             let expected_key_len = (PAYLOAD_LEN * 8).div_ceil(5);
@@ -808,6 +819,12 @@ impl Host {
                     Ok(ScAddress::MuxedAccount(MuxedEd25519Account {
                         id: m.id,
                         ed25519: Uint256(m.ed25519),
+                    }))
+                }
+                stellar_strkey::Strkey::MuxedContract(m) if allow_muxed => {
+                    Ok(ScAddress::MuxedContract(MuxedContract {
+                        id: m.id,
+                        contract_id: ContractId(Hash(m.contract_id)),
                     }))
                 }
                 _ => Err(self.err(

@@ -3637,7 +3637,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Val, Self::Error> {
         let sc_addr = self.strkey_to_scaddress(strkey_obj, true)?;
         match &sc_addr {
-            ScAddress::MuxedAccount(_) => {
+            ScAddress::MuxedAccount(_) | ScAddress::MuxedContract(_) => {
                 Ok(self.add_host_object(MuxedScAddress(sc_addr))?.to_val())
             }
             _ => Ok(self.add_host_object(sc_addr)?.to_val()),
@@ -3656,6 +3656,9 @@ impl VmCallerEnv for Host {
                 )));
                 Ok(address)
             }
+            ScAddress::MuxedContract(muxed_contract) => Ok(ScAddress::Contract(
+                muxed_contract.contract_id.metered_clone(self)?,
+            )),
             _ => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::InternalError,
@@ -3673,6 +3676,7 @@ impl VmCallerEnv for Host {
     ) -> Result<U64Val, Self::Error> {
         let mux_id = self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
             ScAddress::MuxedAccount(muxed_account) => Ok(muxed_account.id),
+            ScAddress::MuxedContract(muxed_contract) => Ok(muxed_contract.id),
             _ => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::InternalError,

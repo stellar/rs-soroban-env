@@ -46,5 +46,7 @@
   "  44 ret strkey_to_address -> Err(Error(Value, InvalidInput))": "cpu:28444, mem:4130, mem_peak:4130",
   "  45 call strkey_to_address(String(obj#45))": "cpu:28886, mem:4210, mem_peak:4210, objs:-/23@65755561",
   "  46 ret strkey_to_address -> Err(Error(Value, InvalidInput))": "cpu:29006",
-  "  47 end": "cpu:29006, mem:4210, mem_peak:4210, prngs:-/-, objs:-/23@65755561, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  47 call strkey_to_address(String(obj#47))": "cpu:29448, mem:4290, mem_peak:4290, objs:-/24@5d519e90",
+  "  48 ret strkey_to_address -> Err(Error(Value, InvalidInput))": "cpu:29568",
+  "  49 end": "cpu:29568, mem:4290, mem_peak:4290, prngs:-/-, objs:-/24@5d519e90, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

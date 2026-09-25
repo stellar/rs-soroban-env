@@ -149,18 +149,6 @@ allow_unsafe = true
 [pkg.subtle]
 allow_unsafe = true
 
-[pkg.byteorder]
-allow_unsafe = true
-
-[pkg.hash32]
-allow_unsafe = true
-
-[pkg.stable_deref_trait]
-allow_unsafe = true
-
-[pkg.stellar-strkey]
-allow_unsafe = true
-
 [pkg.zeroize]
 allow_unsafe = true
 
@@ -258,14 +246,6 @@ allow_unsafe = true
 [pkg.platforms]
 build.allow_apis = [
     "env",
-]
-
-[pkg.heapless]
-allow_unsafe = true
-build.allow_apis = [
-    "env",
-    "fs",
-    "process",
 ]
 
 [pkg.tracking-allocator]
@@ -555,6 +535,26 @@ build.allow_apis = [
 allow_unsafe = true
 
 [pkg.data-encoding]
+allow_unsafe = true
+
+[pkg.heapless]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.stellar-strkey]
+allow_unsafe = true
+
+[pkg.byteorder]
+allow_unsafe = true
+
+[pkg.hash32]
+allow_unsafe = true
+
+[pkg.stable_deref_trait]
 allow_unsafe = true
 
 [pkg.ark-ff]

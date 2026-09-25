@@ -1,8 +1,8 @@
 use crate::{
     host_object::MuxedScAddress,
     xdr::{
-        AccountId, ClaimableBalanceId, ContractId, Hash, MuxedEd25519Account, PoolId, PublicKey,
-        ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString, ScVal, Uint256,
+        AccountId, ClaimableBalanceId, ContractId, Hash, MuxedContract, MuxedEd25519Account,
+        PoolId, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString, ScVal, Uint256,
     },
     AddressObject, Compare, Env, Host, HostError, MuxedAddressObject, StringObject, Val,
 };
@@ -48,6 +48,29 @@ fn test_muxed_address_to_components_conversion() {
         )))
     );
     assert_eq!(mux_id_val, ScVal::U64(123));
+}
+
+#[test]
+fn test_cap_84_muxed_contract_to_components_conversion() {
+    use crate::xdr::MuxedContract;
+    let host = observe_host!(Host::test_host());
+    let muxed_address_obj = host
+        .add_host_object(MuxedScAddress(ScAddress::MuxedContract(MuxedContract {
+            id: 456,
+            contract_id: ContractId(Hash([20; 32])),
+        })))
+        .unwrap();
+    let address = host
+        .get_address_from_muxed_address(muxed_address_obj)
+        .unwrap();
+    let mux_id = host.get_id_from_muxed_address(muxed_address_obj).unwrap();
+    let address_val = host.from_host_val(address.into()).unwrap();
+    let mux_id_val = host.from_host_val(mux_id.into()).unwrap();
+    assert_eq!(
+        address_val,
+        ScVal::Address(ScAddress::Contract(ContractId(Hash([20; 32]))))
+    );
+    assert_eq!(mux_id_val, ScVal::U64(456));
 }
 
 #[test]
@@ -415,6 +438,12 @@ fn invalid_strkey_to_address_conversion() {
             "MA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAACJUQ"
         ))
         .is_err());
+    assert!(host
+        .strkey_to_address(string_to_object(
+            &host,
+            "WA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAAAWWC"
+        ))
+        .is_err());
 }
 
 #[test]
@@ -503,6 +532,89 @@ fn test_muxed_address_strkey_conversions() {
         .compare(&muxed_address_obj, &converted_from_bytes_obj)
         .unwrap()
         .is_eq());
+}
+
+#[test]
+fn test_cap_84_muxed_contract_strkey_conversions() {
+    let host = observe_host!(Host::test_host());
+    let contract_id = [
+        0x3f, 0x0c, 0x34, 0xbf, 0x93, 0xad, 0x0d, 0x99, 0x71, 0xd0, 0x4c, 0xcc, 0x90, 0xf7, 0x05,
+        0x51, 0x1c, 0x83, 0x8a, 0xad, 0x97, 0x34, 0xa4, 0xa2, 0xfb, 0x0d, 0x7a, 0x03, 0xfc, 0x7f,
+        0xe8, 0x9a,
+    ];
+    let muxed_address_obj = host
+        .add_host_object(MuxedScAddress(ScAddress::MuxedContract(MuxedContract {
+            id: 0,
+            contract_id: ContractId(Hash(contract_id)),
+        })))
+        .unwrap();
+
+    let strkey = host
+        .muxed_address_to_strkey(muxed_address_obj.to_val())
+        .unwrap();
+    assert_eq!(
+        extract_string(&host, strkey),
+        "WA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAAAWWC"
+    );
+
+    let converted_val = host.strkey_to_muxed_address(strkey.to_val()).unwrap();
+    let converted_muxed_address_object = MuxedAddressObject::try_from(converted_val).unwrap();
+    assert!((*host)
+        .compare(&muxed_address_obj, &converted_muxed_address_object)
+        .unwrap()
+        .is_eq());
+
+    // Mux id exceeding the maximum signed 64-bit integer.
+    let muxed_address_obj_2 = host
+        .add_host_object(MuxedScAddress(ScAddress::MuxedContract(MuxedContract {
+            id: 9223372036854775808,
+            contract_id: ContractId(Hash(contract_id)),
+        })))
+        .unwrap();
+    let strkey_2 = host
+        .muxed_address_to_strkey(muxed_address_obj_2.to_val())
+        .unwrap();
+    assert_eq!(
+        extract_string(&host, strkey_2),
+        "WA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVAAAAAAAAAAAACWJY"
+    );
+    let converted_val_2 = host.strkey_to_muxed_address(strkey_2.to_val()).unwrap();
+    let converted_muxed_address_object_2 = MuxedAddressObject::try_from(converted_val_2).unwrap();
+    assert!((*host)
+        .compare(&muxed_address_obj_2, &converted_muxed_address_object_2)
+        .unwrap()
+        .is_eq());
+
+    // Test conversion from bytes
+    let converted_from_bytes_val = host
+        .strkey_to_muxed_address(string_to_bytes_object(
+            &host,
+            "WA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAAAWWC",
+        ))
+        .unwrap();
+    let converted_from_bytes_obj = MuxedAddressObject::try_from(converted_from_bytes_val).unwrap();
+    assert!((*host)
+        .compare(&muxed_address_obj, &converted_from_bytes_obj)
+        .unwrap()
+        .is_eq());
+
+    // Invalid muxed contract strkeys (SEP-23 test vectors).
+    for invalid in [
+        // Non-zero unused trailing bit.
+        "WA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAAAWWD",
+        // Invalid length (congruent to 6 mod 8).
+        "WA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAAAWWCA",
+        // Invalid length (44 decoded bytes).
+        "WA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAAAAIOUI",
+        // Invalid algorithm bits.
+        "W47QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAADXHW",
+        // Invalid checksum.
+        "WA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAAAWWA",
+    ] {
+        assert!(host
+            .strkey_to_muxed_address(string_to_object(&host, invalid))
+            .is_err());
+    }
 }
 
 #[test]

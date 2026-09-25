@@ -18,7 +18,8 @@ soroban-builtin-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi", "shallow-val-hash"] }
 wasmi = { workspace = true }
 wasmparser = { workspace = true }
-stellar-strkey = "0.0.18"
+# Must match the stellar-strkey rev pinned by the stellar-xdr dep above.
+stellar-strkey = { version = "0.0.18", git = "https://github.com/stellar/rs-stellar-strkey", rev = "80085faa3e1f851fc28f3b2b941019265d46c314" }
 static_assertions = "1.1.0"
 sha2 = "0.10.8"
 hex-literal = "0.4.1"
