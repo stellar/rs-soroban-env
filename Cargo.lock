@@ -1121,8 +1121,9 @@ dependencies = [
 
 [[package]]
 name = "ml-dsa"
-version = "0.1.0"
-source = "git+https://github.com/RustCrypto/signatures.git?rev=c97a631#c97a63150d6b5d9e4461fe4346f03e5dd8ef5942"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "add6b9d92e496f16f4526d68ff29da1483aba4b119baeab8bed3b9e3544a6f3d"
 dependencies = [
  "crypto-common 0.2.2",
  "ctutils",
