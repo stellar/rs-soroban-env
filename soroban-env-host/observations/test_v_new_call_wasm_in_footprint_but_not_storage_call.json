@@ -1,8 +1,8 @@
 {
-  "   0 begin": "cpu:0, mem:0, mem_peak:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/2@2559d55c, foot:2@a9afff7a, stk:-, auth:-/-",
-  "   1 call vec_new()": "cpu:176688, mem:28582, mem_peak:28582, objs:-/1@10432200, store:-/2@5722d2de",
-  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:177190, mem:28662, mem_peak:28662, objs:-/2@acf0be8f",
+  "   0 begin": "cpu:0, mem:0, mem_peak:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/2@853ff9d4, foot:2@a9afff7a, stk:-, auth:-/-",
+  "   1 call vec_new()": "cpu:178548, mem:28867, mem_peak:28867, objs:-/1@10432200, store:-/2@5722d2de",
+  "   2 ret vec_new -> Ok(Vec(obj#3))": "cpu:179050, mem:28947, mem_peak:28947, objs:-/2@acf0be8f",
   "   3 call call(Address(obj#1), Symbol(test), Vec(obj#3))": "",
-  "   4 ret call -> Err(Error(Storage, MissingValue))": "cpu:181136, mem:29198, mem_peak:29198",
-  "   5 end": "cpu:181136, mem:29198, mem_peak:29198, prngs:-/-, objs:-/2@acf0be8f, vm:-/-, evt:-, store:-/2@5722d2de, foot:2@a9afff7a, stk:-, auth:-/-"
+  "   4 ret call -> Err(Error(Storage, MissingValue))": "cpu:182996, mem:29483, mem_peak:29483",
+  "   5 end": "cpu:182996, mem:29483, mem_peak:29483, prngs:-/-, objs:-/2@acf0be8f, vm:-/-, evt:-, store:-/2@5722d2de, foot:2@a9afff7a, stk:-, auth:-/-"
 }
