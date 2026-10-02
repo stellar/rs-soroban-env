@@ -164,7 +164,7 @@ fn ml_dsa_error_paths() {
             "oversized sig",
         );
 
-        // Context longer than 255 bytes: a length error, so Object, not Crypto.
+        // Context longer than 255 bytes: Crypto/InvalidInput per CAP-0087.
         assert_err_type(
             host_verify_ml_dsa(&host, variant, &pk, msg, &sig, &[0u8; 256]),
             ScErrorType::Crypto,
