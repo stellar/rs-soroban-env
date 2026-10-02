@@ -8,7 +8,15 @@
   "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:3827, mem:4048, mem_peak:4048, objs:-/3@d4b87487",
   "   7 call bytes_new_from_slice(0)": "",
   "   8 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:4790, mem:4144, mem_peak:4144, objs:-/4@f7c5209",
-  "   9 call verify_sig_ml_dsa_44(Bytes(obj#1), Bytes(obj#3), Bytes(obj#5), Bytes(obj#7))": "",
-  "  10 ret verify_sig_ml_dsa_44 -> Ok(Void)": "cpu:1578768, mem:32904, mem_peak:32904",
-  "  11 end": "cpu:1578768, mem:32904, mem_peak:32904, prngs:-/-, objs:-/4@f7c5209, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "   9 call bytes_new_from_slice(1312)": "",
+  "  10 ret bytes_new_from_slice -> Ok(Bytes(obj#9))": "cpu:6081, mem:5552, mem_peak:5552, objs:-/5@995c5a67",
+  "  11 call bytes_new_from_slice(28)": "",
+  "  12 ret bytes_new_from_slice -> Ok(Bytes(obj#11))": "cpu:7050, mem:5676, mem_peak:5676, objs:-/6@81325053",
+  "  13 call bytes_new_from_slice(2420)": "",
+  "  14 ret bytes_new_from_slice -> Ok(Bytes(obj#13))": "cpu:8617, mem:8192, mem_peak:8192, objs:-/7@347f394d",
+  "  15 call bytes_new_from_slice(0)": "",
+  "  16 ret bytes_new_from_slice -> Ok(Bytes(obj#15))": "cpu:9580, mem:8288, mem_peak:8288, objs:-/8@7d9c1174",
+  "  17 call verify_sig_ml_dsa_44(Bytes(obj#9), Bytes(obj#11), Bytes(obj#13), Bytes(obj#15))": "",
+  "  18 ret verify_sig_ml_dsa_44 -> Ok(Void)": "cpu:1583558, mem:37048, mem_peak:37048",
+  "  19 end": "cpu:1583558, mem:37048, mem_peak:37048, prngs:-/-, objs:-/8@7d9c1174, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

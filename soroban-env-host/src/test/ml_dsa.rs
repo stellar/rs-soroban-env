@@ -6,12 +6,8 @@
 //! Wycheproof vector sets is covered by the vector-driven tests further
 //! down, which read from src/test/data/ml_dsa/.
 //!
-//! The host functions are gated at protocol 30 ("next"), the protocol
-//! CAP-0087 targets. Under default features the env/ledger protocol is 29, so
-//! calling them traps with Context/IndexBounds. Behavior tests therefore
-//! early-return unless the ledger protocol supports ML-DSA (i.e. they fully
-//! run under `--features next`). Observation recording is disabled under
-//! `next` (see observe.rs), so only the protocol-gate test is observed.
+//! The host functions are gated at protocol 30, the protocol
+//! CAP-0087 targets.
 
 use crate::{
     crypto::ml_dsa::MlDsaVariant,
@@ -84,21 +80,25 @@ fn assert_err_type(res: Result<crate::Void, HostError>, ty: ScErrorType, ctx: &s
 }
 
 /// The host functions are protocol-gated at 30: below that they must trap
-/// with Context/IndexBounds, at or above they verify successfully. This test
-/// is meaningful (and observed) under default features, and exercises the
-/// success path under `--features next`.
+/// with Context/IndexBounds, at or above they verify successfully.
 #[test]
 fn ml_dsa_protocol_gate() {
     let host = observe_host!(Host::test_host());
-    let msg = b"soroban ml-dsa protocol gate";
-    let (pk, sig) = fixture_for("ML-DSA-44", 1, msg, b"");
-    let res = host_verify_ml_dsa(&host, "ML-DSA-44", &pk, msg, &sig, b"");
-    if ml_dsa_enabled(&host) {
-        assert!(res.is_ok(), "expected success at protocol >= 30: {res:?}");
-    } else {
-        let err = res.expect_err("expected protocol gate trap below protocol 30");
-        assert!(err.error.is_type(ScErrorType::Context));
-        assert!(err.error.is_code(ScErrorCode::IndexBounds));
+    for protocol in vec![29, 30] {
+        host.with_mut_ledger_info(|li| {
+            li.protocol_version = protocol;
+        })
+        .unwrap();
+        let msg = b"soroban ml-dsa protocol gate";
+        let (pk, sig) = fixture_for("ML-DSA-44", 1, msg, b"");
+        let res = host_verify_ml_dsa(&host, "ML-DSA-44", &pk, msg, &sig, b"");
+        if ml_dsa_enabled(&host) {
+            assert!(res.is_ok(), "expected success at protocol >= 30: {res:?}");
+        } else {
+            let err = res.expect_err("expected protocol gate trap below protocol 30");
+            assert!(err.error.is_type(ScErrorType::Context));
+            assert!(err.error.is_code(ScErrorCode::IndexBounds));
+        }
     }
 }
 
@@ -106,10 +106,8 @@ fn ml_dsa_protocol_gate() {
 /// empty and a non-empty context string.
 #[test]
 fn ml_dsa_verify_happy_path() {
-    let host = Host::test_host();
-    if !ml_dsa_enabled(&host) {
-        return;
-    }
+    let host = observe_host!(Host::test_host());
+    assert!(ml_dsa_enabled(&host));
     for variant in VARIANTS {
         for (seed, ctx) in [(1u8, &b""[..]), (2u8, &b"soroban-domain-separator"[..])] {
             let msg = b"attestation payload";
@@ -127,10 +125,8 @@ fn ml_dsa_verify_happy_path() {
 /// inputs per the FIPS 204 external interface.
 #[test]
 fn ml_dsa_boundary_inputs() {
-    let host = Host::test_host();
-    if !ml_dsa_enabled(&host) {
-        return;
-    }
+    let host = observe_host!(Host::test_host());
+    assert!(ml_dsa_enabled(&host));
     for variant in VARIANTS {
         let max_ctx = [0xABu8; 255];
         let (pk, sig) = fixture_for(variant, 3, b"", &max_ctx);
@@ -145,10 +141,8 @@ fn ml_dsa_boundary_inputs() {
 /// fixture, and check each is rejected with the right error type.
 #[test]
 fn ml_dsa_error_paths() {
-    let host = Host::test_host();
-    if !ml_dsa_enabled(&host) {
-        return;
-    }
+    let host = observe_host!(Host::test_host());
+    assert!(ml_dsa_enabled(&host));
     let msg = b"attestation payload";
     let ctx = b"soroban-domain-separator";
     for variant in VARIANTS {
@@ -218,10 +212,8 @@ fn ml_dsa_error_paths() {
 /// variant's host function (sizes differ, so Crypto/InvalidInput).
 #[test]
 fn ml_dsa_cross_variant_confusion() {
-    let host = Host::test_host();
-    if !ml_dsa_enabled(&host) {
-        return;
-    }
+    let host = observe_host!(Host::test_host());
+    assert!(ml_dsa_enabled(&host));
     let msg = b"attestation payload";
     let (pk44, sig44) = fixture_for("ML-DSA-44", 6, msg, b"");
     let (pk65, sig65) = fixture_for("ML-DSA-65", 6, msg, b"");
@@ -244,10 +236,8 @@ fn ml_dsa_cross_variant_confusion() {
 #[test]
 fn ml_dsa_budget_exhaustion() -> Result<(), HostError> {
     use crate::budget::AsBudget;
-    let host = Host::test_host();
-    if !ml_dsa_enabled(&host) {
-        return Ok(());
-    }
+    let host = observe_host!(Host::test_host());
+    assert!(ml_dsa_enabled(&host));
     let msg = b"attestation payload";
     let (pk, sig) = fixture_for("ML-DSA-65", 7, msg, b"");
     host.as_budget().reset_limits(10_000, 10_000)?;
@@ -316,7 +306,7 @@ fn ml_dsa_acvp_sig_ver_internal() {
     // A plain (non-observed) host: this test makes thousands of budget
     // charges across 45 verifications; observation tests come with the
     // host-function-level tests instead.
-    let host = Host::test_host();
+    let host = observe_host!(Host::test_host());
     let data = std::fs::read("./src/test/data/ml_dsa/acvp_sig_ver_internal.json").unwrap();
     let file: AcvpInternalFile = serde_json::from_slice(&data).unwrap();
     let mut count = 0;
@@ -359,10 +349,8 @@ fn load_acvp_external() -> Vec<AcvpExternalCase> {
 /// Object error; valid cases must succeed. Runs fully under `--features next`.
 #[test]
 fn ml_dsa_acvp_sig_ver_external() {
-    let host = Host::test_host();
-    if !ml_dsa_enabled(&host) {
-        return;
-    }
+    let host = observe_host!(Host::test_host());
+    assert!(ml_dsa_enabled(&host));
     // The default budget is sized for a single transaction, not hundreds of
     // post-quantum verifications; metering itself is covered by the budget
     // test below.
@@ -432,9 +420,7 @@ struct WycheproofCase {
 }
 
 fn run_wycheproof_file(host: &Host, parameter_set: &str, file: &str) {
-    if !ml_dsa_enabled(host) {
-        return;
-    }
+    assert!(ml_dsa_enabled(&host));
     // See ml_dsa_acvp_sig_ver_external for why the budget is uncapped here.
     host.budget_ref().reset_unlimited().unwrap();
     let data = std::fs::read(format!("./src/test/data/ml_dsa/{file}")).unwrap();
@@ -479,18 +465,18 @@ fn run_wycheproof_file(host: &Host, parameter_set: &str, file: &str) {
 
 #[test]
 fn ml_dsa_wycheproof_44() {
-    let host = Host::test_host();
+    let host = observe_host!(Host::test_host());
     run_wycheproof_file(&host, "ML-DSA-44", "wycheproof_mldsa_44_verify.json");
 }
 
 #[test]
 fn ml_dsa_wycheproof_65() {
-    let host = Host::test_host();
+    let host = observe_host!(Host::test_host());
     run_wycheproof_file(&host, "ML-DSA-65", "wycheproof_mldsa_65_verify.json");
 }
 
 #[test]
 fn ml_dsa_wycheproof_87() {
-    let host = Host::test_host();
+    let host = observe_host!(Host::test_host());
     run_wycheproof_file(&host, "ML-DSA-87", "wycheproof_mldsa_87_verify.json");
 }

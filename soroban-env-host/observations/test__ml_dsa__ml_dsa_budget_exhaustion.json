@@ -1,0 +1,14 @@
+{
+  "   0 begin": "cpu:0, mem:0, mem_peak:0, prngs:-/-, objs:-/-, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-",
+  "   1 call bytes_new_from_slice(1952)": "",
+  "   2 ret bytes_new_from_slice -> Ok(Bytes(obj#1))": "cpu:1451, mem:2048, mem_peak:2048, objs:-/1@9b6f33d9",
+  "   3 call bytes_new_from_slice(19)": "",
+  "   4 ret bytes_new_from_slice -> Ok(Bytes(obj#3))": "cpu:2418, mem:2163, mem_peak:2163, objs:-/2@1f02af35",
+  "   5 call bytes_new_from_slice(3309)": "",
+  "   6 ret bytes_new_from_slice -> Ok(Bytes(obj#5))": "cpu:4207, mem:5568, mem_peak:5568, objs:-/3@f2c5fc1f",
+  "   7 call bytes_new_from_slice(0)": "",
+  "   8 ret bytes_new_from_slice -> Ok(Bytes(obj#7))": "cpu:5170, mem:5664, mem_peak:5664, objs:-/4@998ecd4f",
+  "   9 call verify_sig_ml_dsa_65(Bytes(obj#1), Bytes(obj#3), Bytes(obj#5), Bytes(obj#7))": "",
+  "  10 ret verify_sig_ml_dsa_65 -> Err(Error(Budget, ExceededLimit))": "cpu:1510741",
+  "  11 end": "cpu:1510741, mem:5664, mem_peak:5664, prngs:-/-, objs:-/4@998ecd4f, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+}
