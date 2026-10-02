@@ -246,6 +246,13 @@ skip = [
     { name = "hashbrown", version = "=0.14.1" },
     { name = "syn", version = "=1.0.109" },
     { name = "crate-git-revision", version = "=0.0.6" },
+    # ml-dsa (CAP-0087) is on the next generation of the RustCrypto traits,
+    # alongside the older generation used by the other crypto crates.
+    { name = "cpufeatures", version = "=0.3.1" },
+    { name = "crypto-common", version = "=0.2.2" },
+    { name = "digest", version = "=0.11.3" },
+    { name = "keccak", version = "=0.2.2" },
+    { name = "signature", version = "=3.0.0" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
