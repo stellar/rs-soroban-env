@@ -293,21 +293,7 @@ impl ParsedModule {
         wasmi_engine: &wasmi::Engine,
         wasm: &[u8],
     ) -> Result<(wasmi::Module, u32), HostError> {
-        // Do a quick pre-validation of the module before exposing it
-        // to wasmi. Unfortunately for compatibility with our previous
-        // choices of "which wasmi errors to bother translating" (see
-        // From<wasmi::Error> in soroban_env_common::error) we need to
-        // translate pre-validation errors into the catchall code
-        // (WasmVm,InvalidAction) that we use in that From, rather than
-        // the InvalidInput that might otherwise make more sense here.
-        context.map_err(wasmparser::validate(wasm).map_err(|_| {
-            soroban_env_common::Error::from_type_and_code(
-                ScErrorType::WasmVm,
-                ScErrorCode::InvalidAction,
-            )
-        }))?;
-
-        // Then re-parse/re-validate running wasmi code as well.
+        // Parse and validate the module with wasmi.
         let module = {
             let _span = tracy_span!("wasmi::Module::new");
             context.map_err(wasmi::Module::new(&wasmi_engine, wasm))?
@@ -555,16 +541,21 @@ impl ParsedModule {
 
         let parser = Parser::new(0);
         let mut elements: u32 = 0;
-        let mut available_memory: u32 = 0;
+        let mut available_guest_memory: u32 = 0;
+        let mut custom_sections: u32 = 0;
+        let mut custom_section_bytes: u32 = 0;
         for section in parser.parse_all(wasm) {
             let section = ctx.map_err(section)?;
             match section {
                 // Ignored sections.
-                Version { .. }
-                | DataCountSection { .. }
-                | CustomSection(_)
-                | CodeSectionStart { .. }
-                | End(_) => (),
+                Version { .. } | DataCountSection { .. } | CodeSectionStart { .. } | End(_) => (),
+
+                CustomSection(s) => {
+                    custom_sections = custom_sections.saturating_add(1);
+                    custom_section_bytes = custom_section_bytes
+                        .saturating_add(s.name().len() as u32)
+                        .saturating_add(s.data().len() as u32);
+                }
 
                 // Component-model stuff or other unsupported sections. Error out.
                 StartSection { .. }
@@ -600,7 +591,7 @@ impl ParsedModule {
                         {
                             return Err(ctx.error(invalid_input, "unsupported memory size", &[]));
                         }
-                        available_memory = available_memory.saturating_add(
+                        available_guest_memory = available_guest_memory.saturating_add(
                             (mem.initial as u32)
                                 .saturating_mul(crate::vm::WASM_STD_MEM_PAGE_SIZE_IN_BYTES),
                         );
@@ -682,19 +673,23 @@ impl ParsedModule {
                 CodeSectionEntry(s) => {
                     let ops = ctx.map_err(s.get_operators_reader())?;
                     for op in ops {
-                        let _ = ctx.map_err(op)?;
+                        let op = ctx.map_err(op)?;
                         costs.n_instructions = costs.n_instructions.saturating_add(1);
+                        if let wasmparser::Operator::BrTable { targets } = op {
+                            costs.n_instructions =
+                                costs.n_instructions.saturating_add(targets.len());
+                        }
                     }
                 }
             }
         }
-        if costs.n_data_segment_bytes > available_memory {
+        if costs.n_data_segment_bytes > available_guest_memory {
             return Err(ctx.error(
                 invalid_input,
                 "data segment(s) content exceeds memory size",
                 &[
                     Val::from_u32(costs.n_data_segment_bytes).into(),
-                    Val::from_u32(available_memory).into(),
+                    Val::from_u32(available_guest_memory).into(),
                 ],
             ));
         }
@@ -708,6 +703,15 @@ impl ParsedModule {
                 ],
             ));
         }
+
+        // Charge custom sections as quasi-data-segments, for the sake of
+        // host-memory accounting. Do not compare them against the
+        // available_guest_memory limit, since that's different memory.
+        costs.n_data_segments = costs.n_data_segments.saturating_add(custom_sections);
+        costs.n_data_segment_bytes = costs
+            .n_data_segment_bytes
+            .saturating_add(custom_section_bytes);
+
         Ok(costs)
     }
 

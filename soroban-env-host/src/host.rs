@@ -1190,37 +1190,37 @@ impl VmCallerEnv for Host {
 
     // Metered: covered by `visit`.
     fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
-        let res = match {
-            match (Object::try_from(a), Object::try_from(b)) {
-                // We were given two objects: compare them.
-                (Ok(a), Ok(b)) => self.visit_obj_untyped(a, |ao| {
-                    // They might each be None but that's ok, None compares less than Some.
-                    self.visit_obj_untyped(b, |bo| Ok(Some(self.compare(&ao, &bo)?)))
-                })?,
+        let partial_res = match (Object::try_from(a), Object::try_from(b)) {
+            // We were given two objects: compare them.
+            (Ok(a), Ok(b)) => self.visit_obj_untyped(a, |ao| {
+                // They might each be None but that's ok, None compares less than Some.
+                self.visit_obj_untyped(b, |bo| Ok(Some(self.compare(&ao, &bo)?)))
+            })?,
 
-                // We were given an object and a non-object: try a small-value comparison.
-                (Ok(a), Err(_)) => self
-                    .visit_obj_untyped(a, |aobj| aobj.try_compare_to_small(self.as_budget(), b))?,
-                // Same as previous case, but reversing the resulting order.
-                (Err(_), Ok(b)) => self.visit_obj_untyped(b, |bobj| {
-                    let ord = bobj.try_compare_to_small(self.as_budget(), a)?;
-                    Ok(match ord {
-                        Some(Ordering::Less) => Some(Ordering::Greater),
-                        Some(Ordering::Greater) => Some(Ordering::Less),
-                        other => other,
-                    })
-                })?,
-                // We should have been given at least one object.
-                (Err(_), Err(_)) => {
-                    return Err(self.err(
-                        ScErrorType::Value,
-                        ScErrorCode::UnexpectedType,
-                        "two non-object args to obj_cmp",
-                        &[a, b],
-                    ));
-                }
+            // We were given an object and a non-object: try a small-value comparison.
+            (Ok(a), Err(_)) => {
+                self.visit_obj_untyped(a, |aobj| aobj.try_compare_to_small(self.as_budget(), b))?
             }
-        } {
+            // Same as previous case, but reversing the resulting order.
+            (Err(_), Ok(b)) => self.visit_obj_untyped(b, |bobj| {
+                let ord = bobj.try_compare_to_small(self.as_budget(), a)?;
+                Ok(match ord {
+                    Some(Ordering::Less) => Some(Ordering::Greater),
+                    Some(Ordering::Greater) => Some(Ordering::Less),
+                    other => other,
+                })
+            })?,
+            // We should have been given at least one object.
+            (Err(_), Err(_)) => {
+                return Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::UnexpectedType,
+                    "two non-object args to obj_cmp",
+                    &[a, b],
+                ));
+            }
+        };
+        let res = match partial_res {
             // If any of the above got us a result, great, use it.
             Some(res) => res,
 
@@ -3679,7 +3679,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Val, Self::Error> {
         let sc_addr = self.strkey_to_scaddress(strkey_obj, true)?;
         match &sc_addr {
-            ScAddress::MuxedAccount(_) => {
+            ScAddress::MuxedAccount(_) | ScAddress::MuxedContract(_) => {
                 Ok(self.add_host_object(MuxedScAddress(sc_addr))?.to_val())
             }
             _ => Ok(self.add_host_object(sc_addr)?.to_val()),
@@ -3698,6 +3698,9 @@ impl VmCallerEnv for Host {
                 )));
                 Ok(address)
             }
+            ScAddress::MuxedContract(muxed_contract) => Ok(ScAddress::Contract(
+                muxed_contract.contract_id.metered_clone(self)?,
+            )),
             _ => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::InternalError,
@@ -3715,6 +3718,7 @@ impl VmCallerEnv for Host {
     ) -> Result<U64Val, Self::Error> {
         let mux_id = self.visit_obj(muxed_address, |addr: &MuxedScAddress| match &addr.0 {
             ScAddress::MuxedAccount(muxed_account) => Ok(muxed_account.id),
+            ScAddress::MuxedContract(muxed_contract) => Ok(muxed_contract.id),
             _ => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::InternalError,
