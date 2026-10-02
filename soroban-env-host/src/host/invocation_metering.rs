@@ -1102,15 +1102,15 @@ mod test {
         // contract), so 2 writes/bumps are expected.
         expect![[r#"
             InvocationResources {
-                instructions: 4140326,
-                mem_bytes: 2861428,
+                instructions: 4146842,
+                mem_bytes: 2868943,
                 disk_read_entries: 0,
                 memory_read_entries: 2,
                 write_entries: 2,
                 disk_read_bytes: 0,
                 write_bytes: 3132,
                 contract_events_size_bytes: 0,
-                persistent_rent_ledger_bytes: 80531388,
+                persistent_rent_ledger_bytes: 83756160,
                 persistent_entry_rent_bumps: 2,
                 temporary_rent_ledger_bytes: 0,
                 temporary_entry_rent_bumps: 0,
@@ -1120,15 +1120,15 @@ mod test {
             DetailedInvocationResources {
                 invocation: CreateContractEntryPoint,
                 resources: SubInvocationResources {
-                    instructions: 4140326,
-                    mem_bytes: 2861428,
+                    instructions: 4146842,
+                    mem_bytes: 2868943,
                     disk_read_entries: 0,
                     memory_read_entries: 2,
                     write_entries: 2,
                     disk_read_bytes: 0,
                     write_bytes: 3132,
                     contract_events_size_bytes: 0,
-                    persistent_rent_ledger_bytes: 80531388,
+                    persistent_rent_ledger_bytes: 83756160,
                     persistent_entry_rent_bumps: 2,
                     temporary_rent_ledger_bytes: 0,
                     temporary_entry_rent_bumps: 0,
@@ -1156,8 +1156,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 310868,
-                mem_bytes: 1134811,
+                instructions: 311545,
+                mem_bytes: 1139098,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1183,8 +1183,8 @@ mod test {
                     ),
                 ),
                 resources: SubInvocationResources {
-                    instructions: 310868,
-                    mem_bytes: 1134811,
+                    instructions: 311545,
+                    mem_bytes: 1139098,
                     disk_read_entries: 0,
                     memory_read_entries: 3,
                     write_entries: 0,
@@ -1217,8 +1217,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 314919,
-                mem_bytes: 1135354,
+                instructions: 315596,
+                mem_bytes: 1139641,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 1,
@@ -1243,8 +1243,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 310167,
-                mem_bytes: 1134659,
+                instructions: 310844,
+                mem_bytes: 1138946,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1269,8 +1269,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 316830,
-                mem_bytes: 1135710,
+                instructions: 317507,
+                mem_bytes: 1139997,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 1,
@@ -1295,8 +1295,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 310680,
-                mem_bytes: 1134727,
+                instructions: 311357,
+                mem_bytes: 1139014,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1321,8 +1321,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 311905,
-                mem_bytes: 1135079,
+                instructions: 312582,
+                mem_bytes: 1139366,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1347,8 +1347,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 312307,
-                mem_bytes: 1135079,
+                instructions: 312984,
+                mem_bytes: 1139366,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1373,8 +1373,8 @@ mod test {
         assert!(res.is_err());
         expect![[r#"
             InvocationResources {
-                instructions: 311744,
-                mem_bytes: 1135147,
+                instructions: 312421,
+                mem_bytes: 1139434,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1406,15 +1406,15 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 314765,
-                mem_bytes: 1135614,
+                instructions: 315442,
+                mem_bytes: 1139901,
                 disk_read_entries: 2,
                 memory_read_entries: 1,
                 write_entries: 2,
                 disk_read_bytes: 3132,
                 write_bytes: 3132,
                 contract_events_size_bytes: 0,
-                persistent_rent_ledger_bytes: 80531388,
+                persistent_rent_ledger_bytes: 83756160,
                 persistent_entry_rent_bumps: 2,
                 temporary_rent_ledger_bytes: 0,
                 temporary_entry_rent_bumps: 0,
@@ -1438,15 +1438,15 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 317302,
-                mem_bytes: 1136061,
+                instructions: 317979,
+                mem_bytes: 1140348,
                 disk_read_entries: 3,
                 memory_read_entries: 0,
                 write_entries: 3,
                 disk_read_bytes: 3216,
                 write_bytes: 3216,
                 contract_events_size_bytes: 0,
-                persistent_rent_ledger_bytes: 80615304,
+                persistent_rent_ledger_bytes: 83840076,
                 persistent_entry_rent_bumps: 3,
                 temporary_rent_ledger_bytes: 0,
                 temporary_entry_rent_bumps: 0,

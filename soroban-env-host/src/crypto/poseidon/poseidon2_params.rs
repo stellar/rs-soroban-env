@@ -46,7 +46,7 @@ impl<F: MeteredScalar> Poseidon2Params<F> {
                 ],
             ));
         }
-        if rounds_f % 2 != 0 {
+        if !rounds_f.is_multiple_of(2) {
             return Err(host.error(
                 INVALID_INPUT,
                 "Poseidon2: `rounds_f` must be even",
