@@ -174,6 +174,17 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, Bn254FrPowMeasure>(&mut params)?;
     call_bench::<B, Bn254FrInvMeasure>(&mut params)?;
 
+    // P30 cost types
+    call_bench::<B, MlDsa44DecodeVerifyingKeyMeasure>(&mut params)?;
+    call_bench::<B, MlDsa65DecodeVerifyingKeyMeasure>(&mut params)?;
+    call_bench::<B, MlDsa87DecodeVerifyingKeyMeasure>(&mut params)?;
+    call_bench::<B, MlDsa44DecodeSignatureMeasure>(&mut params)?;
+    call_bench::<B, MlDsa65DecodeSignatureMeasure>(&mut params)?;
+    call_bench::<B, MlDsa87DecodeSignatureMeasure>(&mut params)?;
+    call_bench::<B, VerifyMlDsa44SigMeasure>(&mut params)?;
+    call_bench::<B, VerifyMlDsa65SigMeasure>(&mut params)?;
+    call_bench::<B, VerifyMlDsa87SigMeasure>(&mut params)?;
+
     // These three mem ones are derived analytically, we do not calibrate them typically
     if std::env::var("INCLUDE_ANALYTICAL_COSTTYPES").is_ok() {
         call_bench::<B, MemAllocMeasure>(&mut params)?;

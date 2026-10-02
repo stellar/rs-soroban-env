@@ -533,6 +533,15 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Bn254FrPow                         0              Some(0)        0              0              755                 68930               0                   0                   
         Bn254FrInv                         0              None           0              0              33151               0                   0                   0                   
         Bn254G1Msm                         0              Some(0)        0              0              1185193             41568084            73061               229779              
+        MlDsa44DecodeVerifyingKey          0              None           0              0              849110              0                   24656               0                   
+        MlDsa65DecodeVerifyingKey          0              None           0              0              1505271             0                   43088               0                   
+        MlDsa87DecodeVerifyingKey          0              None           0              0              2625760             0                   73808               0                   
+        MlDsa44DecodeSignature             0              None           0              0              37888               0                   4104                0                   
+        MlDsa65DecodeSignature             0              None           0              0              47691               0                   5128                0                   
+        MlDsa87DecodeSignature             0              None           0              0              66346               0                   7176                0                   
+        VerifyMlDsa44Sig                   0              Some(0)        0              0              685165              6103                0                   0                   
+        VerifyMlDsa65Sig                   0              Some(0)        0              0              983619              6103                0                   0                   
+        VerifyMlDsa87Sig                   0              Some(0)        0              0              1437210             6102                0                   0                   
         ===============================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 70

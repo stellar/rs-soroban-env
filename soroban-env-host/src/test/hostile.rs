@@ -635,6 +635,15 @@ fn excessive_logging() -> Result<(), HostError> {
             Bn254FrPow                         0              0              
             Bn254FrInv                         0              0              
             Bn254G1Msm                         0              0              
+            MlDsa44DecodeVerifyingKey          0              0              
+            MlDsa65DecodeVerifyingKey          0              0              
+            MlDsa87DecodeVerifyingKey          0              0              
+            MlDsa44DecodeSignature             0              0              
+            MlDsa65DecodeSignature             0              0              
+            MlDsa87DecodeSignature             0              0              
+            VerifyMlDsa44Sig                   0              0              
+            VerifyMlDsa65Sig                   0              0              
+            VerifyMlDsa87Sig                   0              0              
             =================================================================
 
         "#]]

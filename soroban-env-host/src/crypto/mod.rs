@@ -23,6 +23,7 @@ use generic_array::ArrayLength;
 pub(crate) mod bls12_381;
 pub(crate) mod bn254;
 pub(crate) mod metered_scalar;
+pub(crate) mod ml_dsa;
 pub(crate) mod poseidon;
 
 /// Specifies which validation checks to perform when deserializing elliptic curve points.

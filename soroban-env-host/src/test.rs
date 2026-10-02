@@ -30,6 +30,7 @@ mod linear_memory;
 mod map;
 #[cfg(feature = "testutils")]
 mod metering_benchmark;
+mod ml_dsa;
 mod num;
 mod poseidon;
 mod post_mvp;
