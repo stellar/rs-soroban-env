@@ -4,7 +4,8 @@
 //! deterministic keygen and signatures from `sign_deterministic`, so no RNG
 //! and no vector files are involved. Conformance against the NIST ACVP and
 //! Wycheproof vector sets is covered by the vector-driven tests further
-//! down, which read from src/test/data/ml_dsa/.
+//! down: ACVP reads from src/test/data/ml_dsa/, Wycheproof comes from the
+//! `wycheproof` crate.
 
 use crate::{
     xdr::{ScErrorCode, ScErrorType},
@@ -12,6 +13,7 @@ use crate::{
 };
 use ml_dsa::{MlDsa44, MlDsa65, MlDsa87, MlDsaParams, SigningKey};
 use serde::Deserialize;
+use wycheproof::{mldsa_verify, TestResult};
 
 const VARIANTS: [&str; 3] = ["ML-DSA-44", "ML-DSA-65", "ML-DSA-87"];
 
@@ -286,73 +288,40 @@ fn ml_dsa_acvp_sig_ver_external() {
 }
 
 // ---------------------------------------------------------------------------
-// Wycheproof ML-DSA verify vectors (C2SP/wycheproof testvectors_v1).
-// Cover malformed encodings, boundary cases, and context strings.
+// Wycheproof ML-DSA verify vectors (C2SP/wycheproof), loaded from the
+// `wycheproof` crate. Cover malformed encodings, boundary conditions,
+// infinity-norm violations of the signer response, and context strings.
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
-struct WycheproofFile {
-    #[serde(rename = "testGroups")]
-    groups: Vec<WycheproofGroup>,
-}
-
-#[derive(Deserialize)]
-struct WycheproofGroup {
-    #[serde(default, rename = "publicKey", with = "hex::serde")]
-    public_key: Vec<u8>,
-    tests: Vec<WycheproofCase>,
-}
-
-#[derive(Deserialize)]
-struct WycheproofCase {
-    #[serde(rename = "tcId")]
-    id: usize,
-    comment: String,
-    #[serde(with = "hex::serde")]
-    msg: Vec<u8>,
-    #[serde(default, with = "hex::serde")]
-    ctx: Vec<u8>,
-    #[serde(with = "hex::serde")]
-    sig: Vec<u8>,
-    result: String,
-}
-
-fn run_wycheproof_file(host: &Host, parameter_set: &str, file: &str) {
+fn run_wycheproof(host: &Host, parameter_set: &str, name: mldsa_verify::TestName) {
     // See ml_dsa_acvp_sig_ver_external for why the budget is uncapped here.
     host.budget_ref().reset_unlimited().unwrap();
-    let data = std::fs::read(format!("./src/test/data/ml_dsa/{file}")).unwrap();
-    let tv: WycheproofFile = serde_json::from_slice(&data).unwrap();
+    let test_set = mldsa_verify::TestSet::load(name).unwrap();
     let mut count = 0;
-    for group in &tv.groups {
+    for group in &test_set.test_groups {
         for tc in &group.tests {
-            let res = host_verify_ml_dsa(
-                host,
-                parameter_set,
-                &group.public_key,
-                &tc.msg,
-                &tc.sig,
-                &tc.ctx,
-            );
-            match tc.result.as_str() {
-                "valid" => assert!(
+            let ctx = tc.ctx.as_deref().map_or(&[][..], Vec::as_slice);
+            let res = host_verify_ml_dsa(host, parameter_set, &group.pubkey, &tc.msg, &tc.sig, ctx);
+            match tc.result {
+                TestResult::Valid => assert!(
                     res.is_ok(),
                     "{parameter_set} wycheproof tcId={} ({}) expected valid, got {:?}",
-                    tc.id,
+                    tc.tc_id,
                     tc.comment,
                     res.err()
                 ),
-                "invalid" => {
+                TestResult::Invalid => {
                     let err = res.expect_err(&format!(
                         "{parameter_set} wycheproof tcId={} ({}) expected invalid",
-                        tc.id, tc.comment
+                        tc.tc_id, tc.comment
                     ));
                     assert!(
                         err.error.is_type(ScErrorType::Crypto),
                         "unexpected error type: {err:?}"
                     );
                 }
-                // "acceptable": implementation-defined; accept either outcome.
-                _ => {}
+                // Implementation-defined; either outcome is acceptable.
+                TestResult::Acceptable => {}
             }
             count += 1;
         }
@@ -363,17 +332,17 @@ fn run_wycheproof_file(host: &Host, parameter_set: &str, file: &str) {
 #[test]
 fn ml_dsa_wycheproof_44() {
     let host = observe_host!(Host::test_host());
-    run_wycheproof_file(&host, "ML-DSA-44", "wycheproof_mldsa_44_verify.json");
+    run_wycheproof(&host, "ML-DSA-44", mldsa_verify::TestName::MlDsa44Verify);
 }
 
 #[test]
 fn ml_dsa_wycheproof_65() {
     let host = observe_host!(Host::test_host());
-    run_wycheproof_file(&host, "ML-DSA-65", "wycheproof_mldsa_65_verify.json");
+    run_wycheproof(&host, "ML-DSA-65", mldsa_verify::TestName::MlDsa65Verify);
 }
 
 #[test]
 fn ml_dsa_wycheproof_87() {
     let host = observe_host!(Host::test_host());
-    run_wycheproof_file(&host, "ML-DSA-87", "wycheproof_mldsa_87_verify.json");
+    run_wycheproof(&host, "ML-DSA-87", mldsa_verify::TestName::MlDsa87Verify);
 }

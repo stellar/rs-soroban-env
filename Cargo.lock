@@ -254,12 +254,6 @@ checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
 
 [[package]]
 name = "base64"
-version = "0.21.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35636a1494ede3b646cc98f74f8e62c773a38a659ebc777a2cf26b9b74171df9"
-
-[[package]]
-name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
@@ -1643,7 +1637,7 @@ version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6b6f7f2fcb69f747921f79f3926bd1e203fce4fef62c268dd3abfb6d86029aa"
 dependencies = [
- "base64 0.22.1",
+ "base64",
  "chrono",
  "hex",
  "indexmap 1.9.3",
@@ -1985,7 +1979,7 @@ version = "28.0.0"
 source = "git+https://github.com/stellar/rs-stellar-xdr?rev=a9c9750e4a24473323f550b5184742975d6419f4#a9c9750e4a24473323f550b5184742975d6419f4"
 dependencies = [
  "arbitrary",
- "base64 0.22.1",
+ "base64",
  "cfg_eval",
  "crate-git-revision",
  "escape-bytes",
@@ -2628,13 +2622,13 @@ dependencies = [
 
 [[package]]
 name = "wycheproof"
-version = "0.5.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e639f57253b80c6584b378011aec0fed61c4c21d7a4b97c4d9d7eaf35ca77d12"
+checksum = "ffb6c33340cdfc5bebaa43b6debf9570812bb30465e42495188740ca8bf1e001"
 dependencies = [
- "base64 0.21.5",
- "hex",
+ "data-encoding",
  "serde",
+ "serde_derive",
  "serde_json",
 ]
 
