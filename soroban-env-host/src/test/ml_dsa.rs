@@ -1,13 +1,14 @@
 //! Tests for the verify_sig_ml_dsa_{44,65,87} host functions.
 //!
-//! Everything here is self-contained: key pairs come from seeded
+//! The fixture-based tests are self-contained: key pairs come from seeded
 //! deterministic keygen and signatures from `sign_deterministic`, so no RNG
-//! and no vector files are involved. Conformance against the NIST ACVP and
-//! Wycheproof vector sets is covered by the vector-driven tests further
-//! down: ACVP files are vendored verbatim under src/test/data/ml_dsa/acvp/,
-//! Wycheproof comes from the `wycheproof` crate.
+//! is involved. Conformance against the NIST ACVP and Wycheproof vector sets
+//! is covered by the vector-driven tests further down: ACVP files are
+//! vendored verbatim under src/test/data/ml_dsa/acvp/, Wycheproof comes from
+//! the `wycheproof` crate.
 
 use crate::{
+    budget::AsBudget,
     xdr::{ScErrorCode, ScErrorType},
     Env, EnvBase, Host, HostError,
 };
@@ -210,7 +211,6 @@ fn ml_dsa_cross_variant_confusion() {
 /// (charges happen before the expensive work).
 #[test]
 fn ml_dsa_budget_exhaustion() -> Result<(), HostError> {
-    use crate::budget::AsBudget;
     let host = observe_host!(Host::test_host());
     let msg = b"attestation payload";
     let (pk, sig) = fixture_for("ML-DSA-65", 7, msg, b"");
@@ -303,7 +303,7 @@ fn load_acvp<T: DeserializeOwned>(path: &str) -> Vec<(String, T)> {
 }
 
 /// Every ACVP sigVer case for the external, pure interface. Valid signatures
-/// must verify; every invalid one must trap with a Crypto error.
+/// must verify; every invalid one must trap with Crypto/InvalidInput.
 #[test]
 fn ml_dsa_acvp_sig_ver_external() {
     let host = observe_host!(Host::test_host());
@@ -348,7 +348,6 @@ fn ml_dsa_acvp_sig_ver_external() {
 #[test]
 fn ml_dsa_acvp_sig_gen_external() {
     let host = observe_host!(Host::test_host());
-    // See ml_dsa_acvp_sig_ver_external for why the budget is uncapped here.
     host.budget_ref().reset_unlimited().unwrap();
     let cases = load_acvp::<AcvpSigGenCase>(ACVP_SIG_GEN_PATH);
     // 15 deterministic and 15 hedged per parameter set in the pinned file.
@@ -378,7 +377,6 @@ fn ml_dsa_acvp_sig_gen_external() {
 // ---------------------------------------------------------------------------
 
 fn run_wycheproof(host: &Host, parameter_set: &str, name: mldsa_verify::TestName) {
-    // See ml_dsa_acvp_sig_ver_external for why the budget is uncapped here.
     host.budget_ref().reset_unlimited().unwrap();
     let test_set = mldsa_verify::TestSet::load(name).unwrap();
     let mut count = 0;
