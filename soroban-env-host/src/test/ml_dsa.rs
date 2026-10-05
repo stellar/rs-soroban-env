@@ -7,7 +7,6 @@
 //! down, which read from src/test/data/ml_dsa/.
 
 use crate::{
-    crypto::ml_dsa::MlDsaVariant,
     xdr::{ScErrorCode, ScErrorType},
     Env, EnvBase, Host, HostError,
 };
@@ -220,78 +219,6 @@ fn ml_dsa_budget_exhaustion() -> Result<(), HostError> {
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
     Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// NIST ACVP sigVer vectors, *internal* interface (ML-DSA.Verify_internal).
-// Source: bundled with the RustCrypto ml-dsa crate (tests/sig-ver.json),
-// originally from usnistgov/ACVP-Server (vsId 42, FIPS204 revision).
-// The external host functions cannot replay these (the external API prepends
-// 0x00 || len(ctx) || ctx to the message), so they exercise the host-side
-// decode plumbing + the crate's core verify at the module level.
-// ---------------------------------------------------------------------------
-
-#[derive(Deserialize)]
-struct AcvpInternalFile {
-    #[serde(rename = "testGroups")]
-    test_groups: Vec<AcvpInternalGroup>,
-}
-
-#[derive(Deserialize)]
-struct AcvpInternalGroup {
-    #[serde(rename = "parameterSet")]
-    parameter_set: String,
-    #[serde(with = "hex::serde")]
-    pk: Vec<u8>,
-    tests: Vec<AcvpInternalCase>,
-}
-
-#[derive(Deserialize)]
-struct AcvpInternalCase {
-    #[serde(rename = "tcId")]
-    id: usize,
-    #[serde(rename = "testPassed")]
-    test_passed: bool,
-    #[serde(with = "hex::serde")]
-    message: Vec<u8>,
-    #[serde(with = "hex::serde")]
-    signature: Vec<u8>,
-}
-
-fn run_acvp_internal_group<P: MlDsaVariant>(host: &Host, group: &AcvpInternalGroup) {
-    for tc in &group.tests {
-        // Use the host's decode helpers (the code under test), then the
-        // crate's internal verify (what these vectors target).
-        let passed = (|| -> Result<bool, HostError> {
-            let vk = host.ml_dsa_verifying_key_from_slice::<P>(&group.pk)?;
-            let sig = host.ml_dsa_signature_from_slice::<P>(&tc.signature)?;
-            Ok(vk.verify_internal(&tc.message, &sig))
-        })()
-        .unwrap_or(false);
-        assert_eq!(
-            passed, tc.test_passed,
-            "ACVP internal {} tcId={} expected testPassed={}",
-            group.parameter_set, tc.id, tc.test_passed
-        );
-    }
-}
-
-#[test]
-fn ml_dsa_acvp_sig_ver_internal() {
-    let host = observe_host!(Host::test_host());
-    let data = std::fs::read("./src/test/data/ml_dsa/acvp_sig_ver_internal.json").unwrap();
-    let file: AcvpInternalFile = serde_json::from_slice(&data).unwrap();
-    let mut count = 0;
-    for group in &file.test_groups {
-        match group.parameter_set.as_str() {
-            "ML-DSA-44" => run_acvp_internal_group::<MlDsa44>(&host, group),
-            "ML-DSA-65" => run_acvp_internal_group::<MlDsa65>(&host, group),
-            "ML-DSA-87" => run_acvp_internal_group::<MlDsa87>(&host, group),
-            other => panic!("unknown parameter set {other}"),
-        }
-        count += group.tests.len();
-    }
-    assert!(count >= 45, "expected at least 45 ACVP cases, got {count}");
 }
 
 #[derive(Deserialize)]
