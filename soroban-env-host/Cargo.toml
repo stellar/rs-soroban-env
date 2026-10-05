@@ -11,7 +11,7 @@ edition = "2021"
 rust-version = "1.87.0"
 build = "build.rs"
 
-exclude = ["observations/"]
+exclude = ["observations/", "src/test/data/"]
 
 [dependencies]
 soroban-builtin-sdk-macros = { workspace = true }

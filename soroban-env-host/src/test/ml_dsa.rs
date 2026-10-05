@@ -4,15 +4,15 @@
 //! deterministic keygen and signatures from `sign_deterministic`, so no RNG
 //! and no vector files are involved. Conformance against the NIST ACVP and
 //! Wycheproof vector sets is covered by the vector-driven tests further
-//! down: ACVP reads from src/test/data/ml_dsa/, Wycheproof comes from the
-//! `wycheproof` crate.
+//! down: ACVP files are vendored verbatim under src/test/data/ml_dsa/acvp/,
+//! Wycheproof comes from the `wycheproof` crate.
 
 use crate::{
     xdr::{ScErrorCode, ScErrorType},
     Env, EnvBase, Host, HostError,
 };
 use ml_dsa::{MlDsa44, MlDsa65, MlDsa87, MlDsaParams, SigningKey};
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize};
 use wycheproof::{mldsa_verify, TestResult};
 
 const VARIANTS: [&str; 3] = ["ML-DSA-44", "ML-DSA-65", "ML-DSA-87"];
@@ -223,44 +223,98 @@ fn ml_dsa_budget_exhaustion() -> Result<(), HostError> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// NIST ACVP ML-DSA vectors, vendored verbatim from usnistgov/ACVP-Server at
+// commit a7f283cdc87d2d6dd93c1bac59e5622c5f9f8324:
+// gen-val/json-files/ML-DSA-{sigVer,sigGen}-FIPS204/internalProjection.json.
+//
+// Only groups the host functions can exercise are used: the external
+// interface (ML-DSA.Verify) over a pure, not pre-hashed, message. The
+// internal-interface and HashML-DSA groups are skipped.
+// ---------------------------------------------------------------------------
+
+const ACVP_SIG_VER_PATH: &str =
+    "./src/test/data/ml_dsa/acvp/ML-DSA-sigVer-FIPS204/internalProjection.json";
+const ACVP_SIG_GEN_PATH: &str =
+    "./src/test/data/ml_dsa/acvp/ML-DSA-sigGen-FIPS204/internalProjection.json";
+
 #[derive(Deserialize)]
-struct AcvpExternalCase {
-    #[serde(rename = "parameterSet")]
+#[serde(rename_all = "camelCase")]
+struct AcvpFile<T> {
+    test_groups: Vec<AcvpGroup<T>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AcvpGroup<T> {
     parameter_set: String,
+    signature_interface: Option<String>,
+    pre_hash: Option<String>,
+    tests: Vec<T>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AcvpSigVerCase {
+    tc_id: u64,
     #[serde(with = "hex::serde")]
     pk: Vec<u8>,
-    #[serde(with = "hex::serde")]
+    #[serde(default, with = "hex::serde")]
     message: Vec<u8>,
     #[serde(with = "hex::serde")]
     signature: Vec<u8>,
-    #[serde(with = "hex::serde")]
+    #[serde(default, with = "hex::serde")]
     context: Vec<u8>,
-    #[serde(rename = "testPassed")]
     test_passed: bool,
+    #[serde(default)]
     reason: String,
 }
 
-fn load_acvp_external() -> Vec<AcvpExternalCase> {
-    let data = std::fs::read("./src/test/data/ml_dsa/acvp_sig_ver_external.json").unwrap();
-    serde_json::from_slice(&data).unwrap()
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AcvpSigGenCase {
+    tc_id: u64,
+    #[serde(with = "hex::serde")]
+    pk: Vec<u8>,
+    #[serde(default, with = "hex::serde")]
+    message: Vec<u8>,
+    #[serde(with = "hex::serde")]
+    signature: Vec<u8>,
+    #[serde(default, with = "hex::serde")]
+    context: Vec<u8>,
 }
 
-/// All NIST ACVP sigVer external-interface (pure, non-externalMu) cases
-/// through the host functions. Invalid cases must trap with a Crypto or
-/// Object error; valid cases must succeed. Runs fully under `--features next`.
+/// Loads a vendored ACVP file and returns the external, pure cases paired
+/// with their parameter set.
+fn load_acvp<T: DeserializeOwned>(path: &str) -> Vec<(String, T)> {
+    let data = std::fs::read(path).unwrap();
+    let file: AcvpFile<T> = serde_json::from_slice(&data).unwrap();
+    file.test_groups
+        .into_iter()
+        .filter(|g| {
+            g.signature_interface.as_deref() == Some("external")
+                && g.pre_hash.as_deref() == Some("pure")
+        })
+        .flat_map(|g| {
+            let parameter_set = g.parameter_set;
+            g.tests.into_iter().map(move |t| (parameter_set.clone(), t))
+        })
+        .collect()
+}
+
+/// Every ACVP sigVer case for the external, pure interface. Valid signatures
+/// must verify; every invalid one must trap with a Crypto error.
 #[test]
 fn ml_dsa_acvp_sig_ver_external() {
     let host = observe_host!(Host::test_host());
-    // The default budget is sized for a single transaction, not hundreds of
-    // post-quantum verifications; metering itself is covered by the budget
-    // test below.
     host.budget_ref().reset_unlimited().unwrap();
-    let cases = load_acvp_external();
-    assert!(!cases.is_empty());
-    for case in &cases {
+    let cases = load_acvp::<AcvpSigVerCase>(ACVP_SIG_VER_PATH);
+    // 15 per parameter set in the pinned file
+    assert_eq!(cases.len(), 45);
+    for (parameter_set, case) in &cases {
         let res = host_verify_ml_dsa(
             &host,
-            &case.parameter_set,
+            parameter_set,
             &case.pk,
             &case.message,
             &case.signature,
@@ -269,21 +323,51 @@ fn ml_dsa_acvp_sig_ver_external() {
         if case.test_passed {
             assert!(
                 res.is_ok(),
-                "{} expected valid, got {:?} (reason: {})",
-                case.parameter_set,
+                "{parameter_set} sigVer tcId={} expected valid, got {:?} (reason: {})",
+                case.tc_id,
                 res.err(),
                 case.reason
             );
         } else {
-            let err = res.expect_err(&format!(
-                "{} expected invalid (reason: {}), but verification succeeded",
-                case.parameter_set, case.reason
-            ));
             assert!(
-                err.error.is_type(ScErrorType::Crypto),
-                "unexpected error type: {err:?}"
+                HostError::result_matches_err(
+                    res,
+                    (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+                ),
+                "{parameter_set} sigVer tcId={} expected Crypto/InvalidInput (reason: {})",
+                case.tc_id,
+                case.reason
             );
         }
+    }
+}
+
+/// The expected signatures of every ACVP sigGen case for the external, pure
+/// interface, deterministic and hedged alike. Each is a valid signature, so
+/// each must verify.
+#[test]
+fn ml_dsa_acvp_sig_gen_external() {
+    let host = observe_host!(Host::test_host());
+    // See ml_dsa_acvp_sig_ver_external for why the budget is uncapped here.
+    host.budget_ref().reset_unlimited().unwrap();
+    let cases = load_acvp::<AcvpSigGenCase>(ACVP_SIG_GEN_PATH);
+    // 15 deterministic and 15 hedged per parameter set in the pinned file.
+    assert_eq!(cases.len(), 90);
+    for (parameter_set, case) in &cases {
+        let res = host_verify_ml_dsa(
+            &host,
+            parameter_set,
+            &case.pk,
+            &case.message,
+            &case.signature,
+            &case.context,
+        );
+        assert!(
+            res.is_ok(),
+            "{parameter_set} sigGen tcId={} must verify, got {:?}",
+            case.tc_id,
+            res.err()
+        );
     }
 }
 
@@ -311,13 +395,14 @@ fn run_wycheproof(host: &Host, parameter_set: &str, name: mldsa_verify::TestName
                     res.err()
                 ),
                 TestResult::Invalid => {
-                    let err = res.expect_err(&format!(
-                        "{parameter_set} wycheproof tcId={} ({}) expected invalid",
-                        tc.tc_id, tc.comment
-                    ));
                     assert!(
-                        err.error.is_type(ScErrorType::Crypto),
-                        "unexpected error type: {err:?}"
+                        HostError::result_matches_err(
+                            res,
+                            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+                        ),
+                        "{parameter_set} wycheproof tcId={} ({}) expected Crypto/InvalidInput",
+                        tc.tc_id,
+                        tc.comment
                     );
                 }
                 // Implementation-defined; either outcome is acceptable.
