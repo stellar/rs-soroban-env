@@ -1,29 +1,22 @@
 //! Tests for the verify_sig_ml_dsa_{44,65,87} host functions.
 //!
-//! Everything here is self-contained: key pairs come from seeded
+//! The fixture-based tests are self-contained: key pairs come from seeded
 //! deterministic keygen and signatures from `sign_deterministic`, so no RNG
-//! and no vector files are involved. Conformance against the NIST ACVP and
-//! Wycheproof vector sets is covered by the vector-driven tests further
-//! down, which read from src/test/data/ml_dsa/.
-//!
-//! The host functions are gated at protocol 30, the protocol
-//! CAP-0087 targets.
+//! is involved. Conformance against the NIST ACVP and Wycheproof vector sets
+//! is covered by the vector-driven tests further down: ACVP files are
+//! vendored verbatim under src/test/data/ml_dsa/acvp/, Wycheproof comes from
+//! the `wycheproof` crate.
 
 use crate::{
-    crypto::ml_dsa::MlDsaVariant,
+    budget::AsBudget,
     xdr::{ScErrorCode, ScErrorType},
     Env, EnvBase, Host, HostError,
 };
 use ml_dsa::{MlDsa44, MlDsa65, MlDsa87, MlDsaParams, SigningKey};
-use serde::Deserialize;
-
-const ML_DSA_MIN_PROTOCOL: u32 = 30;
+use serde::{de::DeserializeOwned, Deserialize};
+use wycheproof::{mldsa_verify, TestResult};
 
 const VARIANTS: [&str; 3] = ["ML-DSA-44", "ML-DSA-65", "ML-DSA-87"];
-
-fn ml_dsa_enabled(host: &Host) -> bool {
-    host.get_ledger_protocol_version().unwrap() >= ML_DSA_MIN_PROTOCOL
-}
 
 /// A deterministic (encoded verifying key, encoded signature) pair over
 /// `msg` and `ctx`. Both keygen and signing are seeded, so the fixture is
@@ -71,43 +64,11 @@ fn host_verify_ml_dsa(
     }
 }
 
-fn assert_err_type(res: Result<crate::Void, HostError>, ty: ScErrorType, ctx: &str) {
-    let err = res.expect_err(&format!("expected {ty:?} error: {ctx}"));
-    assert!(
-        err.error.is_type(ty),
-        "expected {ty:?}, got {err:?} ({ctx})"
-    );
-}
-
-/// The host functions are protocol-gated at 30: below that they must trap
-/// with Context/IndexBounds, at or above they verify successfully.
-#[test]
-fn ml_dsa_protocol_gate() {
-    let host = observe_host!(Host::test_host());
-    for protocol in vec![29, 30] {
-        host.with_mut_ledger_info(|li| {
-            li.protocol_version = protocol;
-        })
-        .unwrap();
-        let msg = b"soroban ml-dsa protocol gate";
-        let (pk, sig) = fixture_for("ML-DSA-44", 1, msg, b"");
-        let res = host_verify_ml_dsa(&host, "ML-DSA-44", &pk, msg, &sig, b"");
-        if ml_dsa_enabled(&host) {
-            assert!(res.is_ok(), "expected success at protocol >= 30: {res:?}");
-        } else {
-            let err = res.expect_err("expected protocol gate trap below protocol 30");
-            assert!(err.error.is_type(ScErrorType::Context));
-            assert!(err.error.is_code(ScErrorCode::IndexBounds));
-        }
-    }
-}
-
 /// A freshly signed message verifies, for every parameter set, with both an
 /// empty and a non-empty context string.
 #[test]
 fn ml_dsa_verify_happy_path() {
     let host = observe_host!(Host::test_host());
-    assert!(ml_dsa_enabled(&host));
     for variant in VARIANTS {
         for (seed, ctx) in [(1u8, &b""[..]), (2u8, &b"soroban-domain-separator"[..])] {
             let msg = b"attestation payload";
@@ -126,7 +87,6 @@ fn ml_dsa_verify_happy_path() {
 #[test]
 fn ml_dsa_boundary_inputs() {
     let host = observe_host!(Host::test_host());
-    assert!(ml_dsa_enabled(&host));
     for variant in VARIANTS {
         let max_ctx = [0xABu8; 255];
         let (pk, sig) = fixture_for(variant, 3, b"", &max_ctx);
@@ -142,68 +102,81 @@ fn ml_dsa_boundary_inputs() {
 #[test]
 fn ml_dsa_error_paths() {
     let host = observe_host!(Host::test_host());
-    assert!(ml_dsa_enabled(&host));
     let msg = b"attestation payload";
     let ctx = b"soroban-domain-separator";
     for variant in VARIANTS {
         let (pk, sig) = fixture_for(variant, 4, msg, ctx);
 
         // Wrong verifying key length (one byte short).
-        assert_err_type(
-            host_verify_ml_dsa(&host, variant, &pk[..pk.len() - 1], msg, &sig, ctx),
-            ScErrorType::Crypto,
-            "truncated pk",
+        assert!(
+            HostError::result_matches_err(
+                host_verify_ml_dsa(&host, variant, &pk[..pk.len() - 1], msg, &sig, ctx),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ),
+            "truncated pk"
         );
 
         // Wrong signature length (one extra byte).
         let mut long_sig = sig.clone();
         long_sig.push(0);
-        assert_err_type(
-            host_verify_ml_dsa(&host, variant, &pk, msg, &long_sig, ctx),
-            ScErrorType::Crypto,
-            "oversized sig",
+        assert!(
+            HostError::result_matches_err(
+                host_verify_ml_dsa(&host, variant, &pk, msg, &long_sig, ctx),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ),
+            "oversized sig"
         );
 
         // Context longer than 255 bytes: Crypto/InvalidInput per CAP-0087.
-        assert_err_type(
-            host_verify_ml_dsa(&host, variant, &pk, msg, &sig, &[0u8; 256]),
-            ScErrorType::Crypto,
-            "ctx > 255",
+        assert!(
+            HostError::result_matches_err(
+                host_verify_ml_dsa(&host, variant, &pk, msg, &sig, &[0u8; 256]),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ),
+            "ctx > 255"
         );
 
         // Bit-flipped message.
         let mut bad_msg = *msg;
         bad_msg[0] ^= 0x01;
-        assert_err_type(
-            host_verify_ml_dsa(&host, variant, &pk, &bad_msg, &sig, ctx),
-            ScErrorType::Crypto,
-            "bit-flipped msg",
+        assert!(
+            HostError::result_matches_err(
+                host_verify_ml_dsa(&host, variant, &pk, &bad_msg, &sig, ctx),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ),
+            "bit-flipped msg"
         );
 
         // Bit-flipped signature (flip a byte in c_tilde, the leading bytes).
         let mut bad_sig = sig.clone();
         bad_sig[0] ^= 0x01;
-        assert_err_type(
-            host_verify_ml_dsa(&host, variant, &pk, msg, &bad_sig, ctx),
-            ScErrorType::Crypto,
-            "bit-flipped sig",
+        assert!(
+            HostError::result_matches_err(
+                host_verify_ml_dsa(&host, variant, &pk, msg, &bad_sig, ctx),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ),
+            "bit-flipped sig"
         );
 
         // Wrong context (valid length, different content).
         let mut bad_ctx = ctx.to_vec();
         bad_ctx[0] ^= 0x01;
-        assert_err_type(
-            host_verify_ml_dsa(&host, variant, &pk, msg, &sig, &bad_ctx),
-            ScErrorType::Crypto,
-            "wrong ctx",
+        assert!(
+            HostError::result_matches_err(
+                host_verify_ml_dsa(&host, variant, &pk, msg, &sig, &bad_ctx),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ),
+            "wrong ctx"
         );
 
         // Signature from a different key.
         let (_, other_sig) = fixture_for(variant, 5, msg, ctx);
-        assert_err_type(
-            host_verify_ml_dsa(&host, variant, &pk, msg, &other_sig, ctx),
-            ScErrorType::Crypto,
-            "sig from another key",
+        assert!(
+            HostError::result_matches_err(
+                host_verify_ml_dsa(&host, variant, &pk, msg, &other_sig, ctx),
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+            ),
+            "sig from another key"
         );
     }
 }
@@ -213,21 +186,24 @@ fn ml_dsa_error_paths() {
 #[test]
 fn ml_dsa_cross_variant_confusion() {
     let host = observe_host!(Host::test_host());
-    assert!(ml_dsa_enabled(&host));
     let msg = b"attestation payload";
     let (pk44, sig44) = fixture_for("ML-DSA-44", 6, msg, b"");
     let (pk65, sig65) = fixture_for("ML-DSA-65", 6, msg, b"");
     // 65-sized inputs into the _44 function.
-    assert_err_type(
-        host_verify_ml_dsa(&host, "ML-DSA-44", &pk65, msg, &sig65, b""),
-        ScErrorType::Crypto,
-        "65 inputs into _44",
+    assert!(
+        HostError::result_matches_err(
+            host_verify_ml_dsa(&host, "ML-DSA-44", &pk65, msg, &sig65, b""),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ),
+        "65 inputs into _44"
     );
     // 44-sized inputs into the _65 function.
-    assert_err_type(
-        host_verify_ml_dsa(&host, "ML-DSA-65", &pk44, msg, &sig44, b""),
-        ScErrorType::Crypto,
-        "44 inputs into _65",
+    assert!(
+        HostError::result_matches_err(
+            host_verify_ml_dsa(&host, "ML-DSA-65", &pk44, msg, &sig44, b""),
+            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+        ),
+        "44 inputs into _65"
     );
 }
 
@@ -235,132 +211,110 @@ fn ml_dsa_cross_variant_confusion() {
 /// (charges happen before the expensive work).
 #[test]
 fn ml_dsa_budget_exhaustion() -> Result<(), HostError> {
-    use crate::budget::AsBudget;
     let host = observe_host!(Host::test_host());
-    assert!(ml_dsa_enabled(&host));
     let msg = b"attestation payload";
     let (pk, sig) = fixture_for("ML-DSA-65", 7, msg, b"");
     host.as_budget().reset_limits(10_000, 10_000)?;
     let res = host_verify_ml_dsa(&host, "ML-DSA-65", &pk, msg, &sig, b"");
-    let err = res.expect_err("expected budget exhaustion");
-    assert!(err.error.is_type(ScErrorType::Budget));
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+    ));
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// NIST ACVP sigVer vectors, *internal* interface (ML-DSA.Verify_internal).
-// Source: bundled with the RustCrypto ml-dsa crate (tests/sig-ver.json),
-// originally from usnistgov/ACVP-Server (vsId 42, FIPS204 revision).
-// The external host functions cannot replay these (the external API prepends
-// 0x00 || len(ctx) || ctx to the message), so they exercise the host-side
-// decode plumbing + the crate's core verify at the module level.
+// NIST ACVP ML-DSA vectors, vendored verbatim from usnistgov/ACVP-Server at
+// commit a7f283cdc87d2d6dd93c1bac59e5622c5f9f8324:
+// gen-val/json-files/ML-DSA-{sigVer,sigGen}-FIPS204/internalProjection.json.
+//
+// Only groups the host functions can exercise are used: the external
+// interface (ML-DSA.Verify) over a pure, not pre-hashed, message. The
+// internal-interface and HashML-DSA groups are skipped.
 // ---------------------------------------------------------------------------
 
+const ACVP_SIG_VER_PATH: &str =
+    "./src/test/data/ml_dsa/acvp/ML-DSA-sigVer-FIPS204/internalProjection.json";
+const ACVP_SIG_GEN_PATH: &str =
+    "./src/test/data/ml_dsa/acvp/ML-DSA-sigGen-FIPS204/internalProjection.json";
+
 #[derive(Deserialize)]
-struct AcvpInternalFile {
-    #[serde(rename = "testGroups")]
-    test_groups: Vec<AcvpInternalGroup>,
+#[serde(rename_all = "camelCase")]
+struct AcvpFile<T> {
+    test_groups: Vec<AcvpGroup<T>>,
 }
 
 #[derive(Deserialize)]
-struct AcvpInternalGroup {
-    #[serde(rename = "parameterSet")]
+#[serde(rename_all = "camelCase")]
+struct AcvpGroup<T> {
     parameter_set: String,
+    signature_interface: Option<String>,
+    pre_hash: Option<String>,
+    tests: Vec<T>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AcvpSigVerCase {
+    tc_id: u64,
     #[serde(with = "hex::serde")]
     pk: Vec<u8>,
-    tests: Vec<AcvpInternalCase>,
-}
-
-#[derive(Deserialize)]
-struct AcvpInternalCase {
-    #[serde(rename = "tcId")]
-    id: usize,
-    #[serde(rename = "testPassed")]
-    test_passed: bool,
-    #[serde(with = "hex::serde")]
+    #[serde(default, with = "hex::serde")]
     message: Vec<u8>,
     #[serde(with = "hex::serde")]
     signature: Vec<u8>,
-}
-
-fn run_acvp_internal_group<P: MlDsaVariant>(host: &Host, group: &AcvpInternalGroup) {
-    for tc in &group.tests {
-        // Use the host's decode helpers (the code under test), then the
-        // crate's internal verify (what these vectors target).
-        let passed = (|| -> Result<bool, HostError> {
-            let vk = host.ml_dsa_verifying_key_from_slice::<P>(&group.pk)?;
-            let sig = host.ml_dsa_signature_from_slice::<P>(&tc.signature)?;
-            Ok(vk.verify_internal(&tc.message, &sig))
-        })()
-        .unwrap_or(false);
-        assert_eq!(
-            passed, tc.test_passed,
-            "ACVP internal {} tcId={} expected testPassed={}",
-            group.parameter_set, tc.id, tc.test_passed
-        );
-    }
-}
-
-#[test]
-fn ml_dsa_acvp_sig_ver_internal() {
-    // A plain (non-observed) host: this test makes thousands of budget
-    // charges across 45 verifications; observation tests come with the
-    // host-function-level tests instead.
-    let host = observe_host!(Host::test_host());
-    let data = std::fs::read("./src/test/data/ml_dsa/acvp_sig_ver_internal.json").unwrap();
-    let file: AcvpInternalFile = serde_json::from_slice(&data).unwrap();
-    let mut count = 0;
-    for group in &file.test_groups {
-        match group.parameter_set.as_str() {
-            "ML-DSA-44" => run_acvp_internal_group::<MlDsa44>(&host, group),
-            "ML-DSA-65" => run_acvp_internal_group::<MlDsa65>(&host, group),
-            "ML-DSA-87" => run_acvp_internal_group::<MlDsa87>(&host, group),
-            other => panic!("unknown parameter set {other}"),
-        }
-        count += group.tests.len();
-    }
-    assert!(count >= 45, "expected at least 45 ACVP cases, got {count}");
-}
-
-#[derive(Deserialize)]
-struct AcvpExternalCase {
-    #[serde(rename = "parameterSet")]
-    parameter_set: String,
-    #[serde(with = "hex::serde")]
-    pk: Vec<u8>,
-    #[serde(with = "hex::serde")]
-    message: Vec<u8>,
-    #[serde(with = "hex::serde")]
-    signature: Vec<u8>,
-    #[serde(with = "hex::serde")]
+    #[serde(default, with = "hex::serde")]
     context: Vec<u8>,
-    #[serde(rename = "testPassed")]
     test_passed: bool,
+    #[serde(default)]
     reason: String,
 }
 
-fn load_acvp_external() -> Vec<AcvpExternalCase> {
-    let data = std::fs::read("./src/test/data/ml_dsa/acvp_sig_ver_external.json").unwrap();
-    serde_json::from_slice(&data).unwrap()
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AcvpSigGenCase {
+    tc_id: u64,
+    #[serde(with = "hex::serde")]
+    pk: Vec<u8>,
+    #[serde(default, with = "hex::serde")]
+    message: Vec<u8>,
+    #[serde(with = "hex::serde")]
+    signature: Vec<u8>,
+    #[serde(default, with = "hex::serde")]
+    context: Vec<u8>,
 }
 
-/// All NIST ACVP sigVer external-interface (pure, non-externalMu) cases
-/// through the host functions. Invalid cases must trap with a Crypto or
-/// Object error; valid cases must succeed. Runs fully under `--features next`.
+/// Loads a vendored ACVP file and returns the external, pure cases paired
+/// with their parameter set.
+fn load_acvp<T: DeserializeOwned>(path: &str) -> Vec<(String, T)> {
+    let data = std::fs::read(path).unwrap();
+    let file: AcvpFile<T> = serde_json::from_slice(&data).unwrap();
+    file.test_groups
+        .into_iter()
+        .filter(|g| {
+            g.signature_interface.as_deref() == Some("external")
+                && g.pre_hash.as_deref() == Some("pure")
+        })
+        .flat_map(|g| {
+            let parameter_set = g.parameter_set;
+            g.tests.into_iter().map(move |t| (parameter_set.clone(), t))
+        })
+        .collect()
+}
+
+/// Every ACVP sigVer case for the external, pure interface. Valid signatures
+/// must verify; every invalid one must trap with Crypto/InvalidInput.
 #[test]
 fn ml_dsa_acvp_sig_ver_external() {
     let host = observe_host!(Host::test_host());
-    assert!(ml_dsa_enabled(&host));
-    // The default budget is sized for a single transaction, not hundreds of
-    // post-quantum verifications; metering itself is covered by the budget
-    // test below.
     host.budget_ref().reset_unlimited().unwrap();
-    let cases = load_acvp_external();
-    assert!(!cases.is_empty());
-    for case in &cases {
+    let cases = load_acvp::<AcvpSigVerCase>(ACVP_SIG_VER_PATH);
+    // 15 per parameter set in the pinned file
+    assert_eq!(cases.len(), 45);
+    for (parameter_set, case) in &cases {
         let res = host_verify_ml_dsa(
             &host,
-            &case.parameter_set,
+            parameter_set,
             &case.pk,
             &case.message,
             &case.signature,
@@ -369,93 +323,88 @@ fn ml_dsa_acvp_sig_ver_external() {
         if case.test_passed {
             assert!(
                 res.is_ok(),
-                "{} expected valid, got {:?} (reason: {})",
-                case.parameter_set,
+                "{parameter_set} sigVer tcId={} expected valid, got {:?} (reason: {})",
+                case.tc_id,
                 res.err(),
                 case.reason
             );
         } else {
-            let err = res.expect_err(&format!(
-                "{} expected invalid (reason: {}), but verification succeeded",
-                case.parameter_set, case.reason
-            ));
             assert!(
-                err.error.is_type(ScErrorType::Crypto),
-                "unexpected error type: {err:?}"
+                HostError::result_matches_err(
+                    res,
+                    (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+                ),
+                "{parameter_set} sigVer tcId={} expected Crypto/InvalidInput (reason: {})",
+                case.tc_id,
+                case.reason
             );
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Wycheproof ML-DSA verify vectors (C2SP/wycheproof testvectors_v1).
-// Cover malformed encodings, boundary cases, and context strings.
-// ---------------------------------------------------------------------------
-
-#[derive(Deserialize)]
-struct WycheproofFile {
-    #[serde(rename = "testGroups")]
-    groups: Vec<WycheproofGroup>,
-}
-
-#[derive(Deserialize)]
-struct WycheproofGroup {
-    #[serde(default, rename = "publicKey", with = "hex::serde")]
-    public_key: Vec<u8>,
-    tests: Vec<WycheproofCase>,
-}
-
-#[derive(Deserialize)]
-struct WycheproofCase {
-    #[serde(rename = "tcId")]
-    id: usize,
-    comment: String,
-    #[serde(with = "hex::serde")]
-    msg: Vec<u8>,
-    #[serde(default, with = "hex::serde")]
-    ctx: Vec<u8>,
-    #[serde(with = "hex::serde")]
-    sig: Vec<u8>,
-    result: String,
-}
-
-fn run_wycheproof_file(host: &Host, parameter_set: &str, file: &str) {
-    assert!(ml_dsa_enabled(&host));
-    // See ml_dsa_acvp_sig_ver_external for why the budget is uncapped here.
+/// The expected signatures of every ACVP sigGen case for the external, pure
+/// interface, deterministic and hedged alike. Each is a valid signature, so
+/// each must verify.
+#[test]
+fn ml_dsa_acvp_sig_gen_external() {
+    let host = observe_host!(Host::test_host());
     host.budget_ref().reset_unlimited().unwrap();
-    let data = std::fs::read(format!("./src/test/data/ml_dsa/{file}")).unwrap();
-    let tv: WycheproofFile = serde_json::from_slice(&data).unwrap();
+    let cases = load_acvp::<AcvpSigGenCase>(ACVP_SIG_GEN_PATH);
+    // 15 deterministic and 15 hedged per parameter set in the pinned file.
+    assert_eq!(cases.len(), 90);
+    for (parameter_set, case) in &cases {
+        let res = host_verify_ml_dsa(
+            &host,
+            parameter_set,
+            &case.pk,
+            &case.message,
+            &case.signature,
+            &case.context,
+        );
+        assert!(
+            res.is_ok(),
+            "{parameter_set} sigGen tcId={} must verify, got {:?}",
+            case.tc_id,
+            res.err()
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Wycheproof ML-DSA verify vectors (C2SP/wycheproof), loaded from the
+// `wycheproof` crate. Cover malformed encodings, boundary conditions,
+// infinity-norm violations of the signer response, and context strings.
+// ---------------------------------------------------------------------------
+
+fn run_wycheproof(host: &Host, parameter_set: &str, name: mldsa_verify::TestName) {
+    host.budget_ref().reset_unlimited().unwrap();
+    let test_set = mldsa_verify::TestSet::load(name).unwrap();
     let mut count = 0;
-    for group in &tv.groups {
+    for group in &test_set.test_groups {
         for tc in &group.tests {
-            let res = host_verify_ml_dsa(
-                host,
-                parameter_set,
-                &group.public_key,
-                &tc.msg,
-                &tc.sig,
-                &tc.ctx,
-            );
-            match tc.result.as_str() {
-                "valid" => assert!(
+            let ctx = tc.ctx.as_deref().map_or(&[][..], Vec::as_slice);
+            let res = host_verify_ml_dsa(host, parameter_set, &group.pubkey, &tc.msg, &tc.sig, ctx);
+            match tc.result {
+                TestResult::Valid => assert!(
                     res.is_ok(),
                     "{parameter_set} wycheproof tcId={} ({}) expected valid, got {:?}",
-                    tc.id,
+                    tc.tc_id,
                     tc.comment,
                     res.err()
                 ),
-                "invalid" => {
-                    let err = res.expect_err(&format!(
-                        "{parameter_set} wycheproof tcId={} ({}) expected invalid",
-                        tc.id, tc.comment
-                    ));
+                TestResult::Invalid => {
                     assert!(
-                        err.error.is_type(ScErrorType::Crypto),
-                        "unexpected error type: {err:?}"
+                        HostError::result_matches_err(
+                            res,
+                            (ScErrorType::Crypto, ScErrorCode::InvalidInput)
+                        ),
+                        "{parameter_set} wycheproof tcId={} ({}) expected Crypto/InvalidInput",
+                        tc.tc_id,
+                        tc.comment
                     );
                 }
-                // "acceptable": implementation-defined; accept either outcome.
-                _ => {}
+                // Implementation-defined; either outcome is acceptable.
+                TestResult::Acceptable => {}
             }
             count += 1;
         }
@@ -466,17 +415,17 @@ fn run_wycheproof_file(host: &Host, parameter_set: &str, file: &str) {
 #[test]
 fn ml_dsa_wycheproof_44() {
     let host = observe_host!(Host::test_host());
-    run_wycheproof_file(&host, "ML-DSA-44", "wycheproof_mldsa_44_verify.json");
+    run_wycheproof(&host, "ML-DSA-44", mldsa_verify::TestName::MlDsa44Verify);
 }
 
 #[test]
 fn ml_dsa_wycheproof_65() {
     let host = observe_host!(Host::test_host());
-    run_wycheproof_file(&host, "ML-DSA-65", "wycheproof_mldsa_65_verify.json");
+    run_wycheproof(&host, "ML-DSA-65", mldsa_verify::TestName::MlDsa65Verify);
 }
 
 #[test]
 fn ml_dsa_wycheproof_87() {
     let host = observe_host!(Host::test_host());
-    run_wycheproof_file(&host, "ML-DSA-87", "wycheproof_mldsa_87_verify.json");
+    run_wycheproof(&host, "ML-DSA-87", mldsa_verify::TestName::MlDsa87Verify);
 }

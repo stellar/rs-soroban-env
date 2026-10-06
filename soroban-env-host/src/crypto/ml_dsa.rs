@@ -10,8 +10,7 @@
 //! Metering follows CAP-0087: three cost types per parameter set, covering
 //! verifying-key decoding, signature decoding, and verification proper. Each
 //! is charged after its input has been length-checked and before the
-//! corresponding work is performed. The cost model parameters are
-//! uncalibrated placeholders; the calibration benchmarks live in
+//! corresponding work is performed. The calibration benchmarks live in
 //! `cost_runner/cost_types/ml_dsa.rs`.
 
 use crate::{
