@@ -9,7 +9,7 @@
 
 use crate::{
     budget::AsBudget,
-    xdr::{ScErrorCode, ScErrorType},
+    xdr::{ContractEventBody, ScErrorCode, ScErrorType, ScSymbol, ScVal},
     Env, EnvBase, Host, HostError,
 };
 use ml_dsa::{MlDsa44, MlDsa65, MlDsa87, MlDsaParams, SigningKey};
@@ -220,6 +220,28 @@ fn ml_dsa_budget_exhaustion() -> Result<(), HostError> {
         res,
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
     ));
+    Ok(())
+}
+
+/// The variant name "ML_DSA_{44,65,87}" must be rendered correctly in an
+/// error's diagnostic event.
+#[test]
+fn ml_dsa_diagnostics_name_the_variant() -> Result<(), HostError> {
+    let host = Host::test_host();
+    host.enable_debug()?;
+    for variant in VARIANTS {
+        let (pk, sig) = fixture_for(variant, 1, b"msg", b"");
+        let res = host_verify_ml_dsa(&host, variant, &pk[..pk.len() - 1], b"msg", &sig, b"");
+        assert!(res.is_err(), "{variant}: truncated pk must be rejected");
+
+        let event = host.get_events()?.0.pop().expect("diagnostic event");
+        let ContractEventBody::V0(body) = event.event.body;
+        let ScVal::Vec(Some(data)) = body.data else {
+            panic!("{variant}: unexpected diagnostic data {:?}", body.data);
+        };
+        let name = ScVal::Symbol(ScSymbol(variant.replace('-', "_").try_into().unwrap()));
+        assert_eq!(data.get(1), Some(&name), "{variant}: {data:?}");
+    }
     Ok(())
 }
 
