@@ -16,7 +16,7 @@
 use crate::{
     err,
     xdr::{ContractCostType, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Host, HostError,
+    BytesObject, Host, HostError, SymbolSmall,
 };
 use ml_dsa::{
     EncodedSignature, EncodedVerifyingKey, MlDsa44, MlDsa65, MlDsa87, MlDsaParams, Signature,
@@ -34,8 +34,9 @@ pub(crate) const ML_DSA_MAX_CONTEXT_LEN: usize = 255;
 /// whatever the underlying crate happens to use; `declare_ml_dsa_variant!`
 /// statically asserts the two agree.
 pub(crate) trait MlDsaVariant: MlDsaParams {
-    /// Parameter set name, e.g. "ML-DSA-44". Included in every error this
-    /// module raises, so a diagnostic always names the exact variant.
+    /// Parameter set name, e.g. `ML_DSA_44`. Included in every error this
+    /// module raises, so a diagnostic always names the exact variant. Must be
+    /// a valid small symbol; see `Host::ml_dsa_name`.
     const NAME: &'static str;
     /// Length of a `pkEncode` verifying key (FIPS 204 Algorithm 22).
     const VERIFYING_KEY_LEN: usize;
@@ -71,7 +72,7 @@ macro_rules! declare_ml_dsa_variant {
 // k=4, l=4.
 declare_ml_dsa_variant!(
     MlDsa44,
-    "ML-DSA-44",
+    "ML_DSA_44",
     1312,
     2420,
     MlDsa44DecodeVerifyingKey,
@@ -81,7 +82,7 @@ declare_ml_dsa_variant!(
 // k=6, l=5.
 declare_ml_dsa_variant!(
     MlDsa65,
-    "ML-DSA-65",
+    "ML_DSA_65",
     1952,
     3309,
     MlDsa65DecodeVerifyingKey,
@@ -91,7 +92,7 @@ declare_ml_dsa_variant!(
 // k=8, l=7.
 declare_ml_dsa_variant!(
     MlDsa87,
-    "ML-DSA-87",
+    "ML_DSA_87",
     2592,
     4627,
     MlDsa87DecodeVerifyingKey,
@@ -100,6 +101,21 @@ declare_ml_dsa_variant!(
 );
 
 impl Host {
+    /// `P::NAME` as a small symbol for error diagnostics. Unlike a string it
+    /// needs no allocation, so it renders even when the error is raised while
+    /// an input object is borrowed. An invalid `NAME` is a bug, reported as an
+    /// internal error.
+    fn ml_dsa_name<P: MlDsaVariant>(&self) -> Result<SymbolSmall, HostError> {
+        SymbolSmall::try_from_str(P::NAME).map_err(|_| {
+            self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "ML-DSA variant name is not a valid small symbol",
+                &[],
+            )
+        })
+    }
+
     /// Decodes an ML-DSA verifying key from a byte slice. The slice length
     /// must exactly match the variant's encoded key size. The charge covers
     /// the SHAKE-128 expansion of `A_hat` and its NTT-domain precompute, and
@@ -108,12 +124,13 @@ impl Host {
         &self,
         bytes: &[u8],
     ) -> Result<VerifyingKey<P>, HostError> {
+        let name = self.ml_dsa_name::<P>()?;
         if bytes.len() != P::VERIFYING_KEY_LEN {
             return Err(err!(
                 self,
                 (ScErrorType::Crypto, ScErrorCode::InvalidInput),
                 "invalid verifying key length",
-                P::NAME,
+                name,
                 P::VERIFYING_KEY_LEN as u64,
                 bytes.len() as u64
             ));
@@ -126,7 +143,7 @@ impl Host {
                 self,
                 (ScErrorType::Context, ScErrorCode::InternalError),
                 "verifying key length passed validation but failed conversion",
-                P::NAME
+                name
             )
         })?;
         Ok(VerifyingKey::<P>::decode(enc))
@@ -141,12 +158,13 @@ impl Host {
         &self,
         bytes: &[u8],
     ) -> Result<Signature<P>, HostError> {
+        let name = self.ml_dsa_name::<P>()?;
         if bytes.len() != P::SIGNATURE_LEN {
             return Err(err!(
                 self,
                 (ScErrorType::Crypto, ScErrorCode::InvalidInput),
                 "invalid signature length",
-                P::NAME,
+                name,
                 P::SIGNATURE_LEN as u64,
                 bytes.len() as u64
             ));
@@ -158,7 +176,7 @@ impl Host {
                 self,
                 (ScErrorType::Context, ScErrorCode::InternalError),
                 "signature length passed validation but failed conversion",
-                P::NAME
+                name
             )
         })?;
         Signature::<P>::decode(enc).ok_or_else(|| {
@@ -166,7 +184,7 @@ impl Host {
                 self,
                 (ScErrorType::Crypto, ScErrorCode::InvalidInput),
                 "malformed signature",
-                P::NAME
+                name
             )
         })
     }
@@ -185,12 +203,13 @@ impl Host {
         ctx: &[u8],
         sig: &Signature<P>,
     ) -> Result<(), HostError> {
+        let name = self.ml_dsa_name::<P>()?;
         if ctx.len() > ML_DSA_MAX_CONTEXT_LEN {
             return Err(err!(
                 self,
                 (ScErrorType::Crypto, ScErrorCode::InvalidInput),
                 "context is too long",
-                P::NAME,
+                name,
                 ML_DSA_MAX_CONTEXT_LEN as u64,
                 ctx.len() as u64
             ));
@@ -203,7 +222,7 @@ impl Host {
                 self,
                 (ScErrorType::Crypto, ScErrorCode::InvalidInput),
                 "failed verification",
-                P::NAME
+                name
             ))
         }
     }
