@@ -39,9 +39,7 @@ default-features = false
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
-version = "=0.31.1-soroban.20.0.1"
-git = "https://github.com/stellar/wasmi"
-rev = "ff5aeeb286880d574bcabc100115126446dca915"
+version = "=0.31.1-soroban.29.0.0"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # [patch.crates-io]
