@@ -14,6 +14,7 @@
 
 pub mod expr;
 pub mod wasmi;
+pub mod zk_bn254;
 
 /// Result of running a fuzz target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
