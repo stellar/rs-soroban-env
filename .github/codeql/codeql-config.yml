@@ -1,0 +1,24 @@
+name: "CodeQL config"
+
+# Restrict CodeQL analysis to the `src` directory of each Rust crate so that
+# tests, benchmarks, fuzz targets, observations and other non-production code
+# are excluded from scanning.
+# See: https://docs.github.com/en/code-security/reference/code-scanning/workflow-configuration-options#specifying-directories-to-scan
+paths:
+  - soroban-builtin-sdk-macros/src
+  - soroban-env-common/src
+  - soroban-env-guest/src
+  - soroban-env-host/src
+  - soroban-env-macros/src
+  - soroban-simulation/src
+  - soroban-synth-wasm/src
+  - soroban-test-wasms/src
+
+paths-ignore:
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/observations/**"
+  - "**/fuzz/**"
+  - "**/build.rs"
+  - soroban-env-host/fuzz
+  - soroban-test-wasms/wasm-workspace
