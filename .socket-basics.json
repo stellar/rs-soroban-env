@@ -1,0 +1,13 @@
+{
+  "workspace": ".",
+  "c_sast_enabled": true,
+  "rust_sast_enabled": true,
+  "rust_disabled_rules": "rust-memory-safety,rust-panic-in-production,rust-sql-injection,rust-unsafe-usage",
+  "sast_ignore_overrides": "rust-hardcoded-secrets:soroban-env-host/src/builtin_contracts/account_contract.rs,rust-hardcoded-secrets:soroban-env-host/src/builtin_contracts/stellar_asset_contract/metadata.rs,rust-env-injection:soroban-env-host/build.rs,rust-env-injection:soroban-env-host/src/testutils.rs,rust-env-injection:soroban-env-macros/src/path.rs,rust-integer-overflow:soroban-env-host/src/host.rs",
+  "secret_scanning_enabled": true,
+  "console_tabular_enabled": true,
+  "dockerfiles": ".devcontainer/Dockerfile",
+  "socket_tier_1_enabled": false,
+  "trivy_vuln_enabled": false,
+  "trufflehog_exclude_dir": "build,target,.git,yarn.lock,package-lock.json,pnpm-lock.yaml,Cargo.lock,go.sum,poetry.lock,Gemfile.lock,composer.lock"
+}
