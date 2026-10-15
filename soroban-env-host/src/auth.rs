@@ -371,11 +371,14 @@ impl RecordingAuthInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum MatchState {
+pub(crate) enum MatchState {
     Unmatched,
     RootMatch,
     SubMatch { index_in_parent: usize },
 }
+
+#[cfg(any(test, feature = "recording_mode"))]
+impl MeteredClone for MatchState {}
 
 impl MatchState {
     fn is_matched(&self) -> bool {
@@ -692,6 +695,37 @@ pub(crate) struct AuthorizedInvocation {
 pub(crate) struct AuthorizedInvocationSnapshot {
     is_exhausted: bool,
     sub_invocations: Vec<AuthorizedInvocationSnapshot>,
+}
+
+// Deep clones of the trackers only happen in the recording mode (for the
+// snapshots), and thus are charged to the shadow budget.
+#[cfg(any(test, feature = "recording_mode"))]
+impl MeteredClone for AuthorizedInvocation {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match &self.function {
+            AuthorizedFunction::ContractFn(f) => f.args.charge_for_substructure(budget.clone())?,
+            AuthorizedFunction::CreateContractHostFn(args) => {
+                args.charge_for_substructure(budget.clone())?
+            }
+        }
+        self.sub_invocations.charge_for_substructure(budget)
+    }
+}
+
+#[cfg(any(test, feature = "recording_mode"))]
+impl MeteredClone for AccountAuthorizationTracker {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.invocation_tracker
+            .match_stack
+            .charge_for_substructure(budget.clone())?;
+        self.invocation_tracker
+            .root_authorized_invocation
+            .charge_for_substructure(budget)
+    }
 }
 
 impl Compare<ContractFunction> for Host {
@@ -1417,6 +1451,10 @@ impl AuthorizationManager {
         }
         // If a tracker for the new tree doesn't exist yet, create
         // it and initialize with the current invocation.
+        host.as_budget().with_observable_shadow_mode(|| {
+            Vec::<RefCell<AccountAuthorizationTracker>>::charge_bulk_init_cpy(1, host)?;
+            Vec::<(u32, usize)>::charge_bulk_init_cpy(1, host)
+        })?;
         self.try_borrow_account_trackers_mut(host)?
             .push(RefCell::new(AccountAuthorizationTracker::new_recording(
                 host,
@@ -1447,7 +1485,8 @@ impl AuthorizationManager {
         // Then check the AccountAuthorizationTrackers
         match &self.mode {
             AuthorizationMode::Enforcing => self.require_auth_enforcing(host, address, &function),
-            // metering: free for recording
+            // metering: charged to shadow budget, as it diverges from the
+            // enforcing mode
             #[cfg(any(test, feature = "recording_mode"))]
             AuthorizationMode::Recording(recording_info) => {
                 self.require_auth_recording(host, address, function, recording_info)
@@ -1483,8 +1522,13 @@ impl AuthorizationManager {
             AuthorizationMode::Recording(_) => {
                 // All trackers should be available to borrow for copy as in
                 // recording mode we can't have recursive authorization.
-                // metering: free for recording
-                AccountTrackersSnapshot::Recording(self.try_borrow_account_trackers(host)?.clone())
+                // metering: charged to shadow budget, as it diverges from the
+                // enforcing mode.
+                let trackers = self.try_borrow_account_trackers(host)?;
+                AccountTrackersSnapshot::Recording(
+                    host.as_budget()
+                        .with_observable_shadow_mode(|| trackers.metered_clone(host))?,
+                )
             }
         };
         let invoker_contract_tracker_root_snapshots = self
@@ -1495,12 +1539,20 @@ impl AuthorizationManager {
         #[cfg(any(test, feature = "recording_mode"))]
         let tracker_by_address_handle = match &self.mode {
             AuthorizationMode::Enforcing => None,
-            AuthorizationMode::Recording(recording_info) => Some(
-                // metering: free for recording
-                recording_info
-                    .try_borrow_tracker_by_address_handle(host)?
-                    .clone(),
-            ),
+            AuthorizationMode::Recording(recording_info) => {
+                // metering: charged to shadow budget, as it diverges from
+                // enforcing mode. `BTreeMap` clone is metered as clone of
+                // the respective vector for simplicity.
+                let tracker_by_address_handle =
+                    recording_info.try_borrow_tracker_by_address_handle(host)?;
+                host.as_budget().with_observable_shadow_mode(|| {
+                    Vec::<(u32, usize)>::charge_bulk_init_cpy(
+                        tracker_by_address_handle.len() as u64,
+                        host,
+                    )
+                })?;
+                Some(tracker_by_address_handle.clone())
+            }
         };
         Ok(AuthorizationManagerSnapshot {
             account_trackers_snapshot,
@@ -1726,7 +1778,8 @@ impl AuthorizationManager {
     // Returns the recorded per-address authorization payloads that would cover the
     // top-level contract function invocation in the enforcing mode.
     // Should only be called in the recording mode.
-    // metering: free, recording mode
+    // metering: charged to shadow budget, as this is recording-mode only
+    // method.
     #[cfg(any(test, feature = "recording_mode"))]
     pub(crate) fn get_recorded_auth_payloads(
         &self,
@@ -1737,11 +1790,12 @@ impl AuthorizationManager {
                 ScErrorType::Auth,
                 ScErrorCode::InternalError,
             ))),
-            AuthorizationMode::Recording(_) => Ok(self
-                .try_borrow_account_trackers(host)?
-                .iter()
-                .map(|tracker| tracker.try_borrow_or_err()?.get_recorded_auth_payload(host))
-                .collect::<Result<Vec<RecordedAuthPayload>, HostError>>()?),
+            AuthorizationMode::Recording(_) => host.as_budget().with_observable_shadow_mode(|| {
+                self.try_borrow_account_trackers(host)?
+                    .iter()
+                    .map(|tracker| tracker.try_borrow_or_err()?.get_recorded_auth_payload(host))
+                    .metered_collect::<Result<Vec<RecordedAuthPayload>, HostError>>(host)?
+            }),
         }
     }
 
@@ -1883,9 +1937,17 @@ impl InvocationTracker {
         }
     }
 
-    // metering: free for recording
+    // metering: charged to shadow budget, as recording mode diverges from the
+    // enforcing mode
     #[cfg(any(test, feature = "recording_mode"))]
-    fn new_recording(function: AuthorizedFunction, current_stack_len: usize) -> Self {
+    fn new_recording(
+        budget: &Budget,
+        function: AuthorizedFunction,
+        current_stack_len: usize,
+    ) -> Result<Self, HostError> {
+        budget.with_observable_shadow_mode(|| {
+            Vec::<MatchState>::charge_bulk_init_cpy(current_stack_len as u64, budget)
+        })?;
         // Create the stack of `MatchState::Unmatched` leading to the current invocation to
         // represent invocations that didn't need authorization on behalf of
         // the tracked address.
@@ -1893,12 +1955,12 @@ impl InvocationTracker {
         // Add a MatchState for the current(root) invocation.
         match_stack.push(MatchState::RootMatch);
         let root_exhausted_frame = Some(match_stack.len() - 1);
-        Self {
+        Ok(Self {
             root_authorized_invocation: AuthorizedInvocation::new_recording(function),
             match_stack,
             root_exhausted_frame,
             is_fully_processed: false,
-        }
+        })
     }
 
     // Walks a path in the tree defined by `match_stack` and
@@ -2026,7 +2088,7 @@ impl InvocationTracker {
     // This is needed for the recording mode only.
     // This assumes that the address matching is correctly performed before
     // calling this.
-    // metering: free for recording
+    // metering: recording-mode-only operations are charged to shadow budget
     #[cfg(any(test, feature = "recording_mode"))]
     fn record_invocation(
         &mut self,
@@ -2047,6 +2109,9 @@ impl InvocationTracker {
         let function_for_comparison = AuthorizedFunction::from_xdr(host, function.to_xdr(host)?)?;
         let _ = host.compare(&function, &function_for_comparison)?;
         if let Some(curr_invocation) = self.last_authorized_invocation_mut()? {
+            host.as_budget().with_observable_shadow_mode(|| {
+                Vec::<AuthorizedInvocation>::charge_bulk_init_cpy(1, host)
+            })?;
             curr_invocation
                 .sub_invocations
                 .push(AuthorizedInvocation::new_recording(function));
@@ -2409,7 +2474,8 @@ impl AccountAuthorizationTracker {
         })
     }
 
-    // metering: free, since this is recording mode only
+    // metering: covered, recording-mode-only operations are charged to the
+    // shadow budget
     #[cfg(any(test, feature = "recording_mode"))]
     fn new_recording(
         host: &Host,
@@ -2450,7 +2516,11 @@ impl AccountAuthorizationTracker {
         };
         Ok(Self {
             address,
-            invocation_tracker: InvocationTracker::new_recording(function, current_stack_len),
+            invocation_tracker: InvocationTracker::new_recording(
+                host.as_budget(),
+                function,
+                current_stack_len,
+            )?,
             signature: Val::VOID.into(),
             credentials: if is_transaction_source_account {
                 AccountAuthorizationCredentials::SourceAccount
@@ -2523,7 +2593,7 @@ impl AccountAuthorizationTracker {
     // This is needed for the recording mode only.
     // This assumes that the address matching is correctly performed before
     // calling this.
-    // metering: free for recording
+    // metering: covered by components
     #[cfg(any(test, feature = "recording_mode"))]
     fn record_invocation(
         &mut self,
@@ -2535,7 +2605,8 @@ impl AccountAuthorizationTracker {
 
     // Build the authorization payload from the invocations recorded in this
     // tracker.
-    // metering: free for recording
+    // metering: charged to shadow budget, as this is recording-mode only
+    // method.
     #[cfg(any(test, feature = "recording_mode"))]
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
         host.as_budget().with_observable_shadow_mode(|| {

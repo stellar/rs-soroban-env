@@ -11,7 +11,6 @@ use crate::{
     auth::RecordedAuthPayload,
     storage::is_persistent_key,
     xdr::{ContractEvent, ReadXdr, ScVal, SorobanAddressCredentials, SorobanCredentials, WriteXdr},
-    DEFAULT_XDR_RW_LIMITS,
 };
 use crate::{
     budget::{AsBudget, Budget},
@@ -544,7 +543,7 @@ where
     }
     let (storage, events) = host.try_finish()?;
     if enable_diagnostics {
-        extract_diagnostic_events(&events, diagnostic_events);
+        extract_diagnostic_events(budget, &events, diagnostic_events);
     }
     let encoded_invoke_result = result.and_then(|res| {
         let mut encoded_result_sc_val = vec![];
@@ -579,14 +578,17 @@ where
 
 #[cfg(any(test, feature = "recording_mode"))]
 impl Host {
-    fn to_xdr_non_metered(&self, v: &impl WriteXdr) -> Result<Vec<u8>, HostError> {
-        v.to_xdr(DEFAULT_XDR_RW_LIMITS).map_err(|_| {
-            self.err(
-                ScErrorType::Value,
-                ScErrorCode::InvalidInput,
-                "could not convert XDR struct to bytes - the input is too deep or too large",
-                &[],
-            )
+    // Serializes value to XDR, metered by the *shadow* budget.
+    // The result of exceeding shadow budget is intentionally observable, as
+    // this may only be used in recording mode for the serializations that are
+    // not resembling the enforcing mode logic, but still need to happen and
+    // thus metered.
+    fn to_xdr_shadow_metered(&self, v: &impl WriteXdr) -> Result<Vec<u8>, HostError> {
+        let budget = self.budget_ref();
+        budget.with_observable_shadow_mode(|| {
+            let mut buf = vec![];
+            metered_write_xdr(budget, v, &mut buf)?;
+            Ok(buf)
         })
     }
 
@@ -594,7 +596,7 @@ impl Host {
     where
         T: WriteXdr + ReadXdr,
     {
-        self.metered_from_xdr(self.to_xdr_non_metered(v)?.as_slice())
+        self.metered_from_xdr(self.to_xdr_shadow_metered(v)?.as_slice())
     }
 }
 
@@ -823,7 +825,7 @@ pub fn invoke_host_function_in_recording_mode(
 
     let encoded_auth_entries = output_auth
         .iter()
-        .map(|e| host.to_xdr_non_metered(e))
+        .map(|e| host.to_xdr_shadow_metered(e))
         .collect::<Result<Vec<Vec<u8>>, HostError>>()?;
     let decoded_auth_entries = host.build_auth_entries_from_xdr(encoded_auth_entries.iter())?;
     if is_recording_auth {
@@ -871,7 +873,7 @@ pub fn invoke_host_function_in_recording_mode(
             let lk_rc = Rc::new(lk.clone());
             let entry_with_live_until = ledger_snapshot.get(&lk_rc)?;
             if let Some((le, maybe_live_until)) = entry_with_live_until {
-                let encoded_le = host.to_xdr_non_metered(&*le)?;
+                let encoded_le = host.to_xdr_shadow_metered(&*le)?;
                 let mut maybe_ttl_meta = None;
                 match &le.data {
                     LedgerEntryData::ContractData(_) | LedgerEntryData::ContractCode(_) => {
@@ -937,10 +939,10 @@ pub fn invoke_host_function_in_recording_mode(
         write_bytes: 0,
     };
     let _resources_roundtrip: SorobanResources =
-        host.metered_from_xdr(host.to_xdr_non_metered(&resources)?.as_slice())?;
+        host.metered_from_xdr(host.to_xdr_shadow_metered(&resources)?.as_slice())?;
     let (storage, events) = host.try_finish()?;
     if enable_diagnostics {
-        extract_diagnostic_events(&events, diagnostic_events);
+        extract_diagnostic_events(budget, &events, diagnostic_events);
     }
     let restored_keys = if restored_keys.map.is_empty() {
         None
@@ -961,9 +963,9 @@ pub fn invoke_host_function_in_recording_mode(
         // Add the keys that only exist in the footprint, but not in the
         // storage. This doesn't resemble anything in the enforcing mode, so use
         // the shadow budget for this.
-        budget.with_shadow_mode(|| {
+        budget.with_observable_shadow_mode(|| {
             add_footprint_only_ledger_changes(budget, &storage, &mut ledger_changes)
-        });
+        })?;
 
         let encoded_contract_events = encode_contract_events(budget, &events)?;
         for e in &encoded_contract_events {
@@ -1021,15 +1023,25 @@ pub fn encode_contract_events(budget: &Budget, events: &Events) -> Result<Vec<Ve
     Ok(ce)
 }
 
-fn extract_diagnostic_events(events: &Events, diagnostic_events: &mut Vec<DiagnosticEvent>) {
-    // Important: diagnostic events should be non-metered and not fallible in
-    // order to not cause unitentional change in transaction result.
-    for event in &events.0 {
-        diagnostic_events.push(DiagnosticEvent {
-            in_successful_contract_call: !event.failed_call,
-            event: event.event.clone(),
-        });
-    }
+fn extract_diagnostic_events(
+    budget: &Budget,
+    events: &Events,
+    diagnostic_events: &mut Vec<DiagnosticEvent>,
+) {
+    // Important: diagnostic events extraction must not be observable and must
+    // not be fallible in order to not cause unintentional change in
+    // transaction result. We still meter the extraction towards the shadow
+    // budget, and just stop extraction if it's exceeded.
+    budget.with_shadow_mode(|| {
+        for event in &events.0 {
+            Vec::<DiagnosticEvent>::charge_bulk_init_cpy(1, budget)?;
+            diagnostic_events.push(DiagnosticEvent {
+                in_successful_contract_call: !event.failed_call,
+                event: event.event.metered_clone(budget)?,
+            });
+        }
+        Ok(())
+    });
 }
 
 fn build_storage_footprint_from_xdr(

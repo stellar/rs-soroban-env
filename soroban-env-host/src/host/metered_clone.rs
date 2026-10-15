@@ -28,13 +28,14 @@ use crate::{
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, Asset, BytesM,
         ContractCodeCostInputs, ContractCodeEntry, ContractCodeEntryExt, ContractCodeEntryV1,
-        ContractCostType, ContractExecutable, ContractId, ContractIdPreimage, CreateContractArgs,
-        CreateContractArgsV2, Duration, Hash, InvokeContractArgs, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine,
-        PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
-        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
-        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
-        SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ContractCostType, ContractEvent, ContractEventBody, ContractExecutable, ContractId,
+        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
+        ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+        SorobanAuthorizedInvocation, SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset,
+        TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -676,6 +677,19 @@ impl MeteredClone for SorobanAuthorizationEntry {
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
         self.root_invocation.charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for ContractEvent {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match &self.body {
+            ContractEventBody::V0(v0) => {
+                v0.topics.charge_for_substructure(budget.clone())?;
+                v0.data.charge_for_substructure(budget)
+            }
+        }
     }
 }
 
