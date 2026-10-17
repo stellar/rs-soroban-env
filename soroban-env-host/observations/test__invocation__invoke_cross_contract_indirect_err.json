@@ -18,11 +18,11 @@
   "  16 ret vec_push_back -> Ok(Vec(obj#19))": "cpu:3701205, mem:2948728, mem_peak:2948728, objs:-/10@3ae9e7eb",
   "  17 call try_call(Address(obj#13), Symbol(add_with), Vec(obj#19))": "",
   "  18 push VM:3f2c7e4c:add_with(I32(2147483647), I32(1), Bytes(obj#17))": "cpu:4382651, mem:4221268, mem_peak:4221268, objs:-/11@a33ab8f2, vm:1114112@e6a5c288/10@a420633f, stk:1@4ed1d7e4, auth:1@bfa8d8/-",
-  "  19 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:4385684, mem:4221370, mem_peak:4221370, objs:1@e42086ac/11@a33ab8f2, stk:1@355815bd",
+  "  19 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:4385686, mem:4221394, mem_peak:4221394, objs:1@e42086ac/11@a33ab8f2, stk:1@355815bd",
   "  20 ret try_call -> Ok(Error(Context, InvalidAction))": " objs:-/11@a33ab8f2, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#13), Symbol(add_with), Vec(obj#19))": "",
-  "  22 push VM:3f2c7e4c:add_with(I32(2147483647), I32(1), Bytes(obj#17))": "cpu:5067130, mem:5493910, mem_peak:5493910, objs:-/12@a24be952, vm:1114112@e6a5c288/10@a420633f, stk:1@4ed1d7e4, auth:1@36e6e42c/-",
-  "  23 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:5070163, mem:5494012, mem_peak:5494012, objs:1@e42086ac/12@a24be952, stk:1@355815bd",
+  "  22 push VM:3f2c7e4c:add_with(I32(2147483647), I32(1), Bytes(obj#17))": "cpu:5067132, mem:5493934, mem_peak:5493934, objs:-/12@a24be952, vm:1114112@e6a5c288/10@a420633f, stk:1@4ed1d7e4, auth:1@36e6e42c/-",
+  "  23 pop VM:3f2c7e4c:add_with -> Err(Error(WasmVm, InvalidAction))": "cpu:5070167, mem:5494060, mem_peak:5494060, objs:1@e42086ac/12@a24be952, stk:1@355815bd",
   "  24 ret call -> Err(Error(WasmVm, InvalidAction))": " objs:-/12@a24be952, vm:-/-, stk:-, auth:-/-",
-  "  25 end": "cpu:5070163, mem:5494012, mem_peak:5494012, prngs:-/9b4a753, objs:-/12@a24be952, vm:-/-, evt:-, store:-/2@eba0c3d0, foot:2@b3f027d3, stk:-, auth:-/-"
+  "  25 end": "cpu:5070167, mem:5494060, mem_peak:5494060, prngs:-/9b4a753, objs:-/12@a24be952, vm:-/-, evt:-, store:-/2@eba0c3d0, foot:2@b3f027d3, stk:-, auth:-/-"
 }

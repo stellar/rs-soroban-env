@@ -212,7 +212,7 @@ pub(crate) struct BudgetImpl {
     /// For the purpose of calibration and reporting; not used for budget-limiting nor does it affect consensus
     tracker: BudgetTracker,
     is_in_shadow_mode: bool,
-    fuel_costs: wasmi::FuelCosts,
+    fuel_costs: wasmi::OperatorCost,
     depth_limit: u32,
 }
 

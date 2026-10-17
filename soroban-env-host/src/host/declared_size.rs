@@ -34,7 +34,7 @@ use crate::{
 use ark_bls12_381::Fr as BlsScalar;
 use ark_bn254::Fr as BnScalar;
 use std::{cell::RefCell, rc::Rc};
-use wasmi::Value;
+use wasmi::Val as WasmiVal;
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
 // and comparison. It should be the upperbound (across various compilations and platforms) of the
@@ -108,7 +108,7 @@ impl_declared_size_type!(StringObject, 8);
 impl_declared_size_type!(Symbol, 8);
 impl_declared_size_type!(SymbolSmall, 8);
 impl_declared_size_type!(SymbolObject, 8);
-impl_declared_size_type!(Value, 16);
+impl_declared_size_type!(WasmiVal, 24);
 
 // other env types
 impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT as u64);
@@ -412,7 +412,7 @@ mod test {
         expect!["8"].assert_eq(size_of::<Symbol>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<SymbolSmall>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<SymbolObject>().to_string().as_str());
-        expect!["16"].assert_eq(size_of::<Value>().to_string().as_str());
+        expect!["24"].assert_eq(size_of::<WasmiVal>().to_string().as_str());
 
         // other env types
         expect!["32"].assert_eq(size_of::<SymbolStr>().to_string().as_str());
@@ -681,7 +681,7 @@ mod test {
         assert_mem_size_le_declared_size!(Symbol);
         assert_mem_size_le_declared_size!(SymbolSmall);
         assert_mem_size_le_declared_size!(SymbolObject);
-        assert_mem_size_le_declared_size!(Value);
+        assert_mem_size_le_declared_size!(WasmiVal);
 
         // other env types
         assert_mem_size_le_declared_size!(SymbolStr);

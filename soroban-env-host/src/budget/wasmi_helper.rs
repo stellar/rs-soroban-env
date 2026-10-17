@@ -4,7 +4,8 @@ use crate::{
     xdr::ContractCostType,
     Host, HostError,
 };
-use wasmi::{errors, FuelConsumptionMode, FuelCosts, ResourceLimiter};
+use wasmi::{CompilationMode, OperatorCost, ResourceLimiter};
+use wasmi_core::LimiterError;
 
 pub(crate) struct WasmiLimits {
     pub table_elements: u32,
@@ -29,11 +30,11 @@ impl ResourceLimiter for Host {
         current: usize,
         desired: usize,
         maximum: Option<usize>,
-    ) -> Result<bool, errors::MemoryError> {
+    ) -> Result<bool, LimiterError> {
         let host_limit = self
             .as_budget()
             .get_mem_bytes_remaining()
-            .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+            .map_err(|_| LimiterError::ResourceLimiterDeniedAllocation)?;
 
         // NB: if desired < current this is considered a 0-cost shrink.
         let delta = (desired as u64).saturating_sub(current as u64);
@@ -51,12 +52,12 @@ impl ResourceLimiter for Host {
             {
                 self.as_budget()
                     .track_wasm_mem_alloc(delta)
-                    .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+                    .map_err(|_| LimiterError::ResourceLimiterDeniedAllocation)?;
             }
 
             self.as_budget()
                 .charge(ContractCostType::MemAlloc, Some(delta))
-                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+                .map_err(|_| LimiterError::ResourceLimiterDeniedAllocation)?;
 
             // Attribute the (real-budget) linear-memory charge to the frame that
             // owns the growing VM, so it can be refunded when that frame pops.
@@ -67,28 +68,28 @@ impl ResourceLimiter for Host {
             if !self
                 .as_budget()
                 .is_in_shadow_mode()
-                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?
+                .map_err(|_| LimiterError::ResourceLimiterDeniedAllocation)?
             {
                 let charged = self
                     .as_budget()
                     .get_memory_cost(ContractCostType::MemAlloc, Some(delta))
-                    .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+                    .map_err(|_| LimiterError::ResourceLimiterDeniedAllocation)?;
                 self.charge_current_frame_linear_mem(charged)
-                    .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+                    .map_err(|_| LimiterError::ResourceLimiterDeniedAllocation)?;
             }
             Ok(true)
         } else {
-            Err(errors::MemoryError::OutOfBoundsGrowth)
+            Err(LimiterError::ResourceLimiterDeniedAllocation)
         }
     }
 
     fn table_growing(
         &mut self,
-        current: u32,
-        desired: u32,
-        maximum: Option<u32>,
-    ) -> Result<bool, errors::TableError> {
-        let allow = if desired > WASMI_LIMITS_CONFIG.table_elements {
+        _current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool, LimiterError> {
+        let allow = if desired > WASMI_LIMITS_CONFIG.table_elements as usize {
             false
         } else {
             match maximum {
@@ -99,11 +100,7 @@ impl ResourceLimiter for Host {
         if allow {
             Ok(allow)
         } else {
-            Err(errors::TableError::GrowOutOfBounds {
-                maximum: maximum.unwrap_or(u32::MAX),
-                current,
-                delta: desired.saturating_sub(current),
-            })
+            Err(LimiterError::ResourceLimiterDeniedAllocation)
         }
     }
 
@@ -123,14 +120,68 @@ impl ResourceLimiter for Host {
 // These values are calibrated and set by us. Calibration is done with a given
 // wasmi version, and as long as the version is pinned, these values aren't
 // expected to change much.
-pub(crate) fn load_calibrated_fuel_costs() -> FuelCosts {
-    let mut fuel_costs = FuelCosts::default();
-    fuel_costs.base = 1;
-    fuel_costs.entity = 3;
-    fuel_costs.load = 2;
-    fuel_costs.store = 1;
-    fuel_costs.call = 67;
-    fuel_costs
+//
+// wasmi charges fuel per Wasm operator. The categories below mirror the ones
+// that the previous (pre-2.0) wasmi fuel model distinguished, with the same
+// per-category values: "base" (1) is wasmi's default for everything not listed
+// here; wasm entity operations cost 3, loads cost 2, stores cost 1 and calls
+// cost 67.
+pub(crate) fn load_calibrated_fuel_costs() -> OperatorCost {
+    const ENTITY: u8 = 3;
+    const LOAD: u8 = 2;
+    const STORE: u8 = 1;
+    const CALL: u8 = 67;
+
+    let mut c = OperatorCost::default();
+
+    c.global_get = ENTITY;
+    c.global_set = ENTITY;
+    c.memory_size = ENTITY;
+    c.memory_grow = ENTITY;
+    c.memory_init = ENTITY;
+    c.memory_copy = ENTITY;
+    c.memory_fill = ENTITY;
+    c.data_drop = ENTITY;
+    c.table_init = ENTITY;
+    c.table_copy = ENTITY;
+    c.table_fill = ENTITY;
+    c.table_get = ENTITY;
+    c.table_set = ENTITY;
+    c.table_grow = ENTITY;
+    c.table_size = ENTITY;
+    c.elem_drop = ENTITY;
+
+    c.i32_load = LOAD;
+    c.i64_load = LOAD;
+    c.f32_load = LOAD;
+    c.f64_load = LOAD;
+    c.i32_load8_s = LOAD;
+    c.i32_load8_u = LOAD;
+    c.i32_load16_s = LOAD;
+    c.i32_load16_u = LOAD;
+    c.i64_load8_s = LOAD;
+    c.i64_load8_u = LOAD;
+    c.i64_load16_s = LOAD;
+    c.i64_load16_u = LOAD;
+    c.i64_load32_s = LOAD;
+    c.i64_load32_u = LOAD;
+
+    c.i32_store = STORE;
+    c.i64_store = STORE;
+    c.f32_store = STORE;
+    c.f64_store = STORE;
+    c.i32_store8 = STORE;
+    c.i32_store16 = STORE;
+    c.i64_store8 = STORE;
+    c.i64_store16 = STORE;
+    c.i64_store32 = STORE;
+
+    c.call = CALL;
+    c.call_indirect = CALL;
+    c.return_call = CALL;
+    c.return_call_indirect = CALL;
+
+    c
 }
 
 pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<wasmi::Config, HostError> {
@@ -140,20 +191,40 @@ pub(crate) fn get_wasmi_config(budget: &Budget) -> Result<wasmi::Config, HostErr
     // Turn off most optional wasm features, leaving on some post-MVP features
     // commonly enabled by Rust and Clang. Make sure all unused features are
     // explicited turned off, so that we don't get "opted in" by a future wasmi
-    // version.
+    // version. (The `memory64`, `simd` and `relaxed-simd` features are not
+    // compiled into wasmi at all, see the workspace Cargo.toml.)
+    //
+    // Translation is eager: wasmi's default is lazy translation, which defers
+    // some failures to first call and is not acceptable for a metered,
+    // deterministic VM.
     config
         .consume_fuel(true)
+        .compilation_mode(CompilationMode::Eager)
         .wasm_bulk_memory(true)
         .wasm_mutable_global(true)
         .wasm_sign_extension(true)
         .wasm_saturating_float_to_int(false)
         .wasm_multi_value(false)
+        .wasm_multi_memory(false)
         .wasm_reference_types(false)
         .wasm_tail_call(false)
         .wasm_extended_const(false)
+        .wasm_custom_page_sizes(false)
+        .wasm_wide_arithmetic(false)
         .floats(false)
-        .fuel_consumption_mode(FuelConsumptionMode::Eager)
-        .set_fuel_costs(fuel_costs);
+        .allow_start_fn(false)
+        .operator_cost(fuel_costs);
+
+    // The stack limits are pinned to the values the pre-2.0 wasmi effectively
+    // enforced (1024 frames, 1 MiB of value stack), rather than wasmi 2.0's
+    // defaults. wasmi 2.0 rejects a call that would reach the configured
+    // recursion depth where the earlier wasmi only rejected one that would
+    // exceed it, so the configured depth is one higher than the effective
+    // limit (see `test_stack_depth_stability`).
+    config
+        .set_max_recursion_depth(1025)
+        .set_max_stack_height(1024 * 1024)
+        .set_min_stack_height(1024);
 
     Ok(config)
 }
