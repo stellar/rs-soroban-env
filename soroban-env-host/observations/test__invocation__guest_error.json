@@ -16,11 +16,11 @@
   "  14 ret vec_new_from_slice -> Ok(Vec(obj#15))": "cpu:3035346, mem:2863256, mem_peak:2863256, objs:-/8@788f2893",
   "  15 call call(Address(obj#13), Symbol(divide), Vec(obj#15))": "",
   "  16 push VM:e921e73a:divide(I32(0))": "cpu:3693067, mem:4123053, mem_peak:4123053, objs:-/9@a47a559b, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@6455dac5, auth:1@2731dcec/-",
-  "  17 pop VM:e921e73a:divide -> Err(Error(WasmVm, InvalidAction))": "cpu:3695573, mem:4123099, mem_peak:4123099",
+  "  17 pop VM:e921e73a:divide -> Err(Error(WasmVm, InvalidAction))": "cpu:3695567, mem:4123107, mem_peak:4123107",
   "  18 ret call -> Err(Error(WasmVm, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
   "  19 call try_call(Address(obj#13), Symbol(divide), Vec(obj#15))": "",
-  "  20 push VM:e921e73a:divide(I32(0))": "cpu:4353294, mem:5382896, mem_peak:5382896, objs:-/10@4f3b1003, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@6455dac5, auth:1@b746104b/-",
-  "  21 pop VM:e921e73a:divide -> Err(Error(WasmVm, InvalidAction))": "cpu:4355800, mem:5382942, mem_peak:5382942",
+  "  20 push VM:e921e73a:divide(I32(0))": "cpu:4353288, mem:5382904, mem_peak:5382904, objs:-/10@4f3b1003, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@6455dac5, auth:1@b746104b/-",
+  "  21 pop VM:e921e73a:divide -> Err(Error(WasmVm, InvalidAction))": "cpu:4355788, mem:5382958, mem_peak:5382958",
   "  22 ret try_call -> Ok(Error(Context, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
-  "  23 end": "cpu:4355800, mem:5382942, mem_peak:5382942, prngs:-/9b4a753, objs:-/10@4f3b1003, vm:-/-, evt:-, store:-/2@7faeee6c, foot:2@155c2cfa, stk:-, auth:-/-"
+  "  23 end": "cpu:4355788, mem:5382958, mem_peak:5382958, prngs:-/9b4a753, objs:-/10@4f3b1003, vm:-/-, evt:-, store:-/2@7faeee6c, foot:2@155c2cfa, stk:-, auth:-/-"
 }

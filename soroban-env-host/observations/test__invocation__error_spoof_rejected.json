@@ -16,11 +16,11 @@
   "  14 ret vec_new_from_slice -> Ok(Vec(obj#15))": "cpu:3035344, mem:2863248, mem_peak:2863248, objs:-/8@b419e0e4",
   "  15 call call(Address(obj#13), Symbol(spoof), Vec(obj#15))": "",
   "  16 push VM:e921e73a:spoof()": "cpu:3693061, mem:4123029, mem_peak:4123029, objs:-/9@838273fa, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@7bcaf9b7, auth:1@b714f5c3/-",
-  "  17 pop VM:e921e73a:spoof -> Err(Error(Context, InvalidAction))": "cpu:3695539, mem:4123059, mem_peak:4123059",
+  "  17 pop VM:e921e73a:spoof -> Err(Error(Context, InvalidAction))": "cpu:3695535, mem:4123059, mem_peak:4123059",
   "  18 ret call -> Err(Error(Context, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
   "  19 call try_call(Address(obj#13), Symbol(spoof), Vec(obj#15))": "",
-  "  20 push VM:e921e73a:spoof()": "cpu:4353256, mem:5382840, mem_peak:5382840, objs:-/10@4ffb5bf8, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@7bcaf9b7, auth:1@bb297f4a/-",
-  "  21 pop VM:e921e73a:spoof -> Err(Error(Context, InvalidAction))": "cpu:4355734, mem:5382870, mem_peak:5382870",
+  "  20 push VM:e921e73a:spoof()": "cpu:4353252, mem:5382840, mem_peak:5382840, objs:-/10@4ffb5bf8, vm:1114112@ba4a7cb7/15@ea6028ca, stk:1@7bcaf9b7, auth:1@bb297f4a/-",
+  "  21 pop VM:e921e73a:spoof -> Err(Error(Context, InvalidAction))": "cpu:4355726, mem:5382870, mem_peak:5382870",
   "  22 ret try_call -> Ok(Error(Context, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
-  "  23 end": "cpu:4355734, mem:5382870, mem_peak:5382870, prngs:-/9b4a753, objs:-/10@4ffb5bf8, vm:-/-, evt:-, store:-/2@7faeee6c, foot:2@155c2cfa, stk:-, auth:-/-"
+  "  23 end": "cpu:4355726, mem:5382870, mem_peak:5382870, prngs:-/9b4a753, objs:-/10@4ffb5bf8, vm:-/-, evt:-, store:-/2@7faeee6c, foot:2@155c2cfa, stk:-, auth:-/-"
 }

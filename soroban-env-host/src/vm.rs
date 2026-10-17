@@ -43,7 +43,13 @@ pub use parsed_module::{
 use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
 
-impl wasmi::core::HostError for HostError {}
+impl wasmi::errors::HostError for HostError {}
+
+impl From<HostError> for wasmi::Error {
+    fn from(he: HostError) -> Self {
+        wasmi::Error::host(he)
+    }
+}
 
 const WASM_STD_MEM_PAGE_SIZE_IN_BYTES: u32 = 0x10000;
 
@@ -110,7 +116,7 @@ impl Host {
         let mut linker = wasmi::Linker::new(&engine);
         for hf in HOST_FUNCTIONS {
             if symbols.contains(&(hf.mod_str, hf.fn_str)) {
-                context.map_err((hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le)))?;
+                context.map_err((hf.wrap)(&mut linker).map_err(wasmi::Error::from))?;
             }
         }
         Ok(linker)
@@ -123,7 +129,7 @@ impl Host {
     ) -> Result<wasmi::Linker<Host>, HostError> {
         let mut linker = wasmi::Linker::new(&engine);
         for hf in HOST_FUNCTIONS {
-            context.map_err((hf.wrap)(&mut linker).map_err(|le| wasmi::Error::Linker(le)))?;
+            context.map_err((hf.wrap)(&mut linker).map_err(wasmi::Error::from))?;
         }
         Ok(linker)
     }
@@ -167,16 +173,15 @@ impl Vm {
         parsed_module.cost_inputs.charge_for_instantiation(host)?;
         store.limiter(|host| host);
         parsed_module.check_contract_imports_match_host_protocol(host)?;
-        let not_started_instance = {
+        // NB: the engine is configured to reject modules with a start
+        // function (see `get_wasmi_config`), so "instantiate and start" here
+        // never runs any guest code.
+        let instance = {
             let _span = tracy_span!("Vm::instantiate_wasmi - instantiate");
-            host.map_err(wasmi_linker.instantiate(&mut store, &parsed_module.wasmi_module))?
+            host.map_err(
+                wasmi_linker.instantiate_and_start(&mut store, &parsed_module.wasmi_module),
+            )?
         };
-
-        let instance = host.map_err(
-            not_started_instance
-                .ensure_no_start(&mut store)
-                .map_err(|ie| wasmi::Error::Instantiation(ie)),
-        )?;
 
         let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
             ext.into_memory()
@@ -276,7 +281,7 @@ impl Vm {
         self: &Rc<Self>,
         host: &Host,
         func_sym: &Symbol,
-        inputs: &[wasmi::Value],
+        inputs: &[wasmi::Val],
         treat_missing_function_as_noop: bool,
     ) -> Result<Val, HostError> {
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
@@ -323,7 +328,7 @@ impl Vm {
         }
 
         // call the function
-        let mut wasm_ret: [wasmi::Value; 1] = [wasmi::Value::I64(0)];
+        let mut wasm_ret: [wasmi::Val; 1] = [wasmi::Val::I64(0)];
         self.wasmi_store
             .try_borrow_mut_or_err()?
             .add_fuel_to_vm(host)?;
@@ -346,44 +351,49 @@ impl Vm {
 
         if let Err(e) = res {
             use std::borrow::Cow;
+            use wasmi::errors::ErrorKind;
 
-            // When a call fails with a wasmi::Error::Trap that carries a HostError
-            // we propagate that HostError as is, rather than producing something new.
+            // When a call fails with a trap that carries a HostError we
+            // propagate that HostError as is, rather than producing something
+            // new.
 
-            match e {
-                wasmi::Error::Trap(trap) => {
-                    if let Some(code) = trap.trap_code() {
-                        let err = code.into();
-                        let mut msg = Cow::Borrowed("VM call trapped");
-                        host.with_debug_mode(|| {
-                            msg = Cow::Owned(format!("VM call trapped: {:?}", code));
-                            Ok(())
-                        });
-                        return Err(host.error(err, &msg, &[func_sym.to_val()]));
-                    }
-                    if let Some(he) = trap.downcast::<HostError>() {
-                        host.log_diagnostics(
-                            "VM call trapped with HostError",
-                            &[func_sym.to_val(), he.error.to_val()],
-                        );
-                        return Err(he);
-                    }
-                    return Err(host.err(
-                        ScErrorType::WasmVm,
-                        ScErrorCode::InternalError,
-                        "VM trapped but propagation failed",
-                        &[],
-                    ));
-                }
-                e => {
-                    let mut msg = Cow::Borrowed("VM call failed");
-                    host.with_debug_mode(|| {
-                        msg = Cow::Owned(format!("VM call failed: {:?}", e));
-                        Ok(())
-                    });
-                    return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
-                }
+            // NB: we classify on the explicit error kind, rather than via
+            // `wasmi::Error::as_trap_code`, which folds a number of
+            // non-trap errors into trap codes.
+            if let ErrorKind::TrapCode(code) = e.kind() {
+                let code = *code;
+                let err = code.into();
+                let mut msg = Cow::Borrowed("VM call trapped");
+                host.with_debug_mode(|| {
+                    msg = Cow::Owned(format!("VM call trapped: {:?}", code));
+                    Ok(())
+                });
+                return Err(host.error(err, &msg, &[func_sym.to_val()]));
             }
+            if matches!(
+                e.kind(),
+                ErrorKind::Host(_) | ErrorKind::Message(_) | ErrorKind::I32ExitStatus(_)
+            ) {
+                if let Some(he) = e.downcast::<HostError>() {
+                    host.log_diagnostics(
+                        "VM call trapped with HostError",
+                        &[func_sym.to_val(), he.error.to_val()],
+                    );
+                    return Err(he);
+                }
+                return Err(host.err(
+                    ScErrorType::WasmVm,
+                    ScErrorCode::InternalError,
+                    "VM trapped but propagation failed",
+                    &[],
+                ));
+            }
+            let mut msg = Cow::Borrowed("VM call failed");
+            host.with_debug_mode(|| {
+                msg = Cow::Owned(format!("VM call failed: {:?}", e));
+                Ok(())
+            });
+            return Err(host.error(e.into(), &msg, &[func_sym.to_val()]));
         }
         host.relative_to_absolute(
             Val::try_marshal_from_value(wasm_ret[0].clone()).ok_or(ConversionError)?,
@@ -398,11 +408,11 @@ impl Vm {
         treat_missing_function_as_noop: bool,
     ) -> Result<Val, HostError> {
         let _span = tracy_span!("Vm::invoke_function_raw");
-        Vec::<wasmi::Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
-        let wasm_args: Vec<wasmi::Value> = args
+        Vec::<wasmi::Val>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
+        let wasm_args: Vec<wasmi::Val> = args
             .iter()
             .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
-            .collect::<Result<Vec<wasmi::Value>, HostError>>()?;
+            .collect::<Result<Vec<wasmi::Val>, HostError>>()?;
         self.metered_func_call(
             host,
             func_sym,
@@ -426,7 +436,7 @@ impl Vm {
     {
         let store: &mut wasmi::Store<Host> = &mut *self.wasmi_store.try_borrow_mut_or_err()?;
         let mut ctx: StoreContextMut<Host> = store.into();
-        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.wasmi_instance));
+        let caller: Caller<Host> = Caller::from(&mut ctx);
         let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
         f(&mut vmcaller)
     }
@@ -438,7 +448,7 @@ impl Vm {
     {
         let store: &mut wasmi::Store<Host> = &mut *self.wasmi_store.try_borrow_mut_or_err()?;
         let mut ctx: StoreContextMut<Host> = store.into();
-        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.wasmi_instance));
+        let caller: Caller<Host> = Caller::from(&mut ctx);
         f(caller)
     }
 
