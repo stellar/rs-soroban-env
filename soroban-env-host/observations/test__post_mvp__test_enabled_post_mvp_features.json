@@ -24,7 +24,7 @@
   "  22 ret vec_new_from_slice -> Ok(Vec(obj#19))": "cpu:1440092, mem:749136, mem_peak:749136, objs:-/10@7101abe3",
   "  23 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "",
   "  24 push VM:fabb726a:test()": "cpu:1643103, mem:915721, mem_peak:915721, objs:-/11@899769a3, vm:65536@b1cd98b9/3@dcce4184, stk:1@b83a6ae2, auth:1@b1b428e/-",
-  "  25 pop VM:fabb726a:test -> Ok(I64(-21555))": "cpu:1645601, mem:915751, mem_peak:915751",
+  "  25 pop VM:fabb726a:test -> Ok(I64(-21555))": "cpu:1645597, mem:915751, mem_peak:915751",
   "  26 ret call -> Ok(I64(-21555))": " vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:1645601, mem:915751, mem_peak:915751, prngs:-/9b4a753, objs:-/11@899769a3, vm:-/-, evt:-, store:-/2@f05c3bb7, foot:2@4e05ae45, stk:-, auth:-/-"
+  "  27 end": "cpu:1645597, mem:915751, mem_peak:915751, prngs:-/9b4a753, objs:-/11@899769a3, vm:-/-, evt:-, store:-/2@f05c3bb7, foot:2@4e05ae45, stk:-, auth:-/-"
 }

@@ -121,7 +121,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     })?;
     assert_eq!(
         (cpu_count, cpu_consumed, wasm_mem_alloc, mem_consumed),
-        (4005, 24030, 65536, 73686)
+        (4003, 24018, 65536, 73694)
     );
 
     // giving it the exact required amount will succeed

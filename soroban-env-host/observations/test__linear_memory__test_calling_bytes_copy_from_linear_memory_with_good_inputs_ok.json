@@ -22,9 +22,9 @@
   "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8067355, mem:1631857, mem_peak:1631857, objs:-/9@3046049f, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#17), Symbol(loadmem3), Vec(obj#21))": "cpu:8068239, mem:1632017, mem_peak:1632017, objs:-/11@4113e001",
   "  22 push VM:7bb68c6:loadmem3(Bytes(obj#19), U32(0), U32(65280), U32(256))": "cpu:8704645, mem:1912283, mem_peak:1912283, objs:-/12@bfad4df2, vm:65536@b1cd98b9/4@70bfd778, stk:1@3ace67e2, auth:1@e28756aa/-",
-  "  23 call bytes_copy_from_linear_memory(Bytes(obj#19), U32(0), U32(65280), U32(256))": "cpu:8707562, mem:1912401, mem_peak:1912401, objs:1@7f18fa80/12@bfad4df2, vm:-/-, stk:1@b84cd05a",
-  "  24 ret bytes_copy_from_linear_memory -> Ok(Bytes(obj#25))": "cpu:8713530, mem:1912753, mem_peak:1912753, objs:1@7f18fa80/13@106ae3f",
-  "  25 pop VM:7bb68c6:loadmem3 -> Ok(Bytes(obj#25))": "cpu:8714025, mem:1912777, mem_peak:1912777, objs:2@92d384d3/13@106ae3f, vm:65536@72ee363d/4@70bfd778, stk:1@6523bdc0",
-  "  26 ret call -> Ok(Bytes(obj#25))": "cpu:8714085, objs:-/13@106ae3f, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8714085, mem:1912777, mem_peak:1912777, prngs:-/9b4a753, objs:-/13@106ae3f, vm:-/-, evt:-, store:-/2@982843c5, foot:2@6a1940a8, stk:-, auth:-/-"
+  "  23 call bytes_copy_from_linear_memory(Bytes(obj#19), U32(0), U32(65280), U32(256))": "cpu:8707570, mem:1912433, mem_peak:1912433, objs:1@7f18fa80/12@bfad4df2, vm:-/-, stk:1@b84cd05a",
+  "  24 ret bytes_copy_from_linear_memory -> Ok(Bytes(obj#25))": "cpu:8713534, mem:1912785, mem_peak:1912785, objs:1@7f18fa80/13@106ae3f",
+  "  25 pop VM:7bb68c6:loadmem3 -> Ok(Bytes(obj#25))": "cpu:8714029, mem:1912809, mem_peak:1912809, objs:2@92d384d3/13@106ae3f, vm:65536@72ee363d/4@70bfd778, stk:1@6523bdc0",
+  "  26 ret call -> Ok(Bytes(obj#25))": "cpu:8714089, objs:-/13@106ae3f, vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8714089, mem:1912809, mem_peak:1912809, prngs:-/9b4a753, objs:-/13@106ae3f, vm:-/-, evt:-, store:-/2@982843c5, foot:2@6a1940a8, stk:-, auth:-/-"
 }

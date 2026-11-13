@@ -22,7 +22,7 @@
   "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1401950, mem:745074, mem_peak:745074, objs:-/9@fbb9d819, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "cpu:963, mem:96, mem_peak:96, objs:-/10@8d2658e8",
   "  22 push VM:e3544952:test()": "cpu:195839, mem:165887, mem_peak:165887, objs:-/11@5290a5e5, vm:65536@b1cd98b9/2@2f94d90d, stk:1@fc1e752d, auth:1@b1b428e/-",
-  "  23 pop VM:e3544952:test -> Err(Error(WasmVm, InvalidAction))": "cpu:198313, mem:165917, mem_peak:165917",
+  "  23 pop VM:e3544952:test -> Err(Error(WasmVm, InvalidAction))": "cpu:198309, mem:165917, mem_peak:165917",
   "  24 ret call -> Err(Error(WasmVm, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
-  "  25 end": "cpu:198313, mem:165917, mem_peak:165917, prngs:-/9b4a753, objs:-/11@5290a5e5, vm:-/-, evt:-, store:-/2@66e7b35e, foot:2@4da7ff45, stk:-, auth:-/-"
+  "  25 end": "cpu:198309, mem:165917, mem_peak:165917, prngs:-/9b4a753, objs:-/11@5290a5e5, vm:-/-, evt:-, store:-/2@66e7b35e, foot:2@4da7ff45, stk:-, auth:-/-"
 }

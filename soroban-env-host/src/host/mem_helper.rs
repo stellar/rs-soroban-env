@@ -84,7 +84,7 @@ impl Host {
         let mem = vm.get_memory(self)?;
         self.map_err(
             mem.write(vmcaller.try_mut()?, mem_pos as usize, buf)
-                .map_err(|me| wasmi::Error::Memory(me)),
+                .map_err(wasmi::Error::from),
         )
     }
 
@@ -99,7 +99,7 @@ impl Host {
         let mem = vm.get_memory(self)?;
         self.map_err(
             mem.read(vmcaller.try_mut()?, mem_pos as usize, buf)
-                .map_err(|me| wasmi::Error::Memory(me)),
+                .map_err(wasmi::Error::from),
         )
     }
 

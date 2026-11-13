@@ -1209,7 +1209,10 @@ pub(crate) mod wasm {
         fe.i32x4_add();
         fe.v128_store(0, 0);
         fe.push(Symbol::try_from_small_str("pass").unwrap());
-        fe.finish_and_export("test").finish()
+        // wasmparser is built without its `simd` feature (see the workspace
+        // Cargo.toml), so it cannot validate the module that the host is
+        // expected to reject.
+        fe.finish_and_export("test").finish_no_validate()
     }
 
     pub(crate) fn wasm_module_calling_protocol_gated_host_fn(wasm_proto: u32) -> Vec<u8> {

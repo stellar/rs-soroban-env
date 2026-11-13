@@ -171,26 +171,23 @@ impl From<Error> for crate::xdr::Error {
 }
 
 #[cfg(feature = "wasmi")]
-impl From<wasmi::core::TrapCode> for Error {
-    fn from(code: wasmi::core::TrapCode) -> Self {
+impl From<wasmi::TrapCode> for Error {
+    fn from(code: wasmi::TrapCode) -> Self {
+        use wasmi::TrapCode as T;
         let ec = match code {
-            wasmi::core::TrapCode::UnreachableCodeReached => ScErrorCode::InvalidAction,
+            T::UnreachableCodeReached => ScErrorCode::InvalidAction,
 
-            wasmi::core::TrapCode::MemoryOutOfBounds | wasmi::core::TrapCode::TableOutOfBounds => {
-                ScErrorCode::IndexBounds
+            T::MemoryOutOfBounds | T::TableOutOfBounds => ScErrorCode::IndexBounds,
+
+            T::IndirectCallToNull => ScErrorCode::MissingValue,
+
+            T::IntegerDivisionByZero | T::IntegerOverflow | T::BadConversionToInteger => {
+                ScErrorCode::ArithDomain
             }
 
-            wasmi::core::TrapCode::IndirectCallToNull => ScErrorCode::MissingValue,
+            T::BadSignature => ScErrorCode::UnexpectedType,
 
-            wasmi::core::TrapCode::IntegerDivisionByZero
-            | wasmi::core::TrapCode::IntegerOverflow
-            | wasmi::core::TrapCode::BadConversionToInteger => ScErrorCode::ArithDomain,
-
-            wasmi::core::TrapCode::BadSignature => ScErrorCode::UnexpectedType,
-
-            wasmi::core::TrapCode::StackOverflow
-            | wasmi::core::TrapCode::OutOfFuel
-            | wasmi::core::TrapCode::GrowthOperationLimited => {
+            T::StackOverflow | T::OutOfFuel | T::GrowthOperationLimited | T::OutOfSystemMemory => {
                 return Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
             }
         };
@@ -199,75 +196,98 @@ impl From<wasmi::core::TrapCode> for Error {
 }
 
 #[cfg(feature = "wasmi")]
+fn wasmi_func_error_to_error(err: &wasmi::errors::FuncError) -> Error {
+    use wasmi::errors::FuncError as F;
+    let ec = match err {
+        F::ExportedFuncNotFound => ScErrorCode::MissingValue,
+        F::MismatchingParameterType | F::MismatchingResultType => ScErrorCode::UnexpectedType,
+        F::MismatchingParameterLen | F::MismatchingResultLen => ScErrorCode::UnexpectedSize,
+    };
+    Error::from_type_and_code(ScErrorType::WasmVm, ec)
+}
+
+#[cfg(feature = "wasmi")]
 impl From<wasmi::errors::FuncError> for Error {
     fn from(err: wasmi::errors::FuncError) -> Self {
-        let ec = match err {
-            wasmi::errors::FuncError::ExportedFuncNotFound => ScErrorCode::MissingValue,
-            wasmi::errors::FuncError::MismatchingParameterType
-            | wasmi::errors::FuncError::MismatchingResultType => ScErrorCode::UnexpectedType,
-            wasmi::errors::FuncError::MismatchingParameterLen
-            | wasmi::errors::FuncError::MismatchingResultLen => ScErrorCode::UnexpectedSize,
-        };
-        return Error::from_type_and_code(ScErrorType::WasmVm, ec);
+        wasmi_func_error_to_error(&err)
+    }
+}
+
+#[cfg(feature = "wasmi")]
+const WASMI_EXCEEDED_LIMIT: Error =
+    Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit);
+#[cfg(feature = "wasmi")]
+const WASMI_INDEX_BOUND: Error =
+    Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds);
+
+#[cfg(feature = "wasmi")]
+fn wasmi_memory_error_to_error(e: &wasmi::errors::MemoryError) -> Option<Error> {
+    use wasmi::errors::MemoryError as M;
+    match e {
+        M::OutOfSystemMemory
+        | M::OutOfBoundsGrowth
+        | M::ResourceLimiterDeniedAllocation
+        | M::OutOfFuel { .. } => Some(WASMI_EXCEEDED_LIMIT),
+        M::OutOfBoundsAccess => Some(WASMI_INDEX_BOUND),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "wasmi")]
+fn wasmi_table_error_to_error(e: &wasmi::errors::TableError) -> Option<Error> {
+    use wasmi::errors::TableError as T;
+    match e {
+        T::GrowOutOfBounds | T::ResourceLimiterDeniedAllocation | T::OutOfFuel { .. } => {
+            Some(WASMI_EXCEEDED_LIMIT)
+        }
+        T::SetOutOfBounds | T::InitOutOfBounds | T::FillOutOfBounds | T::CopyOutOfBounds => {
+            Some(WASMI_INDEX_BOUND)
+        }
+        _ => None,
     }
 }
 
 #[cfg(feature = "wasmi")]
 impl From<wasmi::Error> for Error {
     fn from(e: wasmi::Error) -> Self {
-        const EXCEEDED_LIMIT: Error =
-            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit);
-        const INDEX_BOUND: Error =
-            Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::IndexBounds);
+        use wasmi::errors::{ErrorKind, FuelError, GlobalError, InstantiationError};
 
-        match e {
-            wasmi::Error::Memory(e) => match e {
-                wasmi::errors::MemoryError::OutOfBoundsAllocation
-                | wasmi::errors::MemoryError::OutOfBoundsGrowth => return EXCEEDED_LIMIT,
-                wasmi::errors::MemoryError::OutOfBoundsAccess => return INDEX_BOUND,
-                _ => (),
-            },
-            wasmi::Error::Table(e) => match e {
-                wasmi::errors::TableError::GrowOutOfBounds { .. } => return EXCEEDED_LIMIT,
-                wasmi::errors::TableError::AccessOutOfBounds { .. }
-                | wasmi::errors::TableError::CopyOutOfBounds => return INDEX_BOUND,
-                _ => (),
-            },
-            wasmi::Error::Instantiation(e) => match e {
-                wasmi::errors::InstantiationError::Memory(me) => match me {
-                    wasmi::errors::MemoryError::OutOfBoundsAllocation
-                    | wasmi::errors::MemoryError::OutOfBoundsGrowth => return EXCEEDED_LIMIT,
-                    wasmi::errors::MemoryError::OutOfBoundsAccess => return INDEX_BOUND,
-                    _ => (),
-                },
-                wasmi::errors::InstantiationError::Table(te) => match te {
-                    wasmi::errors::TableError::GrowOutOfBounds { .. } => return EXCEEDED_LIMIT,
-                    wasmi::errors::TableError::AccessOutOfBounds { .. }
-                    | wasmi::errors::TableError::CopyOutOfBounds => return INDEX_BOUND,
-                    _ => (),
-                },
-                _ => (),
-            },
-            wasmi::Error::Store(e) => {
-                if let wasmi::errors::FuelError::OutOfFuel = e {
-                    return EXCEEDED_LIMIT;
+        // NB: we deliberately match on the explicit error kinds _before_
+        // consulting `wasmi::Error::as_trap_code`, since wasmi folds some
+        // errors (eg. memory growth failures) into trap codes whose
+        // `ScErrorCode` mapping differs from the one the host has always
+        // reported for them.
+        match e.kind() {
+            ErrorKind::Memory(me) => {
+                if let Some(err) = wasmi_memory_error_to_error(me) {
+                    return err;
                 }
             }
-            wasmi::Error::Trap(trap) => {
-                if let Some(code) = trap.trap_code() {
-                    return code.into();
+            ErrorKind::Table(te) => {
+                if let Some(err) = wasmi_table_error_to_error(te) {
+                    return err;
                 }
             }
-            wasmi::Error::Func(e) => {
-                return e.into();
-            }
-            wasmi::Error::Global(e) => {
-                if matches!(e, wasmi::errors::GlobalError::TypeMismatch { .. }) {
-                    return Error::from_type_and_code(
-                        ScErrorType::WasmVm,
-                        ScErrorCode::UnexpectedType,
-                    );
+            ErrorKind::Instantiation(ie) => match ie {
+                InstantiationError::FailedToInstantiateMemory(me) => {
+                    if let Some(err) = wasmi_memory_error_to_error(me) {
+                        return err;
+                    }
                 }
+                InstantiationError::FailedToInstantiateTable(te) => {
+                    if let Some(err) = wasmi_table_error_to_error(te) {
+                        return err;
+                    }
+                }
+                _ => (),
+            },
+            ErrorKind::Fuel(FuelError::OutOfFuel { .. }) | ErrorKind::ResumableOutOfFuel(_) => {
+                return WASMI_EXCEEDED_LIMIT
+            }
+            ErrorKind::TrapCode(code) => return (*code).into(),
+            ErrorKind::Func(fe) => return wasmi_func_error_to_error(fe),
+            ErrorKind::Global(GlobalError::TypeMismatch) => {
+                return Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::UnexpectedType);
             }
             _ => (),
         }

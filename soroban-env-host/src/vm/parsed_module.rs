@@ -440,9 +440,9 @@ impl ParsedModule {
     }
 
     fn module_custom_section(m: &wasmi::Module, name: impl AsRef<str>) -> Option<&[u8]> {
-        m.custom_sections().iter().find_map(|s| {
-            if &*s.name == name.as_ref() {
-                Some(&*s.data)
+        m.custom_sections().find_map(|s| {
+            if s.name() == name.as_ref() {
+                Some(s.data())
             } else {
                 None
             }
@@ -557,21 +557,13 @@ impl ParsedModule {
                         .saturating_add(s.data().len() as u32);
                 }
 
-                // Component-model stuff or other unsupported sections. Error out.
-                StartSection { .. }
-                | ModuleSection { .. }
-                | InstanceSection(_)
-                | CoreTypeSection(_)
-                | ComponentSection { .. }
-                | ComponentInstanceSection(_)
-                | ComponentAliasSection(_)
-                | ComponentTypeSection(_)
-                | ComponentCanonicalSection(_)
-                | ComponentStartSection { .. }
-                | ComponentImportSection(_)
-                | ComponentExportSection(_)
-                | TagSection(_)
-                | UnknownSection { .. } => {
+                // Start sections, tag sections, unknown sections and anything
+                // else (including component-model sections, which wasmparser is
+                // not built to parse here) are unsupported. Error out.
+                //
+                // NB: `Payload` is non-exhaustive, so this catch-all also
+                // rejects any section type added by a future wasmparser.
+                StartSection { .. } | TagSection(_) | UnknownSection { .. } => {
                     return Err(ctx.error(invalid_input, "unsupported wasm section type", &[]))
                 }
 
@@ -583,6 +575,13 @@ impl ParsedModule {
                         }
                         if mem.shared {
                             return Err(ctx.error(invalid_input, "unsupported shared memory", &[]));
+                        }
+                        if mem.page_size_log2.is_some() {
+                            return Err(ctx.error(
+                                invalid_input,
+                                "unsupported custom memory page size",
+                                &[],
+                            ));
                         }
                         if mem
                             .initial
@@ -606,8 +605,12 @@ impl ParsedModule {
                 TableSection(s) => {
                     for table in s {
                         let table = ctx.map_err(table)?;
-                        costs.n_table_entries =
-                            costs.n_table_entries.saturating_add(table.ty.initial);
+                        if table.ty.table64 {
+                            return Err(ctx.error(invalid_input, "unsupported 64-bit table", &[]));
+                        }
+                        costs.n_table_entries = costs
+                            .n_table_entries
+                            .saturating_add(u32::try_from(table.ty.initial).unwrap_or(u32::MAX));
                         match table.init {
                             TableInit::RefNull => (),
                             TableInit::Expr(ref expr) => {
@@ -681,6 +684,8 @@ impl ParsedModule {
                         }
                     }
                 }
+
+                _ => return Err(ctx.error(invalid_input, "unsupported wasm section type", &[])),
             }
         }
         if costs.n_data_segment_bytes > available_guest_memory {

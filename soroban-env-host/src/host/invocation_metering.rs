@@ -1156,8 +1156,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 311545,
-                mem_bytes: 1139098,
+                instructions: 311531,
+                mem_bytes: 1139106,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1183,8 +1183,8 @@ mod test {
                     ),
                 ),
                 resources: SubInvocationResources {
-                    instructions: 311545,
-                    mem_bytes: 1139098,
+                    instructions: 311531,
+                    mem_bytes: 1139106,
                     disk_read_entries: 0,
                     memory_read_entries: 3,
                     write_entries: 0,
@@ -1217,8 +1217,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 315596,
-                mem_bytes: 1139641,
+                instructions: 315564,
+                mem_bytes: 1139657,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 1,
@@ -1243,8 +1243,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 310844,
-                mem_bytes: 1138946,
+                instructions: 310830,
+                mem_bytes: 1138954,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1269,8 +1269,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 317507,
-                mem_bytes: 1139997,
+                instructions: 317475,
+                mem_bytes: 1140013,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 1,
@@ -1295,8 +1295,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 311357,
-                mem_bytes: 1139014,
+                instructions: 311343,
+                mem_bytes: 1139022,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1321,8 +1321,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 312582,
-                mem_bytes: 1139366,
+                instructions: 312564,
+                mem_bytes: 1139390,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1347,8 +1347,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 312984,
-                mem_bytes: 1139366,
+                instructions: 312970,
+                mem_bytes: 1139390,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1373,8 +1373,8 @@ mod test {
         assert!(res.is_err());
         expect![[r#"
             InvocationResources {
-                instructions: 312421,
-                mem_bytes: 1139434,
+                instructions: 312403,
+                mem_bytes: 1139458,
                 disk_read_entries: 0,
                 memory_read_entries: 3,
                 write_entries: 0,
@@ -1406,8 +1406,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 315442,
-                mem_bytes: 1139901,
+                instructions: 315428,
+                mem_bytes: 1139909,
                 disk_read_entries: 2,
                 memory_read_entries: 1,
                 write_entries: 2,
@@ -1438,8 +1438,8 @@ mod test {
             .unwrap();
         expect![[r#"
             InvocationResources {
-                instructions: 317979,
-                mem_bytes: 1140348,
+                instructions: 317965,
+                mem_bytes: 1140356,
                 disk_read_entries: 3,
                 memory_read_entries: 0,
                 write_entries: 3,

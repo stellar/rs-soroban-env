@@ -38,7 +38,7 @@
   "  36 ret symbol_len -> Ok(U32(12))": "",
   "  37 call symbol_copy_to_slice(Symbol(obj#29), U32(0), 12)": "",
   "  38 ret symbol_copy_to_slice -> Ok(())": "",
-  "  39 pop VM:3f2c7e4c:sym#29 -> Err(Error(Budget, ExceededLimit))": "cpu:180",
+  "  39 pop VM:3f2c7e4c:sym#29 -> Err(Error(Budget, ExceededLimit))": "cpu:174",
   "  40 ret try_call -> Err(Error(Budget, ExceededLimit))": " objs:-/17@7ef20ad2, vm:-/-, stk:-, auth:-/-",
-  "  41 end": "cpu:180, mem:0, mem_peak:0, prngs:-/9b4a753, objs:-/17@7ef20ad2, vm:-/-, evt:-, store:-/4@d172a5eb, foot:4@7048bcdb, stk:-, auth:-/-"
+  "  41 end": "cpu:174, mem:0, mem_peak:0, prngs:-/9b4a753, objs:-/17@7ef20ad2, vm:-/-, evt:-, store:-/4@d172a5eb, foot:4@7048bcdb, stk:-, auth:-/-"
 }

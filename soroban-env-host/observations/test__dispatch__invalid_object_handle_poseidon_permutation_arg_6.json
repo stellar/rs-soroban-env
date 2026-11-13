@@ -22,8 +22,8 @@
   "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1447386, mem:753154, mem_peak:753154, objs:-/9@b2491e27, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#17), Symbol(test), Vec(obj#23))": "cpu:1448712, mem:753394, mem_peak:753394, objs:-/12@93e2dbbb",
   "  22 push VM:7cb2fee9:test(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1657594, mem:921507, mem_peak:921507, objs:-/13@a5eba62f, vm:65536@b1cd98b9/2@2f94d90d, stk:1@1b9f1352, auth:1@73b1caf7/-",
-  "  23 call poseidon_permutation(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1661397, mem:921737, mem_peak:921737, objs:3@34201d93/13@a5eba62f, vm:-/-, stk:1@ad6468a0",
-  "  24 pop VM:7cb2fee9:test -> Err(Error(Value, InvalidInput))": "cpu:1662132, vm:65536@b1cd98b9/2@2f94d90d",
+  "  23 call poseidon_permutation(Vec(obj#19), Symbol(abc), U32(123), U32(123), U32(123), U32(123), Vec(obj#123), Vec(obj#21))": "cpu:1661413, mem:921801, mem_peak:921801, objs:3@34201d93/13@a5eba62f, vm:-/-, stk:1@ad6468a0",
+  "  24 pop VM:7cb2fee9:test -> Err(Error(Value, InvalidInput))": "cpu:1662136, vm:65536@b1cd98b9/2@2f94d90d",
   "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/13@a5eba62f, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1662132, mem:921737, mem_peak:921737, prngs:-/9b4a753, objs:-/13@a5eba62f, vm:-/-, evt:-, store:-/2@b7cc4194, foot:2@fc2ddf21, stk:-, auth:-/-"
+  "  26 end": "cpu:1662136, mem:921801, mem_peak:921801, prngs:-/9b4a753, objs:-/13@a5eba62f, vm:-/-, evt:-, store:-/2@b7cc4194, foot:2@fc2ddf21, stk:-, auth:-/-"
 }

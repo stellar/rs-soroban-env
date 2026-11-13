@@ -22,9 +22,9 @@
   "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8060736, mem:1630925, mem_peak:1630925, objs:-/9@90b9ee60, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#17), Symbol(loadmem1), Vec(obj#19))": "cpu:8061178, mem:1631005, mem_peak:1631005, objs:-/10@abe22998",
   "  22 push VM:be1b9761:loadmem1(U32(0), U32(65024), U32(32))": "cpu:8696982, mem:1911097, mem_peak:1911097, objs:-/11@2740b880, vm:65536@b1cd98b9/4@70bfd778, stk:1@d138404f, auth:1@27279bf3/-",
-  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8699460, mem:1911175, mem_peak:1911175, vm:-/-",
-  "  24 ret map_new_from_linear_memory -> Ok(Map(obj#23))": "cpu:8710744, mem:1912583, mem_peak:1912583, objs:-/12@6ac0dabc",
-  "  25 pop VM:be1b9761:loadmem1 -> Ok(Map(obj#23))": "cpu:8711239, mem:1912607, mem_peak:1912607, objs:1@7b601b67/12@6ac0dabc, vm:65536@1ef083fd/4@70bfd778, stk:1@773f7f49",
-  "  26 ret call -> Ok(Map(obj#23))": "cpu:8711299, objs:-/12@6ac0dabc, vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8711299, mem:1912607, mem_peak:1912607, prngs:-/9b4a753, objs:-/12@6ac0dabc, vm:-/-, evt:-, store:-/2@46699e33, foot:2@d181aab6, stk:-, auth:-/-"
+  "  23 call map_new_from_linear_memory(U32(0), U32(65024), U32(32))": "cpu:8699466, mem:1911199, mem_peak:1911199, vm:-/-",
+  "  24 ret map_new_from_linear_memory -> Ok(Map(obj#23))": "cpu:8710746, mem:1912607, mem_peak:1912607, objs:-/12@6ac0dabc",
+  "  25 pop VM:be1b9761:loadmem1 -> Ok(Map(obj#23))": "cpu:8711241, mem:1912631, mem_peak:1912631, objs:1@7b601b67/12@6ac0dabc, vm:65536@1ef083fd/4@70bfd778, stk:1@773f7f49",
+  "  26 ret call -> Ok(Map(obj#23))": "cpu:8711301, objs:-/12@6ac0dabc, vm:-/-, stk:-, auth:-/-",
+  "  27 end": "cpu:8711301, mem:1912631, mem_peak:1912631, prngs:-/9b4a753, objs:-/12@6ac0dabc, vm:-/-, evt:-, store:-/2@46699e33, foot:2@d181aab6, stk:-, auth:-/-"
 }

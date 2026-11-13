@@ -737,8 +737,7 @@ impl Host {
             match res {
                 Ok(res) => res,
                 Err(panic_payload) => {
-                    let mut error: Error =
-                        Error::from(wasmi::core::TrapCode::UnreachableCodeReached);
+                    let mut error: Error = Error::from(wasmi::TrapCode::UnreachableCodeReached);
 
                     let mut recovered_error_from_panic_refcell = false;
                     if let Ok(panic) = panic.try_borrow() {
@@ -856,8 +855,7 @@ impl Host {
                     // code). It's a little weird because we're not actually
                     // running a VM, but we prioritize emulation fidelity over
                     // honesty here.
-                    let mut error: Error =
-                        Error::from(wasmi::core::TrapCode::UnreachableCodeReached);
+                    let mut error: Error = Error::from(wasmi::TrapCode::UnreachableCodeReached);
 
                     let mut recovered_error_from_panic_refcell = false;
                     if let Ok(panic) = panic.try_borrow() {

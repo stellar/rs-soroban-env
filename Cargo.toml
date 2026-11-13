@@ -31,15 +31,34 @@ soroban-env-host = { version = "=30.0.0", path = "soroban-env-host" }
 soroban-env-macros = { version = "=30.0.0", path = "soroban-env-macros" }
 soroban-builtin-sdk-macros = { version = "=30.0.0", path = "soroban-builtin-sdk-macros" }
 # NB: this must match the wasmparser version wasmi is using
-wasmparser = "=0.116.1"
+wasmparser = { version = "=0.228.0", default-features = false, features = ["std", "validate", "features"] }
 
 [workspace.dependencies.stellar-xdr]
 version = "=30.0.0"
 default-features = false
 
+# NB: wasmi is deliberately built without its `wat`, `memory64` and `simd`
+# features: none of them are wanted in a deterministic contract VM.
+#
+# NB: `portable-dispatch` is deliberate. wasmi's default `auto-dispatch` uses a
+# tail-call interpreter loop at opt-level >= 2, which on stable Rust relies on
+# LLVM tail-call optimization (only guaranteed with nightly + the `unstable`
+# feature). Under the `test-opt` profile (debug-assertions on) that
+# optimization did not happen and a long-running contract overflowed the
+# native stack, aborting the process. With debug-assertions off the
+# tail-call backend passed the full suite, but build profiles are not under
+# our control, so the loop backend is the safe default.
 [workspace.dependencies.wasmi]
-package = "soroban-wasmi"
-version = "=29.0.0"
+version = "=2.0.0"
+default-features = false
+features = ["stable", "std", "validate", "portable-dispatch"]
+
+# wasmi does not re-export `LimiterError`, which is required to implement
+# `wasmi::ResourceLimiter`, so we depend on `wasmi_core` directly. It must
+# always be pinned to the same version as `wasmi`.
+[workspace.dependencies.wasmi_core]
+version = "=2.0.0"
+default-features = false
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # [patch.crates-io]

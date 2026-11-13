@@ -211,7 +211,7 @@ fn test_native_mode_calling_protocol_gated_host_fn() -> Result<(), HostError> {
 fn configure_protocol_test_for_runtime_guardrail(
     host: &Host,
     ledger_proto: u32,
-) -> Result<wasmi::Value, wasmi::Error> {
+) -> Result<wasmi::Val, wasmi::Error> {
     host.enable_debug().unwrap();
     let mut li = LedgerInfo::default();
     li.protocol_version = ledger_proto;
@@ -223,27 +223,26 @@ fn configure_protocol_test_for_runtime_guardrail(
 fn register_and_invoke_custom_vm_no_linker_check(
     host: &Host,
     wasm_code: &[u8],
-) -> Result<wasmi::Value, wasmi::Error> {
+) -> Result<wasmi::Val, wasmi::Error> {
     use crate::vm::protocol_gated_dummy;
-    use wasmi::{Engine, Func, Linker, Module, Store, Value};
+    use wasmi::{Engine, Func, Linker, Module, Store, Val};
     let mut config = wasmi::Config::default();
     config.consume_fuel(true);
     let engine = Engine::new(&config);
     let module = Module::new(&engine, wasm_code).unwrap();
     let mut store = Store::new(&engine, host.clone());
-    store.add_fuel(10000000).unwrap();
+    store.set_fuel(10000000).unwrap();
     store.limiter(|host| host);
     let mut linker = <Linker<Host>>::new(&engine);
 
     let wrap = |store| Func::wrap(store, protocol_gated_dummy);
     let func = (wrap)(&mut store);
     linker.define("t", "0", func).unwrap();
-    let not_started_instance = linker.instantiate(&mut store, &module).unwrap();
-    let instance = not_started_instance.ensure_no_start(&mut store).unwrap();
+    let instance = linker.instantiate_and_start(&mut store, &module).unwrap();
 
     let ext = instance.get_export(&mut store, "test").unwrap();
     let func = ext.into_func().unwrap();
-    let mut wasm_ret: [Value; 1] = [Value::I64(0)];
+    let mut wasm_ret: [Val; 1] = [Val::I64(0)];
     let res = func
         .call(&mut store, &[], &mut wasm_ret)
         .map(|_| wasm_ret[0].clone());
@@ -252,15 +251,15 @@ fn register_and_invoke_custom_vm_no_linker_check(
 
 fn fish_host_error_from_wasm_trap(
     host: &Host,
-    res: Result<wasmi::Value, wasmi::Error>,
+    res: Result<wasmi::Val, wasmi::Error>,
 ) -> Result<Val, HostError> {
     res.map(|r| {
         host.relative_to_absolute(Val::try_marshal_from_value(r).unwrap())
             .unwrap()
     })
-    .map_err(|e| match e {
-        wasmi::Error::Trap(t) => t.downcast().unwrap(),
-        _ => panic!(),
+    .map_err(|e| match e.downcast::<HostError>() {
+        Some(he) => he,
+        None => panic!(),
     })
 }
 

@@ -14,7 +14,7 @@
   "  12 ret create_contract -> Ok(Address(obj#13))": "cpu:3260639, mem:2891396, mem_peak:2891396, objs:-/7@77ebce5a, store:-/2@72f57e4e, foot:2@9ddf4d04, auth:-/1@d8d93ddd",
   "  13 call call(Address(obj#13), Symbol(oob1), Vec(obj#15))": "cpu:3261081, mem:2891476, mem_peak:2891476, objs:-/8@2a540d72, auth:-/-",
   "  14 push VM:cd475327:oob1()": "cpu:3907363, mem:4152770, mem_peak:4152770, objs:-/9@430dbbfd, vm:1114112@415819ab/16@b860c029, stk:1@1b86d06d, auth:1@c80a506a/-",
-  "  15 pop VM:cd475327:oob1 -> Err(Error(WasmVm, InvalidAction))": "cpu:3909837, mem:4152800, mem_peak:4152800",
+  "  15 pop VM:cd475327:oob1 -> Err(Error(WasmVm, InvalidAction))": "cpu:3909833, mem:4152800, mem_peak:4152800",
   "  16 ret call -> Err(Error(WasmVm, InvalidAction))": " vm:-/-, stk:-, auth:-/-",
-  "  17 end": "cpu:3909837, mem:4152800, mem_peak:4152800, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@72f57e4e, foot:2@9ddf4d04, stk:-, auth:-/-"
+  "  17 end": "cpu:3909833, mem:4152800, mem_peak:4152800, prngs:-/9b4a753, objs:-/9@430dbbfd, vm:-/-, evt:-, store:-/2@72f57e4e, foot:2@9ddf4d04, stk:-, auth:-/-"
 }

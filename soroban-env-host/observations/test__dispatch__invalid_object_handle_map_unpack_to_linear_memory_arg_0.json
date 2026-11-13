@@ -22,8 +22,8 @@
   "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:1436504, mem:751670, mem_peak:751670, objs:-/9@34e886c5, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#17), Symbol(test), Vec(obj#19))": "cpu:1436946, mem:751750, mem_peak:751750, objs:-/10@9c6fc4db",
   "  22 push VM:f05ca4e9:test(Map(obj#123), U32(123), U32(123), U32(123))": "cpu:1645016, mem:919585, mem_peak:919585, objs:-/11@73ab889e, vm:65536@b1cd98b9/2@2f94d90d, stk:1@b5a36339, auth:1@b1b428e/-",
-  "  23 call map_unpack_to_linear_memory(Map(obj#123), U32(123), U32(123), U32(123))": "cpu:1647933, mem:919703, mem_peak:919703, objs:1@a940116a/11@73ab889e, vm:-/-, stk:1@cc76babf",
+  "  23 call map_unpack_to_linear_memory(Map(obj#123), U32(123), U32(123), U32(123))": "cpu:1647941, mem:919735, mem_peak:919735, objs:1@a940116a/11@73ab889e, vm:-/-, stk:1@cc76babf",
   "  24 pop VM:f05ca4e9:test -> Err(Error(Value, InvalidInput))": "cpu:1648588, vm:65536@b1cd98b9/2@2f94d90d",
   "  25 ret call -> Err(Error(Value, InvalidInput))": " objs:-/11@73ab889e, vm:-/-, stk:-, auth:-/-",
-  "  26 end": "cpu:1648588, mem:919703, mem_peak:919703, prngs:-/9b4a753, objs:-/11@73ab889e, vm:-/-, evt:-, store:-/2@ccdc4d6f, foot:2@97a65d9d, stk:-, auth:-/-"
+  "  26 end": "cpu:1648588, mem:919735, mem_peak:919735, prngs:-/9b4a753, objs:-/11@73ab889e, vm:-/-, evt:-, store:-/2@ccdc4d6f, foot:2@97a65d9d, stk:-, auth:-/-"
 }

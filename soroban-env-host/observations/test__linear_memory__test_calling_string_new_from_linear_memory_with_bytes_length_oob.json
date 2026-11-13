@@ -22,9 +22,9 @@
   "  20 ret create_contract -> Ok(Address(obj#17))": "cpu:8054121, mem:1629990, mem_peak:1629990, objs:-/9@d31b4430, vm:-/-, stk:-, auth:-/-",
   "  21 call call(Address(obj#17), Symbol(loadmem3), Vec(obj#19))": "cpu:8054563, mem:1630070, mem_peak:1630070, objs:-/10@49ae0ed5",
   "  22 push VM:7439dfc:loadmem3(U32(65505), U32(32))": "cpu:8689766, mem:1909987, mem_peak:1909987, objs:-/11@140376b9, vm:65536@b1cd98b9/4@70bfd778, stk:1@43a10203, auth:1@f4a75d5f/-",
-  "  23 call string_new_from_linear_memory(U32(65505), U32(32))": "cpu:8692240, mem:1910049, mem_peak:1910049, vm:-/-",
-  "  24 ret string_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8697463, mem:1910097, mem_peak:1910097",
+  "  23 call string_new_from_linear_memory(U32(65505), U32(32))": "cpu:8692244, mem:1910065, mem_peak:1910065, vm:-/-",
+  "  24 ret string_new_from_linear_memory -> Err(Error(WasmVm, IndexBounds))": "cpu:8697463, mem:1910113, mem_peak:1910113",
   "  25 pop VM:7439dfc:loadmem3 -> Err(Error(WasmVm, IndexBounds))": " vm:65536@72ee363d/4@70bfd778",
   "  26 ret call -> Err(Error(WasmVm, IndexBounds))": " vm:-/-, stk:-, auth:-/-",
-  "  27 end": "cpu:8697463, mem:1910097, mem_peak:1910097, prngs:-/9b4a753, objs:-/11@140376b9, vm:-/-, evt:-, store:-/2@ed6293d5, foot:2@d703f1fb, stk:-, auth:-/-"
+  "  27 end": "cpu:8697463, mem:1910113, mem_peak:1910113, prngs:-/9b4a753, objs:-/11@140376b9, vm:-/-, evt:-, store:-/2@ed6293d5, foot:2@d703f1fb, stk:-, auth:-/-"
 }

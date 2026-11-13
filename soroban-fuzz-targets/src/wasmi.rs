@@ -12,7 +12,7 @@
 
 use crate::FuzzResult;
 use arbitrary::{Arbitrary, Unstructured};
-use wasmi::{core::ValueType, Engine, Extern, Linker, Module, Store, StoreLimitsBuilder, Value};
+use wasmi::{Engine, Extern, Linker, Module, Store, StoreLimitsBuilder, Val, ValType};
 
 #[derive(Debug, Arbitrary)]
 struct WasmiConfig;
@@ -65,12 +65,12 @@ impl wasm_smith::Config for WasmiConfig {
     }
 }
 
-fn ty_to_arg(ty: &ValueType) -> Value {
+fn ty_to_arg(ty: &ValType) -> Val {
     match ty {
-        ValueType::I32 => Value::I32(1),
-        ValueType::I64 => Value::I64(1),
-        ValueType::F32 => Value::F32(1.0.into()),
-        ValueType::F64 => Value::F64(1.0.into()),
+        ValType::I32 => Val::I32(1),
+        ValType::I64 => Val::I64(1),
+        ValType::F32 => Val::F32(1.0.into()),
+        ValType::F64 => Val::F64(1.0.into()),
         _ => panic!("reference type"),
     }
 }
@@ -106,12 +106,7 @@ pub fn run_fuzz_target(data: &[u8]) -> FuzzResult {
         Err(_) => return FuzzResult::Ok, // wasm-smith should produce valid wasm, but if not, skip
     };
 
-    let preinstance = match linker.instantiate(&mut store, &module) {
-        Ok(p) => p,
-        Err(_) => return FuzzResult::Ok,
-    };
-
-    let instance = match preinstance.ensure_no_start(&mut store) {
+    let instance = match linker.instantiate_and_start(&mut store, &module) {
         Ok(i) => i,
         Err(_) => return FuzzResult::Ok,
     };
