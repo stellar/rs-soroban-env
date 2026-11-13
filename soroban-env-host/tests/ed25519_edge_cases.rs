@@ -61,6 +61,7 @@
 use ed25519_dalek::{Signature, VerifyingKey, PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH};
 use soroban_env_common::{Env, EnvBase};
 use soroban_env_host::{
+    budget::AsBudget,
     xdr::{ScErrorCode, ScErrorType},
     Host,
 };
@@ -78,6 +79,8 @@ fn check_zcash_test_vectors_are_rejected() {
     const ZIP215_TEST_MESSAGE: &[u8] = b"Zcash";
     let msg = host.bytes_new_from_slice(&ZIP215_TEST_MESSAGE).unwrap();
     for (i, test_vector) in ZCASH_TEST_VECTORS.iter().enumerate() {
+        // reset the budget for each test case so they don't interfere
+        host.as_budget().reset_default().unwrap();
         println!("Zcash Test vector {}", i);
         let public_key: [u8; PUBLIC_KEY_LENGTH] = hex::decode(test_vector.public_key)
             .unwrap()

@@ -1,6 +1,6 @@
 use crate::common::HostCostMeasurement;
 use ark_bls12_381::{Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ff::UniformRand;
+use ark_ff::{BigInt, PrimeField, UniformRand};
 use ark_serialize::CanonicalSerialize;
 use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{
@@ -190,10 +190,36 @@ impl HostCostMeasurement for Bls12381G1ProjectiveToAffineMeasure {
     }
 }
 
+// The canonical scalar (< r) with the maximal Hamming weight at full bit
+// length: weight 254 over 255 bits. `Affine * Fr` uses double-and-add, which
+// performs one point addition per set bit, so this maximizes the cost.
+fn max_hamming_weight_fr() -> Fr {
+    let s = Fr::from_bigint(BigInt([
+        u64::MAX,
+        u64::MAX,
+        u64::MAX,
+        0x6fff_ffff_ffff_ffff,
+    ]))
+    .unwrap();
+    assert_eq!(
+        s.into_bigint()
+            .0
+            .iter()
+            .map(|l| l.count_ones())
+            .sum::<u32>(),
+        254
+    );
+    s
+}
+
 pub(crate) struct Bls12381G1MulMeasure;
 
 impl HostCostMeasurement for Bls12381G1MulMeasure {
     type Runner = Bls12381G1MulRun;
+
+    fn new_worst_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G1MulSample {
+        Bls12381G1MulSample(G1Affine::rand(rng), max_hamming_weight_fr())
+    }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G1MulSample {
         let p = G1Affine::rand(rng);
@@ -279,6 +305,10 @@ pub(crate) struct Bls12381G2MulMeasure;
 
 impl HostCostMeasurement for Bls12381G2MulMeasure {
     type Runner = Bls12381G2MulRun;
+
+    fn new_worst_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G2MulSample {
+        Bls12381G2MulSample(G2Affine::rand(rng), max_hamming_weight_fr())
+    }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bls12381G2MulSample {
         let p = G2Affine::rand(rng);
