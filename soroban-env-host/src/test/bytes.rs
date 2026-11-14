@@ -608,3 +608,61 @@ fn bytes_copy_from_slice_resizes_and_overwrites() -> Result<(), HostError> {
         .is_err());
     Ok(())
 }
+
+#[test]
+fn deserialize_rejects_unrepresentable_values_at_any_depth() -> Result<(), HostError> {
+    let host = Host::default();
+    let deser = |v: ScVal| -> Result<Val, HostError> {
+        let bytes: Vec<u8> = v.to_xdr(DEFAULT_XDR_RW_LIMITS)?;
+        let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
+        host.deserialize_from_bytes(bo)
+    };
+    let bad = ScVal::LedgerKeyContractInstance;
+    let in_vec = ScVal::Vec(Some(ScVec(
+        vec![ScVal::U32(1), bad.clone()].try_into().unwrap(),
+    )));
+    let in_map_val = ScVal::Map(Some(ScMap(
+        vec![ScMapEntry {
+            key: ScVal::U32(1),
+            val: bad.clone(),
+        }]
+        .try_into()
+        .unwrap(),
+    )));
+    let in_map_key = ScVal::Map(Some(ScMap(
+        vec![ScMapEntry {
+            key: bad.clone(),
+            val: ScVal::U32(1),
+        }]
+        .try_into()
+        .unwrap(),
+    )));
+    let nested = ScVal::Vec(Some(ScVec(vec![in_vec.clone()].try_into().unwrap())));
+    for v in [bad, in_vec, in_map_val, in_map_key, nested] {
+        let err = deser(v.clone()).err().unwrap().error;
+        assert!(err.is_type(ScErrorType::Value), "{v:?}: {err:?}");
+        assert!(err.is_code(ScErrorCode::UnexpectedType), "{v:?}: {err:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn deserialize_charges_for_the_walk_that_finds_an_unrepresentable_value() -> Result<(), HostError> {
+    let host = Host::default();
+    let n = 1000;
+    let mut elems = vec![ScVal::Void; n];
+    elems[n - 1] = ScVal::LedgerKeyContractInstance;
+    let v = ScVal::Vec(Some(ScVec(elems.try_into().unwrap())));
+    let bytes: Vec<u8> = v.to_xdr(DEFAULT_XDR_RW_LIMITS)?;
+    let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
+    let ((), alloc, cpy) = mem_inputs_charged(&host, || {
+        assert!(host.deserialize_from_bytes(bo).is_err());
+        Ok(())
+    })?;
+    // Beyond the decode, the failed conversion is charged for the vector of
+    // values it started to build.
+    let vals_bytes = (n * std::mem::size_of::<Val>()) as u64;
+    assert_ge!(alloc, vals_bytes);
+    assert_ge!(cpy, vals_bytes);
+    Ok(())
+}

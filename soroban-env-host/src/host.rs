@@ -2613,21 +2613,10 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        // Metering bug: the representation check is not metered,
-        // so if the value is not valid, we won't charge anything for
-        // walking the `ScVal`. Since `to_host_val` performs validation
-        // and has proper metering, next protocol version should just
-        // call `to_host_val` directly.
-        if Val::can_represent_scval_recursive(&scv) {
-            self.to_host_val(&scv)
-        } else {
-            Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::UnexpectedType,
-                "Deserialized ScVal type cannot be represented as Val",
-                &[(scv.discriminant() as i32).into()],
-            ))
-        }
+        // `to_host_val` rejects any `ScVal` that cannot be represented as a
+        // `Val`, at every level of nesting, and meters the walk it does to
+        // find one.
+        self.to_host_val(&scv)
     }
 
     fn string_copy_to_linear_memory(
