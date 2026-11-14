@@ -477,10 +477,11 @@ where
             Tag::SymbolSmall => {
                 let sym: SymbolSmall =
                     unsafe { <SymbolSmall as ValConvert>::unchecked_from_val(val) };
-                let str: String = sym.into_iter().collect();
-                Ok(ScVal::Symbol(crate::xdr::ScSymbol(
-                    str.as_bytes().try_into()?,
-                )))
+                // Decode into a stack buffer so that the only heap allocation
+                // is the one owned by the resulting `ScSymbol`.
+                let str = sym.to_str();
+                let bytes: &[u8] = str.as_ref();
+                Ok(ScVal::Symbol(crate::xdr::ScSymbol(bytes.try_into()?)))
             }
 
             // The object types should all be handled above, and the other tag

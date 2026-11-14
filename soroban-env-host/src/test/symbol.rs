@@ -210,3 +210,4 @@ fn invalid_symbol_conversions() {
         );
     }
 }
+
