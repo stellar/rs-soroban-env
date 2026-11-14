@@ -363,6 +363,15 @@ impl MeteredClone for ContractExecutable {
         }
     }
 }
+impl MeteredClone for CreateContractArgs {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        // The preimage is shallow, but the executable may own an external
+        // reference tag.
+        self.executable.charge_for_substructure(budget)
+    }
+}
 impl MeteredClone for AccountId {}
 impl MeteredClone for SponsorshipDescriptor {}
 impl MeteredClone for ScAddress {}
@@ -378,7 +387,6 @@ impl MeteredClone for LedgerKeyContractCode {}
 impl MeteredClone for LedgerEntryExt {}
 impl MeteredClone for TrustLineEntry {}
 
-impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
 impl MeteredClone for Asset {}
 // endregion: xdr types with no substructure
@@ -748,8 +756,8 @@ impl MeteredClone for SorobanAuthorizedFunction {
         match self {
             // InvokeContractArgs carries a vector as substructure.
             SorobanAuthorizedFunction::ContractFn(c) => c.charge_for_substructure(budget),
-            // CreateContractArgs has no substructure.
-            SorobanAuthorizedFunction::CreateContractHostFn(_) => Ok(()),
+            // CreateContractArgs may carry an external reference tag.
+            SorobanAuthorizedFunction::CreateContractHostFn(c) => c.charge_for_substructure(budget),
             SorobanAuthorizedFunction::CreateContractV2HostFn(c) => {
                 c.charge_for_substructure(budget)
             }
