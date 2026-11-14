@@ -99,7 +99,13 @@ ignore = [
     # Ignores 'Rand is unsound with a custom logger using rand::rng()' advisory.
     # `rand` 0.8.5 is only vulnerable when its `log` + `thread_rng` path is
     # enabled with a custom logger, which we don't use
-    "RUSTSEC-2026-0097"
+    "RUSTSEC-2026-0097",
+    # Ignores 'Multiple timing variability issues in operations intended to be
+    # constant-time' in `crypto-bigint`. We get 0.5.x transitively through
+    # `elliptic-curve` 0.13 (k256/p256), and the fix is only in 0.7.6. The
+    # host only verifies signatures and recovers keys from public inputs, so
+    # there are no secrets for a timing side channel to leak.
+    "RUSTSEC-2026-0387"
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
