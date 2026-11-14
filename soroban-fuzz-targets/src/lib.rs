@@ -13,6 +13,7 @@
 //! those in external workspaces like stellar-core.
 
 pub mod expr;
+pub mod muxed_addr;
 pub mod wasmi;
 
 /// Result of running a fuzz target.

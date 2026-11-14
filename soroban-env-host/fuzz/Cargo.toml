@@ -39,3 +39,10 @@ path = "fuzz_targets/wasmi.rs"
 test = false
 doc = false
 required-features = ["libfuzzer"]
+
+[[bin]]
+name = "muxed_addr"
+path = "fuzz_targets/muxed_addr.rs"
+test = false
+doc = false
+required-features = ["libfuzzer"]
