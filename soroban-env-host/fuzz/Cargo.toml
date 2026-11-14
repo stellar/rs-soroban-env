@@ -39,3 +39,10 @@ path = "fuzz_targets/wasmi.rs"
 test = false
 doc = false
 required-features = ["libfuzzer"]
+
+[[bin]]
+name = "sparse_map"
+path = "fuzz_targets/sparse_map.rs"
+test = false
+doc = false
+required-features = ["libfuzzer"]
