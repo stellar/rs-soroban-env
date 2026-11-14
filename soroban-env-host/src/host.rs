@@ -15,7 +15,7 @@ use crate::{
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, CreateContractArgsV2, Duration, LedgerEntryData, PublicKey, ScAddress,
-        ScBytes, ScErrorCode, ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
+        ScBytes, ScErrorCode, ScErrorType, ScString, ScSymbol, ScVal, TimePoint, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, Compare, ContractTtlExtension, ConversionError, EnvBase,
     Error, ExecutableTagObject, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol,
@@ -992,6 +992,17 @@ impl EnvBase for Host {
         // Note: this whole function could be replaced by `ScSymbol::try_from_bytes`
         // in order to avoid duplication. It is duplicated in order to support
         // a slightly different check order for the sake of observation consistency.
+        //
+        // The length is checked first so that a slice that can never be a
+        // symbol is rejected without scanning it.
+        if s.len() > SCSYMBOL_LIMIT as usize {
+            return Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "slice is too long to be represented as Symbol",
+                &[(s.len() as u32).into()],
+            ));
+        }
         self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
         for b in s {
             SymbolSmall::validate_byte(*b).map_err(|_| {

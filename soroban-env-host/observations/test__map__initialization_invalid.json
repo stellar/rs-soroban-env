@@ -6,8 +6,8 @@
   "   4 ret map_new_from_slices -> Err(Error(Object, InvalidInput))": "cpu:1162, mem:128, mem_peak:128",
   "   5 call map_new_from_slices(1)": "cpu:2133, mem:256, mem_peak:256, objs:-/1@a2458e4e",
   "   6 call symbol_new_from_slice(34)": "cpu:2660, mem:296, mem_peak:296",
-  "   7 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:3237, mem:346, mem_peak:346",
-  "   8 call map_new_from_slices(5)": "cpu:1754200, mem:7000442, mem_peak:7000442, objs:-/2@e05b5022",
-  "   9 ret map_new_from_slices -> Ok(Map(obj#5))": "cpu:1755550, mem:7000658, mem_peak:7000658, objs:-/3@48538ad5",
-  "  10 end": "cpu:9634291, mem:42001714, mem_peak:42001714, prngs:-/-, objs:-/3@48538ad5, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "   7 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "",
+  "   8 call map_new_from_slices(5)": "cpu:1753623, mem:7000392, mem_peak:7000392, objs:-/2@e05b5022",
+  "   9 ret map_new_from_slices -> Ok(Map(obj#5))": "cpu:1754973, mem:7000608, mem_peak:7000608, objs:-/3@48538ad5",
+  "  10 end": "cpu:9633714, mem:42001664, mem_peak:42001664, prngs:-/-, objs:-/3@48538ad5, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

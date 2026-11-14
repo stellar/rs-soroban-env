@@ -1,5 +1,5 @@
 use crate::xdr::{self, ScErrorCode, ScErrorType, ScSymbol, ScVal};
-use crate::{Host, HostError};
+use crate::{budget::AsBudget, EnvBase, Host, HostError};
 use soroban_env_common::{Symbol, SymbolSmall, SymbolStr, TryFromVal, TryIntoVal, Val};
 
 #[test]
@@ -211,3 +211,19 @@ fn invalid_symbol_conversions() {
     }
 }
 
+#[test]
+fn oversized_symbol_slice_is_rejected_before_it_is_scanned() -> Result<(), HostError> {
+    let cpu_charged = |len: usize| -> Result<u64, HostError> {
+        let host = Host::default();
+        let bytes = vec![b'a'; len];
+        let before = host.as_budget().get_cpu_insns_consumed()?;
+        let err = host.symbol_new_from_slice(&bytes).err().unwrap();
+        assert!(err.error.is_type(ScErrorType::Value));
+        assert!(err.error.is_code(ScErrorCode::InvalidInput));
+        Ok(host.as_budget().get_cpu_insns_consumed()? - before)
+    };
+    // One byte over the limit costs the same as a megabyte over it.
+    assert_eq!(cpu_charged(33)?, cpu_charged(1 << 20)?);
+
+    Ok(())
+}

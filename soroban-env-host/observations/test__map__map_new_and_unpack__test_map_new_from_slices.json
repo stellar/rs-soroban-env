@@ -47,8 +47,8 @@
   "  45 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:15549",
   "  46 call map_new_from_slices(1)": "",
   "  47 call symbol_new_from_slice(100)": "cpu:16076, mem:1728, mem_peak:1728",
-  "  48 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:16677, mem:1844, mem_peak:1844",
+  "  48 ret map_new_from_slices -> Err(Error(Value, InvalidInput))": "",
   "  49 call map_new_from_slices(2)": "",
   "  50 ret map_new_from_slices -> Err(Error(Object, UnexpectedSize))": "",
-  "  51 end": "cpu:16677, mem:1844, mem_peak:1844, prngs:-/-, objs:-/11@8f3b220e, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  51 end": "cpu:16076, mem:1728, mem_peak:1728, prngs:-/-, objs:-/11@8f3b220e, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }

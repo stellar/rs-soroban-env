@@ -80,8 +80,8 @@
   "  78 ret sparse_map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:25435",
   "  79 call sparse_map_new_from_slices(1)": "",
   "  80 call symbol_new_from_slice(100)": "cpu:25962, mem:2624, mem_peak:2624",
-  "  81 ret sparse_map_new_from_slices -> Err(Error(Value, InvalidInput))": "cpu:26563, mem:2740, mem_peak:2740",
+  "  81 ret sparse_map_new_from_slices -> Err(Error(Value, InvalidInput))": "",
   "  82 call sparse_map_new_from_slices(2)": "",
   "  83 ret sparse_map_new_from_slices -> Err(Error(Object, UnexpectedSize))": "",
-  "  84 end": "cpu:26563, mem:2740, mem_peak:2740, prngs:-/-, objs:-/18@e96ffc46, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
+  "  84 end": "cpu:25962, mem:2624, mem_peak:2624, prngs:-/-, objs:-/18@e96ffc46, vm:-/-, evt:-, store:-/-, foot:-, stk:-, auth:-/-"
 }
