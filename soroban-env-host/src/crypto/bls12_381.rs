@@ -593,7 +593,6 @@ impl Host {
         msg: &[u8],
         ty: &ContractCostType,
     ) -> Result<Affine<P>, HostError> {
-        self.charge_budget(*ty, Some(msg.len() as u64))?;
         // check dst requirements
         let dst_len = domain.len();
         if dst_len == 0 || dst_len > 255 {
@@ -605,6 +604,27 @@ impl Host {
                 &[],
             ));
         }
+        // The cost is linear in the number of bytes hashed by the message
+        // expansion (`expand_message_xmd` with SHA-256). The message is hashed
+        // once. The domain separation tag is hashed once per block: one
+        // initial block and then one per 32 bytes of output. The output is 64
+        // bytes per field element for two elements, each of one base field
+        // coefficient in G1 and two in G2, which makes 5 and 9 blocks.
+        let dst_hash_passes: u64 = match ty {
+            ContractCostType::Bls12381HashToG1 => 5,
+            ContractCostType::Bls12381HashToG2 => 9,
+            _ => {
+                return Err(self.err(
+                    ScErrorType::Crypto,
+                    ScErrorCode::InternalError,
+                    "hash_to_curve: unexpected cost type",
+                    &[],
+                ))
+            }
+        };
+        let hashed_bytes =
+            (msg.len() as u64).saturating_add(dst_hash_passes.saturating_mul(dst_len as u64));
+        self.charge_budget(*ty, Some(hashed_bytes))?;
 
         // The `new` function here constructs a DefaultFieldHasher and a WBMap.
         // - The DefaultFieldHasher::new() function creates an ExpanderXmd with
