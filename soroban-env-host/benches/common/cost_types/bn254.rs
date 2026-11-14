@@ -187,12 +187,11 @@ impl HostCostMeasurement for Bn254G1MsmMeasure {
     type Runner = Bn254G1MsmRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bn254G1MsmSample {
+        // An MSM over zero points is rejected by the host, so the smallest sample is 1.
+        let n = input.max(1);
         Bn254G1MsmSample(
-            (0..input)
-                .into_iter()
-                .map(|_| G1Affine::rand(rng))
-                .collect(),
-            (0..input).into_iter().map(|_| Fr::rand(rng)).collect(),
+            (0..n).into_iter().map(|_| G1Affine::rand(rng)).collect(),
+            (0..n).into_iter().map(|_| Fr::rand(rng)).collect(),
             Bn254G1Msm,
             "G1".to_string(),
         )
