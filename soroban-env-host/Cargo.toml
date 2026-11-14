@@ -129,5 +129,10 @@ name = "bls-signature"
 path = "tests/bls.rs"
 required-features = ["testutils"]
 
+[[test]]
+name = "ed25519_edge_cases"
+path = "tests/ed25519_edge_cases.rs"
+required-features = ["testutils"]
+
 [package.metadata.docs.rs]
 features = ["recording_mode", "tracy", "testutils"]

@@ -176,11 +176,11 @@
   " 174 call bytes_len(Bytes(obj#65))": "",
   " 175 ret bytes_len -> Ok(U32(64))": "cpu:212015",
   " 176 call verify_sig_ed25519(Bytes(obj#63), Bytes(obj#101), Bytes(obj#65))": "",
-  " 177 ret verify_sig_ed25519 -> Ok(Void)": "cpu:631246",
+  " 177 ret verify_sig_ed25519 -> Ok(Void)": "cpu:964591",
   " 178 call bytes_copy_to_slice(Bytes(obj#63), U32(0), 32)": "",
-  " 179 ret bytes_copy_to_slice -> Ok(())": "cpu:631352",
-  " 180 ret require_auth -> Ok(Void)": "cpu:638655, mem:38387, mem_peak:38387, store:3@1601028b/5@ecc74617, foot:5@a1357971, auth:1@9f09645c/1@f4935837",
-  " 181 pop SAC:2e378f80:trust -> Err(Error(Contract, #15))": "cpu:643457, mem:38931, mem_peak:38931",
+  " 179 ret bytes_copy_to_slice -> Ok(())": "cpu:964697",
+  " 180 ret require_auth -> Ok(Void)": "cpu:972000, mem:38387, mem_peak:38387, store:3@1601028b/5@ecc74617, foot:5@a1357971, auth:1@9f09645c/1@f4935837",
+  " 181 pop SAC:2e378f80:trust -> Err(Error(Contract, #15))": "cpu:976802, mem:38931, mem_peak:38931",
   " 182 ret call -> Err(Error(Contract, #15))": " store:-/3@3ac12c99, stk:-, auth:-/-",
-  " 183 end": "cpu:643457, mem:38931, mem_peak:38931, prngs:-/9b4a753, objs:-/56@4d6a2c3a, vm:-/-, evt:-, store:-/3@3ac12c99, foot:5@a1357971, stk:-, auth:-/-"
+  " 183 end": "cpu:976802, mem:38931, mem_peak:38931, prngs:-/9b4a753, objs:-/56@4d6a2c3a, vm:-/-, evt:-, store:-/3@3ac12c99, foot:5@a1357971, stk:-, auth:-/-"
 }

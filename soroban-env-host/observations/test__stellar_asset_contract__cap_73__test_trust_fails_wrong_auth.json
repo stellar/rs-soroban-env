@@ -218,11 +218,11 @@
   " 216 call bytes_len(Bytes(obj#95))": "",
   " 217 ret bytes_len -> Ok(U32(64))": "cpu:260792",
   " 218 call verify_sig_ed25519(Bytes(obj#93), Bytes(obj#131), Bytes(obj#95))": "",
-  " 219 ret verify_sig_ed25519 -> Ok(Void)": "cpu:680023",
+  " 219 ret verify_sig_ed25519 -> Ok(Void)": "cpu:1013368",
   " 220 call bytes_copy_to_slice(Bytes(obj#93), U32(0), 32)": "",
-  " 221 ret bytes_copy_to_slice -> Ok(())": "cpu:680129",
-  " 222 ret require_auth -> Err(Error(Auth, InvalidAction))": "cpu:680175, auth:1@4433a9e4/1@a6b31082",
+  " 221 ret bytes_copy_to_slice -> Ok(())": "cpu:1013474",
+  " 222 ret require_auth -> Err(Error(Auth, InvalidAction))": "cpu:1013520, auth:1@4433a9e4/1@a6b31082",
   " 223 pop SAC:2e378f80:trust -> Err(Error(Auth, InvalidAction))": "",
   " 224 ret call -> Err(Error(Auth, InvalidAction))": " store:-/3@e55c59dc, stk:-, auth:-/-",
-  " 225 end": "cpu:680175, mem:45394, mem_peak:45394, prngs:-/9b4a753, objs:-/71@5da2597f, vm:-/-, evt:-, store:-/3@e55c59dc, foot:4@4d757858, stk:-, auth:-/-"
+  " 225 end": "cpu:1013520, mem:45394, mem_peak:45394, prngs:-/9b4a753, objs:-/71@5da2597f, vm:-/-, evt:-, store:-/3@e55c59dc, foot:4@4d757858, stk:-, auth:-/-"
 }

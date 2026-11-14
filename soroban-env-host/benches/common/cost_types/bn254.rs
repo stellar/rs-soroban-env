@@ -1,6 +1,7 @@
 use crate::common::HostCostMeasurement;
 use ark_bn254::{Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine};
-use ark_ff::UniformRand;
+use ark_ec::AffineRepr;
+use ark_ff::{BigInt, Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::CanonicalSerialize;
 use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{
@@ -118,15 +119,60 @@ impl HostCostMeasurement for Bn254G1ProjectiveToAffineMeasure {
         rng: &mut StdRng,
         _input: u64,
     ) -> Bn254G1ProjectiveToAffineSample {
-        let p0 = G1Projective::rand(rng);
-        Bn254G1ProjectiveToAffineSample(p0)
+        Bn254G1ProjectiveToAffineSample(random_g1_projective_with_nontrivial_z(rng))
     }
+}
+
+// A random G1 point in Jacobian form with Z not in {0, 1}, so that
+// `into_affine` takes the field-inversion path. `G1Projective::rand` always
+// produces Z == 1 for BN254 (its cofactor is 1), which `into_affine`
+// short-circuits into a plain copy. Every host path that converts a point
+// (outputs of add/mul/msm) produces Z != 1 in general.
+fn random_g1_projective_with_nontrivial_z(rng: &mut StdRng) -> G1Projective {
+    loop {
+        let p = G1Affine::rand(rng);
+        let l = Fq::rand(rng);
+        if p.is_zero() || l.is_zero() || l.is_one() {
+            continue;
+        }
+        let (x, y) = p.xy().unwrap();
+        let l2 = l.square();
+        let q = G1Projective::new_unchecked(x * l2, y * (l2 * l), l);
+        assert!(!q.z.is_one());
+        return q;
+    }
+}
+
+// The canonical scalar (< r) with the maximal Hamming weight at full bit
+// length: weight 253 over 254 bits. `G1Affine * Fr` uses double-and-add, which
+// performs one point addition per set bit, so this maximizes the cost.
+fn max_hamming_weight_fr() -> Fr {
+    let s = Fr::from_bigint(BigInt([
+        u64::MAX,
+        u64::MAX,
+        u64::MAX,
+        0x2fff_ffff_ffff_ffff,
+    ]))
+    .unwrap();
+    assert_eq!(
+        s.into_bigint()
+            .0
+            .iter()
+            .map(|l| l.count_ones())
+            .sum::<u32>(),
+        253
+    );
+    s
 }
 
 pub(crate) struct Bn254G1MulMeasure;
 
 impl HostCostMeasurement for Bn254G1MulMeasure {
     type Runner = Bn254G1MulRun;
+
+    fn new_worst_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bn254G1MulSample {
+        Bn254G1MulSample(G1Affine::rand(rng), max_hamming_weight_fr())
+    }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Bn254G1MulSample {
         let p = G1Affine::rand(rng);
