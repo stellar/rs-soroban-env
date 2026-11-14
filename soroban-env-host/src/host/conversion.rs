@@ -463,12 +463,10 @@ impl Host {
             self.visit_obj_untyped(objref, |ho| {
                 let val = match ho {
                     HostObject::Vec(vv) => {
-                        Vec::<ScVal>::charge_bulk_init_cpy(vv.len() as u64, self)?;
-                        let sv = vv.iter().map(|e| self.from_host_val(*e)).collect::<Result<
-                            Vec<ScVal>,
-                            HostError,
-                        >>(
-                        )?;
+                        let mut sv = Vec::<ScVal>::with_metered_capacity(vv.len(), self)?;
+                        for e in vv.iter() {
+                            sv.push(self.from_host_val(*e)?);
+                        }
                         ScVal::Vec(Some(ScVec(self.map_err(sv.try_into())?)))
                     }
                     HostObject::Map(mm) => ScVal::Map(Some(self.host_map_to_scmap(mm)?)),

@@ -123,6 +123,11 @@ where
 
     /// Metered version of the container's `with_capacity` method.
     fn with_metered_capacity(capacity: usize, budget: impl AsBudget) -> Result<Self, HostError>;
+
+    /// Collects `iter` into a container with initial capacity `capacity`. The caller
+    /// must charge for enough capacity to hold every yielded item to avoid unmetered
+    /// reallocation.
+    fn collect_with_capacity(iter: impl Iterator<Item = Self::Item>, capacity: usize) -> Self;
 }
 
 impl<T: DeclaredSizeForMetering> MeteredContainer for Vec<T> {
@@ -131,6 +136,12 @@ impl<T: DeclaredSizeForMetering> MeteredContainer for Vec<T> {
     fn with_metered_capacity(capacity: usize, budget: impl AsBudget) -> Result<Self, HostError> {
         Self::charge_bulk_init_cpy(capacity as u64, budget)?;
         Ok(Vec::with_capacity(capacity))
+    }
+
+    fn collect_with_capacity(iter: impl Iterator<Item = Self::Item>, capacity: usize) -> Self {
+        let mut v = Vec::with_capacity(capacity);
+        v.extend(iter);
+        v
     }
 }
 
@@ -145,6 +156,16 @@ impl<T: DeclaredSizeForMetering, E: DeclaredSizeForMetering> MeteredContainer
     /// `Result<Vec<T, E>>` with capacity.
     fn with_metered_capacity(_capacity: usize, _budget: impl AsBudget) -> Result<Self, HostError> {
         Err(Error::from_type_and_code(ScErrorType::Object, ScErrorCode::InvalidAction).into())
+    }
+
+    fn collect_with_capacity(iter: impl Iterator<Item = Self::Item>, capacity: usize) -> Self {
+        // Collecting into a `Result<Vec<T>, E>` hides the iterator's size hint
+        // from the `Vec`, which then grows by doubling.
+        let mut v = Vec::with_capacity(capacity);
+        for item in iter {
+            v.push(item?);
+        }
+        Ok(v)
     }
 }
 
@@ -165,7 +186,7 @@ where
     ) -> Result<B, HostError> {
         if let (_, Some(ub)) = self.size_hint() {
             B::charge_bulk_init_cpy(ub as u64, budget)?;
-            Ok(self.collect())
+            Ok(B::collect_with_capacity(self, ub))
         } else {
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
         }
