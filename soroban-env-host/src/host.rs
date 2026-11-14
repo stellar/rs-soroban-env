@@ -2930,12 +2930,16 @@ impl VmCallerEnv for Host {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, |hv: &ScBytes| {
             self.validate_index_le_bound(i, hv.len())?;
-            // we allocate the new vector to be able to hold `len + 1` bytes, so that the insert
-            // will not trigger a reallocation, causing data to be cloned twice.
+            // We allocate the new vector to hold `len + 1` bytes and write the two halves
+            // around the new byte, so that every byte is copied exactly once. Copying the
+            // whole content and then inserting would move the tail a second time, which the
+            // charge below does not cover.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
             let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
-            vnew.extend_from_slice(hv.as_slice());
-            vnew.insert(i as usize, u);
+            let (head, tail) = hv.as_slice().split_at(i as usize);
+            vnew.extend_from_slice(head);
+            vnew.push(u);
+            vnew.extend_from_slice(tail);
             Ok(ScBytes(vnew.try_into()?))
         })?;
         self.add_host_object(vnew)

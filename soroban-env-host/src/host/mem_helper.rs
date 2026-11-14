@@ -1,6 +1,6 @@
 use crate::{
     budget::AsBudget,
-    host::Frame,
+    host::{metered_clone::MeteredContainer, Frame},
     host_object::MemHostObjectType,
     xdr::{ContractCostType, ScErrorCode, ScErrorType, ScSymbol},
     Compare, Host, HostError, Symbol, SymbolObject, SymbolSmall, SymbolStr, U32Val, Vm, VmCaller,
@@ -364,19 +364,19 @@ impl Host {
         copy_bytes_in: impl FnOnce(&mut [u8]) -> Result<(), HostError>,
     ) -> Result<HOT::Wrapper, HostError> {
         let obj_pos: u32 = obj_pos.into();
-        let mut obj_new: Vec<u8> = self
-            .visit_obj(obj, move |hv: &HOT| hv.metered_clone(self))?
-            .into();
-        let obj_end = obj_pos
-            .checked_add(len)
-            .ok_or_else(|| self.err_arith_overflow())? as usize;
-        if obj_new.len() < obj_end {
-            self.charge_budget(
-                ContractCostType::MemAlloc,
-                Some((obj_end.saturating_sub(obj_new.len())) as u64),
-            )?;
-            obj_new.resize(obj_end, 0);
-        }
+        let (mut obj_new, obj_end) = self.visit_obj(obj, move |hv: &HOT| {
+            let bytes = hv.as_byte_slice();
+            let obj_end = obj_pos
+                .checked_add(len)
+                .ok_or_else(|| self.err_arith_overflow())? as usize;
+            // Allocate and charge for the final buffer once before copying it.
+            let mut obj_new = Vec::<u8>::with_metered_capacity(bytes.len().max(obj_end), self)?;
+            obj_new.extend_from_slice(bytes);
+            if obj_new.len() < obj_end {
+                obj_new.resize(obj_end, 0);
+            }
+            Ok((obj_new, obj_end))
+        })?;
         let obj_range = obj_pos as usize..obj_end;
         let obj_buf: &mut [u8] = obj_new.as_mut_slice().get_mut(obj_range).ok_or_else(|| {
             self.err(

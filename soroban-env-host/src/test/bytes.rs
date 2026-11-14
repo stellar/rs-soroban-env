@@ -547,3 +547,64 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
 
     Ok(())
 }
+
+fn bytes_to_vec(host: &Host, obj: BytesObject) -> Result<Vec<u8>, HostError> {
+    let len: u32 = host.bytes_len(obj)?.into();
+    let mut buf = vec![0; len as usize];
+    host.bytes_copy_to_slice(obj, 0_u32.into(), buf.as_mut())?;
+    Ok(buf)
+}
+
+// Returns the total (MemAlloc, MemCpy) input bytes charged while running `f`.
+fn mem_inputs_charged<T>(
+    host: &Host,
+    f: impl FnOnce() -> Result<T, HostError>,
+) -> Result<(T, u64, u64), HostError> {
+    let inputs = |ty| -> Result<u64, HostError> {
+        Ok(host.as_budget().get_tracker(ty)?.inputs.unwrap_or(0))
+    };
+    let (alloc, cpy) = (
+        inputs(ContractCostType::MemAlloc)?,
+        inputs(ContractCostType::MemCpy)?,
+    );
+    let res = f()?;
+    Ok((
+        res,
+        inputs(ContractCostType::MemAlloc)? - alloc,
+        inputs(ContractCostType::MemCpy)? - cpy,
+    ))
+}
+
+#[test]
+fn bytes_copy_from_slice_resizes_and_overwrites() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
+
+    // Overwrite inside the object: no growth.
+    let (_, alloc_in_place, _) = mem_inputs_charged(&host, || {
+        host.bytes_copy_from_slice(obj, 1_u32.into(), &[9, 9])
+    })?;
+
+    // Write across the end: the object grows by two bytes.
+    let (res, alloc_grown, _) = mem_inputs_charged(&host, || {
+        host.bytes_copy_from_slice(obj, 3_u32.into(), &[7, 8, 9])
+    })?;
+    assert_eq!(bytes_to_vec(&host, res)?, vec![1, 2, 3, 7, 8, 9]);
+    assert_eq!(alloc_grown - alloc_in_place, 2);
+
+    // Write past the end: the gap is zero-filled.
+    let (res, alloc_gap, _) = mem_inputs_charged(&host, || {
+        host.bytes_copy_from_slice(obj, 6_u32.into(), &[5])
+    })?;
+    assert_eq!(bytes_to_vec(&host, res)?, vec![1, 2, 3, 4, 0, 0, 5]);
+    assert_eq!(alloc_gap - alloc_in_place, 3);
+
+    // The source object is untouched.
+    assert_eq!(bytes_to_vec(&host, obj)?, vec![1, 2, 3, 4]);
+
+    // A position and length that overflow u32 are rejected.
+    assert!(host
+        .bytes_copy_from_slice(obj, u32::MAX.into(), &[1])
+        .is_err());
+    Ok(())
+}
