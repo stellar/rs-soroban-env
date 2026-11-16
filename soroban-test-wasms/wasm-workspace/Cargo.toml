@@ -55,6 +55,7 @@ members = [
     "check_auth_instance_storage",
     "builtin_auth_delegation",
     "update_exec_ref",
+    "instance_storage_depth",
 ]
 [profile.release]
 opt-level = "z"
@@ -70,11 +71,11 @@ lto = true
 rust-version = "1.84.0"
 
 [workspace.dependencies.soroban-sdk]
-version = "=27.0.0-rc.1"
+version = "=30.0.0-rc.1"
 # git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-env-common]
-version = "=27.0.0"
+version = "=30.0.0"
 # git = "https://github.com/stellar/rs-soroban-env"
 
 # Always build from the local instance of env as we need to rebuild test Wasms

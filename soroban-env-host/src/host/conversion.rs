@@ -271,18 +271,28 @@ impl Host {
     }
 
     // This function is almost identical to `host_map_to_scmap`, and should only
-    // be used for creating the instance storage map.
+    // be used for creating the instance storage map. This holds in the opposite
+    // direction as well: the instance storage map should always be converted
+    // using this function.
     pub(crate) fn instance_storage_map_to_scmap(&self, map: &HostMap) -> Result<ScMap, HostError> {
-        let mut mv = Vec::<ScMapEntry>::with_metered_capacity(map.len(), self)?;
-        for (k, v) in map.iter(self)? {
-            // This is the only difference point compared to `host_map_to_scmap`:
-            // we convert the key according to the storage key conversion rules
-            // instead of the general value conversion rules.
-            let key = self.from_host_val_for_storage(*k)?;
-            let val = self.from_host_val(*v)?;
-            mv.push(ScMapEntry { key, val });
-        }
-        Ok(ScMap(self.map_err(mv.try_into())?))
+        // The instance storage map is stored inside of
+        // `ScVal::ContractInstance`, which is an additional depth level above
+        // the map. Thus we account for it here by wrapping a conversion in
+        // `with_limited_depth` which adds that one level of depth to
+        // conversion.
+        self.budget_cloned().with_limited_depth(|_| {
+            let mut mv = Vec::<ScMapEntry>::with_metered_capacity(map.len(), self)?;
+            for (k, v) in map.iter(self)? {
+                // This is the only conversion logic difference compared to
+                // `host_map_to_scmap`: we convert the key according to the
+                // storage key conversion rules instead of the general value
+                // conversion rules.
+                let key = self.from_host_val_for_storage(*k)?;
+                let val = self.from_host_val(*v)?;
+                mv.push(ScMapEntry { key, val });
+            }
+            Ok(ScMap(self.map_err(mv.try_into())?))
+        })
     }
 
     /// Convert a VecObject of U256Val elements to a Vec of MeteredScalar
