@@ -351,24 +351,30 @@ fn get_ledger_changes<S: EntryTTLSource + ?Sized>(
 /// only be recorded in the footprint. However, we still need to account for
 /// these in the ledger entry changes, as downstream consumers (simulation) rely
 /// on that to determine the fees.
+///
+/// This doesn't resemble anything in the enforcing mode, so use the shadow
+/// budget for this.
 #[cfg(any(test, feature = "recording_mode"))]
 fn add_footprint_only_ledger_changes(
     budget: &Budget,
     storage: &Storage,
     changes: &mut Vec<LedgerEntryChange>,
 ) -> Result<(), HostError> {
-    for (key, access_type) in storage.footprint.0.iter(budget)? {
-        // We have to check if the entry exists in the internal storage map
-        // because `has` check on storage affects the footprint.
-        if storage.map.contains_key::<Rc<LedgerKey>>(key, budget)? {
-            continue;
+    budget.with_observable_shadow_mode(|| {
+        for (key, access_type) in storage.footprint.0.iter(budget)? {
+            // We have to check if the entry exists in the internal storage map
+            // because `has` check on storage affects the footprint.
+            if storage.map.contains_key::<Rc<LedgerKey>>(key, budget)? {
+                continue;
+            }
+            let mut entry_change = LedgerEntryChange::default();
+            metered_write_xdr(budget, key.as_ref(), &mut entry_change.encoded_key)?;
+            entry_change.read_only = matches!(*access_type, AccessType::ReadOnly);
+            Vec::<LedgerEntryChange>::charge_bulk_init_cpy(1, budget)?;
+            changes.push(entry_change);
         }
-        let mut entry_change = LedgerEntryChange::default();
-        metered_write_xdr(budget, key.as_ref(), &mut entry_change.encoded_key)?;
-        entry_change.read_only = matches!(*access_type, AccessType::ReadOnly);
-        changes.push(entry_change);
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Extracts the rent-related changes from the provided ledger changes.
@@ -602,21 +608,28 @@ impl Host {
 
 #[cfg(any(test, feature = "recording_mode"))]
 fn storage_footprint_to_ledger_footprint(
+    budget: &Budget,
     footprint: &Footprint,
 ) -> Result<LedgerFootprint, HostError> {
-    let mut read_only: Vec<LedgerKey> = Vec::with_capacity(footprint.0.len());
-    let mut read_write: Vec<LedgerKey> = Vec::with_capacity(footprint.0.len());
-    for (key, access_type) in &footprint.0 {
-        match access_type {
-            AccessType::ReadOnly => read_only.push((**key).clone()),
-            AccessType::ReadWrite => read_write.push((**key).clone()),
+    budget.with_observable_shadow_mode(|| {
+        // The total size of both key vectors is exactly the footprint size, so
+        // charge for the allocation of both at once.
+        Vec::<LedgerKey>::charge_bulk_init_cpy(footprint.0.len() as u64, budget)?;
+        let mut read_only: Vec<LedgerKey> = vec![];
+        let mut read_write: Vec<LedgerKey> = vec![];
+        for (key, access_type) in footprint.0.iter(budget)? {
+            let key = key.as_ref().metered_clone(budget)?;
+            match access_type {
+                AccessType::ReadOnly => read_only.push(key),
+                AccessType::ReadWrite => read_write.push(key),
+            }
         }
-    }
-    Ok(LedgerFootprint {
-        read_only: read_only.try_into().map_err(|_| storage_internal_error())?,
-        read_write: read_write
-            .try_into()
-            .map_err(|_| storage_internal_error())?,
+        Ok(LedgerFootprint {
+            read_only: read_only.try_into().map_err(|_| storage_internal_error())?,
+            read_write: read_write
+                .try_into()
+                .map_err(|_| storage_internal_error())?,
+        })
     })
 }
 
@@ -624,33 +637,34 @@ fn storage_footprint_to_ledger_footprint(
 impl RecordedAuthPayload {
     fn into_auth_entry_with_emulated_signature(
         self,
+        budget: &Budget,
         use_address_v2: bool,
     ) -> Result<SorobanAuthorizationEntry, HostError> {
         const EMULATED_SIGNATURE_SIZE: usize = 512;
 
         match (self.address, self.nonce) {
-            (Some(address), Some(nonce)) => Ok(SorobanAuthorizationEntry {
-                credentials: if use_address_v2 {
-                    SorobanCredentials::AddressV2(SorobanAddressCredentials {
-                        address,
-                        nonce,
-                        signature_expiration_ledger: 0,
-                        signature: ScVal::Bytes(
-                            vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
-                        ),
-                    })
-                } else {
-                    SorobanCredentials::Address(SorobanAddressCredentials {
-                        address,
-                        nonce,
-                        signature_expiration_ledger: 0,
-                        signature: ScVal::Bytes(
-                            vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into().unwrap(),
-                        ),
-                    })
-                },
-                root_invocation: self.invocation,
-            }),
+            (Some(address), Some(nonce)) => {
+                let signature = budget.with_observable_shadow_mode(|| {
+                    Vec::<u8>::charge_bulk_init_cpy(EMULATED_SIGNATURE_SIZE as u64, budget)?;
+                    Ok(ScVal::Bytes(
+                        vec![0_u8; EMULATED_SIGNATURE_SIZE].try_into()?,
+                    ))
+                })?;
+                let address_credentials = SorobanAddressCredentials {
+                    address,
+                    nonce,
+                    signature_expiration_ledger: 0,
+                    signature,
+                };
+                Ok(SorobanAuthorizationEntry {
+                    credentials: if use_address_v2 {
+                        SorobanCredentials::AddressV2(address_credentials)
+                    } else {
+                        SorobanCredentials::Address(address_credentials)
+                    },
+                    root_invocation: self.invocation,
+                })
+            }
             (None, None) => Ok(SorobanAuthorizationEntry {
                 credentials: SorobanCredentials::SourceAccount,
                 root_invocation: self.invocation,
@@ -781,7 +795,12 @@ pub fn invoke_host_function_in_recording_mode(
 
     match &auth_mode {
         RecordingInvocationAuthMode::Enforcing(auth_entries) => {
-            host.set_authorization_entries(auth_entries.clone())?;
+            // In the real enforcing mode the entries are decoded from XDR, this
+            // clone is recording mode-only and thus is charged to the shadow
+            // budget.
+            let auth_entries =
+                budget.with_observable_shadow_mode(|| auth_entries.metered_clone(budget))?;
+            host.set_authorization_entries(auth_entries)?;
         }
         RecordingInvocationAuthMode::Recording(recording_auth) => {
             host.switch_to_recording_auth(recording_auth.disable_non_root_auth)?;
@@ -803,30 +822,32 @@ pub fn invoke_host_function_in_recording_mode(
     let mut output_auth = if let RecordingInvocationAuthMode::Enforcing(auth_entries) = auth_mode {
         auth_entries
     } else {
-        let recorded_auth = host.get_recorded_auth_payloads()?;
-        recorded_auth
-            .into_iter()
-            .map(|a| {
-                a.into_auth_entry_with_emulated_signature(
-                    recording_auth
-                        .ok_or_else(|| {
-                            host.err(
-                                ScErrorType::Context,
-                                ScErrorCode::InternalError,
-                                "expected to have recording auth info in recording mode",
-                                &[],
-                            )
-                        })?
-                        .use_address_v2,
+        let use_address_v2 = recording_auth
+            .ok_or_else(|| {
+                host.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "expected to have recording auth info in recording mode",
+                    &[],
                 )
-            })
-            .collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>()?
+            })?
+            .use_address_v2;
+        let recorded_auth = host.get_recorded_auth_payloads()?;
+        budget.with_observable_shadow_mode(|| {
+            recorded_auth
+                .into_iter()
+                .map(|a| a.into_auth_entry_with_emulated_signature(budget, use_address_v2))
+                .metered_collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>(budget)
+        })??
     };
 
-    let encoded_auth_entries = output_auth
-        .iter()
-        .map(|e| host.to_xdr_shadow_metered(e))
-        .collect::<Result<Vec<Vec<u8>>, HostError>>()?;
+    // Recording mode-only collection, so charge it to the shadow budget.
+    let encoded_auth_entries = budget.with_observable_shadow_mode(|| {
+        output_auth
+            .iter()
+            .map(|e| host.to_xdr_shadow_metered(e))
+            .metered_collect::<Result<Vec<Vec<u8>>, HostError>>(budget)
+    })??;
     let decoded_auth_entries = host.build_auth_entries_from_xdr(encoded_auth_entries.iter())?;
     if is_recording_auth {
         host.set_authorization_entries(decoded_auth_entries)?;
@@ -842,7 +863,7 @@ pub fn invoke_host_function_in_recording_mode(
         restored_keys,
         initial_entry_sizes_for_rent,
     ) = host.with_mut_storage(|storage| {
-        let footprint = storage_footprint_to_ledger_footprint(&storage.footprint)?;
+        let footprint = storage_footprint_to_ledger_footprint(budget, &storage.footprint)?;
         let _footprint_from_xdr = build_storage_footprint_from_xdr(&budget, &footprint)?;
 
         let key_count = footprint.read_only.len() + footprint.read_write.len();
@@ -961,11 +982,8 @@ pub fn invoke_host_function_in_recording_mode(
             ledger_seq,
         )?;
         // Add the keys that only exist in the footprint, but not in the
-        // storage. This doesn't resemble anything in the enforcing mode, so use
-        // the shadow budget for this.
-        budget.with_observable_shadow_mode(|| {
-            add_footprint_only_ledger_changes(budget, &storage, &mut ledger_changes)
-        })?;
+        // storage.
+        add_footprint_only_ledger_changes(budget, &storage, &mut ledger_changes)?;
 
         let encoded_contract_events = encode_contract_events(budget, &events)?;
         for e in &encoded_contract_events {

@@ -34,8 +34,8 @@ use crate::{
         LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
         ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
         ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset,
-        TrustLineEntry, Uint256,
+        SorobanAuthorizedInvocation, SorobanCredentials, SorobanDelegateSignature,
+        SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -676,7 +676,34 @@ impl MeteredClone for SorobanAuthorizationEntry {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match &self.credentials {
+            SorobanCredentials::SourceAccount => (),
+            SorobanCredentials::Address(c) | SorobanCredentials::AddressV2(c) => {
+                c.signature.charge_for_substructure(budget.clone())?
+            }
+            SorobanCredentials::AddressWithDelegates(c) => {
+                c.address_credentials
+                    .signature
+                    .charge_for_substructure(budget.clone())?;
+                c.delegates.charge_for_substructure(budget.clone())?;
+            }
+        }
         self.root_invocation.charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for SorobanDelegateSignature {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        // Delegate signatures are recursive, so this is a depth limit
+        // checkpoint, similarly to `ScVal`.
+        let mut budget_clone = budget.as_budget().clone();
+        budget_clone.with_limited_depth(|_| {
+            // `address` is shallow.
+            self.signature.charge_for_substructure(budget.clone())?;
+            self.nested_delegates.charge_for_substructure(budget)
+        })
     }
 }
 
