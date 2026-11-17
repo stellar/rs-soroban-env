@@ -954,7 +954,7 @@ pub fn invoke_host_function_in_recording_mode(
         ))
     })?;
     let mut resources = SorobanResources {
-        footprint: footprint.clone(),
+        footprint,
         instructions: 0,
         disk_read_bytes,
         write_bytes: 0,
@@ -975,7 +975,7 @@ pub fn invoke_host_function_in_recording_mode(
             &budget,
             &storage,
             ledger_snapshot.as_ref(),
-            &footprint,
+            &resources.footprint,
             &initial_entry_sizes_for_rent,
             min_live_until_ledger,
             &restored_keys,
