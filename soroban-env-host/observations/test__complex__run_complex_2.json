@@ -17,7 +17,7 @@
   "  15 call get_ledger_network_id()": "cpu:2885793, mem:4032580, mem_peak:4032580, vm:-/-",
   "  16 ret get_ledger_network_id -> Ok(Bytes(obj#19))": "cpu:2891051, mem:4032708, mem_peak:4032708, objs:-/10@e159b064",
   "  17 call get_ledger_version()": "cpu:2891546, mem:4032732, mem_peak:4032732, objs:1@7f18fa80/10@e159b064, stk:1@3f4ace64",
-  "  18 ret get_ledger_version -> Ok(U32(30))": "cpu:2891841",
+  "  18 ret get_ledger_version -> Ok(U32(31))": "cpu:2891841",
   "  19 call get_ledger_sequence()": "",
   "  20 ret get_ledger_sequence -> Ok(U32(1234))": "cpu:2892136",
   "  21 call get_ledger_timestamp()": "",
@@ -43,10 +43,10 @@
   "  41 ret symbol_new_from_slice -> Ok(Symbol(obj#33))": "cpu:2911192, mem:4033727, mem_peak:4033727, objs:6@e37e9bd8/17@82f590b9",
   "  42 call obj_cmp(Symbol(obj#33), Symbol(seq))": "cpu:2912476, mem:4033887, mem_peak:4033887",
   "  43 ret obj_cmp -> Ok(-1)": "cpu:2912640",
-  "  44 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:2913082, mem:4033967, mem_peak:4033967, objs:6@e37e9bd8/18@a316a605",
-  "  45 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:2913577, mem:4033991, mem_peak:4033991, objs:7@929806d2/18@a316a605, stk:1@5118906a",
-  "  46 ret put_contract_data -> Ok(Void)": "cpu:2919555, mem:4035589, mem_peak:4035589, store:-/3@d59aaf25",
-  "  47 pop VM:2c0dcac5:go -> Ok(Void)": " vm:1114112@99174a9f/5@8d05851",
-  "  48 ret call -> Ok(Void)": " objs:-/18@a316a605, vm:-/-, stk:-, auth:-/-",
-  "  49 end": "cpu:2919555, mem:4035589, mem_peak:4035589, prngs:-/-, objs:-/18@a316a605, vm:-/-, evt:1@4403228c, store:-/3@d59aaf25, foot:3@2f0e11c9, stk:-, auth:-/-"
+  "  44 ret map_new_from_linear_memory -> Ok(Map(obj#35))": "cpu:2913082, mem:4033967, mem_peak:4033967, objs:6@e37e9bd8/18@7ffb13fe",
+  "  45 call put_contract_data(Symbol(data), Map(obj#35), Temporary)": "cpu:2913577, mem:4033991, mem_peak:4033991, objs:7@929806d2/18@7ffb13fe, stk:1@5118906a",
+  "  46 ret put_contract_data -> Ok(Void)": "cpu:2919555, mem:4035589, mem_peak:4035589, store:-/3@2fc83143",
+  "  47 pop VM:2c0dcac5:go -> Ok(Void)": " vm:1114112@ae06fbbc/5@8d05851",
+  "  48 ret call -> Ok(Void)": " objs:-/18@7ffb13fe, vm:-/-, stk:-, auth:-/-",
+  "  49 end": "cpu:2919555, mem:4035589, mem_peak:4035589, prngs:-/-, objs:-/18@7ffb13fe, vm:-/-, evt:1@4403228c, store:-/3@2fc83143, foot:3@2f0e11c9, stk:-, auth:-/-"
 }
