@@ -3,7 +3,7 @@ use crate::{
         AccountAuthorizationTracker, AccountAuthorizationTrackerSnapshot, AuthorizedInvocation,
         AuthorizedInvocationSnapshot, ContractInvocation, DelegatedAccountAuthSignerTreeNode,
         DelegatedAccountAuthSignerTreeNodeSnapshot, DelegatedAccountAuthTrackerSnapshot,
-        InvokerContractAuthorizationTracker,
+        InvokerContractAuthorizationTracker, MatchState,
     },
     builtin_contracts::base_types::Address,
     events::{
@@ -16,13 +16,14 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeCostInputs, ContractCodeEntry,
         ContractCodeEntryV1, ContractDataDurability, ContractEvent, ContractExecutable, ContractId,
-        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, ExtensionPoint,
-        Hash, Int128Parts, Int256Parts, InvokeContractArgs, LedgerEntry, LedgerEntryExt, LedgerKey,
-        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
-        ScContractInstance, ScError, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
-        ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-        SorobanAuthorizedInvocation, SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset,
-        TrustLineEntry, TtlEntry, UInt128Parts, UInt256Parts, Uint256, SCSYMBOL_LIMIT,
+        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, DiagnosticEvent, Duration,
+        ExtensionPoint, Hash, Int128Parts, Int256Parts, InvokeContractArgs, LedgerEntry,
+        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine,
+        PublicKey, ScAddress, ScBytes, ScContractInstance, ScError, ScMap, ScMapEntry, ScNonceKey,
+        ScString, ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry,
+        SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanDelegateSignature,
+        SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset, TrustLineEntry, TtlEntry,
+        UInt128Parts, UInt256Parts, Uint256, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -128,6 +129,7 @@ impl_declared_size_type!(InternalEvent, 40);
 impl_declared_size_type!(EventError, 1);
 
 impl_declared_size_type!(ContractInvocation, 16);
+impl_declared_size_type!(MatchState, 16);
 impl_declared_size_type!(AuthorizedInvocation, 208);
 impl_declared_size_type!(AuthorizedInvocationSnapshot, 32);
 impl_declared_size_type!(AccountAuthorizationTracker, 320);
@@ -136,6 +138,8 @@ impl_declared_size_type!(DelegatedAccountAuthSignerTreeNode, 48);
 impl_declared_size_type!(DelegatedAccountAuthSignerTreeNodeSnapshot, 32);
 impl_declared_size_type!(DelegatedAccountAuthTrackerSnapshot, 56);
 impl_declared_size_type!(InvokerContractAuthorizationTracker, 264);
+#[cfg(any(test, feature = "recording_mode"))]
+impl_declared_size_type!(crate::auth::RecordedAuthPayload, 264);
 impl_declared_size_type!(InternalDiagnosticArg, 96);
 impl_declared_size_type!(InternalDiagnosticEvent, 88);
 
@@ -179,6 +183,8 @@ impl_declared_size_type!(TtlEntry, 36);
 impl_declared_size_type!(LedgerKey, 152);
 impl_declared_size_type!(LedgerEntry, 288);
 impl_declared_size_type!(ContractEvent, 160);
+impl_declared_size_type!(DiagnosticEvent, 168);
+impl_declared_size_type!(crate::e2e_invoke::LedgerEntryChange, 104);
 impl_declared_size_type!(ScBytes, 24);
 impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ExecutableTag, 24);
@@ -265,6 +271,7 @@ impl_declared_size_type!(ExtensionPoint, 0);
 
 impl_declared_size_type!(ScContractInstance, 96);
 impl_declared_size_type!(SorobanAuthorizationEntry, 384);
+impl_declared_size_type!(SorobanDelegateSignature, 168);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 200);
 impl_declared_size_type!(SorobanAuthorizedFunction, 176);
 
@@ -475,6 +482,7 @@ mod test {
         expect!["1"].assert_eq(size_of::<EventError>().to_string().as_str());
 
         expect!["16"].assert_eq(size_of::<ContractInvocation>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<MatchState>().to_string().as_str());
         expect!["208"].assert_eq(size_of::<AuthorizedInvocation>().to_string().as_str());
         expect!["32"].assert_eq(
             size_of::<AuthorizedInvocationSnapshot>()
@@ -493,6 +501,11 @@ mod test {
         );
         expect!["264"].assert_eq(
             size_of::<InvokerContractAuthorizationTracker>()
+                .to_string()
+                .as_str(),
+        );
+        expect!["264"].assert_eq(
+            size_of::<crate::auth::RecordedAuthPayload>()
                 .to_string()
                 .as_str(),
         );
@@ -568,6 +581,12 @@ mod test {
 
         expect!["288"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["160"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
+        expect!["168"].assert_eq(size_of::<DiagnosticEvent>().to_string().as_str());
+        expect!["104"].assert_eq(
+            size_of::<crate::e2e_invoke::LedgerEntryChange>()
+                .to_string()
+                .as_str(),
+        );
         expect!["24"].assert_eq(size_of::<ScBytes>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScString>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
@@ -580,6 +599,7 @@ mod test {
         expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
         expect!["96"].assert_eq(size_of::<ScContractInstance>().to_string().as_str());
         expect!["384"].assert_eq(size_of::<SorobanAuthorizationEntry>().to_string().as_str());
+        expect!["168"].assert_eq(size_of::<SorobanDelegateSignature>().to_string().as_str());
         expect!["200"].assert_eq(
             size_of::<SorobanAuthorizedInvocation>()
                 .to_string()
@@ -701,11 +721,13 @@ mod test {
         assert_mem_size_le_declared_size!(EventError);
 
         assert_mem_size_le_declared_size!(ContractInvocation);
+        assert_mem_size_le_declared_size!(MatchState);
         assert_mem_size_le_declared_size!(AuthorizedInvocation);
         assert_mem_size_le_declared_size!(AuthorizedInvocationSnapshot);
         assert_mem_size_le_declared_size!(AccountAuthorizationTracker);
         assert_mem_size_le_declared_size!(AccountAuthorizationTrackerSnapshot);
         assert_mem_size_le_declared_size!(InvokerContractAuthorizationTracker);
+        assert_mem_size_le_declared_size!(crate::auth::RecordedAuthPayload);
         assert_mem_size_le_declared_size!(InternalDiagnosticArg);
         assert_mem_size_le_declared_size!(InternalDiagnosticEvent);
 
@@ -747,6 +769,8 @@ mod test {
         assert_mem_size_le_declared_size!(LedgerKey);
         assert_mem_size_le_declared_size!(LedgerEntry);
         assert_mem_size_le_declared_size!(ContractEvent);
+        assert_mem_size_le_declared_size!(DiagnosticEvent);
+        assert_mem_size_le_declared_size!(crate::e2e_invoke::LedgerEntryChange);
         assert_mem_size_le_declared_size!(ScBytes);
         assert_mem_size_le_declared_size!(ScString);
         assert_mem_size_le_declared_size!(ScSymbol);
@@ -759,6 +783,7 @@ mod test {
         assert_mem_size_le_declared_size!(ExtensionPoint);
         assert_mem_size_le_declared_size!(ScContractInstance);
         assert_mem_size_le_declared_size!(SorobanAuthorizationEntry);
+        assert_mem_size_le_declared_size!(SorobanDelegateSignature);
         assert_mem_size_le_declared_size!(SorobanAuthorizedInvocation);
         assert_mem_size_le_declared_size!(SorobanAuthorizedFunction);
 

@@ -28,12 +28,13 @@ use crate::{
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, Asset, BytesM,
         ContractCodeCostInputs, ContractCodeEntry, ContractCodeEntryExt, ContractCodeEntryV1,
-        ContractCostType, ContractExecutable, ContractId, ContractIdPreimage, CreateContractArgs,
-        CreateContractArgsV2, Duration, Hash, InvokeContractArgs, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine,
-        PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
-        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
-        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+        ContractCostType, ContractEvent, ContractEventBody, ContractExecutable, ContractId,
+        ContractIdPreimage, CreateContractArgs, CreateContractArgsV2, Duration, Hash,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
+        ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+        SorobanAuthorizedInvocation, SorobanCredentials, SorobanDelegateSignature,
         SponsorshipDescriptor, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
@@ -675,7 +676,47 @@ impl MeteredClone for SorobanAuthorizationEntry {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match &self.credentials {
+            SorobanCredentials::SourceAccount => (),
+            SorobanCredentials::Address(c) | SorobanCredentials::AddressV2(c) => {
+                c.signature.charge_for_substructure(budget.clone())?
+            }
+            SorobanCredentials::AddressWithDelegates(c) => {
+                c.address_credentials
+                    .signature
+                    .charge_for_substructure(budget.clone())?;
+                c.delegates.charge_for_substructure(budget.clone())?;
+            }
+        }
         self.root_invocation.charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for SorobanDelegateSignature {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        // Delegate signatures are recursive, so this is a depth limit
+        // checkpoint, similarly to `ScVal`.
+        let mut budget_clone = budget.as_budget().clone();
+        budget_clone.with_limited_depth(|_| {
+            // `address` is shallow.
+            self.signature.charge_for_substructure(budget.clone())?;
+            self.nested_delegates.charge_for_substructure(budget)
+        })
+    }
+}
+
+impl MeteredClone for ContractEvent {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match &self.body {
+            ContractEventBody::V0(v0) => {
+                v0.topics.charge_for_substructure(budget.clone())?;
+                v0.data.charge_for_substructure(budget)
+            }
+        }
     }
 }
 
