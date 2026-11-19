@@ -1,9 +1,10 @@
 use crate::{
+    budget::AsBudget,
     crypto::bls12_381::{
         FP2_SERIALIZED_SIZE, FP_SERIALIZED_SIZE, G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE,
     },
     crypto::PointValidationMode,
-    xdr::{ScErrorCode, ScErrorType},
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
     BytesObject, Env, EnvBase, Host, HostError, U256Val, U32Val, Val, VecObject,
 };
 use ark_bls12_381::{Fq, Fq2, Fr, G1Affine, G2Affine, FQ_ONE, FQ_ZERO};
@@ -1983,5 +1984,34 @@ fn g2_is_on_curve() -> Result<(), HostError> {
         }
     }
 
+    Ok(())
+}
+
+#[test]
+fn hash_to_curve_charges_for_hashing_the_dst() -> Result<(), HostError> {
+    const MSG_LEN: u64 = 100;
+    // Returns the input bytes charged to the hash-to-curve cost type by one call.
+    let charged_inputs = |g2: bool, dst_len: usize| -> Result<u64, HostError> {
+        let host = Host::test_host();
+        let msg = host.bytes_new_from_slice(&[7u8; MSG_LEN as usize])?;
+        let dst = host.bytes_new_from_slice(&vec![b'd'; dst_len])?;
+        let ty = if g2 {
+            host.bls12_381_hash_to_g2(msg, dst)?;
+            ContractCostType::Bls12381HashToG2
+        } else {
+            host.bls12_381_hash_to_g1(msg, dst)?;
+            ContractCostType::Bls12381HashToG1
+        };
+        Ok(host.as_budget().get_tracker(ty)?.inputs.unwrap_or(0))
+    };
+    // The message is hashed once. The DST is hashed in every block of the
+    // message expansion: 5 blocks for G1 and 9 for G2.
+    for dst_len in [1usize, 53, 255] {
+        assert_eq!(
+            charged_inputs(false, dst_len)?,
+            MSG_LEN + 5 * dst_len as u64
+        );
+        assert_eq!(charged_inputs(true, dst_len)?, MSG_LEN + 9 * dst_len as u64);
+    }
     Ok(())
 }

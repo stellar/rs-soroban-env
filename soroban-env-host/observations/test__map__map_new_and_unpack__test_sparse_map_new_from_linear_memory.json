@@ -340,8 +340,8 @@
   " 338 push VM:752f04ca:test()": "cpu:17548073, mem:9370829, mem_peak:9370829, objs:-/129@6abce7a5, vm:65536@831a95c8/2@2f94d90d, stk:1@49d13a6e, auth:1@447fb804/-",
   " 339 call sparse_map_new_from_linear_memory(U32(108), U32(100), U32(1))": "cpu:17550539, mem:9370859, mem_peak:9370859, vm:-/-",
   " 340 call symbol_new_from_slice(100)": "cpu:17551688, mem:9370883, mem_peak:9370883",
-  " 341 ret sparse_map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:17552289, mem:9370999, mem_peak:9370999",
+  " 341 ret sparse_map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "",
   " 342 pop VM:752f04ca:test -> Err(Error(Value, InvalidInput))": " vm:65536@831a95c8/2@2f94d90d",
   " 343 ret call -> Err(Error(Value, InvalidInput))": " vm:-/-, stk:-, auth:-/-",
-  " 344 end": "cpu:17552289, mem:9370999, mem_peak:9370999, prngs:-/9b4a753, objs:-/129@6abce7a5, vm:-/-, evt:-, store:-/20@b56b6c46, foot:20@605a8ff1, stk:-, auth:-/-"
+  " 344 end": "cpu:17551688, mem:9370883, mem_peak:9370883, prngs:-/9b4a753, objs:-/129@6abce7a5, vm:-/-, evt:-, store:-/20@b56b6c46, foot:20@605a8ff1, stk:-, auth:-/-"
 }

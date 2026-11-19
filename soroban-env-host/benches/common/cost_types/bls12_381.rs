@@ -234,12 +234,11 @@ impl HostCostMeasurement for Bls12381G1MsmMeasure {
     type Runner = Bls12381G1MsmRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bls12381G1MsmSample {
+        // An MSM over zero points is rejected by the host, so the smallest sample is 1.
+        let n = input.max(1);
         Bls12381G1MsmSample(
-            (0..input)
-                .into_iter()
-                .map(|_| G1Affine::rand(rng))
-                .collect(),
-            (0..input).into_iter().map(|_| Fr::rand(rng)).collect(),
+            (0..n).into_iter().map(|_| G1Affine::rand(rng)).collect(),
+            (0..n).into_iter().map(|_| Fr::rand(rng)).collect(),
             Bls12381G1Msm,
             "G1".to_string(),
         )
@@ -323,12 +322,11 @@ impl HostCostMeasurement for Bls12381G2MsmMeasure {
     type Runner = Bls12381G2MsmRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Bls12381G2MsmSample {
+        // An MSM over zero points is rejected by the host, so the smallest sample is 1.
+        let n = input.max(1);
         Bls12381G2MsmSample(
-            (0..input)
-                .into_iter()
-                .map(|_| G2Affine::rand(rng))
-                .collect(),
-            (0..input).into_iter().map(|_| Fr::rand(rng)).collect(),
+            (0..n).into_iter().map(|_| G2Affine::rand(rng)).collect(),
+            (0..n).into_iter().map(|_| Fr::rand(rng)).collect(),
             Bls12381G2Msm,
             "G2".to_string(),
         )

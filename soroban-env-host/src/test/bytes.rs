@@ -547,3 +547,122 @@ fn instantiate_oversized_bytes_from_linear_memory() -> Result<(), HostError> {
 
     Ok(())
 }
+
+fn bytes_to_vec(host: &Host, obj: BytesObject) -> Result<Vec<u8>, HostError> {
+    let len: u32 = host.bytes_len(obj)?.into();
+    let mut buf = vec![0; len as usize];
+    host.bytes_copy_to_slice(obj, 0_u32.into(), buf.as_mut())?;
+    Ok(buf)
+}
+
+// Returns the total (MemAlloc, MemCpy) input bytes charged while running `f`.
+fn mem_inputs_charged<T>(
+    host: &Host,
+    f: impl FnOnce() -> Result<T, HostError>,
+) -> Result<(T, u64, u64), HostError> {
+    let inputs = |ty| -> Result<u64, HostError> {
+        Ok(host.as_budget().get_tracker(ty)?.inputs.unwrap_or(0))
+    };
+    let (alloc, cpy) = (
+        inputs(ContractCostType::MemAlloc)?,
+        inputs(ContractCostType::MemCpy)?,
+    );
+    let res = f()?;
+    Ok((
+        res,
+        inputs(ContractCostType::MemAlloc)? - alloc,
+        inputs(ContractCostType::MemCpy)? - cpy,
+    ))
+}
+
+#[test]
+fn bytes_copy_from_slice_resizes_and_overwrites() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
+
+    // Overwrite inside the object: no growth.
+    let (_, alloc_in_place, _) = mem_inputs_charged(&host, || {
+        host.bytes_copy_from_slice(obj, 1_u32.into(), &[9, 9])
+    })?;
+
+    // Write across the end: the object grows by two bytes.
+    let (res, alloc_grown, _) = mem_inputs_charged(&host, || {
+        host.bytes_copy_from_slice(obj, 3_u32.into(), &[7, 8, 9])
+    })?;
+    assert_eq!(bytes_to_vec(&host, res)?, vec![1, 2, 3, 7, 8, 9]);
+    assert_eq!(alloc_grown - alloc_in_place, 2);
+
+    // Write past the end: the gap is zero-filled.
+    let (res, alloc_gap, _) = mem_inputs_charged(&host, || {
+        host.bytes_copy_from_slice(obj, 6_u32.into(), &[5])
+    })?;
+    assert_eq!(bytes_to_vec(&host, res)?, vec![1, 2, 3, 4, 0, 0, 5]);
+    assert_eq!(alloc_gap - alloc_in_place, 3);
+
+    // The source object is untouched.
+    assert_eq!(bytes_to_vec(&host, obj)?, vec![1, 2, 3, 4]);
+
+    // A position and length that overflow u32 are rejected.
+    assert!(host
+        .bytes_copy_from_slice(obj, u32::MAX.into(), &[1])
+        .is_err());
+    Ok(())
+}
+
+#[test]
+fn deserialize_rejects_unrepresentable_values_at_any_depth() -> Result<(), HostError> {
+    let host = Host::default();
+    let deser = |v: ScVal| -> Result<Val, HostError> {
+        let bytes: Vec<u8> = v.to_xdr(DEFAULT_XDR_RW_LIMITS)?;
+        let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
+        host.deserialize_from_bytes(bo)
+    };
+    let bad = ScVal::LedgerKeyContractInstance;
+    let in_vec = ScVal::Vec(Some(ScVec(
+        vec![ScVal::U32(1), bad.clone()].try_into().unwrap(),
+    )));
+    let in_map_val = ScVal::Map(Some(ScMap(
+        vec![ScMapEntry {
+            key: ScVal::U32(1),
+            val: bad.clone(),
+        }]
+        .try_into()
+        .unwrap(),
+    )));
+    let in_map_key = ScVal::Map(Some(ScMap(
+        vec![ScMapEntry {
+            key: bad.clone(),
+            val: ScVal::U32(1),
+        }]
+        .try_into()
+        .unwrap(),
+    )));
+    let nested = ScVal::Vec(Some(ScVec(vec![in_vec.clone()].try_into().unwrap())));
+    for v in [bad, in_vec, in_map_val, in_map_key, nested] {
+        let err = deser(v.clone()).err().unwrap().error;
+        assert!(err.is_type(ScErrorType::Value), "{v:?}: {err:?}");
+        assert!(err.is_code(ScErrorCode::UnexpectedType), "{v:?}: {err:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn deserialize_charges_for_the_walk_that_finds_an_unrepresentable_value() -> Result<(), HostError> {
+    let host = Host::default();
+    let n = 1000;
+    let mut elems = vec![ScVal::Void; n];
+    elems[n - 1] = ScVal::LedgerKeyContractInstance;
+    let v = ScVal::Vec(Some(ScVec(elems.try_into().unwrap())));
+    let bytes: Vec<u8> = v.to_xdr(DEFAULT_XDR_RW_LIMITS)?;
+    let bo = host.add_host_object(ScBytes(bytes.try_into()?))?;
+    let ((), alloc, cpy) = mem_inputs_charged(&host, || {
+        assert!(host.deserialize_from_bytes(bo).is_err());
+        Ok(())
+    })?;
+    // Beyond the decode, the failed conversion is charged for the vector of
+    // values it started to build.
+    let vals_bytes = (n * std::mem::size_of::<Val>()) as u64;
+    assert_ge!(alloc, vals_bytes);
+    assert_ge!(cpy, vals_bytes);
+    Ok(())
+}

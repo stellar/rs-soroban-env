@@ -187,7 +187,8 @@ impl_compare_fixed_size_ord_type!(TimePoint);
 impl_compare_fixed_size_ord_type!(Duration);
 impl_compare_fixed_size_ord_type!(Hash);
 impl_compare_fixed_size_ord_type!(Uint256);
-impl_compare_fixed_size_ord_type!(ContractExecutable);
+// NB: ContractExecutable is not here: its ExternalRef variant has a
+// variable-size tag ScString.
 impl_compare_fixed_size_ord_type!(AccountId);
 impl_compare_fixed_size_ord_type!(ScError);
 impl_compare_fixed_size_ord_type!(ScAddress);
@@ -197,7 +198,7 @@ impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
 impl_compare_fixed_size_ord_type!(ContractDataDurability);
 impl_compare_fixed_size_ord_type!(ContractIdPreimage);
-impl_compare_fixed_size_ord_type!(CreateContractArgs);
+// NB: CreateContractArgs is not here: it has a variable-size ContractExecutable.
 // NB: CreateContractArgsV2 is not here: it has a variable-size constructor_args ScVec.
 
 impl_compare_fixed_size_ord_type!(LedgerKeyAccount);
@@ -258,6 +259,80 @@ impl Compare<ScMapEntry> for Budget {
             Ordering::Equal => self.compare(&a.val, &b.val),
             cmp => Ok(cmp),
         }
+    }
+}
+
+impl Compare<ContractExecutable> for Budget {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &ContractExecutable,
+        b: &ContractExecutable,
+    ) -> Result<Ordering, Self::Error> {
+        // Charge the declared size of the enum itself, which covers every
+        // fixed-size field (the Wasm hash and the ExternalRef owner).
+        self.charge(
+            ContractCostType::MemCmp,
+            Some(<ContractExecutable as DeclaredSizeForMetering>::DECLARED_SIZE),
+        )?;
+        match (a, b) {
+            // The ExternalRef tag is variable-size, so it is charged per byte.
+            // This matches the derived Ord: owner first, then tag bytes.
+            (ContractExecutable::ExternalRef(a), ContractExecutable::ExternalRef(b)) => {
+                match a.executable_owner.cmp(&b.executable_owner) {
+                    Ordering::Equal => <Self as Compare<&[u8]>>::compare(
+                        self,
+                        &a.tag.as_slice(),
+                        &b.tag.as_slice(),
+                    ),
+                    cmp => Ok(cmp),
+                }
+            }
+            // All remaining cases are fixed-size.
+            (ContractExecutable::Wasm(_), _)
+            | (ContractExecutable::StellarAsset, _)
+            | (ContractExecutable::ExternalRef(_), _) => Ok(a.cmp(b)),
+        }
+    }
+}
+
+impl Compare<ContractExecutable> for Host {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &ContractExecutable,
+        b: &ContractExecutable,
+    ) -> Result<Ordering, Self::Error> {
+        self.as_budget().compare(a, b)
+    }
+}
+
+impl Compare<CreateContractArgs> for Budget {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &CreateContractArgs,
+        b: &CreateContractArgs,
+    ) -> Result<Ordering, Self::Error> {
+        match self.compare(&a.contract_id_preimage, &b.contract_id_preimage)? {
+            Ordering::Equal => self.compare(&a.executable, &b.executable),
+            cmp => Ok(cmp),
+        }
+    }
+}
+
+impl Compare<CreateContractArgs> for Host {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &CreateContractArgs,
+        b: &CreateContractArgs,
+    ) -> Result<Ordering, Self::Error> {
+        self.as_budget().compare(a, b)
     }
 }
 

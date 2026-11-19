@@ -398,11 +398,11 @@ impl Vm {
         treat_missing_function_as_noop: bool,
     ) -> Result<Val, HostError> {
         let _span = tracy_span!("Vm::invoke_function_raw");
-        Vec::<wasmi::Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
-        let wasm_args: Vec<wasmi::Value> = args
-            .iter()
-            .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
-            .collect::<Result<Vec<wasmi::Value>, HostError>>()?;
+        let mut wasm_args =
+            Vec::<wasmi::Value>::with_metered_capacity(args.len(), host.as_budget())?;
+        for i in args {
+            wasm_args.push(host.absolute_to_relative(*i)?.marshal_from_self());
+        }
         self.metered_func_call(
             host,
             func_sym,

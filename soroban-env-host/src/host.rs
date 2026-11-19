@@ -15,7 +15,7 @@ use crate::{
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
         ContractIdPreimage, CreateContractArgsV2, Duration, LedgerEntryData, PublicKey, ScAddress,
-        ScBytes, ScErrorCode, ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
+        ScBytes, ScErrorCode, ScErrorType, ScString, ScSymbol, ScVal, TimePoint, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, Compare, ContractTtlExtension, ConversionError, EnvBase,
     Error, ExecutableTagObject, LedgerInfo, MapObject, Object, StorageType, StringObject, Symbol,
@@ -992,6 +992,17 @@ impl EnvBase for Host {
         // Note: this whole function could be replaced by `ScSymbol::try_from_bytes`
         // in order to avoid duplication. It is duplicated in order to support
         // a slightly different check order for the sake of observation consistency.
+        //
+        // The length is checked first so that a slice that can never be a
+        // symbol is rejected without scanning it.
+        if s.len() > SCSYMBOL_LIMIT as usize {
+            return Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "slice is too long to be represented as Symbol",
+                &[(s.len() as u32).into()],
+            ));
+        }
         self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
         for b in s {
             SymbolSmall::validate_byte(*b).map_err(|_| {
@@ -2602,21 +2613,10 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        // Metering bug: the representation check is not metered,
-        // so if the value is not valid, we won't charge anything for
-        // walking the `ScVal`. Since `to_host_val` performs validation
-        // and has proper metering, next protocol version should just
-        // call `to_host_val` directly.
-        if Val::can_represent_scval_recursive(&scv) {
-            self.to_host_val(&scv)
-        } else {
-            Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::UnexpectedType,
-                "Deserialized ScVal type cannot be represented as Val",
-                &[(scv.discriminant() as i32).into()],
-            ))
-        }
+        // `to_host_val` rejects any `ScVal` that cannot be represented as a
+        // `Val`, at every level of nesting, and meters the walk it does to
+        // find one.
+        self.to_host_val(&scv)
     }
 
     fn string_copy_to_linear_memory(
@@ -2930,12 +2930,16 @@ impl VmCallerEnv for Host {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, |hv: &ScBytes| {
             self.validate_index_le_bound(i, hv.len())?;
-            // we allocate the new vector to be able to hold `len + 1` bytes, so that the insert
-            // will not trigger a reallocation, causing data to be cloned twice.
+            // We allocate the new vector to hold `len + 1` bytes and write the two halves
+            // around the new byte, so that every byte is copied exactly once. Copying the
+            // whole content and then inserting would move the tail a second time, which the
+            // charge below does not cover.
             let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
             let mut vnew = Vec::<u8>::with_metered_capacity(len, self)?;
-            vnew.extend_from_slice(hv.as_slice());
-            vnew.insert(i as usize, u);
+            let (head, tail) = hv.as_slice().split_at(i as usize);
+            vnew.extend_from_slice(head);
+            vnew.push(u);
+            vnew.extend_from_slice(tail);
             Ok(ScBytes(vnew.try_into()?))
         })?;
         self.add_host_object(vnew)

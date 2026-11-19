@@ -227,8 +227,8 @@
   " 225 push VM:a7828a43:test()": "cpu:12230507, mem:6545120, mem_peak:6545120, objs:-/88@aef7b407, vm:65536@8062c427/2@2f94d90d, stk:1@c86421c3, auth:1@df2b2f66/-",
   " 226 call map_new_from_linear_memory(U32(108), U32(100), U32(1))": "cpu:12232973, mem:6545150, mem_peak:6545150, vm:-/-",
   " 227 call symbol_new_from_slice(100)": "cpu:12234122, mem:6545174, mem_peak:6545174",
-  " 228 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "cpu:12234723, mem:6545290, mem_peak:6545290",
+  " 228 ret map_new_from_linear_memory -> Err(Error(Value, InvalidInput))": "",
   " 229 pop VM:a7828a43:test -> Err(Error(Value, InvalidInput))": " vm:65536@8062c427/2@2f94d90d",
   " 230 ret call -> Err(Error(Value, InvalidInput))": " vm:-/-, stk:-, auth:-/-",
-  " 231 end": "cpu:12234723, mem:6545290, mem_peak:6545290, prngs:-/9b4a753, objs:-/88@aef7b407, vm:-/-, evt:-, store:-/14@ff8fc14c, foot:14@f632cfe, stk:-, auth:-/-"
+  " 231 end": "cpu:12234122, mem:6545174, mem_peak:6545174, prngs:-/9b4a753, objs:-/88@aef7b407, vm:-/-, evt:-, store:-/14@ff8fc14c, foot:14@f632cfe, stk:-, auth:-/-"
 }

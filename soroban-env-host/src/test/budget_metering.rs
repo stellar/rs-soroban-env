@@ -7,7 +7,7 @@ use crate::{
     xdr::{
         ContractCostType, HostFunction, InvokeContractArgs, ScAddress, ScMap, ScMapEntry, ScVal,
     },
-    AddressObject, Env, ErrorHandler, Host, HostError, Symbol, Val,
+    AddressObject, Env, ErrorHandler, Host, HostError, Symbol, U32Val, Val,
 };
 use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
@@ -337,6 +337,35 @@ fn test_metered_collection() -> Result<(), HostError> {
         .map(|i| Ok(i.unsigned_abs() as u64))
         .metered_collect::<Result<Vec<u64>, HostError>>(&budget)??;
     assert_eq!(res, vec![4, 6, 11]);
+    Ok(())
+}
+
+// A metered collection charges for the iterator's upper bound once, so the
+// result must not hold a larger allocation than that.
+#[test]
+fn test_metered_collection_does_not_overallocate() -> Result<(), HostError> {
+    let budget = Budget::default();
+    let n: usize = 1025;
+    let src: Vec<u64> = (0..n as u64).collect();
+
+    let fallible = src
+        .iter()
+        .map(|i| Ok(*i))
+        .metered_collect::<Result<Vec<u64>, HostError>>(&budget)??;
+    assert_eq!(fallible, src);
+    assert_eq!(fallible.capacity(), n);
+
+    let host = Host::default();
+    let mut vec = host.vec_new()?;
+    for i in 0..n as u32 {
+        vec = host.vec_push_back(vec, U32Val::from(i).to_val())?;
+    }
+    let ScVal::Vec(Some(scvec)) = host.from_host_val(vec.to_val())? else {
+        panic!("expected a vector");
+    };
+    let elements: Vec<ScVal> = scvec.0.into();
+    assert_eq!(elements.len(), n);
+    assert_eq!(elements.capacity(), n);
     Ok(())
 }
 
