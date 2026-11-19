@@ -137,3 +137,189 @@ fn length_limited_scval_xdr_conversion() -> Result<(), HostError> {
     assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
+
+mod instance_storage_depth {
+    use super::*;
+    use crate::{
+        testutils::generate_account_id,
+        xdr::{
+            InvokeContractArgs, ScAddress, SorobanAddressCredentials, SorobanAuthorizationEntry,
+            SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials,
+        },
+        AddressObject, BytesObject, EnvBase, Symbol, TryFromVal, Val, DEFAULT_HOST_DEPTH_LIMIT,
+    };
+    use soroban_test_wasms::INSTANCE_STORAGE_DEPTH_TEST_CONTRACT;
+
+    struct InstanceStorageDepthTest {
+        host: Host,
+        wasm_hash: BytesObject,
+        deployer: AddressObject,
+        // Contract instantiated with an empty instance storage.
+        contract: AddressObject,
+    }
+
+    impl InstanceStorageDepthTest {
+        fn new() -> Self {
+            let host = Host::test_host_with_recording_footprint();
+            host.switch_to_recording_auth(true).unwrap();
+            let wasm_hash = host
+                .upload_wasm(
+                    host.bytes_new_from_slice(INSTANCE_STORAGE_DEPTH_TEST_CONTRACT)
+                        .unwrap(),
+                )
+                .unwrap();
+            let deployer = host
+                .add_host_object(ScAddress::Account(generate_account_id(&host)))
+                .unwrap();
+            let contract =
+                Self::create_contract_internal(&host, wasm_hash, deployer, 0, 0).unwrap();
+            Self {
+                host,
+                wasm_hash,
+                deployer,
+                contract,
+            }
+        }
+
+        fn create_contract_internal(
+            host: &Host,
+            wasm_hash: BytesObject,
+            deployer: AddressObject,
+            salt: u8,
+            constructor_depth: u32,
+        ) -> Result<AddressObject, HostError> {
+            host.create_contract_with_constructor(
+                deployer,
+                wasm_hash,
+                host.bytes_new_from_slice(&[salt; 32]).unwrap(),
+                host.vec_new_from_slice(&[Val::from_u32(constructor_depth).into()])
+                    .unwrap(),
+            )
+        }
+
+        fn create_contract_with_deep_value_in_constructor(
+            &self,
+            salt: u8,
+            constructor_depth: u32,
+        ) -> Result<AddressObject, HostError> {
+            Self::create_contract_internal(
+                &self.host,
+                self.wasm_hash,
+                self.deployer,
+                salt,
+                constructor_depth,
+            )
+        }
+
+        fn call(
+            &self,
+            contract: AddressObject,
+            func: &str,
+            args: &[u32],
+        ) -> Result<Val, HostError> {
+            let args: Vec<Val> = args.iter().map(|a| Val::from_u32(*a).into()).collect();
+            self.host.call(
+                contract,
+                Symbol::try_from_val(&self.host, &func).unwrap(),
+                self.host.vec_new_from_slice(&args).unwrap(),
+            )
+        }
+
+        // Writes a value of the given depth into instance storage, then requires
+        // auth for the current contract, which persists the instance storage before
+        // the self-reentrant `__check_auth` call. The value is removed before
+        // returning, so that the instance storage persisted at the end of the
+        // call doesn't contain it.
+        fn put_val_and_self_auth(&self, depth: u32, nonce: i64) -> Result<Val, HostError> {
+            let contract_address = self.host.scaddress_from_address(self.contract).unwrap();
+            self.host
+                .set_authorization_entries(vec![SorobanAuthorizationEntry {
+                    credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                        address: contract_address.clone(),
+                        nonce,
+                        signature: ScVal::Void,
+                        signature_expiration_ledger: 1000,
+                    }),
+                    root_invocation: SorobanAuthorizedInvocation {
+                        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                            contract_address,
+                            function_name: "put_val_and_self_auth".try_into().unwrap(),
+                            args: vec![ScVal::U32(depth)].try_into().unwrap(),
+                        }),
+                        sub_invocations: Default::default(),
+                    },
+                }])
+                .unwrap();
+            self.call(self.contract, "put_val_and_self_auth", &[depth])
+        }
+    }
+
+    #[test]
+    fn max_depth_instance_storage_value() {
+        let test = InstanceStorageDepthTest::new();
+
+        assert!(test
+            .call(test.contract, "put_val", &[DEFAULT_HOST_DEPTH_LIMIT - 1])
+            .is_ok());
+        assert!(test.call(test.contract, "put_small", &[]).is_ok());
+
+        assert!(HostError::result_matches_err(
+            test.call(test.contract, "put_val", &[DEFAULT_HOST_DEPTH_LIMIT]),
+            (ScErrorType::Context, ScErrorCode::ExceededLimit)
+        ));
+        assert!(test.call(test.contract, "put_small", &[]).is_ok());
+    }
+
+    #[test]
+    fn max_depth_instance_storage_key() {
+        let test = InstanceStorageDepthTest::new();
+
+        assert!(test
+            .call(test.contract, "put_key", &[DEFAULT_HOST_DEPTH_LIMIT - 1])
+            .is_ok());
+        assert!(test.call(test.contract, "put_small", &[]).is_ok());
+
+        assert!(HostError::result_matches_err(
+            test.call(test.contract, "put_key", &[DEFAULT_HOST_DEPTH_LIMIT]),
+            (ScErrorType::Context, ScErrorCode::ExceededLimit)
+        ));
+        assert!(test.call(test.contract, "put_small", &[]).is_ok());
+    }
+
+    #[test]
+    fn max_depth_instance_storage_in_constructor() {
+        let test = InstanceStorageDepthTest::new();
+
+        let Ok(contract) =
+            test.create_contract_with_deep_value_in_constructor(1, DEFAULT_HOST_DEPTH_LIMIT - 1)
+        else {
+            panic!("contract creation should succeed");
+        };
+        assert!(test.call(contract, "put_small", &[]).is_ok());
+
+        // Constructor failures are converted to a generic `InvalidAction`
+        // error.
+        assert!(HostError::result_matches_err(
+            test.create_contract_with_deep_value_in_constructor(2, DEFAULT_HOST_DEPTH_LIMIT),
+            (ScErrorType::Context, ScErrorCode::InvalidAction)
+        ));
+    }
+
+    #[test]
+    fn max_depth_instance_storage_on_self_reentry() {
+        let test = InstanceStorageDepthTest::new();
+
+        assert!(test
+            .put_val_and_self_auth(DEFAULT_HOST_DEPTH_LIMIT - 1, 1)
+            .is_ok());
+        assert!(test.call(test.contract, "put_small", &[]).is_ok());
+
+        // The failure happens while invoking `__check_auth`, so it's reported
+        // as an auth failure.
+        assert!(HostError::result_matches_err(
+            test.put_val_and_self_auth(DEFAULT_HOST_DEPTH_LIMIT, 2),
+            (ScErrorType::Auth, ScErrorCode::InvalidAction)
+        ));
+        assert!(test.call(test.contract, "put_small", &[]).is_ok());
+    }
+}
