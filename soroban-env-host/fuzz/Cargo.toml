@@ -39,3 +39,10 @@ path = "fuzz_targets/wasmi.rs"
 test = false
 doc = false
 required-features = ["libfuzzer"]
+
+[[bin]]
+name = "checked_arith"
+path = "fuzz_targets/checked_arith.rs"
+test = false
+doc = false
+required-features = ["libfuzzer"]
