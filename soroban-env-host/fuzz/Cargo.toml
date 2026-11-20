@@ -39,3 +39,10 @@ path = "fuzz_targets/wasmi.rs"
 test = false
 doc = false
 required-features = ["libfuzzer"]
+
+[[bin]]
+name = "zk_bn254"
+path = "fuzz_targets/zk_bn254.rs"
+test = false
+doc = false
+required-features = ["libfuzzer"]
